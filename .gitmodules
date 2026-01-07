@@ -1,0 +1,9 @@
+[submodule "lib/cwist_crypto"]
+	path = lib/cwist_crypto
+	url = ../cwist_crypto
+[submodule "lib/cjson"]
+	path = lib/cjson
+	url = https://github.com/DaveGamble/cJSON
+[submodule "lib/monocypher"]
+	path = lib/monocypher
+	url = https://github.com/LoupVaillant/Monocypher

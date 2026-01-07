@@ -1,0 +1,12 @@
+services:
+  ceversi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ceversi:latest
+    container_name: ceversi
+    ports:
+      - "31744:31744"
+    environment:
+      - RELAY=wss://portal.gosuda.org/relay,wss://portal.thumbgo.kr/relay
+    restart: always

@@ -1,0 +1,93 @@
+@startuml mux_router_design
+
+' Skinparam for better look
+skinparam classAttributeIconSize 0
+skinparam monochrome true
+skinparam packageStyle rectangle
+
+package "HTTP Core" {
+    class cwist_http_request {
+        + method: cwist_http_method_t
+        + path: cwist_sstring*
+        + query: cwist_sstring* (raw string)
+        + query_params: cwist_query_map* (parsed)
+        + version: cwist_sstring*
+        + headers: cwist_http_header_node*
+        + body: cwist_sstring*
+    }
+
+    class cwist_http_response {
+        + status_code: int
+        + body: cwist_sstring*
+        .. methods ..
+        + send()
+    }
+}
+
+package "Mux Router" {
+    class cwist_mux_router {
+        - routes: cwist_mux_route* (Linked List or Trie)
+        - global_middlewares: cwist_middleware*
+        .. methods ..
+        + create(): cwist_mux_router*
+        + handle(method, path, handler): void
+        + serve_http(req: cwist_http_request*): cwist_http_response*
+    }
+
+    class cwist_mux_route {
+        + method: cwist_http_method_t
+        + pattern: cwist_sstring*
+        + handler: cwist_http_handler_func
+        + next: cwist_mux_route*
+    }
+
+    ' Function pointer type
+    class "cwist_http_handler_func" as HandlerType << (T, #FF7700) typedef >> {
+        + void (*)(cwist_http_request*, cwist_http_response*)
+    }
+}
+
+package "Query Parameter Management (SipHash)" {
+    class cwist_query_map {
+        - buckets: cwist_query_bucket** (Array of pointers)
+        - size: size_t (Number of buckets)
+        - seed: uint8_t[16] (SipHash secret)
+        .. methods ..
+        + create(): cwist_query_map*
+        + parse(raw_query: char*): void
+        + get(key: char*): char*
+        + set(key: char*, value: char*): void
+    }
+
+    class cwist_query_bucket {
+        + key: char*
+        + value: char*
+        + next: cwist_query_bucket*
+    }
+}
+
+' Relationships
+cwist_mux_router "1" *-- "many" cwist_mux_route : contains
+cwist_mux_route --> HandlerType : executes
+cwist_http_request "1" *-- "0..1" cwist_query_map : owns
+cwist_query_map "1" *-- "many" cwist_query_bucket : hashes to
+cwist_query_map ..> "SipHash" : uses for index calc
+
+note right of cwist_query_map::parse
+  1. Split raw_query by '&'
+  2. Split each part by '='
+  3. Hash 'key' using SipHash(key, seed)
+  4. Index = hash % size
+  5. Store in bucket (handle collisions with linked list)
+end note
+
+note bottom of cwist_mux_router
+  Router Logic:
+  1. Iterate through routes
+  2. Check if req.method == route.method
+  3. Check if req.path matches route.pattern (exact match for basic)
+  4. If match, call route.handler(req, res)
+  5. If no match, return 404
+end note
+
+@enduml

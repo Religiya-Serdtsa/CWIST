@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+:root {
+    --board-bg: #1a535c;
+    --cell-bg: #4ecdc4;
+    --black-piece: #1e1e1e;
+    --white-piece: #f7fff7;
+    --highlight-color: #ffe66d;
+    --container-bg: #073b4c;
+    --text-color: #f7fff7;
+    --title-color: #ffe66d;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--container-bg);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+#game-container {
+    background-color: #118ab2;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+
+#title-bar h1 {
+    color: var(--title-color);
+    margin: 0 0 10px 0;
+}
+
+#game-info {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+}
+
+#board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    background-color: var(--board-bg);
+    border: 5px solid var(--board-bg);
+    border-radius: 10px;
+    width: 480px;
+    height: 480px;
+}
+
+.cell {
+    background-color: var(--cell-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.cell:hover {
+    background-color: var(--highlight-color);
+}
+
+.piece {
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    animation: place-piece 0.3s ease-out;
+}
+
+.piece.black {
+    background-color: var(--black-piece);
+}
+
+.piece.white {
+    background-color: var(--white-piece);
+}
+
+@keyframes place-piece {
+    from {
+        transform: scale(0.5);
+        opacity: 0.5;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+#status-bar {
+    margin-top: 20px;
+    font-size: 1.2em;
+}

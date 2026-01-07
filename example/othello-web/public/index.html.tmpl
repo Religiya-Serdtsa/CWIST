@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cwist Othello</title>
+    <link rel="stylesheet" href="/public/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="title-bar">
+            <h1>Cwist Othello</h1>
+            <div id="game-info">
+                <p>Room: <span id="room-id">{{ room_id }}</span></p>
+                <p>Mode: <span id="game-mode">{{ mode }}</span></p>
+            </div>
+        </div>
+        
+        <div id="board">
+            {% for row in board %}
+                <div class="row">
+                    {% for cell in row %}
+                        <div class="cell" data-r="{{ forloop.parent.index }}" data-c="{{ forloop.index }}">
+                            {% if cell == 1 %}
+                                <div class="piece black"></div>
+                            {% endif %}
+                            {% if cell == 2 %}
+                                <div class="piece white"></div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div id="status-bar">
+            <p id="status-message">{{ status }}</p>
+            <p>Turn: <span id="turn">{{ turn }}</span></p>
+        </div>
+    </div>
+    <script src="/public/script.js"></script>
+</body>
+</html>

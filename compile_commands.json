@@ -1,0 +1,74 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-I./include",
+      "-I./lib",
+      "-I./lib/cjson",
+      "-Wall",
+      "-Wextra",
+      "-pthread",
+      "-c",
+      "-o",
+      "src/sstring/sstring.o",
+      "src/sstring/sstring.c"
+    ],
+    "directory": "/home/yjlee/cwistaw",
+    "file": "/home/yjlee/cwistaw/src/sstring/sstring.c",
+    "output": "/home/yjlee/cwistaw/src/sstring/sstring.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-I./include",
+      "-I./lib",
+      "-I./lib/cjson",
+      "-Wall",
+      "-Wextra",
+      "-pthread",
+      "-c",
+      "-o",
+      "src/process/err/error.o",
+      "src/process/err/error.c"
+    ],
+    "directory": "/home/yjlee/cwistaw",
+    "file": "/home/yjlee/cwistaw/src/process/err/error.c",
+    "output": "/home/yjlee/cwistaw/src/process/err/error.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-I./include",
+      "-I./lib",
+      "-I./lib/cjson",
+      "-Wall",
+      "-Wextra",
+      "-pthread",
+      "-c",
+      "-o",
+      "src/http/http.o",
+      "src/http/http.c"
+    ],
+    "directory": "/home/yjlee/cwistaw",
+    "file": "/home/yjlee/cwistaw/src/http/http.c",
+    "output": "/home/yjlee/cwistaw/src/http/http.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-I./include",
+      "-I./lib",
+      "-I./lib/cjson",
+      "-Wall",
+      "-Wextra",
+      "-pthread",
+      "-c",
+      "-o",
+      "src/session/session_manager.o",
+      "src/session/session_manager.c"
+    ],
+    "directory": "/home/yjlee/cwistaw",
+    "file": "/home/yjlee/cwistaw/src/session/session_manager.c",
+    "output": "/home/yjlee/cwistaw/src/session/session_manager.o"
+  }
+]
