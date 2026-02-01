@@ -6,7 +6,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-/* --- SSL Structures --- */
+/** --- SSL Structures --- */
 
 typedef struct cwist_https_context {
     SSL_CTX *ctx;
@@ -19,7 +19,7 @@ typedef struct cwist_https_connection {
     size_t buf_len;
 } cwist_https_connection;
 
-/* --- API Functions --- */
+/** --- API Functions --- */
 
 /**
  * Initialize the OpenSSL library and create an SSL context.
@@ -61,8 +61,10 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
  */
 cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *conn, void *), void *user_ctx);
 
-/* --- Error Codes --- */
-// Defined as constants to be used with cwist_error_t (err_i16) or err_json
-// We will use standard errno-like negative values or specific error codes.
+/** --- Error Codes --- */
+/**
+ * @brief Defined as errno-like constants used with `cwist_error_t` fields.
+ * Values are declared elsewhere alongside their implementations.
+ */
 
 #endif

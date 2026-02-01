@@ -1,0 +1,9 @@
+<map id="include/cwist/sys/app/app.h" name="include/cwist/sys/app/app.h">
+<area shape="rect" id="Node000001" title="Core Application Structure and Lifecycle Management." alt="" coords="103,5,265,45"/>
+<area shape="rect" id="Node000002" href="$d3/db9/middleware_8h_source.html" title=" " alt="" coords="18,93,179,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="157,57,119,95,116,91,154,53"/>
+<area shape="rect" id="Node000004" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="203,101,338,126"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="215,53,261,98,257,102,211,57"/>
+<area shape="rect" id="Node000003" href="$d9/dc9/middleware_8c_source.html" title=" " alt="" coords="5,181,192,207"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="101,147,101,181,96,181,96,147"/>
+</map>

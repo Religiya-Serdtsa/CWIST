@@ -1,4 +1,5 @@
 #include "utils.h"
+#include <cwist/core/mem/alloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -8,7 +9,7 @@ char *read_file_content(const char *path) {
     fseek(f, 0, SEEK_END);
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
-    char *buf = malloc(len + 1);
+    char *buf = cwist_alloc(len + 1);
     fread(buf, 1, len, f);
     buf[len] = '\0';
     fclose(f);

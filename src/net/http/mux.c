@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <cwist/net/http/mux.h>
 #include <cwist/net/http/http.h>
+#include <cwist/core/mem/alloc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -8,7 +9,7 @@
 /* --- Mux Router Implementation --- */
 
 cwist_mux_router *cwist_mux_router_create(void) {
-    cwist_mux_router *router = (cwist_mux_router *)malloc(sizeof(cwist_mux_router));
+    cwist_mux_router *router = (cwist_mux_router *)cwist_alloc(sizeof(cwist_mux_router));
     if (!router) return NULL;
     router->routes = NULL;
     return router;
@@ -20,16 +21,16 @@ void cwist_mux_router_destroy(cwist_mux_router *router) {
     while (curr) {
         cwist_mux_route *next = curr->next;
         cwist_sstring_destroy(curr->path);
-        free(curr);
+        cwist_free(curr);
         curr = next;
     }
-    free(router);
+    cwist_free(router);
 }
 
 void cwist_mux_handle(cwist_mux_router *router, cwist_http_method_t method, const char *path, cwist_http_handler_func handler) {
     if (!router || !path || !handler) return;
 
-    cwist_mux_route *route = (cwist_mux_route *)malloc(sizeof(cwist_mux_route));
+    cwist_mux_route *route = (cwist_mux_route *)cwist_alloc(sizeof(cwist_mux_route));
     if (!route) return;
 
     route->method = method;

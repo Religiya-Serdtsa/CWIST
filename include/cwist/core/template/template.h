@@ -36,4 +36,4 @@ cwist_sstring* cwist_template_render(const char *template_str, const cJSON *cont
  */
 cwist_sstring* cwist_template_render_file(const char *file_path, const cJSON *context);
 
-#endif // CWIST_TEMPLATE_H
+#endif

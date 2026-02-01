@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <cwist/net/http/query.h>
 #include <cwist/core/siphash/siphash.h>
+#include <cwist/core/mem/alloc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -9,13 +10,13 @@
 #define CWIST_QUERY_MAP_DEFAULT_SIZE 16
 
 cwist_query_map *cwist_query_map_create(void) {
-    cwist_query_map *map = (cwist_query_map *)malloc(sizeof(cwist_query_map));
+    cwist_query_map *map = (cwist_query_map *)cwist_alloc(sizeof(cwist_query_map));
     if (!map) return NULL;
 
     map->size = CWIST_QUERY_MAP_DEFAULT_SIZE;
-    map->buckets = (cwist_query_bucket **)calloc(map->size, sizeof(cwist_query_bucket *));
+    map->buckets = (cwist_query_bucket **)cwist_alloc_array(map->size, sizeof(cwist_query_bucket *));
     if (!map->buckets) {
-        free(map);
+        cwist_free(map);
         return NULL;
     }
 
@@ -26,8 +27,8 @@ cwist_query_map *cwist_query_map_create(void) {
 void cwist_query_map_destroy(cwist_query_map *map) {
     if (!map) return;
     cwist_query_map_clear(map);
-    free(map->buckets);
-    free(map);
+    cwist_free(map->buckets);
+    cwist_free(map);
 }
 
 void cwist_query_map_clear(cwist_query_map *map) {
@@ -36,9 +37,9 @@ void cwist_query_map_clear(cwist_query_map *map) {
         cwist_query_bucket *curr = map->buckets[i];
         while (curr) {
             cwist_query_bucket *next = curr->next;
-            free(curr->key);
-            free(curr->value);
-            free(curr);
+            cwist_free(curr->key);
+            cwist_free(curr->value);
+            cwist_free(curr);
             curr = next;
         }
         map->buckets[i] = NULL;
@@ -55,18 +56,18 @@ void cwist_query_map_set(cwist_query_map *map, const char *key, const char *valu
     while (curr) {
         if (strcmp(curr->key, key) == 0) {
             // Update existing
-            free(curr->value);
-            curr->value = strdup(value);
+            cwist_free(curr->value);
+            curr->value = cwist_strdup(value);
             return;
         }
         curr = curr->next;
     }
 
     // Insert new
-    cwist_query_bucket *node = (cwist_query_bucket *)malloc(sizeof(cwist_query_bucket));
+    cwist_query_bucket *node = (cwist_query_bucket *)cwist_alloc(sizeof(cwist_query_bucket));
     if (!node) return;
-    node->key = strdup(key);
-    node->value = strdup(value);
+    node->key = cwist_strdup(key);
+    node->value = cwist_strdup(value);
     node->next = map->buckets[index];
     map->buckets[index] = node;
 }

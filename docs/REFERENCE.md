@@ -50,6 +50,22 @@ Unified error handling system using `cwist_error_t`.
 - **Header:** `<cwist/sys/err/cwist_err.h>`
 - **Features:** Can return simple integer codes or complex JSON objects (e.g., OpenSSL/SQLite errors).
 
+### 8. Big Dumb Reply (BDR)
+Auto-caches serialized responses for expensive handlers.
+- **Header:** `<cwist/sys/app/big_dumb_reply.h>`
+- **Functions:** `cwist_bdr_get`, `cwist_bdr_put`, `cwist_bdr_set_limits`.
+- **Guard Rails:** Entries expire after a configurable TTL or hit budget and the cache maintains a soft byte cap (32 MiB by default). Use `cwist_app_configure_bdr` to tune per-application behavior.
+
+## LibTTAK Memory Features
+
+CWIST embeds libttak and exposes its latest memory runtime:
+
+- **Generational Arenas:** Static assets and cache entries are tracked via `ttak_mem_tree` and retired generation-by-generation to avoid RSS spikes.
+- **Epoch-Based Reclamation:** Hot reloads and Big Dumb Reply swaps call `ttak_epoch_enter/exit` so readers never block when arenas rotate.
+- **Detachable Memory:** `ttak_detachable_mem_alloc` backs zero-copy HTTP bodies; cached slices reuse the tiny detachable cache and register cleanup hooks with `cwist_http_response_set_body_ptr_managed`.
+
+See `example/rps-showcase/` for a runnable demonstration that combines all three pieces to keep `/rps` saturated during load tests.
+
 ## Example: Othello Web
 Located in `example/othello-web/`.
 - **Stack:** HTML/CSS/JS (Frontend), C (Backend).

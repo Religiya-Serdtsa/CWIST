@@ -1,0 +1,41 @@
+@startuml
+title Zero-Copy IO & Memory Manager
+
+participant "App Init" as Init
+participant "Mem Manager" as Mem
+filesystem "File System" as FS
+participant "HTTP Handler" as HTTP
+participant "Kernel" as OS
+
+== Initialization ==
+Init -> Mem: cwist_mem_init()
+Mem -> FS: Recursive Scan (Calc Size)
+Mem -> Mem: Alloc Total * 2
+loop For each file
+    Mem -> FS: Read File
+    FS --> Mem: Load to Buffer
+    Mem -> Mem: Store Offset & Size
+end
+
+== Request Serving ==
+HTTP -> Mem: cwist_mem_get_file("/index.html")
+Mem --> HTTP: cwist_file_t (offset, size)
+
+HTTP -> OS: sendmsg(header_iov, body_iov)
+note right
+    body_iov.base = Mem->raw_memory + offset
+    No userspace copy during send
+end note
+
+== Hot Reload ==
+participant "Watcher Thread" as Watch
+loop Every 2s
+    Watch -> FS: stat(files)
+    alt Modified
+        Watch -> FS: Read New Content
+        Watch -> Mem: Append to End of Buffer (Ring/Linear)
+        Watch -> Mem: Update File Offset
+    end
+end
+
+@enduml

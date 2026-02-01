@@ -3,6 +3,7 @@
 #include <cwist/net/http/http.h>
 #include <cwist/core/macros.h>
 #include <cwist/core/utils/json_builder.h>
+#include <cwist/core/mem/alloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +19,7 @@ static unsigned int rid_seed = 0;
 
 static char *generate_request_id() {
     static const char charset[] = "abcdefghijklmnopqrstuvwxyz0123456789";
-    char *id = malloc(17);
+    char *id = cwist_alloc(17);
     
     pthread_mutex_lock(&rid_mutex);
     if (rid_seed == 0) rid_seed = (unsigned int)time(NULL) ^ (unsigned int)pthread_self();
@@ -38,7 +39,7 @@ void cwist_mw_request_id_handler(cwist_http_request *req, cwist_http_response *r
     char *rid;
 
     if (existing) {
-        rid = strdup(existing);
+        rid = cwist_strdup(existing);
     } else {
         rid = generate_request_id();
         cwist_http_header_add(&req->headers, header_name, rid);
@@ -47,7 +48,7 @@ void cwist_mw_request_id_handler(cwist_http_request *req, cwist_http_response *r
     cwist_http_header_add(&res->headers, header_name, rid);
 
     next(req, res);
-    free(rid);
+    cwist_free(rid);
 }
 
 cwist_middleware_func cwist_mw_request_id(const char *header_name) {
@@ -144,7 +145,7 @@ void cwist_mw_rate_limit_ip_handler(cwist_http_request *req, cwist_http_response
         }
         found->count++;
     }
-    free(ip);
+    cwist_sstring_destroy(ip);
     pthread_mutex_unlock(&rate_mutex);
 
     next(req, res);

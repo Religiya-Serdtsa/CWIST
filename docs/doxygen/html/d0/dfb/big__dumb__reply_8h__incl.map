@@ -1,0 +1,21 @@
+<map id="include/cwist/sys/app/big_dumb_reply.h" name="include/cwist/sys/app/big_dumb_reply.h">
+<area shape="rect" id="Node000001" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="375,5,536,45"/>
+<area shape="rect" id="Node000002" href="$d1/d34/sstring_8h_source.html" title=" " alt="" coords="198,93,334,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="415,48,321,90,319,85,413,43"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="362,189,445,214"/>
+<area shape="poly" id="edge9_Node000001_Node000005" title=" " alt="" coords="452,46,413,176,408,174,447,45"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="396,269,467,295"/>
+<area shape="poly" id="edge8_Node000001_Node000007" title=" " alt="" coords="461,46,467,123,466,172,459,222,446,258,441,256,454,221,460,172,461,123,455,46"/>
+<area shape="rect" id="Node000009" title=" " alt="" coords="519,101,583,126"/>
+<area shape="poly" id="edge10_Node000001_Node000009" title=" " alt="" coords="478,44,529,89,526,93,475,48"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="5,189,76,214"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="216,136,88,184,83,186,81,181,86,179,214,131"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="100,189,171,214"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="238,136,166,183,163,179,236,131"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="298,131,375,179,372,184,295,136"/>
+<area shape="rect" id="Node000006" href="$d7/d82/cwist__err_8h_source.html" title=" " alt="" coords="195,181,337,221"/>
+<area shape="poly" id="edge5_Node000002_Node000006" title=" " alt="" coords="269,134,269,167,263,167,263,134"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="307,219,396,261,394,266,304,224"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="211,269,321,295"/>
+<area shape="poly" id="edge7_Node000006_Node000008" title=" " alt="" coords="269,222,269,255,263,255,263,222"/>
+</map>

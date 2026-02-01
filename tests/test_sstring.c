@@ -1,4 +1,5 @@
 #include <cwist/core/sstring/sstring.h>
+#include <cwist/core/mem/alloc.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -119,8 +120,8 @@ void test_sstring_ops() {
 
     assert(left.compare(&left, &right) == 0);
 
-    free(left.data);
-    free(right.data);
+    cwist_free(left.data);
+    cwist_free(right.data);
     printf("Passed sstring-to-sstring ops.\n");
 }
 

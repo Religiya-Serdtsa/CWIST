@@ -1,4 +1,5 @@
 #include "ws_utils.h"
+#include <cwist/core/mem/alloc.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -145,7 +146,7 @@ static const int mod_table[] = {0, 2, 1};
 
 char *base64_encode(const uint8_t *data, size_t input_length, size_t *output_length) {
     *output_length = 4 * ((input_length + 2) / 3);
-    char *encoded_data = (char *)malloc(*output_length + 1);
+    char *encoded_data = (char *)cwist_alloc(*output_length + 1);
     if (encoded_data == NULL) return NULL;
 
     for (size_t i = 0, j = 0; i < input_length;) {

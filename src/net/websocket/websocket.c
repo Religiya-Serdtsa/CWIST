@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <cwist/net/websocket/websocket.h>
 #include <cwist/net/http/http.h>
+#include <cwist/core/mem/alloc.h>
 #include "ws_utils.h"
 
 #include <stdio.h>
@@ -46,13 +47,13 @@ cwist_websocket *cwist_websocket_upgrade(cwist_http_request *req, int client_fd)
     cwist_error_t err = cwist_http_send_response(client_fd, res);
     
     cwist_http_response_destroy(res);
-    free(accept_key);
+    cwist_free(accept_key);
 
     if (err.error.err_i16 != 0) return NULL;
 
     req->upgraded = true;
 
-    cwist_websocket *ws = (cwist_websocket *)malloc(sizeof(cwist_websocket));
+    cwist_websocket *ws = (cwist_websocket *)cwist_alloc(sizeof(cwist_websocket));
     ws->fd = client_fd;
     ws->is_closed = false;
     return ws;
@@ -109,10 +110,10 @@ cwist_ws_frame *cwist_websocket_receive(cwist_websocket *ws) {
 
     uint8_t *payload = NULL;
     if (payload_len > 0) {
-        payload = (uint8_t *)malloc(payload_len + 1); // +1 for safety null term if text
+        payload = (uint8_t *)cwist_alloc(payload_len + 1); // +1 for safety null term if text
         if (!payload) return NULL;
         if (read_exact(ws->fd, payload, payload_len) < 0) {
-            free(payload);
+            cwist_free(payload);
             return NULL;
         }
 
@@ -127,7 +128,7 @@ cwist_ws_frame *cwist_websocket_receive(cwist_websocket *ws) {
         ws->is_closed = true;
     }
 
-    cwist_ws_frame *frame = (cwist_ws_frame *)malloc(sizeof(cwist_ws_frame));
+    cwist_ws_frame *frame = (cwist_ws_frame *)cwist_alloc(sizeof(cwist_ws_frame));
     frame->fin = fin;
     frame->opcode = opcode;
     frame->payload = payload;
@@ -171,8 +172,8 @@ int cwist_websocket_send(cwist_websocket *ws, cwist_ws_opcode_t opcode, const ui
 
 void cwist_websocket_frame_destroy(cwist_ws_frame *frame) {
     if (frame) {
-        if (frame->payload) free(frame->payload);
-        free(frame);
+        if (frame->payload) cwist_free(frame->payload);
+        cwist_free(frame);
     }
 }
 
@@ -188,6 +189,6 @@ void cwist_websocket_destroy(cwist_websocket *ws) {
         // We don't own fd in terms of closing it immediately if the app wants to, 
         // but typically destroying WS wrapper implies we are done.
         // The App handler owns the FD usually.
-        free(ws);
+        cwist_free(ws);
     }
 }

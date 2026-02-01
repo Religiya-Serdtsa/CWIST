@@ -1,0 +1,6 @@
+<map id="cwist_http_response" name="cwist_http_response">
+<area shape="rect" id="Node000001" title="HTTP Response Object. Supports standard string body or Zero&#45;Copy pointer body." alt="" coords="18,93,173,119"/>
+<area shape="rect" id="Node000002" href="$d3/d72/structcwist__http__header__node.html" title="Linked list node for request/response headers." alt="" coords="5,5,185,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="98,45,98,93,93,93,93,45"/>
+<area shape="poly" id="edge2_Node000002_Node000002" title=" " alt="" coords="201,10,212,18,204,25,186,28,185,23,202,20,207,18,198,15"/>
+</map>

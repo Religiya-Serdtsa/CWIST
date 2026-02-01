@@ -1,0 +1,90 @@
+@startuml
+skinparam packageStyle rectangle
+
+package "CWIST Core" {
+    class "cwist_app" as App {
+        + int port
+        + cwist_route_table *router
+        + cwist_middleware_node *middlewares
+        + cwist_fix_server_mem *mem_manager
+        + cwist_bdr_t *bdr_ctx
+        + cwist_db *db
+        --
+        + cwist_app_create()
+        + cwist_app_listen()
+        + cwist_app_get()
+        + cwist_app_use_db()
+    }
+
+    class "cwist_fix_server_mem" as MemManager {
+        + unsigned char *raw_memory
+        + cwist_file_t *files
+        + pthread_t watcher_thread
+        --
+        + cwist_mem_init()
+        + cwist_mem_get_file()
+        + cwist_mem_watcher()
+    }
+
+    class "cwist_file_t" as FileEntry {
+        + char *path
+        + size_t offset
+        + size_t size
+    }
+
+    class "cwist_bdr_t" as BDR {
+        + bdr_entry_t **buckets
+        + int latency_threshold_ms
+        --
+        + cwist_bdr_get()
+        + cwist_bdr_put()
+    }
+
+    class "cwist_nuke_db_t" as NukeDB {
+        + sqlite3 *mem_db
+        + sqlite3 *disk_db
+        + bool auto_sync
+        --
+        + cwist_nuke_init()
+        + cwist_nuke_sync()
+        + cwist_nuke_get_db()
+    }
+}
+
+package "Net & IO" {
+    class "cwist_http_request" as Req {
+        + method
+        + path
+        + query_params
+    }
+
+    class "cwist_http_response" as Res {
+        + status_code
+        + ptr_body (ZeroCopy)
+        + body (SString)
+        --
+        + cwist_http_response_set_body_ptr()
+    }
+
+    class "cwist_io_queue" as IO {
+        + ring_fd / kq_fd
+        --
+        + cwist_io_queue_submit()
+        + cwist_io_queue_run()
+    }
+
+    note right of IO
+        Backend: io_uring (Linux)
+        or kqueue (BSD/Mac)
+    end note
+}
+
+App *-- MemManager : manages
+MemManager "1" *-- "many" FileEntry : holds
+App *-- BDR : caches
+App ..> NukeDB : integrates
+App ..> Req : receives
+App ..> Res : sends
+Res ..> IO : uses (sendmsg/writev)
+
+@enduml

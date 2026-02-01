@@ -1,10 +1,11 @@
 #include <cwist/core/utils/json_builder.h>
 #include <cwist/core/sstring/sstring.h>
+#include <cwist/core/mem/alloc.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 cwist_json_builder *cwist_json_builder_create(void) {
-    cwist_json_builder *b = (cwist_json_builder *)malloc(sizeof(cwist_json_builder));
+    cwist_json_builder *b = (cwist_json_builder *)cwist_alloc(sizeof(cwist_json_builder));
     if (!b) return NULL;
     b->buffer = cwist_sstring_create();
     b->needs_comma = false;
@@ -14,7 +15,7 @@ cwist_json_builder *cwist_json_builder_create(void) {
 void cwist_json_builder_destroy(cwist_json_builder *b) {
     if (b) {
         cwist_sstring_destroy(b->buffer);
-        free(b);
+        cwist_free(b);
     }
 }
 

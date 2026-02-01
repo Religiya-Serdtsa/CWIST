@@ -1,5 +1,6 @@
 #include <cwist/net/http/http.h>
 #include <cwist/core/sstring/sstring.h>
+#include <cwist/core/mem/alloc.h>
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -16,7 +17,7 @@
 // Actual request handler logic (keep-alive capable)
 void handle_client(int client_fd, void *ctx) {
     (void)ctx;
-    char *read_buf = malloc(CWIST_HTTP_READ_BUFFER_SIZE);
+    char *read_buf = cwist_alloc(CWIST_HTTP_READ_BUFFER_SIZE);
     if (!read_buf) {
         close(client_fd);
         return;
@@ -98,7 +99,7 @@ void handle_client(int client_fd, void *ctx) {
         }
     }
 
-    free(read_buf);
+    cwist_free(read_buf);
     close(client_fd);
 }
 

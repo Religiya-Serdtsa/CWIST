@@ -1,4 +1,5 @@
 #include <cwist/sys/session/session_manager.h>
+#include <cwist/core/mem/alloc.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -33,7 +34,7 @@ void session_rc_init(struct session_rc_header *header, void (*destructor)(void *
 
 void *session_shared_alloc(size_t payload_size, void (*destructor)(void *)) {
     size_t total = sizeof(struct session_rc_header) + payload_size;
-    uint8_t *raw = (uint8_t *)malloc(total);
+    uint8_t *raw = (uint8_t *)cwist_alloc(total);
     if (!raw) return NULL;
     struct session_rc_header *header = (struct session_rc_header *)raw;
     session_rc_init(header, destructor);
@@ -57,7 +58,7 @@ void session_shared_dec(void *payload) {
         if (header->destructor) {
             header->destructor(payload);
         }
-        free(header);
+        cwist_free(header);
     }
 }
 

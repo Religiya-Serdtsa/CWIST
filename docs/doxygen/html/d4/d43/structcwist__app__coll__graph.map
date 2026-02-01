@@ -1,0 +1,19 @@
+<map id="cwist_app" name="cwist_app">
+<area shape="rect" id="Node000001" title="Main Application Context." alt="" coords="438,181,525,207"/>
+<area shape="rect" id="Node000002" href="$d8/d41/structcwist__middleware__node.html" title="Linked list node for middleware chain." alt="" coords="5,93,184,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="156,119,310,155,438,181,437,187,309,160,155,124"/>
+<area shape="poly" id="edge2_Node000002_Node000002" title=" " alt="" coords="199,98,211,106,202,113,185,116,184,111,200,108,205,106,197,103"/>
+<area shape="rect" id="Node000003" href="$dd/dcc/structcwist__https__context.html" title=" " alt="" coords="265,93,417,119"/>
+<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="373,124,464,179,461,183,371,128"/>
+<area shape="rect" id="Node000004" href="$dd/d55/structcwist__db.html" title=" " alt="" coords="442,93,521,119"/>
+<area shape="poly" id="edge4_Node000001_Node000004" title=" " alt="" coords="484,133,484,181,479,181,479,133"/>
+<area shape="rect" id="Node000005" href="$d7/dba/structcwist__fix__server__mem.html" title="Fixed Server Memory Manager." alt="" coords="545,93,713,119"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="599,128,503,183,500,179,596,123"/>
+<area shape="rect" id="Node000006" href="$d6/de0/structcwist__file__t.html" title="Represents a file loaded into the fixed memory pool." alt="" coords="582,5,677,31"/>
+<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="632,45,632,93,627,93,627,45"/>
+<area shape="rect" id="Node000007" href="$d9/d90/structcwist__bdr__t.html" title="Big Dumb Reply Context. Manages cache buckets and learning parameters." alt="" coords="737,93,833,119"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="753,127,675,160,596,179,525,190,524,185,595,174,674,155,751,123"/>
+<area shape="rect" id="Node000008" href="$d5/d26/structbdr__entry__t.html" title="Big Dumb Reply Entry. Stores a completely serialized HTTP response blob." alt="" coords="737,5,833,31"/>
+<area shape="poly" id="edge8_Node000007_Node000008" title=" " alt="" coords="788,45,788,93,783,93,783,45"/>
+<area shape="poly" id="edge9_Node000008_Node000008" title=" " alt="" coords="848,9,860,18,852,26,834,29,833,23,849,21,855,18,846,14"/>
+</map>

@@ -1,0 +1,48 @@
+@startuml
+skinparam packageStyle rectangle
+
+title Nuke DB Lifecycle & Fail-safe
+
+participant "User App" as App
+participant "Nuke DB" as Nuke
+database "Memory (:memory:)" as RAM
+database "Disk (file.db)" as Disk
+participant "Sync Thread" as Sync
+participant "Sys Info" as Sys
+
+== Initialization ==
+App -> Nuke: cwist_nuke_init("data.db")
+Nuke -> Disk: sqlite3_open("data.db")
+Nuke -> RAM: sqlite3_open(":memory:")
+Nuke -> Disk: Backup to RAM
+Disk --> RAM: Data Copy
+Nuke -> Sync: Start Thread
+
+== Runtime ==
+App -> Nuke: cwist_nuke_get_db()
+Nuke --> App: sqlite3* (RAM)
+App -> RAM: INSERT / SELECT (Fast)
+
+== Synchronization (Background) ==
+loop Every Interval
+    Sync -> Sys: cwist_is_ram_critical(Threshold)
+    
+    alt RAM OK
+        Sync -> RAM: Backup to Disk
+        RAM --> Disk: Sync
+    else RAM Critical
+        Sync -> Nuke: Switch to Disk Mode
+        Nuke -> RAM: Force Backup
+        RAM --> Disk: Final Sync
+        Nuke -> RAM: Release Memory
+        Nuke -> App: Future get_db() returns Disk Handle
+    end
+end
+
+== Shutdown ==
+App -> Nuke: Signal (SIGINT)
+Nuke -> RAM: Force Sync
+RAM --> Disk: Persist
+Nuke -> App: Exit
+
+@enduml

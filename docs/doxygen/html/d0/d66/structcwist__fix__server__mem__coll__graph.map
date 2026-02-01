@@ -1,0 +1,5 @@
+<map id="cwist_fix_server_mem" name="cwist_fix_server_mem">
+<area shape="rect" id="Node000001" title="Fixed Server Memory Manager." alt="" coords="5,93,173,119"/>
+<area shape="rect" id="Node000002" href="$d6/de0/structcwist__file__t.html" title="Represents a file loaded into the fixed memory pool." alt="" coords="42,5,137,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="92,45,92,93,87,93,87,45"/>
+</map>

@@ -1,4 +1,5 @@
 #include "cwist/core/template/template.h"
+#include <cwist/core/mem/alloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +16,7 @@ static const cJSON* get_value_from_context(const cJSON *context, const char *key
         return context;
     }
 
-    char *key_copy = strdup(key);
+    char *key_copy = cwist_strdup(key);
     char *ptr_to_free = key_copy;
     char *token = strtok(key_copy, ".");
     const cJSON *current = context;
@@ -30,7 +31,7 @@ static const cJSON* get_value_from_context(const cJSON *context, const char *key
         token = strtok(NULL, ".");
     }
 
-    free(ptr_to_free);
+    cwist_free(ptr_to_free);
     return current;
 }
 
@@ -164,7 +165,7 @@ cwist_sstring* cwist_template_render_file(const char *file_path, const cJSON *co
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *template_str = malloc(len + 1);
+    char *template_str = cwist_alloc(len + 1);
     if (!template_str) {
         fclose(f);
         return NULL;
@@ -175,7 +176,7 @@ cwist_sstring* cwist_template_render_file(const char *file_path, const cJSON *co
     fclose(f);
 
     cwist_sstring *result = cwist_template_render(template_str, context);
-    free(template_str);
+    cwist_free(template_str);
 
     return result;
 }

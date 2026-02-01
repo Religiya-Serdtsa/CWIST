@@ -1,0 +1,45 @@
+yjlee@elegant:~/cev$ ab -n 100 -c 85 -k http://localhost:31744/
+This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking localhost (be patient).....done
+
+
+Server Software:        
+Server Hostname:        localhost
+Server Port:            31744
+
+Document Path:          /
+Document Length:        8797 bytes
+
+Concurrency Level:      85
+Time taken for tests:   0.034 seconds
+Complete requests:      100
+Failed requests:        0
+Keep-Alive requests:    100
+Total transferred:      888700 bytes
+HTML transferred:       879700 bytes
+Requests per second:    2958.40 [#/sec] (mean)
+Time per request:       28.732 [ms] (mean)
+Time per request:       0.338 [ms] (mean, across all concurrent requests)
+Transfer rate:          25675.14 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    1   0.7      1       2
+Processing:     0   15  12.9      6      30
+Waiting:        0   15  12.9      6      30
+Total:          0   16  12.9      8      31
+
+Percentage of the requests served within a certain time (ms)
+  50%      8
+  66%     31
+  75%     31
+  80%     31
+  90%     31
+  95%     31
+  98%     31
+  99%     31
+ 100%     31 (longest request)
+yjlee@elegant:~/cev$ 

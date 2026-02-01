@@ -12,20 +12,28 @@ typedef struct cwist_html_element {
     cwist_sstring *inner_text;
 } cwist_html_element_t;
 
-// Element creation and destruction
+/** @name Element creation and destruction */
+/** @{ */
 cwist_html_element_t* cwist_html_element_create(const char *tag);
 void cwist_html_element_destroy(cwist_html_element_t *el);
+/** @} */
 
-// Attribute manipulation
+/** @name Attribute manipulation */
+/** @{ */
 void cwist_html_element_add_attr(cwist_html_element_t *el, const char *key, const char *value);
 void cwist_html_element_set_id(cwist_html_element_t *el, const char *id);
 void cwist_html_element_add_class(cwist_html_element_t *el, const char *class_name);
+/** @} */
 
-// Content and children
+/** @name Content and children */
+/** @{ */
 void cwist_html_element_set_text(cwist_html_element_t *el, const char *text);
 void cwist_html_element_add_child(cwist_html_element_t *el, cwist_html_element_t *child);
+/** @} */
 
-// Rendering
+/** @name Rendering */
+/** @{ */
 cwist_sstring* cwist_html_render(cwist_html_element_t *el);
+/** @} */
 
-#endif // CWIST_HTML_BUILDER_H
+#endif

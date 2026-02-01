@@ -1,0 +1,57 @@
+@startuml
+title Big Dumb Reply (BDR) Logic
+
+participant "HTTP Loop" as Loop
+participant "BDR Cache" as BDR
+participant "Handler" as Handler
+database "Disk Fallback" as Disk
+
+== Request Received ==
+Loop -> BDR: cwist_bdr_get(GET, /path)
+alt Hit (and Stable)
+    BDR --> Loop: Response Blob (Ptr)
+    Loop -> Client: send(Blob) (Zero Copy)
+    return
+else Miss
+    BDR --> Loop: NULL
+end
+
+== Processing ==
+Loop -> Handler: internal_route_handler()
+Handler --> Loop: Response Object
+Loop -> Client: sendmsg(Response)
+
+== Learning (Post-Response) ==
+Loop -> Loop: Check Latency > Threshold
+opt Slow Request
+    Loop -> BDR: cwist_bdr_put(GET, /path, Blob)
+    
+    group BDR Put Logic
+        BDR -> BDR: Calc Request Hash
+        BDR -> BDR: Calc Response Hash
+        
+        alt Low RAM
+            BDR -> Disk: Insert/Update (Disk Mode)
+        else Normal RAM
+            alt Entry Exists
+                alt Stable
+                    BDR -> BDR: Check Response Hash
+                    alt Changed
+                        BDR -> BDR: Destabilize (Remove Blob)
+                    end
+                else Unstable (Candidate)
+                    BDR -> BDR: Compare Hash with Candidate
+                    alt Match
+                        BDR -> BDR: Stabilize (Malloc & Cache Blob)
+                    else Mismatch
+                        BDR -> BDR: Update Candidate Hash
+                    end
+                end
+            else New Entry
+                BDR -> BDR: Create Candidate (No Blob, Hash Only)
+            end
+        end
+    end
+end
+
+@enduml

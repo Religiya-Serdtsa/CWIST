@@ -1,5 +1,6 @@
 #include "db.h"
 #include <cwist/core/db/sql.h>
+#include <cwist/core/mem/alloc.h>
 #include <cjson/cJSON.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,7 +47,7 @@ static void serialize_board(int board[SIZE][SIZE], char *out) {
 
 static void deserialize_board(const char *in, int board[SIZE][SIZE]) {
     if (!in) return;
-    char *dup = strdup(in);
+    char *dup = cwist_strdup(in);
     char *token = strtok(dup, ",");
     int r=0, c=0;
     while (token) {
@@ -55,7 +56,7 @@ static void deserialize_board(const char *in, int board[SIZE][SIZE]) {
         if (c >= SIZE) { c=0; r++; }
         token = strtok(NULL, ",");
     }
-    free(dup);
+    cwist_free(dup);
 }
 
 void get_game_state(cwist_db *db, int room_id, int board[SIZE][SIZE], int *turn, char *status, int *players, char *mode, const char *requested_mode) {

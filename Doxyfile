@@ -1,0 +1,68 @@
+# Doxygen configuration for cwist
+# Generated to document the public headers and source files.
+
+#--------------------------------------------------------------------------
+# Project
+#--------------------------------------------------------------------------
+PROJECT_NAME           = "cwist"
+PROJECT_NUMBER         =
+PROJECT_BRIEF          = "Modern C web framework with libttak runtime"
+PROJECT_LOGO           =
+OUTPUT_DIRECTORY       = docs/doxygen
+CREATE_SUBDIRS         = YES
+OUTPUT_LANGUAGE        = English
+
+#--------------------------------------------------------------------------
+# Input
+#--------------------------------------------------------------------------
+INPUT                  = include src
+FILE_PATTERNS          = *.c *.h
+RECURSIVE              = YES
+EXCLUDE_PATTERNS       = */tests/* */example/* */docs/* */lib/*
+EXCLUDE_SYMLINKS       = YES
+EXCLUDE                = lib lib/libttak
+
+#--------------------------------------------------------------------------
+# Build
+#--------------------------------------------------------------------------
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_PACKAGE        = NO
+EXTRACT_LOCAL_CLASSES  = NO
+EXTRACT_ANON_NSPACES   = NO
+HIDE_UNDOC_MEMBERS     = YES
+HIDE_UNDOC_CLASSES     = YES
+INLINE_SOURCES         = NO
+SOURCE_BROWSER         = YES
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+USE_MDFILE_AS_MAINPAGE = README
+
+#--------------------------------------------------------------------------
+# Warnings
+#--------------------------------------------------------------------------
+WARN_AS_ERROR          = NO
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+
+#--------------------------------------------------------------------------
+# Output formats
+#--------------------------------------------------------------------------
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_LATEX         = NO
+GENERATE_MAN           = NO
+GENERATE_XML           = NO
+GENERATE_RTF           = NO
+
+#--------------------------------------------------------------------------
+# Dot configuration
+#--------------------------------------------------------------------------
+HAVE_DOT               = YES
+DOT_FONTPATH           =
+GRAPHICAL_HIERARCHY    = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+DOT_TRANSPARENT        = YES

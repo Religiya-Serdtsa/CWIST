@@ -7,3 +7,6 @@
 [submodule "lib/monocypher"]
 	path = lib/monocypher
 	url = https://github.com/LoupVaillant/Monocypher
+[submodule "lib/libttak"]
+    path = lib/libttak
+    url  = https://github.com/religiya-serdtsa/libttak
