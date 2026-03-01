@@ -1,6 +1,35 @@
 # Compiler and Flags
-CC = gcc
-CFLAGS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -Wall -Wextra -pthread -g -D_GNU_SOURCE -O3 -DSQLITE_ENABLE_DESERIALIZE
+CC ?= gcc
+
+INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3
+COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
+COMMON_WARNINGS = -std=c17 -Wall -pthread -fPIC
+COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
+
+BUILD_PROFILE = perf
+ifneq (,$(findstring tcc,$(notdir $(CC))))
+    BUILD_PROFILE = tcc
+endif
+
+TCC_STACK_FLAGS = -O3 -g \
+                  -fno-inline \
+                  -fno-omit-frame-pointer \
+                  -fno-optimize-sibling-calls \
+                  -fno-semantic-interposition \
+                  -fno-trapping-math \
+                  -falign-functions=32 \
+                  -fno-plt \
+                  -fno-math-errno
+
+PERF_WARNINGS = -Wextra
+PERF_STACK_FLAGS = -O3 -g
+
+ifeq ($(BUILD_PROFILE),tcc)
+    CFLAGS = $(COMMON_CFLAGS) $(TCC_STACK_FLAGS) -ftls-model=global-dynamic
+else
+    CFLAGS = $(COMMON_CFLAGS) $(PERF_WARNINGS) $(PERF_STACK_FLAGS)
+endif
+
 LIBS = -L./lib/libttak/lib -pthread -lcjson -lssl -lcrypto -luriparser -ldl -lttak
 
 # SQLite Automation
