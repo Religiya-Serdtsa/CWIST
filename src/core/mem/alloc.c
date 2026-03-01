@@ -39,7 +39,11 @@ typedef struct {
 } cwist_owner_realloc_args_t;
 
 static ttak_mutex_t g_owner_lock;
+#if defined(__TINYC__)
+static atomic_bool g_owner_lock_ready = false;
+#else
 static atomic_bool g_owner_lock_ready = ATOMIC_VAR_INIT(false);
+#endif
 static ttak_owner_t *g_owner = NULL;
 static cwist_owner_policy_t g_owner_policy = {
     .flags = TTAK_MEM_DEFAULT | TTAK_MEM_STRICT_CHECK
