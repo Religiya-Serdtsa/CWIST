@@ -10,6 +10,10 @@
 #include <stdlib.h>
 #include <stdatomic.h>
 
+#ifndef ATOMIC_VAR_INIT
+#define ATOMIC_VAR_INIT(value) (value)
+#endif
+
 #define CWIST_OWNER_RESOURCE "cwist_mem_resource"
 #define CWIST_OWNER_ALLOC_FUNC "cwist_mem_alloc"
 #define CWIST_OWNER_FREE_FUNC "cwist_mem_free"
