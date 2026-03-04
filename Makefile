@@ -73,6 +73,8 @@ SRCS = src/core/sstring/sstring.c \
        src/net/websocket/websocket.c \
        src/net/websocket/ws_utils.c \
        src/core/utils/json_builder.c \
+       src/core/utils/json_heal.c \
+       src/core/utils/zod.c \
        src/sys/app/middleware.c \
        src/core/template/template.c \
        src/core/html/builder.c \
@@ -140,6 +142,10 @@ test_migrate: $(LIB_NAME) tests/test_migrate.c
 	$(CC) $(CFLAGS) -o test_migrate tests/test_migrate.c $(LIB_NAME) $(LIBS)
 	./test_migrate
 
+test_json_heal: $(LIB_NAME) tests/test_json_heal.c
+	$(CC) $(CFLAGS) -o test_json_heal tests/test_json_heal.c $(LIB_NAME) $(LIBS)
+	./test_json_heal
+
 # ... (other tests omitted for brevity, keeping standard ones)
 
 install: $(LIB_NAME)
@@ -168,7 +174,7 @@ clean:
 	@echo "Cleaning up build artifacts..."
 	rm -f $(OBJS) $(LIB_NAME)
 	rm -rf include/cwist/vendor
-	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket test_jwt test_migrate
+	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket test_jwt test_migrate test_json_heal
 	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
 	@$(MAKE) -C $(LIBTTAK_DIR) clean
 
