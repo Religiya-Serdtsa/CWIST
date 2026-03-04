@@ -82,4 +82,35 @@ sqlite3 *cwist_nuke_get_db(void);
  */
 void cwist_nuke_signal_handler(int signum);
 
+/**
+ * @brief Serialize the in-memory database to a raw byte buffer.
+ *
+ * Uses sqlite3_serialize() for direct byte-level access to the SQLite image,
+ * which avoids the overhead of the backup API and enables encryption or
+ * network transfer without a temporary file.
+ *
+ * The returned buffer is allocated by sqlite3_malloc() and must be freed
+ * with sqlite3_free().  Returns NULL on failure or when NukeDB is not
+ * initialised.
+ *
+ * @param[out] out_size Set to the number of bytes in the returned buffer.
+ * @return sqlite3_malloc()-allocated byte buffer, or NULL on failure.
+ */
+unsigned char *cwist_nuke_serialize(sqlite3_int64 *out_size);
+
+/**
+ * @brief Load a raw SQLite byte buffer into the in-memory database.
+ *
+ * Uses sqlite3_deserialize() to replace the current in-memory database
+ * content with the provided bytes.  Ownership of @p data is transferred to
+ * SQLite (allocated with sqlite3_malloc()); do not free it yourself after a
+ * successful call.
+ *
+ * @param data     Buffer previously obtained via cwist_nuke_serialize() or
+ *                 cwist_db_sync_pull().  Must be sqlite3_malloc()-allocated.
+ * @param data_len Length of @p data in bytes.
+ * @return 0 on success, -1 on failure.
+ */
+int cwist_nuke_deserialize(unsigned char *data, sqlite3_int64 data_len);
+
 #endif
