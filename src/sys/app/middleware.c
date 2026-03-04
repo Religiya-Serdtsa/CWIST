@@ -179,3 +179,163 @@ void cwist_mw_cors_handler(cwist_http_request *req, cwist_http_response *res, cw
 cwist_middleware_func cwist_mw_cors(void) {
     return cwist_mw_cors_handler;
 }
+
+/* --- JWT Authentication Middleware --- */
+
+/*
+ * We use req->private_data to carry the decoded claims across the middleware
+ * boundary into the downstream handler.  The previous value of private_data
+ * is saved/restored so other middleware can also use that field without
+ * conflict.
+ *
+ * The context is stack-allocated inside each wrapper function.  It is only
+ * valid during the synchronous execution of the middleware chain; no pointer
+ * to the context escapes to asynchronous code.
+ */
+
+#define CWIST_JWT_CTX_MAGIC 0x4A574354UL  /* "JWCT" */
+
+typedef struct {
+    unsigned long magic;             ///< Must equal CWIST_JWT_CTX_MAGIC.
+    const char *secret;              ///< Signing secret (borrowed, never freed here).
+    cwist_jwt_claims *claims;        ///< Decoded claims; owned by this struct.
+    void *prev_private_data;         ///< Previous req->private_data value.
+} cwist_jwt_ctx_t;
+
+void cwist_mw_jwt_auth_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
+    /* Retrieve the secret stored in the context tag */
+    cwist_jwt_ctx_t *ctx = (cwist_jwt_ctx_t *)req->private_data;
+    if (!ctx) {
+        /* Should not happen if the middleware was set up correctly */
+        res->status_code = CWIST_HTTP_INTERNAL_ERROR;
+        cwist_sstring_assign(res->body, "{\"error\":\"JWT middleware misconfigured\"}");
+        cwist_http_header_add(&res->headers, "Content-Type", "application/json");
+        return;
+    }
+
+    const char *secret = ctx->secret;
+
+    /* Extract Bearer token from Authorization header */
+    char *auth_header = cwist_http_header_get(req->headers, "Authorization");
+    if (!auth_header) {
+        res->status_code = CWIST_HTTP_UNAUTHORIZED;
+        cwist_sstring_assign(res->body, "{\"error\":\"Missing Authorization header\"}");
+        cwist_http_header_add(&res->headers, "Content-Type", "application/json");
+        return;
+    }
+
+    /* Expect "Bearer <token>" */
+    if (strncmp(auth_header, "Bearer ", 7) != 0) {
+        res->status_code = CWIST_HTTP_UNAUTHORIZED;
+        cwist_sstring_assign(res->body, "{\"error\":\"Invalid Authorization scheme\"}");
+        cwist_http_header_add(&res->headers, "Content-Type", "application/json");
+        return;
+    }
+
+    const char *token = auth_header + 7;
+
+    cwist_jwt_claims *claims = cwist_jwt_verify(token, secret);
+    if (!claims) {
+        res->status_code = CWIST_HTTP_UNAUTHORIZED;
+        cwist_sstring_assign(res->body, "{\"error\":\"Invalid or expired token\"}");
+        cwist_http_header_add(&res->headers, "Content-Type", "application/json");
+        return;
+    }
+
+    /* Stash claims so downstream handlers can retrieve them */
+    ctx->claims = claims;
+
+    next(req, res);
+
+    /* Clean up after the chain returns */
+    cwist_jwt_claims_destroy(claims);
+    ctx->claims = NULL;
+}
+
+/*
+ * Factory — we use a small heap-allocated context to bind the secret to the
+ * handler.  Because cwist_middleware_func is a plain function pointer we cannot
+ * capture the secret in a closure, so we embed it in the req->private_data
+ * field before dispatching.
+ *
+ * The returned function pointer is cwist_mw_jwt_auth_handler.  The secret is
+ * stored in a per-request cwist_jwt_ctx_t that is pushed/popped around the
+ * call so it does not trample any existing private_data.
+ */
+
+typedef struct {
+    const char *secret;
+} cwist_jwt_mw_cfg_t;
+
+/* We keep a small static table of registered secrets.  A server rarely needs
+ * more than a handful of distinct signing keys.  8 slots cover the common case
+ * (e.g. one per audience / service) without dynamic allocation.  If more are
+ * needed, increase CWIST_JWT_MAX_SECRETS and add the corresponding wrapper. */
+#define CWIST_JWT_MAX_SECRETS 8
+
+static cwist_jwt_mw_cfg_t s_jwt_cfgs[CWIST_JWT_MAX_SECRETS];
+static int s_jwt_cfg_count = 0;
+static pthread_mutex_t s_jwt_cfg_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* One wrapper function per registered secret slot.
+ * The ctx is stack-allocated; its lifetime is confined to this function frame. */
+#define CWIST_JWT_DEFINE_WRAPPER(N) \
+static void cwist_mw_jwt_wrap_##N(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) { \
+    cwist_jwt_ctx_t ctx = { \
+        .magic = CWIST_JWT_CTX_MAGIC, \
+        .secret = s_jwt_cfgs[N].secret, \
+        .claims = NULL, \
+        .prev_private_data = req->private_data \
+    }; \
+    req->private_data = &ctx; \
+    cwist_mw_jwt_auth_handler(req, res, next); \
+    req->private_data = ctx.prev_private_data; \
+}
+
+CWIST_JWT_DEFINE_WRAPPER(0)
+CWIST_JWT_DEFINE_WRAPPER(1)
+CWIST_JWT_DEFINE_WRAPPER(2)
+CWIST_JWT_DEFINE_WRAPPER(3)
+CWIST_JWT_DEFINE_WRAPPER(4)
+CWIST_JWT_DEFINE_WRAPPER(5)
+CWIST_JWT_DEFINE_WRAPPER(6)
+CWIST_JWT_DEFINE_WRAPPER(7)
+
+static cwist_middleware_func s_jwt_wrappers[CWIST_JWT_MAX_SECRETS] = {
+    cwist_mw_jwt_wrap_0, cwist_mw_jwt_wrap_1, cwist_mw_jwt_wrap_2, cwist_mw_jwt_wrap_3,
+    cwist_mw_jwt_wrap_4, cwist_mw_jwt_wrap_5, cwist_mw_jwt_wrap_6, cwist_mw_jwt_wrap_7,
+};
+
+cwist_middleware_func cwist_mw_jwt_auth(const char *secret) {
+    if (!secret) return NULL;
+
+    pthread_mutex_lock(&s_jwt_cfg_mutex);
+
+    /* Reuse existing slot for the same secret pointer */
+    for (int i = 0; i < s_jwt_cfg_count; i++) {
+        if (s_jwt_cfgs[i].secret == secret) {
+            pthread_mutex_unlock(&s_jwt_cfg_mutex);
+            return s_jwt_wrappers[i];
+        }
+    }
+
+    if (s_jwt_cfg_count >= CWIST_JWT_MAX_SECRETS) {
+        pthread_mutex_unlock(&s_jwt_cfg_mutex);
+        fprintf(stderr, "[CWIST] cwist_mw_jwt_auth: maximum secret slots exceeded\n");
+        return NULL;
+    }
+
+    int slot = s_jwt_cfg_count++;
+    s_jwt_cfgs[slot].secret = secret;
+
+    pthread_mutex_unlock(&s_jwt_cfg_mutex);
+    return s_jwt_wrappers[slot];
+}
+
+const cwist_jwt_claims *cwist_mw_jwt_get_claims(const cwist_http_request *req) {
+    if (!req || !req->private_data) return NULL;
+    cwist_jwt_ctx_t *ctx = (cwist_jwt_ctx_t *)req->private_data;
+    /* Validate that private_data is actually a JWT context */
+    if (ctx->magic != CWIST_JWT_CTX_MAGIC) return NULL;
+    return ctx->claims;
+}
