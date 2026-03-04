@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <fcntl.h>
 
 void test_methods() {
     printf("Testing HTTP methods...\n");
@@ -24,6 +25,7 @@ void test_request_lifecycle() {
     cwist_http_header_add(&req->headers, "Host", "example.com");
 
     assert(strcmp(cwist_http_header_get(req->headers, "Host"), "example.com") == 0);
+    assert(strcmp(cwist_http_header_get(req->headers, "host"), "example.com") == 0);
     assert(strcmp(cwist_http_header_get(req->headers, "Content-Type"), "application/json") == 0);
     assert(cwist_http_header_get(req->headers, "Invalid") == NULL);
 
@@ -32,6 +34,28 @@ void test_request_lifecycle() {
 
     cwist_http_request_destroy(req);
     printf("Passed Request Lifecycle.\n");
+}
+
+void test_wasm_content_type_detection() {
+    printf("Testing WASM content-type detection...\n");
+    char path[128];
+    snprintf(path, sizeof(path), "/tmp/cwist_test_%d.wasm", (int)getpid());
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    assert(fd >= 0);
+    const unsigned char wasm_magic[4] = {0x00, 0x61, 0x73, 0x6d};
+    assert(write(fd, wasm_magic, sizeof(wasm_magic)) == (ssize_t)sizeof(wasm_magic));
+    close(fd);
+
+    cwist_http_response *res = cwist_http_response_create();
+    assert(res != NULL);
+    cwist_error_t err = cwist_http_response_send_file(res, path, NULL, NULL);
+    assert(err.errtype == CWIST_ERR_INT16);
+    assert(err.error.err_i16 == 0);
+    assert(strcmp(cwist_http_header_get(res->headers, "content-type"), "application/wasm") == 0);
+
+    cwist_http_response_destroy(res);
+    unlink(path);
+    printf("Passed WASM content-type detection.\n");
 }
 
 void test_response_lifecycle() {
@@ -106,6 +130,7 @@ int main() {
     test_response_lifecycle();
     test_parse_request();
     test_send_response();
+    test_wasm_content_type_detection();
     printf("All HTTP tests passed!\n");
     return 0;
 }
