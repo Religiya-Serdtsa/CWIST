@@ -1,0 +1,24 @@
+# Build artifacts
+*.o
+*.a
+*.so
+
+# Test binaries
+test_sstring
+test_http
+test_siphash
+test_mux
+stress_test
+test_cors
+test_websocket
+test_jwt
+
+# SQLite amalgamation (downloaded automatically)
+lib/sqlite3/sqlite3.c
+lib/sqlite3/sqlite3.h
+lib/sqlite3/sqlite3ext.h
+lib/sqlite3/shell.c
+
+# cJSON build artifacts
+lib/cjson/cJSON.o
+lib/cjson/libcjson.a
