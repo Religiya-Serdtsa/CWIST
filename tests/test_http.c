@@ -39,8 +39,11 @@ void test_request_lifecycle() {
 
 void test_wasm_content_type_detection() {
     printf("Testing WASM content-type detection...\n");
-    char path[] = "/tmp/cwist_test_XXXXXX.wasm";
-    int fd = mkstemps(path, 5);
+    const char *tmpdir = getenv("TMPDIR");
+    const int wasm_suffix_len = 5; // ".wasm"
+    char path[256];
+    snprintf(path, sizeof(path), "%s/cwist_test_XXXXXX.wasm", tmpdir ? tmpdir : "/tmp");
+    int fd = mkstemps(path, wasm_suffix_len);
     assert(fd >= 0);
     const unsigned char wasm_magic[4] = {0x00, 0x61, 0x73, 0x6d};
     assert(write(fd, wasm_magic, sizeof(wasm_magic)) == (ssize_t)sizeof(wasm_magic));
