@@ -30,7 +30,7 @@ else
     CFLAGS = $(COMMON_CFLAGS) $(PERF_WARNINGS) $(PERF_STACK_FLAGS)
 endif
 
-LIBS = -L./lib/libttak/lib -pthread -lcjson -lssl -lcrypto -luriparser -ldl -lttak
+LIBS = -L./lib/libttak/lib -L./lib/cjson -pthread -lcjson -lssl -lcrypto -luriparser -ldl -lttak
 
 # SQLite Automation
 SQLITE_YEAR = 2024
@@ -68,6 +68,7 @@ SRCS = src/core/sstring/sstring.c \
        src/core/siphash/siphash.c \
        src/core/db/db.c \
        src/core/db/nuke_db.c \
+       src/core/db/migrate.c \
        src/sys/app/app.c \
        src/net/websocket/websocket.c \
        src/net/websocket/ws_utils.c \
@@ -79,6 +80,9 @@ SRCS = src/core/sstring/sstring.c \
        src/sys/sys_info.c \
        src/core/mem/alloc.c \
        lib/sqlite3/sqlite3.c \
+       src/security/jwt/jwt.c \
+       src/security/db_crypt/db_crypt.c \
+       src/net/db_sync/db_sync.c \
        $(IO_SRC)
 
 # Object Files and Target
@@ -86,6 +90,8 @@ OBJS = $(SRCS:.c=.o)
 LIB_NAME = libcwist.a
 LIBTTAK_DIR = lib/libttak
 LIBTTAK_LIB = $(LIBTTAK_DIR)/lib/libttak.a
+CJSON_DIR = lib/cjson
+CJSON_LIB = $(CJSON_DIR)/libcjson.a
 
 # Installation Paths
 PREFIX ?= /usr/local
@@ -94,7 +100,7 @@ INCLUDEDIR = $(PREFIX)/include
 
 # --- Build Targets ---
 
-all: $(LIBTTAK_LIB) $(SQLITE_DIR)/sqlite3.c $(LIB_NAME)
+all: $(LIBTTAK_LIB) $(CJSON_LIB) $(SQLITE_DIR)/sqlite3.c $(LIB_NAME)
 
 # SQLite Download & Extraction Rule
 $(SQLITE_DIR)/sqlite3.c:
@@ -114,11 +120,25 @@ $(LIBTTAK_LIB):
 	@echo "Building libttak..."
 	$(MAKE) -C $(LIBTTAK_DIR)
 
+$(CJSON_LIB):
+	@echo "Building cJSON..."
+	$(CC) -O3 -fPIC -I$(CJSON_DIR) -c $(CJSON_DIR)/cJSON.c -o $(CJSON_DIR)/cJSON.o
+	ar rcs $@ $(CJSON_DIR)/cJSON.o
+	@echo "cJSON Ready."
+
 # --- Test Targets ---
 
 test: $(LIB_NAME) tests/test_sstring.c
 	$(CC) $(CFLAGS) -o test_sstring tests/test_sstring.c $(LIB_NAME) $(LIBS)
 	./test_sstring
+
+test_jwt: $(LIB_NAME) tests/test_jwt.c
+	$(CC) $(CFLAGS) -o test_jwt tests/test_jwt.c $(LIB_NAME) $(LIBS)
+	./test_jwt
+
+test_migrate: $(LIB_NAME) tests/test_migrate.c
+	$(CC) $(CFLAGS) -o test_migrate tests/test_migrate.c $(LIB_NAME) $(LIBS)
+	./test_migrate
 
 # ... (other tests omitted for brevity, keeping standard ones)
 
@@ -148,7 +168,8 @@ clean:
 	@echo "Cleaning up build artifacts..."
 	rm -f $(OBJS) $(LIB_NAME)
 	rm -rf include/cwist/vendor
-	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket
+	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket test_jwt test_migrate
+	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
 	@$(MAKE) -C $(LIBTTAK_DIR) clean
 
 rebuild: clean all
