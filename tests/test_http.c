@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 void test_methods() {
     printf("Testing HTTP methods...\n");
@@ -38,9 +39,8 @@ void test_request_lifecycle() {
 
 void test_wasm_content_type_detection() {
     printf("Testing WASM content-type detection...\n");
-    char path[128];
-    snprintf(path, sizeof(path), "/tmp/cwist_test_%d.wasm", (int)getpid());
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    char path[] = "/tmp/cwist_test_XXXXXX.wasm";
+    int fd = mkstemps(path, 5);
     assert(fd >= 0);
     const unsigned char wasm_magic[4] = {0x00, 0x61, 0x73, 0x6d};
     assert(write(fd, wasm_magic, sizeof(wasm_magic)) == (ssize_t)sizeof(wasm_magic));
