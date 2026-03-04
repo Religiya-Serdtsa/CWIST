@@ -96211,11 +96211,16 @@ case OP_MakeRecord: {
         switch( len ){
           default: zPayload[7] = (u8)(v&0xff); v >>= 8;
                    zPayload[6] = (u8)(v&0xff); v >>= 8;
+                   /* fall through */
           case 6:  zPayload[5] = (u8)(v&0xff); v >>= 8;
                    zPayload[4] = (u8)(v&0xff); v >>= 8;
+                   /* fall through */
           case 4:  zPayload[3] = (u8)(v&0xff); v >>= 8;
+                   /* fall through */
           case 3:  zPayload[2] = (u8)(v&0xff); v >>= 8;
+                   /* fall through */
           case 2:  zPayload[1] = (u8)(v&0xff); v >>= 8;
+                   /* fall through */
           case 1:  zPayload[0] = (u8)(v&0xff);
         }
         zPayload += len;
@@ -205098,8 +205103,8 @@ json_parse_restart:
       jsonBlobAppendOneByte(pParse, JSONB_NULL);
       return i+4;
     }
-    /* fall-through into the default case that checks for NaN */
   }
+  /* fall through */
   default: {
     u32 k;
     int nn;

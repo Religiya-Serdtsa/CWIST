@@ -607,7 +607,7 @@ static const cwist_mime_entry CWIST_MIME_TABLE[] = {
     { ".htm",  "text/html; charset=utf-8" },
     { ".css",  "text/css; charset=utf-8" },
     { ".js",   "application/javascript" },
-    { ".mjs",  "text/javascript; charset=utf-8" },
+    { ".mjs",  "application/javascript" },
     { ".json", "application/json" },
     { ".wasm", "application/wasm" },
     { ".png",  "image/png" },
