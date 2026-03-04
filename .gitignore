@@ -22,3 +22,4 @@ lib/sqlite3/shell.c
 # cJSON build artifacts
 lib/cjson/cJSON.o
 lib/cjson/libcjson.a
+test_json_heal
