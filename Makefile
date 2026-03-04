@@ -68,6 +68,7 @@ SRCS = src/core/sstring/sstring.c \
        src/core/siphash/siphash.c \
        src/core/db/db.c \
        src/core/db/nuke_db.c \
+       src/core/db/migrate.c \
        src/sys/app/app.c \
        src/net/websocket/websocket.c \
        src/net/websocket/ws_utils.c \
@@ -80,6 +81,8 @@ SRCS = src/core/sstring/sstring.c \
        src/core/mem/alloc.c \
        lib/sqlite3/sqlite3.c \
        src/security/jwt/jwt.c \
+       src/security/db_crypt/db_crypt.c \
+       src/net/db_sync/db_sync.c \
        $(IO_SRC)
 
 # Object Files and Target
@@ -133,6 +136,10 @@ test_jwt: $(LIB_NAME) tests/test_jwt.c
 	$(CC) $(CFLAGS) -o test_jwt tests/test_jwt.c $(LIB_NAME) $(LIBS)
 	./test_jwt
 
+test_migrate: $(LIB_NAME) tests/test_migrate.c
+	$(CC) $(CFLAGS) -o test_migrate tests/test_migrate.c $(LIB_NAME) $(LIBS)
+	./test_migrate
+
 # ... (other tests omitted for brevity, keeping standard ones)
 
 install: $(LIB_NAME)
@@ -161,7 +168,7 @@ clean:
 	@echo "Cleaning up build artifacts..."
 	rm -f $(OBJS) $(LIB_NAME)
 	rm -rf include/cwist/vendor
-	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket test_jwt
+	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket test_jwt test_migrate
 	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
 	@$(MAKE) -C $(LIBTTAK_DIR) clean
 

@@ -343,3 +343,40 @@ sqlite3 *cwist_nuke_get_db(void) {
 void cwist_nuke_signal_handler(int signum) {
     CWIST_UNUSED(signum);
 }
+
+unsigned char *cwist_nuke_serialize(sqlite3_int64 *out_size) {
+    if (!out_size) return NULL;
+    *out_size = 0;
+
+    pthread_mutex_lock(&g_nuke_lock);
+    sqlite3 *src = g_nuke.is_disk_mode ? g_nuke.disk_db : g_nuke.mem_db;
+    if (!src) {
+        pthread_mutex_unlock(&g_nuke_lock);
+        return NULL;
+    }
+
+    unsigned char *buf = sqlite3_serialize(src, "main", out_size, 0);
+    pthread_mutex_unlock(&g_nuke_lock);
+    return buf;
+}
+
+int cwist_nuke_deserialize(unsigned char *data, sqlite3_int64 data_len) {
+    if (!data || data_len <= 0) return -1;
+
+    pthread_mutex_lock(&g_nuke_lock);
+
+    if (g_nuke.is_disk_mode || !g_nuke.mem_db) {
+        pthread_mutex_unlock(&g_nuke_lock);
+        return -1;
+    }
+
+    /* SQLITE_DESERIALIZE_FREEONCLOSE: SQLite will free the buffer when the
+     * database connection is closed.
+     * SQLITE_DESERIALIZE_RESIZABLE: allows the in-memory DB to grow. */
+    int rc = sqlite3_deserialize(g_nuke.mem_db, "main",
+                                 data, data_len, data_len,
+                                 SQLITE_DESERIALIZE_FREEONCLOSE |
+                                 SQLITE_DESERIALIZE_RESIZEABLE);
+    pthread_mutex_unlock(&g_nuke_lock);
+    return (rc == SQLITE_OK) ? 0 : -1;
+}
