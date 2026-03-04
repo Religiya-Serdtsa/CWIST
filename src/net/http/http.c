@@ -93,8 +93,7 @@ cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *k
 char *cwist_http_header_get(cwist_http_header_node *head, const char *key) {
     cwist_http_header_node *curr = head;
     while (curr) {
-        // case-insensitive comparison for headers is standard, but keeping it strict for now for simplicity
-        if (curr->key->data && strcmp(curr->key->data, key) == 0) {
+        if (curr->key->data && strcasecmp(curr->key->data, key) == 0) {
             return curr->value->data;
         }
         curr = curr->next;
@@ -608,7 +607,9 @@ static const cwist_mime_entry CWIST_MIME_TABLE[] = {
     { ".htm",  "text/html; charset=utf-8" },
     { ".css",  "text/css; charset=utf-8" },
     { ".js",   "application/javascript" },
+    { ".mjs",  "application/javascript" },
     { ".json", "application/json" },
+    { ".wasm", "application/wasm" },
     { ".png",  "image/png" },
     { ".jpg",  "image/jpeg" },
     { ".jpeg", "image/jpeg" },

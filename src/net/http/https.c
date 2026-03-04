@@ -52,6 +52,12 @@ cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *ce
         return make_ssl_error("Unable to create SSL context");
     }
 
+    if (SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_2_VERSION) != 1) {
+        SSL_CTX_free(ssl_ctx);
+        return make_ssl_error("Unable to enforce TLS minimum version");
+    }
+    SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_COMPRESSION);
+
     // Load Cert and Key
     if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path, SSL_FILETYPE_PEM) <= 0) {
         SSL_CTX_free(ssl_ctx);

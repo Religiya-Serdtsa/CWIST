@@ -9,6 +9,7 @@ Secure transport layer utilizing OpenSSL.
 cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *cert_path, const char *key_path);
 ```
 Initializes OpenSSL context and loads certificates.
+The context enforces TLS 1.2+ and disables TLS-level compression.
 
 ### `cwist_https_accept`
 ```c
