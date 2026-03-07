@@ -1,7 +1,7 @@
 # Compiler and Flags
 CC ?= gcc
 
-INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3
+INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include
 COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
 COMMON_WARNINGS = -std=c17 -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
@@ -30,7 +30,18 @@ else
     CFLAGS = $(COMMON_CFLAGS) $(PERF_WARNINGS) $(PERF_STACK_FLAGS)
 endif
 
-LIBS = -L./lib/libttak/lib -L./lib/cjson -pthread -lcjson -lssl -lcrypto -luriparser -ldl -lttak
+URIPARSER_DIR = lib/uriparser
+URIPARSER_BUILD_DIR = $(URIPARSER_DIR)/build
+URIPARSER_LIB = $(URIPARSER_BUILD_DIR)/liburiparser.a
+URIPARSER_CMAKE_FLAGS = -DCMAKE_BUILD_TYPE=Release \
+                        -DBUILD_SHARED_LIBS=OFF \
+                        -DURIPARSER_SHARED_LIBS=OFF \
+                        -DURIPARSER_BUILD_DOCS=OFF \
+                        -DURIPARSER_BUILD_TESTS=OFF \
+                        -DURIPARSER_BUILD_FUZZERS=OFF \
+                        -DURIPARSER_BUILD_TOOLS=OFF
+
+LIBS = -L$(URIPARSER_BUILD_DIR) -L./lib/libttak/lib -L./lib/cjson -pthread -lcjson -lssl -lcrypto -luriparser -ldl -lttak
 
 # SQLite Automation
 SQLITE_YEAR = 2024
@@ -103,7 +114,7 @@ INCLUDEDIR = $(PREFIX)/include
 
 # --- Build Targets ---
 
-all: $(LIBTTAK_LIB) $(CJSON_LIB) $(SQLITE_DIR)/sqlite3.c $(LIB_NAME)
+all: $(LIBTTAK_LIB) $(CJSON_LIB) $(URIPARSER_LIB) $(SQLITE_DIR)/sqlite3.c $(LIB_NAME)
 
 # SQLite Download & Extraction Rule
 $(SQLITE_DIR)/sqlite3.c:
@@ -115,7 +126,7 @@ $(SQLITE_DIR)/sqlite3.c:
 	@rm $(SQLITE_DIR)/$(SQLITE_ZIP)
 	@echo "SQLite Ready."
 
-$(LIB_NAME): $(OBJS)
+$(LIB_NAME): $(URIPARSER_LIB) $(OBJS)
 	@echo "Creating static library..."
 	ar rcs $@ $^
 
@@ -128,6 +139,12 @@ $(CJSON_LIB):
 	$(CC) -O3 -fPIC -I$(CJSON_DIR) -c $(CJSON_DIR)/cJSON.c -o $(CJSON_DIR)/cJSON.o
 	ar rcs $@ $(CJSON_DIR)/cJSON.o
 	@echo "cJSON Ready."
+
+$(URIPARSER_LIB):
+	@echo "Configuring uriparser..."
+	cmake -S $(URIPARSER_DIR) -B $(URIPARSER_BUILD_DIR) -DCMAKE_C_COMPILER=$(CC) $(URIPARSER_CMAKE_FLAGS)
+	@echo "Building uriparser..."
+	cmake --build $(URIPARSER_BUILD_DIR) --target uriparser
 
 # --- Test Targets ---
 
@@ -177,6 +194,7 @@ clean:
 	rm -rf include/cwist/vendor
 	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket test_jwt test_migrate test_json_heal
 	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
+	rm -rf $(URIPARSER_BUILD_DIR)
 	@$(MAKE) -C $(LIBTTAK_DIR) clean
 
 rebuild: clean all
