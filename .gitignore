@@ -23,3 +23,6 @@ lib/sqlite3/shell.c
 lib/cjson/cJSON.o
 lib/cjson/libcjson.a
 test_json_heal
+
+# uriparser build artifacts
+lib/uriparser/build/
