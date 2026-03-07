@@ -57,6 +57,27 @@ void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handle
 
 Routes without parameters are stored in a hash table for O(1) lookups while parameterized patterns fall back to sequential matching.
 
+### `cwist_endpoint_opt_t`
+Each route can be annotated with a bitmask of behavioral flags:
+
+| Flag | Description |
+| ---- | ----------- |
+| `CWIST_DYNAMIC` | Default dynamic handler behavior. |
+| `CWIST_ENDPOINT_FIXED` | Persist the first response in the Big Dumb Reply cache and reuse it immediately on subsequent hits. |
+| `CWIST_ENDPOINT_FILE` | Hint that the endpoint streams files, enabling Linux/BSD `sendfile` fast paths. |
+
+Use the `_opt` helpers to set these flags:
+
+```c
+cwist_app_get_opt(app, "/feed", feed_handler, CWIST_ENDPOINT_FIXED);
+cwist_app_get_opt(app,
+                  "/download/:id",
+                  download_handler,
+                  CWIST_DYNAMIC | CWIST_ENDPOINT_FILE);
+```
+
+Flags may be OR-ed together to combine behaviors (e.g., `fixed + file`).
+
 ## Static Assets
 
 ### `cwist_app_static`

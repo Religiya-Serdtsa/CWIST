@@ -59,7 +59,7 @@ cwist_error_t cwist_http_response_send_file(
     size_t *out_size
 );
 ```
-Reads a static file from disk, copies it into the response body, and sets a sensible `Content-Type`. Files larger than `CWIST_HTTP_MAX_BODY_SIZE` are rejected with `-EFBIG`. Returns `0` on success and propagates `-errno` on failures (`-ENOENT`, `-EISDIR`, etc.). `out_size` is optional; when provided it receives the file length so handlers can emit HEAD responses without buffering the payload. The built-in table includes modern web extensions such as `.wasm` and `.mjs`.
+Reads a static file from disk, copies it into the response body, and sets a sensible `Content-Type`. Files larger than `CWIST_HTTP_MAX_BODY_SIZE` are rejected with `-EFBIG` unless the route is tagged with `CWIST_ENDPOINT_FILE`, which switches Linux/macOS/FreeBSD to `sendfile(2)` so the kernel streams the payload directly. Returns `0` on success and propagates `-errno` on failures (`-ENOENT`, `-EISDIR`, etc.). `out_size` is optional; when provided it receives the file length so handlers can emit HEAD responses without buffering the payload. The built-in table includes modern web extensions such as `.wasm` and `.mjs`.
 
 ### `cwist_http_header_add`
 ```c

@@ -72,10 +72,16 @@ CWIST links against the in-tree `lib/libttak` build and now exposes the subsyste
 ### Epoch-Based Reclamation (EBR)
 - Threads pin critical sections with `ttak_epoch_enter/exit` so arena generations can be retired without locking readers.
 - `cwist_fix_server_mem` and the new examples advance epochs during hot reloads; stale buffers are reclaimed the moment no worker is in that epoch, which keeps latency flat even when static files churn.
+- CWIST now exposes `cwist_gc()`/`cwist_gc_shutdown()`/`cwist_reg_ptr()` so applications can enable libttak’s epoch GC without diving into the raw APIs. Call `cwist_gc(&ctx, true)` to activate a manual rotation context, feed allocations through `cwist_reg_ptr(&ctx, ptr)`, and optionally tick `cwist_gc_rotate(&ctx)` from your control loop.
 
 ### Detachable Memory
 - `ttak_detachable_mem_alloc` layers a tiny-cache + signal-safe arena on top of EBR. CWIST uses it for TLS write buffers, websocket frames, and zero-copy HTTP responses.
 - The detachable cache short-circuits the allocator for tiny payloads (<=16B) while larger slices flow through the same generational rows, so the server sustains >15M ops/s (see `lib/libttak/bench/ttl-cache-multithread-bench`).
+
+### Lock-Free Job Queue
+- The `cwist_io_queue` backend now mirrors libttak's lock-free approach: a Michael–Scott style CAS queue keeps submitters completely lock-free while a lightweight sleep gate is only touched when the queue is empty.
+- Producers allocate job nodes via `ttak`-compatible allocators and push them with a single atomic swap, so hot paths avoid `pthread_mutex` contention even under heavy fan-in.
+- Consumers drain jobs and reuse the detached nodes as sentinels, which means the queue can run indefinitely without fragmenting memory or blocking readers.
 
 ### Big Dumb Reply Guardrails
 - The built-in BDR cache now enforces a rolling sweep that expires entries after 5 minutes or ~100k hits and caps the live payload budget at 32 MiB by default. Oldest blobs are trimmed automatically so a long-running server never hoards stale pages.
@@ -83,6 +89,9 @@ CWIST links against the in-tree `lib/libttak` build and now exposes the subsyste
 
 ### RPS Showcase Example
 - `example/rps-showcase/` is a new high-throughput demo that keeps a JSON payload inside a detachable arena, protects it with EBR, and streams it via `cwist_http_response_set_body_ptr`.
+- Thread-local `cwist_gc_t` contexts eliminate lock contention for per-thread scratch buffers (used for trace headers), while payload churn is handled by a dedicated GC instance that retires the previous snapshot when `/refresh` swaps it out.
+- The `/rps` handler now serves a zero-copy snapshot (`rps_payload_refresh`) so steady-state requests never touch the allocator; `/refresh` rebuilds the payload on demand and swaps it atomically.
+- Allocation flags stay cache-aligned while the refresh path serializes writers with a mutex, so we avoid additional allocator contention per libttak’s “single-writer, lock-free readers” guidance.
 - Run `wrk -t4 -c128 -d30s http://127.0.0.1:8080/rps` inside that folder to see how swapping payload generations does not interrupt live traffic.
 
 == DEPENDENCIES ==

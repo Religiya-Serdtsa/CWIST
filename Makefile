@@ -81,6 +81,7 @@ SRCS = src/core/sstring/sstring.c \
        src/sys/app/big_dumb_reply.c \
        src/sys/sys_info.c \
        src/core/mem/alloc.c \
+       src/core/mem/gc.c \
        lib/sqlite3/sqlite3.c \
        src/security/jwt/jwt.c \
        src/security/db_crypt/db_crypt.c \

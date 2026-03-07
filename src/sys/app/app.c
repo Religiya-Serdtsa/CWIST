@@ -192,6 +192,7 @@ typedef struct cwist_route_entry {
     cwist_http_method_t method;
     cwist_handler_func handler;
     cwist_ws_handler_func ws_handler;
+    cwist_endpoint_opt_t opts;
     struct cwist_route_entry *next;
 } cwist_route_entry;
 
@@ -221,7 +222,12 @@ typedef struct {
 
 static cwist_route_table *cwist_route_table_create(void);
 static void cwist_route_table_destroy(cwist_route_table *table);
-static void cwist_route_table_insert(cwist_route_table *table, const char *path, cwist_http_method_t method, cwist_handler_func handler, cwist_ws_handler_func ws_handler);
+static void cwist_route_table_insert(cwist_route_table *table,
+                                     const char *path,
+                                     cwist_http_method_t method,
+                                     cwist_handler_func handler,
+                                     cwist_ws_handler_func ws_handler,
+                                     cwist_endpoint_opt_t opts);
 static cwist_route_entry *cwist_route_table_lookup(cwist_route_table *table, cwist_http_method_t method, const char *path);
 static cwist_route_entry *cwist_route_table_match_params(cwist_route_table *table, cwist_http_request *req);
 static bool match_path(const char *pattern, const char *actual, cwist_query_map *params);
@@ -246,13 +252,18 @@ static size_t cwist_route_hash(cwist_http_method_t method, const char *path, siz
     return (size_t)(hash % bucket_count);
 }
 
-static cwist_route_entry *cwist_route_entry_create(const char *path, cwist_http_method_t method, cwist_handler_func handler, cwist_ws_handler_func ws_handler) {
+static cwist_route_entry *cwist_route_entry_create(const char *path,
+                                                   cwist_http_method_t method,
+                                                   cwist_handler_func handler,
+                                                   cwist_ws_handler_func ws_handler,
+                                                   cwist_endpoint_opt_t opts) {
     cwist_route_entry *entry = (cwist_route_entry *)cwist_alloc(sizeof(cwist_route_entry));
     if (!entry) return NULL;
     entry->path = cwist_strdup(path ? path : "/");
     entry->method = method;
     entry->handler = handler;
     entry->ws_handler = ws_handler;
+    entry->opts = opts;
     entry->has_params = route_has_params(entry->path);
     entry->next = NULL;
     return entry;
@@ -298,9 +309,14 @@ static void cwist_route_table_destroy(cwist_route_table *table) {
     cwist_free(table);
 }
 
-static void cwist_route_table_insert(cwist_route_table *table, const char *path, cwist_http_method_t method, cwist_handler_func handler, cwist_ws_handler_func ws_handler) {
+static void cwist_route_table_insert(cwist_route_table *table,
+                                     const char *path,
+                                     cwist_http_method_t method,
+                                     cwist_handler_func handler,
+                                     cwist_ws_handler_func ws_handler,
+                                     cwist_endpoint_opt_t opts) {
     if (!table || !path) return;
-    cwist_route_entry *entry = cwist_route_entry_create(path, method, handler, ws_handler);
+    cwist_route_entry *entry = cwist_route_entry_create(path, method, handler, ws_handler, opts);
     if (!entry) return;
 
     if (entry->has_params) {
@@ -316,6 +332,7 @@ static void cwist_route_table_insert(cwist_route_table *table, const char *path,
         if (!curr->has_params && curr->method == method && strcmp(curr->path, entry->path) == 0) {
             curr->handler = handler;
             curr->ws_handler = ws_handler;
+            curr->opts = opts;
             cwist_route_entry_free(entry);
             return;
         }
@@ -976,22 +993,45 @@ cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const cha
     return err;
 }
 
-static void add_route(cwist_app *app, const char *path, cwist_http_method_t method, cwist_handler_func handler) {
+static void add_route(cwist_app *app,
+                      const char *path,
+                      cwist_http_method_t method,
+                      cwist_handler_func handler,
+                      cwist_endpoint_opt_t opts) {
     if (!app || !app->router || !path) return;
-    cwist_route_table_insert(app->router, path, method, handler, NULL);
+    if (opts == 0) {
+        opts = CWIST_ENDPOINT_DEFAULT;
+    }
+    cwist_route_table_insert(app->router, path, method, handler, NULL, opts);
 }
 
 void cwist_app_get(cwist_app *app, const char *path, cwist_handler_func handler) {
-    add_route(app, path, CWIST_HTTP_GET, handler);
+    add_route(app, path, CWIST_HTTP_GET, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
 void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler) {
-    add_route(app, path, CWIST_HTTP_POST, handler);
+    add_route(app, path, CWIST_HTTP_POST, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
 void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handler) {
     if (!app || !app->router || !path) return;
-    cwist_route_table_insert(app->router, path, CWIST_HTTP_GET, NULL, handler);
+    cwist_route_table_insert(app->router, path, CWIST_HTTP_GET, NULL, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
+void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts) {
+    add_route(app, path, CWIST_HTTP_GET, handler, opts);
+}
+
+void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts) {
+    add_route(app, path, CWIST_HTTP_POST, handler, opts);
+}
+
+void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func handler, cwist_endpoint_opt_t opts) {
+    if (!app || !app->router || !path) return;
+    if (opts == 0) {
+        opts = CWIST_ENDPOINT_DEFAULT;
+    }
+    cwist_route_table_insert(app->router, path, CWIST_HTTP_GET, NULL, handler, opts);
 }
 
 static bool match_path(const char *pattern, const char *actual, cwist_query_map *params) {
@@ -1026,8 +1066,15 @@ static bool match_path(const char *pattern, const char *actual, cwist_query_map 
 static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwist_http_response *res) {
     if (!req || !app || !app->router) return;
 
+    req->endpoint_opts = CWIST_ENDPOINT_DEFAULT;
+    if (res) {
+        res->endpoint_opts = req->endpoint_opts;
+    }
+
     cwist_static_request_info static_info = {0};
     if (cwist_prepare_static(app, req, &static_info)) {
+        req->endpoint_opts = CWIST_ENDPOINT_FILE;
+        if (res) res->endpoint_opts = req->endpoint_opts;
         execute_chain(app, req, res, cwist_static_handler, &static_info);
         return;
     }
@@ -1044,6 +1091,8 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
     }
 
     if (found_route) {
+        req->endpoint_opts = found_route->opts ? found_route->opts : CWIST_ENDPOINT_DEFAULT;
+        if (res) res->endpoint_opts = req->endpoint_opts;
         if (found_route->ws_handler) {
             if (req->client_fd >= 0) {
                 cwist_websocket *ws = cwist_websocket_upgrade(req, req->client_fd);
@@ -1058,11 +1107,11 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
         } else {
             execute_chain(app, req, res, found_route->handler, NULL);
         }
-    } else {
-        if (app->error_handler) {
-            app->error_handler(req, res, CWIST_HTTP_NOT_FOUND);
         } else {
-            res->status_code = CWIST_HTTP_NOT_FOUND;
+            if (app->error_handler) {
+                app->error_handler(req, res, CWIST_HTTP_NOT_FOUND);
+            } else {
+                res->status_code = CWIST_HTTP_NOT_FOUND;
             cwist_sstring_assign(res->body, "404 Not Found");
         }
     }
@@ -1144,7 +1193,12 @@ static void static_http_handler(int client_fd, void *ctx) {
             }
             
             // --- Big Dumb Reply (Learn) ---
-            if (app->bdr_ctx && req->method == CWIST_HTTP_GET && duration_ms > (uint64_t)app->bdr_ctx->latency_threshold_ms) {
+            bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
+            bool endpoint_file = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FILE);
+            if (app->bdr_ctx &&
+                req->method == CWIST_HTTP_GET &&
+                !endpoint_file &&
+                (endpoint_fixed || duration_ms > (uint64_t)app->bdr_ctx->latency_threshold_ms)) {
                 // Too slow! Cache it.
                 // We need to serialize the response we just sent.
                 // Note: This duplicates serialization work (once in send_response, once here).

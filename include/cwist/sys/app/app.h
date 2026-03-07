@@ -173,6 +173,9 @@ cwist_db *cwist_app_get_db(cwist_app *app);
 void cwist_app_get(cwist_app *app, const char *path, cwist_handler_func handler);
 void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler);
 void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handler);
+void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func handler, cwist_endpoint_opt_t opts);
 
 /**
  * @brief Serves a directory of static files at a URL prefix.
