@@ -1,0 +1,9 @@
+<map id="include/cwist/security/jwt/jwt.h" name="include/cwist/security/jwt/jwt.h">
+<area shape="rect" id="Node000001" title="JWT (JSON Web Token) generation and verification." alt="" coords="108,5,270,50"/>
+<area shape="rect" id="Node000002" href="$d3/db9/middleware_8h_source.html" title=" " alt="" coords="18,98,179,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="159,63,122,100,118,96,155,59"/>
+<area shape="rect" id="Node000004" href="$d8/d80/jwt_8c.html" title="HS256 JWT signing, verification, and decoded&#45;claims access helpers." alt="" coords="202,106,358,134"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="223,59,269,104,265,108,220,63"/>
+<area shape="rect" id="Node000003" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="5,191,192,218"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="101,158,101,190,96,190,96,158"/>
+</map>

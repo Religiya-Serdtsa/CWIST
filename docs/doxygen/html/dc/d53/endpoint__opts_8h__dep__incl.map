@@ -1,0 +1,34 @@
+<map id="include/cwist/sys/app/endpoint_opts.h" name="include/cwist/sys/app/endpoint_opts.h">
+<area shape="rect" id="Node000001" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="524,5,684,50"/>
+<area shape="rect" id="Node000002" href="$dd/d56/http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="523,98,684,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="606,66,606,98,601,98,601,66"/>
+<area shape="rect" id="Node000003" href="$d7/d95/https_8h_source.html" title=" " alt="" coords="523,191,684,235"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="606,158,606,190,601,190,601,158"/>
+<area shape="rect" id="Node000004" href="$d2/d39/app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="77,283,237,328"/>
+<area shape="poly" id="edge14_Node000002_Node000004" title=" " alt="" coords="508,133,351,156,280,173,232,193,210,213,191,237,167,284,162,282,187,234,206,209,229,188,278,168,350,151,507,128"/>
+<area shape="rect" id="Node000006" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="5,469,192,496"/>
+<area shape="poly" id="edge19_Node000002_Node000006" title=" " alt="" coords="508,127,435,133,353,145,268,164,186,193,146,210,115,227,90,249,68,285,54,320,52,350,58,381,68,420,78,445,91,467,86,469,73,448,63,422,52,383,47,351,49,319,63,282,86,245,112,222,143,206,184,188,266,159,352,140,434,128,507,122"/>
+<area shape="rect" id="Node000007" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="454,384,588,412"/>
+<area shape="poly" id="edge18_Node000002_Node000007" title=" " alt="" coords="660,149,681,167,699,189,721,226,734,260,734,293,717,330,691,356,658,375,623,387,589,395,588,390,622,382,656,370,687,352,712,326,729,292,729,261,716,228,695,192,678,171,657,154"/>
+<area shape="rect" id="Node000009" href="$d5/d57/mux_8h_source.html" title=" " alt="" coords="812,191,974,235"/>
+<area shape="poly" id="edge9_Node000002_Node000009" title=" " alt="" coords="688,145,825,188,823,193,687,150"/>
+<area shape="rect" id="Node000010" href="$dd/d49/mux_8c.html" title="Fixed&#45;bucket HTTP route dispatch using a lightweight path signature." alt="" coords="808,292,947,320"/>
+<area shape="poly" id="edge16_Node000002_Node000010" title=" " alt="" coords="669,147,744,188,803,235,864,289,861,293,799,239,741,193,667,152"/>
+<area shape="rect" id="Node000011" href="$db/d64/websocket_8h_source.html" title=" " alt="" coords="243,191,447,235"/>
+<area shape="poly" id="edge11_Node000002_Node000011" title=" " alt="" coords="528,151,408,193,406,188,527,146"/>
+<area shape="rect" id="Node000012" href="$d4/de6/websocket_8c.html" title="WebSocket handshake and frame transport helpers for CWIST handlers." alt="" coords="262,292,484,320"/>
+<area shape="poly" id="edge17_Node000002_Node000012" title=" " alt="" coords="564,154,514,193,462,237,392,293,388,289,458,233,510,189,560,150"/>
+<area shape="rect" id="Node000013" href="$dd/d43/http_8c.html" title="Core HTTP request/response allocation, serialization, socket, and server&#45;loop helpers." alt="" coords="998,199,1135,227"/>
+<area shape="poly" id="edge15_Node000002_Node000013" title=" " alt="" coords="700,134,836,158,987,188,1019,196,1018,201,986,193,835,163,699,139"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="508,235,251,286,238,289,237,283,250,281,507,230"/>
+<area shape="poly" id="edge8_Node000003_Node000007" title=" " alt="" coords="574,248,549,285,538,311,531,339,525,384,519,384,526,338,533,310,544,282,570,245"/>
+<area shape="rect" id="Node000008" href="$d2/db2/https_8c.html" title="OpenSSL&#45;backed HTTPS accept, receive, send, and server&#45;loop helpers." alt="" coords="559,292,702,320"/>
+<area shape="poly" id="edge7_Node000003_Node000008" title=" " alt="" coords="617,249,629,290,624,292,612,251"/>
+<area shape="rect" id="Node000005" href="$d3/db9/middleware_8h_source.html" title=" " alt="" coords="77,376,237,421"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="160,344,160,376,154,376,154,344"/>
+<area shape="poly" id="edge6_Node000004_Node000007" title=" " alt="" coords="253,328,469,381,468,386,252,333"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="135,435,110,470,106,466,131,432"/>
+<area shape="poly" id="edge10_Node000009_Node000010" title=" " alt="" coords="889,251,882,292,877,291,884,250"/>
+<area shape="poly" id="edge12_Node000011_Node000004" title=" " alt="" coords="287,245,203,285,201,281,285,240"/>
+<area shape="poly" id="edge13_Node000011_Node000012" title=" " alt="" coords="359,249,372,290,367,292,354,251"/>
+</map>

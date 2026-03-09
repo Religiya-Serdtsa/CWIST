@@ -1,0 +1,31 @@
+<map id="src/security/jwt/jwt.c" name="src/security/jwt/jwt.c">
+<area shape="rect" id="Node000001" title="HS256 JWT signing, verification, and decoded&#45;claims access helpers." alt="" coords="615,5,771,33"/>
+<area shape="rect" id="Node000002" href="$d5/d6c/jwt_8h.html" title="JWT (JSON Web Token) generation and verification." alt="" coords="71,81,206,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="615,30,439,49,222,83,221,78,438,44,615,25"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="5,174,69,201"/>
+<area shape="poly" id="edge15_Node000001_Node000005" title=" " alt="" coords="615,25,466,32,292,43,140,60,88,71,60,83,48,99,41,118,37,158,32,158,36,117,43,96,57,79,87,66,139,55,292,38,466,26,615,20"/>
+<area shape="rect" id="Node000006" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="230,90,402,117"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="633,36,391,88,390,83,632,31"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="426,90,536,117"/>
+<area shape="poly" id="edge8_Node000001_Node000008" title=" " alt="" coords="660,36,530,86,528,81,658,31"/>
+<area shape="rect" id="Node000009" title=" " alt="" coords="561,90,684,117"/>
+<area shape="poly" id="edge9_Node000001_Node000009" title=" " alt="" coords="684,35,645,80,641,76,680,32"/>
+<area shape="rect" id="Node000010" title=" " alt="" coords="708,90,819,117"/>
+<area shape="poly" id="edge10_Node000001_Node000010" title=" " alt="" coords="706,32,745,76,741,80,702,35"/>
+<area shape="rect" id="Node000011" title=" " alt="" coords="843,90,954,117"/>
+<area shape="poly" id="edge11_Node000001_Node000011" title=" " alt="" coords="727,31,853,81,851,86,725,36"/>
+<area shape="rect" id="Node000012" title=" " alt="" coords="978,90,1043,117"/>
+<area shape="poly" id="edge12_Node000001_Node000012" title=" " alt="" coords="771,30,866,50,967,78,973,81,971,86,966,84,865,55,770,35"/>
+<area shape="rect" id="Node000013" title=" " alt="" coords="1068,90,1137,117"/>
+<area shape="poly" id="edge13_Node000001_Node000013" title=" " alt="" coords="771,25,906,44,982,59,1056,78,1064,81,1062,86,1055,84,981,64,905,49,771,30"/>
+<area shape="rect" id="Node000014" title=" " alt="" coords="1160,90,1231,117"/>
+<area shape="poly" id="edge14_Node000001_Node000014" title=" " alt="" coords="771,21,946,38,1049,55,1150,78,1157,81,1155,86,1148,84,1048,60,946,43,771,27"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="95,174,176,201"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="140,126,139,158,134,158,135,126"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="200,174,274,201"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="166,124,211,161,208,166,163,128"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="113,128,67,166,63,161,110,124"/>
+<area shape="poly" id="edge6_Node000006_Node000004" title=" " alt="" coords="305,120,262,164,258,161,301,116"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="298,174,438,201"/>
+<area shape="poly" id="edge7_Node000006_Node000007" title=" " alt="" coords="326,116,353,159,349,162,322,119"/>
+</map>

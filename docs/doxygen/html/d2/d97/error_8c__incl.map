@@ -1,0 +1,9 @@
+<map id="src/sys/err/error.c" name="src/sys/err/error.c">
+<area shape="rect" id="Node000001" title="Minimal constructors for the framework&#39;s tagged error container." alt="" coords="31,5,164,33"/>
+<area shape="rect" id="Node000002" href="$d7/d82/cwist__err_8h_source.html" title=" " alt="" coords="27,81,168,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="100,34,100,65,95,65,95,34"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="5,174,76,201"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="85,128,61,162,56,159,81,125"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="100,174,210,201"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="115,125,139,159,135,162,111,128"/>
+</map>

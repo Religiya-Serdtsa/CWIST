@@ -1,0 +1,5 @@
+<map id="include/cwist/core/db/migrate.h" name="include/cwist/core/db/migrate.h">
+<area shape="rect" id="Node000001" title="Schema migration system with version history and rollback." alt="" coords="15,5,154,50"/>
+<area shape="rect" id="Node000002" href="$d7/da4/migrate_8c.html" title="Schema migration helpers for applying and rolling back ordered SQL revisions." alt="" coords="5,98,164,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="87,66,87,97,82,97,82,66"/>
+</map>

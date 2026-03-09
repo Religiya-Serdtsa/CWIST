@@ -1,9 +1,16 @@
 var searchData=
 [
-  ['request_5fhash_0',['request_hash',['../d5/d26/structbdr__entry__t.html#a332ed267c4995a8081e776d67c8b3553',1,'bdr_entry_t']]],
-  ['response_5fblob_1',['response_blob',['../d5/d26/structbdr__entry__t.html#a54d99b1285a8d41ac622ecdcc33d19a3',1,'bdr_entry_t']]],
-  ['response_5fhash_2',['response_hash',['../d5/d26/structbdr__entry__t.html#abaf41a985ec47bcc450c0a6100521b95',1,'bdr_entry_t']]],
-  ['retire_5fgrace_5fns_3',['retire_grace_ns',['../d7/dba/structcwist__fix__server__mem.html#aba7e3dc876a2b69838843a3312904e4a',1,'cwist_fix_server_mem']]],
-  ['revalidate_5fhits_4',['revalidate_hits',['../d9/d90/structcwist__bdr__t.html#a4b5c09b0422d6bc9067c64d573e9e2b6',1,'cwist_bdr_t']]],
-  ['router_5',['router',['../dc/da0/structcwist__app.html#a8c33672187918ac728fda9040779ac8f',1,'cwist_app']]]
+  ['macros_2eh_0',['macros.h',['../de/d3c/macros_8h.html',1,'']]],
+  ['make_5ferror_1',['make_error',['../db/dcc/error_8c.html#acebd12423b82bb0e4580503397972ac0',1,'error.c']]],
+  ['max_5fbytes_2',['max_bytes',['../d9/d90/structcwist__bdr__t.html#a6c224571b874ac111326d99deb0ca2c9',1,'cwist_bdr_t']]],
+  ['max_5fentry_5fage_5fsec_3',['max_entry_age_sec',['../d9/d90/structcwist__bdr__t.html#a49d315bce92eae0216a0c5c1f47c680f',1,'cwist_bdr_t']]],
+  ['max_5fmem_5fspace_4',['max_mem_space',['../dc/da0/structcwist__app.html#a0dd0babfca6fb67cfe27d3d8c789443c',1,'cwist_app']]],
+  ['mem_5fdb_5',['mem_db',['../d4/d32/structcwist__nuke__db__t.html#ab729b9bd62d36dd083da0e7ea4abd839',1,'cwist_nuke_db_t']]],
+  ['mem_5fmanager_6',['mem_manager',['../dc/da0/structcwist__app.html#a4e1a5f14818648344e5510d681c92e5d',1,'cwist_app']]],
+  ['middleware_2ec_7',['middleware.c',['../d9/dc9/middleware_8c.html',1,'']]],
+  ['middlewares_8',['middlewares',['../dc/da0/structcwist__app.html#afb89d3fddd42b3afc0c8b3b57d27c6ec',1,'cwist_app']]],
+  ['migrate_2ec_9',['migrate.c',['../d7/da4/migrate_8c.html',1,'']]],
+  ['migrate_2eh_10',['migrate.h',['../d1/d2a/migrate_8h.html',1,'']]],
+  ['model_11',['Encryption model',['../d9/df9/db__crypt_8h.html#autotoc_md1',1,'']]],
+  ['mux_2ec_12',['mux.c',['../dd/d49/mux_8c.html',1,'']]]
 ];

@@ -1,0 +1,13 @@
+<map id="include/cwist/core/utils/zod.h" name="include/cwist/core/utils/zod.h">
+<area shape="rect" id="Node000001" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="85,5,223,50"/>
+<area shape="rect" id="Node000002" href="$db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="79,98,229,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="157,50,157,83,151,83,151,50"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="5,191,87,218"/>
+<area shape="poly" id="edge6_Node000001_Node000003" title=" " alt="" coords="118,53,91,73,70,99,55,138,49,176,44,175,50,136,65,97,88,70,114,49"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="211,191,321,218"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="193,48,220,70,243,97,260,136,267,175,262,176,255,138,238,99,216,73,190,53"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="127,145,77,183,74,179,124,141"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="113,191,187,218"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="156,143,154,175,149,175,150,143"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="185,141,237,179,234,183,182,145"/>
+</map>

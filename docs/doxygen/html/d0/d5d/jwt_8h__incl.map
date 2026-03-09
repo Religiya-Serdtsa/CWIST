@@ -1,0 +1,9 @@
+<map id="include/cwist/security/jwt/jwt.h" name="include/cwist/security/jwt/jwt.h">
+<area shape="rect" id="Node000001" title="JWT (JSON Web Token) generation and verification." alt="" coords="66,5,228,50"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,98,87,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="122,52,76,90,72,86,119,48"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="111,98,184,126"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="150,50,150,82,145,82,145,50"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="208,98,271,126"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="173,48,215,86,212,90,170,52"/>
+</map>

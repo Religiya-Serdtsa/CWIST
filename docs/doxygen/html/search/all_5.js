@@ -1,7 +1,8 @@
 var searchData=
 [
-  ['file_5ftree_0',['file_tree',['../d7/dba/structcwist__fix__server__mem.html#a4df4252f690bc25231ae689dfad64eaa',1,'cwist_fix_server_mem']]],
-  ['files_1',['files',['../d7/dba/structcwist__fix__server__mem.html#abe40d549f052c7d81b2a70b8755fdb68',1,'cwist_fix_server_mem']]],
-  ['files_5fcapacity_2',['files_capacity',['../d7/dba/structcwist__fix__server__mem.html#a400b5c7499bb14fc1e0cef0a142ea332',1,'cwist_fix_server_mem']]],
-  ['fs_5fpath_3',['fs_path',['../d6/de0/structcwist__file__t.html#a57ddfa38195cb94a9f2579b71d24df5f',1,'cwist_file_t']]]
+  ['encryption_20model_0',['Encryption model',['../d9/df9/db__crypt_8h.html#autotoc_md1',1,'']]],
+  ['endpoint_5fopts_1',['endpoint_opts',['../dd/d22/structcwist__http__response.html#a128a2953a2f58e9d2dd9901a4d899e92',1,'cwist_http_response']]],
+  ['endpoint_5fopts_2eh_2',['endpoint_opts.h',['../de/d66/endpoint__opts_8h.html',1,'']]],
+  ['error_2ec_3',['error.c',['../db/dcc/error_8c.html',1,'']]],
+  ['error_5fhandler_4',['error_handler',['../dc/da0/structcwist__app.html#a2703e224f695e88ae59307f220af0554',1,'cwist_app']]]
 ];

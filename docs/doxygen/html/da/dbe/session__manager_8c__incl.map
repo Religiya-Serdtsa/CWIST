@@ -1,0 +1,18 @@
+<map id="src/sys/session/session_manager.c" name="src/sys/session/session_manager.c">
+<area shape="rect" id="Node000001" title="Session allocation helpers built from a resettable arena and RC payloads." alt="" coords="289,5,461,50"/>
+<area shape="rect" id="Node000002" href="$d7/d95/session__manager_8h.html" title="Request&#45;scoped arena and shared&#45;payload helpers for session data." alt="" coords="5,98,193,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="310,53,180,95,178,90,308,48"/>
+<area shape="rect" id="Node000005" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="217,106,389,134"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="360,52,325,96,321,92,356,49"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="414,106,483,134"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="394,49,430,93,426,96,390,52"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="506,106,577,134"/>
+<area shape="poly" id="edge8_Node000001_Node000008" title=" " alt="" coords="416,48,505,96,503,101,414,53"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="148,191,221,218"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="123,141,161,178,158,181,120,145"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="53,191,124,218"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="99,143,95,175,89,175,94,143"/>
+<area shape="poly" id="edge5_Node000005_Node000003" title=" " alt="" coords="285,137,217,184,214,179,282,133"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="245,191,385,218"/>
+<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="308,134,314,175,308,176,302,135"/>
+</map>

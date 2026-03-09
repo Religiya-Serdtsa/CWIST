@@ -1,0 +1,5 @@
+<map id="session_manager" name="session_manager">
+<area shape="rect" id="Node000001" title="Top&#45;level session allocator state owned by a request context." alt="" coords="5,106,141,134"/>
+<area shape="rect" id="Node000002" href="$d4/d6b/structsession__arena.html" title="Linear arena used for fast request&#45;lifetime allocations." alt="" coords="16,5,130,33"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="76,49,76,105,70,105,70,49"/>
+</map>
