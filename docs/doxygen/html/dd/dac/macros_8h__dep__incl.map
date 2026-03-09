@@ -1,0 +1,18 @@
+<map id="include/cwist/core/macros.h" name="include/cwist/core/macros.h">
+<area shape="rect" id="Node000001" title="Convenience size&#45;conversion and utility macros shared across CWIST." alt="" coords="410,5,548,50"/>
+<area shape="rect" id="Node000002" href="$d2/d39/app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="163,98,323,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="409,58,300,100,298,95,407,53"/>
+<area shape="rect" id="Node000004" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="130,283,316,311"/>
+<area shape="poly" id="edge7_Node000001_Node000004" title=" " alt="" coords="430,61,408,79,389,100,377,118,371,135,365,168,358,201,350,219,337,237,302,266,263,285,261,280,299,261,333,234,345,216,353,200,360,167,366,134,373,116,385,96,404,75,427,57"/>
+<area shape="rect" id="Node000006" href="$d0/d14/nuke__db_8c.html" title="In&#45;memory SQLite mirroring layer that can fall back to disk under memory pressure." alt="" coords="398,106,560,134"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="482,66,482,106,476,106,476,66"/>
+<area shape="rect" id="Node000007" href="$dc/da3/big__dumb__reply_8c.html" title="Opportunistic response cache that stores stable GET replies in memory or on disk." alt="" coords="583,98,745,143"/>
+<area shape="poly" id="edge6_Node000001_Node000007" title=" " alt="" coords="538,55,621,95,619,100,536,60"/>
+<area shape="rect" id="Node000008" href="$d8/d99/sys__info_8c.html" title="Cross&#45;platform helpers for estimating available RAM and low&#45;memory pressure." alt="" coords="770,106,905,134"/>
+<area shape="poly" id="edge8_Node000001_Node000008" title=" " alt="" coords="564,47,758,95,789,103,787,108,757,101,562,52"/>
+<area shape="rect" id="Node000003" href="$d3/db9/middleware_8h_source.html" title=" " alt="" coords="5,191,166,235"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="194,153,124,193,122,188,191,148"/>
+<area shape="rect" id="Node000005" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="190,199,323,227"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="251,157,257,198,252,199,246,158"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="136,241,202,280,199,285,133,246"/>
+</map>

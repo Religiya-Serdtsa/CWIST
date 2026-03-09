@@ -1,9 +1,9 @@
 <map id="include/cwist/sys/sys_info.h" name="include/cwist/sys/sys_info.h">
-<area shape="rect" id="Node000001" title="System Resource Monitoring Utilities." alt="" coords="194,5,353,45"/>
-<area shape="rect" id="Node000002" href="$d0/d14/nuke__db_8c_source.html" title=" " alt="" coords="5,101,168,126"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="221,53,113,103,110,98,219,49"/>
-<area shape="rect" id="Node000003" href="$dc/da3/big__dumb__reply_8c_source.html" title=" " alt="" coords="192,93,355,133"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="276,59,276,93,271,93,271,59"/>
-<area shape="rect" id="Node000004" href="$d8/d99/sys__info_8c_source.html" title=" " alt="" coords="379,101,515,126"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="325,49,425,98,422,103,322,54"/>
+<area shape="rect" id="Node000001" title="System Resource Monitoring Utilities." alt="" coords="192,5,350,50"/>
+<area shape="rect" id="Node000002" href="$d0/d14/nuke__db_8c.html" title="In&#45;memory SQLite mirroring layer that can fall back to disk under memory pressure." alt="" coords="5,106,167,134"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="215,59,114,108,112,104,212,55"/>
+<area shape="rect" id="Node000003" href="$dc/da3/big__dumb__reply_8c.html" title="Opportunistic response cache that stores stable GET replies in memory or on disk." alt="" coords="190,98,352,143"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="274,66,274,98,269,98,269,66"/>
+<area shape="rect" id="Node000004" href="$d8/d99/sys__info_8c.html" title="Cross&#45;platform helpers for estimating available RAM and low&#45;memory pressure." alt="" coords="377,106,512,134"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="327,55,421,104,418,108,325,60"/>
 </map>

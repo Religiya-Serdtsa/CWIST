@@ -1,0 +1,7 @@
+<map id="src/net/websocket/ws_utils.h" name="src/net/websocket/ws_utils.h">
+<area shape="rect" id="Node000001" title="Internal cryptographic helpers used during the WebSocket handshake." alt="" coords="144,5,305,50"/>
+<area shape="rect" id="Node000002" href="$d4/de6/websocket_8c.html" title="WebSocket handshake and frame transport helpers for CWIST handlers." alt="" coords="5,106,228,134"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="189,62,134,108,131,104,186,58"/>
+<area shape="rect" id="Node000003" href="$df/db2/ws__utils_8c.html" title="Small SHA&#45;1 and Base64 helpers used by the WebSocket handshake path." alt="" coords="252,98,413,143"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="263,58,308,95,305,100,260,62"/>
+</map>

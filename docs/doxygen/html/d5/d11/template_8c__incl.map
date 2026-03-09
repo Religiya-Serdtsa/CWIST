@@ -1,0 +1,30 @@
+<map id="src/core/template/template.c" name="src/core/template/template.c">
+<area shape="rect" id="Node000001" title="Minimal template renderer supporting variable substitution and simple control flow." alt="" coords="165,5,374,33"/>
+<area shape="rect" id="Node000002" href="$de/db8/template_8h_source.html" title=" " alt="" coords="195,81,345,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="272,34,272,65,267,65,267,34"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="5,275,76,302"/>
+<area shape="poly" id="edge15_Node000001_Node000004" title=" " alt="" coords="234,36,195,55,157,83,120,127,90,176,68,223,52,261,47,259,63,221,86,173,116,124,153,79,192,51,232,31"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="99,275,168,302"/>
+<area shape="poly" id="edge14_Node000001_Node000005" title=" " alt="" coords="243,36,212,55,185,83,162,127,148,176,140,222,137,260,132,259,135,221,143,175,157,125,181,79,209,51,240,31"/>
+<area shape="rect" id="Node000010" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="418,90,591,117"/>
+<area shape="poly" id="edge10_Node000001_Node000010" title=" " alt="" coords="308,31,454,82,452,87,307,36"/>
+<area shape="rect" id="Node000013" title=" " alt="" coords="614,90,680,117"/>
+<area shape="poly" id="edge13_Node000001_Node000013" title=" " alt="" coords="375,30,487,48,604,78,610,81,609,86,602,84,485,54,374,35"/>
+<area shape="rect" id="Node000003" href="$d1/d34/sstring_8h_source.html" title=" " alt="" coords="196,174,331,218"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="271,126,269,158,263,158,266,126"/>
+<area shape="rect" id="Node000009" title=" " alt="" coords="372,359,482,387"/>
+<area shape="poly" id="edge9_Node000002_Node000009" title=" " alt="" coords="312,124,349,148,389,180,426,219,455,265,460,286,459,308,445,346,440,344,453,306,455,287,450,267,422,223,385,184,346,152,309,129"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="207,221,88,269,84,271,82,266,86,264,205,216"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="234,221,167,268,164,263,231,216"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="358,275,440,302"/>
+<area shape="poly" id="edge5_Node000003_Node000006" title=" " alt="" coords="297,217,369,264,366,268,294,221"/>
+<area shape="rect" id="Node000007" href="$d7/d82/cwist__err_8h_source.html" title=" " alt="" coords="192,266,334,311"/>
+<area shape="poly" id="edge6_Node000003_Node000007" title=" " alt="" coords="266,219,266,251,260,251,260,219"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="228,359,298,387"/>
+<area shape="poly" id="edge7_Node000007_Node000008" title=" " alt="" coords="266,311,266,343,260,343,260,311"/>
+<area shape="poly" id="edge8_Node000007_Node000009" title=" " alt="" coords="308,309,389,349,386,354,305,314"/>
+<area shape="rect" id="Node000011" title=" " alt="" coords="516,182,589,210"/>
+<area shape="poly" id="edge11_Node000010_Node000011" title=" " alt="" coords="514,116,541,167,536,170,509,119"/>
+<area shape="rect" id="Node000012" title=" " alt="" coords="613,182,753,210"/>
+<area shape="poly" id="edge12_Node000010_Node000012" title=" " alt="" coords="532,115,645,172,643,177,529,120"/>
+</map>

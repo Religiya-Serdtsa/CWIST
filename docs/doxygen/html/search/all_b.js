@@ -1,6 +1,5 @@
 var searchData=
 [
-  ['node_0',['node',['../d6/de0/structcwist__file__t.html#a413740e983d5ace023d4841c13aee2e5',1,'cwist_file_t']]],
-  ['nuke_5fdb_2eh_1',['nuke_db.h',['../dc/dfe/nuke__db_8h.html',1,'']]],
-  ['nuke_5fenabled_2',['nuke_enabled',['../dc/da0/structcwist__app.html#a02dc98c0c714a3e35dee89e9df1e7afc',1,'cwist_app']]]
+  ['kek_0',['kek',['../dc/d2b/structcwist__db__crypt__ctx__t.html#a0b3dc3ba33e220c07834a5a71da6247d',1,'cwist_db_crypt_ctx_t']]],
+  ['kqueue_2ec_1',['kqueue.c',['../dd/d2e/kqueue_8c.html',1,'']]]
 ];

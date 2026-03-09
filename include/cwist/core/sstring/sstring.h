@@ -9,6 +9,7 @@
 typedef struct cwist_sstring {
   char   *data;  ///< Access directly only when raw handling is necessary.
   bool   is_fixed;
+  bool   owns_storage;
   size_t size;
   size_t (*get_size)(struct cwist_sstring *str);
   int    (*compare )(struct cwist_sstring *left, const struct cwist_sstring *right); ///< Should mimic `strcmp`, internally use `strncmp`.

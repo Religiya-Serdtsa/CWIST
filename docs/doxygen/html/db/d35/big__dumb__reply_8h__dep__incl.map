@@ -1,13 +1,13 @@
 <map id="include/cwist/sys/app/big_dumb_reply.h" name="include/cwist/sys/app/big_dumb_reply.h">
-<area shape="rect" id="Node000001" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="197,5,358,45"/>
-<area shape="rect" id="Node000002" href="$d2/d39/app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="103,93,265,133"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="248,57,206,95,203,91,245,53"/>
-<area shape="rect" id="Node000006" href="$dc/da3/big__dumb__reply_8c_source.html" title=" " alt="" coords="289,93,452,133"/>
-<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="310,53,352,91,348,95,306,57"/>
-<area shape="rect" id="Node000003" href="$d3/db9/middleware_8h_source.html" title=" " alt="" coords="18,181,179,221"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="157,145,119,183,116,179,154,141"/>
-<area shape="rect" id="Node000005" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="203,189,338,214"/>
-<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="215,141,261,186,257,190,211,145"/>
-<area shape="rect" id="Node000004" href="$d9/dc9/middleware_8c_source.html" title=" " alt="" coords="5,269,192,295"/>
-<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="101,235,101,269,96,269,96,235"/>
+<area shape="rect" id="Node000001" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="196,5,356,50"/>
+<area shape="rect" id="Node000002" href="$d2/d39/app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="104,98,264,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="245,63,207,100,204,96,241,59"/>
+<area shape="rect" id="Node000006" href="$dc/da3/big__dumb__reply_8c.html" title="Opportunistic response cache that stores stable GET replies in memory or on disk." alt="" coords="288,98,450,143"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="311,59,349,96,345,100,307,63"/>
+<area shape="rect" id="Node000003" href="$d3/db9/middleware_8h_source.html" title=" " alt="" coords="18,191,179,235"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="155,156,121,192,117,189,151,152"/>
+<area shape="rect" id="Node000005" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="202,199,336,227"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="216,152,259,197,255,200,212,156"/>
+<area shape="rect" id="Node000004" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="5,283,192,311"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="101,251,101,283,96,283,96,251"/>
 </map>

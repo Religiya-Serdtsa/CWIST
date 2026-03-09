@@ -1,0 +1,12 @@
+<map id="include/cwist/net/db_sync/db_sync.h" name="include/cwist/net/db_sync/db_sync.h">
+<area shape="rect" id="Node000001" title="Server&#45;to&#45;server SQLite database synchronisation over TCP." alt="" coords="76,5,227,50"/>
+<area shape="rect" id="Node000002" href="$d9/df9/db__crypt_8h.html" title="Two&#45;level key hierarchy for encrypting an SQLite database blob." alt="" coords="66,98,237,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="154,50,154,83,149,83,149,50"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="5,191,79,218"/>
+<area shape="poly" id="edge5_Node000001_Node000003" title=" " alt="" coords="107,53,79,73,56,99,48,118,44,137,42,176,37,175,38,137,43,116,52,97,75,69,104,48"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="261,106,338,134"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="188,48,266,96,264,100,185,53"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="124,145,73,183,70,179,121,141"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="116,191,186,218"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="154,143,154,175,149,175,149,143"/>
+</map>

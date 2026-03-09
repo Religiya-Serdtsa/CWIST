@@ -1,0 +1,5 @@
+<map id="cwist_schema" name="cwist_schema">
+<area shape="rect" id="Node000001" title="A complete schema: array of field descriptors + count." alt="" coords="23,106,136,134"/>
+<area shape="rect" id="Node000002" href="$d6/d03/structcwist__schema__field.html" title="Single field descriptor used by both the healer and the Zod validator." alt="" coords="5,5,154,33"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="82,49,82,105,77,105,77,49"/>
+</map>

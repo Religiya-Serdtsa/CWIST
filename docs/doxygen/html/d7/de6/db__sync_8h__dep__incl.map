@@ -1,0 +1,5 @@
+<map id="include/cwist/net/db_sync/db_sync.h" name="include/cwist/net/db_sync/db_sync.h">
+<area shape="rect" id="Node000001" title="Server&#45;to&#45;server SQLite database synchronisation over TCP." alt="" coords="5,5,157,50"/>
+<area shape="rect" id="Node000002" href="$d4/d48/db__sync_8c.html" title="Minimal TCP protocol for shipping encrypted SQLite snapshots between peers." alt="" coords="10,98,152,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="84,66,84,98,78,98,78,66"/>
+</map>

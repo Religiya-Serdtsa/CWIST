@@ -1,0 +1,27 @@
+var annotated_dup =
+[
+    [ "bdr_entry_t", "d5/d26/structbdr__entry__t.html", "d5/d26/structbdr__entry__t" ],
+    [ "cwist_app", "dc/da0/structcwist__app.html", "dc/da0/structcwist__app" ],
+    [ "cwist_bdr_t", "d9/d90/structcwist__bdr__t.html", "d9/d90/structcwist__bdr__t" ],
+    [ "cwist_db", "dd/d55/structcwist__db.html", null ],
+    [ "cwist_db_crypt_ctx_t", "dc/d2b/structcwist__db__crypt__ctx__t.html", "dc/d2b/structcwist__db__crypt__ctx__t" ],
+    [ "cwist_file_t", "d6/de0/structcwist__file__t.html", "d6/de0/structcwist__file__t" ],
+    [ "cwist_fix_server_mem", "d7/dba/structcwist__fix__server__mem.html", "d7/dba/structcwist__fix__server__mem" ],
+    [ "cwist_gc", "d8/d25/structcwist__gc.html", null ],
+    [ "cwist_heal_config", "d4/d38/structcwist__heal__config.html", "d4/d38/structcwist__heal__config" ],
+    [ "cwist_heal_result", "d5/d02/structcwist__heal__result.html", "d5/d02/structcwist__heal__result" ],
+    [ "cwist_http_header_node", "d3/d72/structcwist__http__header__node.html", null ],
+    [ "cwist_http_response", "dd/d22/structcwist__http__response.html", "dd/d22/structcwist__http__response" ],
+    [ "cwist_https_context", "dd/dcc/structcwist__https__context.html", null ],
+    [ "cwist_json_builder", "d7/ddf/structcwist__json__builder.html", null ],
+    [ "cwist_middleware_node", "d8/d41/structcwist__middleware__node.html", null ],
+    [ "cwist_migration_t", "da/d46/structcwist__migration__t.html", "da/d46/structcwist__migration__t" ],
+    [ "cwist_nuke_db_t", "d4/d32/structcwist__nuke__db__t.html", "d4/d32/structcwist__nuke__db__t" ],
+    [ "cwist_schema", "d5/d83/structcwist__schema.html", null ],
+    [ "cwist_schema_field", "d6/d03/structcwist__schema__field.html", "d6/d03/structcwist__schema__field" ],
+    [ "cwist_zod_error", "dc/d5f/structcwist__zod__error.html", null ],
+    [ "cwist_zod_result", "dd/d71/structcwist__zod__result.html", null ],
+    [ "session_arena", "d4/d6b/structsession__arena.html", null ],
+    [ "session_manager", "de/d64/structsession__manager.html", null ],
+    [ "session_rc_header", "d7/d9b/structsession__rc__header.html", null ]
+];
