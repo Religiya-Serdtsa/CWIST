@@ -7,8 +7,17 @@
 #include <stdio.h>
 #include <uriparser/Uri.h>
 
+/**
+ * @file query.c
+ * @brief Hash-map based storage and parsing helpers for URL query parameters.
+ */
+
 #define CWIST_QUERY_MAP_DEFAULT_SIZE 16
 
+/**
+ * @brief Allocate a query map and seed its SipHash key material.
+ * @return Newly allocated map, or NULL when memory allocation fails.
+ */
 cwist_query_map *cwist_query_map_create(void) {
     cwist_query_map *map = (cwist_query_map *)cwist_alloc(sizeof(cwist_query_map));
     if (!map) return NULL;
@@ -24,6 +33,10 @@ cwist_query_map *cwist_query_map_create(void) {
     return map;
 }
 
+/**
+ * @brief Release every bucket node and the map container itself.
+ * @param map Query map to destroy.
+ */
 void cwist_query_map_destroy(cwist_query_map *map) {
     if (!map) return;
     cwist_query_map_clear(map);
@@ -31,6 +44,10 @@ void cwist_query_map_destroy(cwist_query_map *map) {
     cwist_free(map);
 }
 
+/**
+ * @brief Remove every key/value pair while keeping the bucket array allocated.
+ * @param map Query map to clear in-place.
+ */
 void cwist_query_map_clear(cwist_query_map *map) {
     if (!map) return;
     for (size_t i = 0; i < map->size; i++) {
@@ -46,6 +63,12 @@ void cwist_query_map_clear(cwist_query_map *map) {
     }
 }
 
+/**
+ * @brief Insert or replace a decoded query parameter in the map.
+ * @param map Query map that owns the entry storage.
+ * @param key Decoded query-string key.
+ * @param value Decoded query-string value.
+ */
 void cwist_query_map_set(cwist_query_map *map, const char *key, const char *value) {
     if (!map || !key || !value) return;
 
@@ -72,6 +95,12 @@ void cwist_query_map_set(cwist_query_map *map, const char *key, const char *valu
     map->buckets[index] = node;
 }
 
+/**
+ * @brief Look up a decoded query parameter by key.
+ * @param map Query map to search.
+ * @param key Decoded key to retrieve.
+ * @return Stored value, or NULL when the key is absent.
+ */
 const char *cwist_query_map_get(cwist_query_map *map, const char *key) {
     if (!map || !key) return NULL;
 
@@ -88,6 +117,11 @@ const char *cwist_query_map_get(cwist_query_map *map, const char *key) {
     return NULL;
 }
 
+/**
+ * @brief Parse a raw `a=1&b=2` query string into the existing map.
+ * @param map Destination map that receives decoded keys and values.
+ * @param raw_query Raw query substring without the leading question mark.
+ */
 void cwist_query_map_parse(cwist_query_map *map, const char *raw_query) {
     if (!map || !raw_query || strlen(raw_query) == 0) return;
 

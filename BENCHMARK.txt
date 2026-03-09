@@ -1,4 +1,41 @@
-yjlee@elegant:~/cev$ ab -n 100 -c 85 -k http://localhost:31744/
+CWIST BENCHMARK SNAPSHOT
+
+This file keeps the raw throughput transcript together with the container
+profile that was active during the measurement.  The goal is to make each run
+useful as a benchmark reference instead of leaving an isolated requests/second
+number with no surrounding context.
+
+== ENVIRONMENT ==
+
+Kernel                 : Linux 6.14.0-1017-azure x86_64
+Visible logical CPUs   : 4
+CPU allocation         : cpuset 0-3
+Processor              : AMD EPYC 7763 64-Core Processor
+Topology               : 1 socket / 2 cores / 2 threads per core
+Observed clock         : 3.23 GHz to 3.31 GHz during capture
+Scheduler tick         : 100 Hz (getconf CLK_TCK)
+Throttle counters      : nr_throttled=0, throttled_usec=0 at capture time
+
+== WORKLOAD ==
+
+Command                : ab -n 100 -c 85 -k http://localhost:31744/
+Server hostname        : localhost
+Server port            : 31744
+Document path          : /
+Document length        : 8797 bytes
+
+== RESULT SUMMARY ==
+
+Requests per second    : 2958.40 [#/sec] (mean)
+Time per request       : 28.732 ms (mean)
+Time per concurrent req: 0.338 ms (mean, across all concurrent requests)
+Failed requests        : 0
+Keep-Alive requests    : 100
+Transfer rate          : 25675.14 Kbytes/sec received
+
+== RAW APACHEBENCH OUTPUT ==
+
+$ ab -n 100 -c 85 -k http://localhost:31744/
 This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
 Licensed to The Apache Software Foundation, http://www.apache.org/
@@ -6,7 +43,7 @@ Licensed to The Apache Software Foundation, http://www.apache.org/
 Benchmarking localhost (be patient).....done
 
 
-Server Software:        
+Server Software:
 Server Hostname:        localhost
 Server Port:            31744
 
@@ -42,4 +79,3 @@ Percentage of the requests served within a certain time (ms)
   98%     31
   99%     31
  100%     31 (longest request)
-yjlee@elegant:~/cev$ 

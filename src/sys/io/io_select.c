@@ -5,6 +5,11 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
+/**
+ * @file io_select.c
+ * @brief Lock-free job queue fallback used when no platform-specific async backend is selected.
+ */
+
 typedef struct job_node {
     cwist_job_func func;
     void *arg;
@@ -20,6 +25,12 @@ struct cwist_io_queue {
     pthread_cond_t sleep_cond;
 };
 
+/**
+ * @brief Allocate a queue node for a submitted job.
+ * @param func Callback to execute.
+ * @param arg User data forwarded to @p func.
+ * @return Newly allocated node, or NULL when allocation fails.
+ */
 static job_node_t *cwist_job_node_create(cwist_job_func func, void *arg) {
     job_node_t *node = cwist_alloc(sizeof(*node));
     if (!node) return NULL;
@@ -29,11 +40,20 @@ static job_node_t *cwist_job_node_create(cwist_job_func func, void *arg) {
     return node;
 }
 
+/**
+ * @brief Release a queue node previously allocated for a job or sentinel.
+ * @param node Node to destroy.
+ */
 static void cwist_job_node_destroy(job_node_t *node) {
     if (!node) return;
     cwist_free(node);
 }
 
+/**
+ * @brief Push a node onto the Michael-Scott style linked queue.
+ * @param q Queue receiving the new job.
+ * @param node Node to append.
+ */
 static void cwist_queue_push(cwist_io_queue *q, job_node_t *node) {
     atomic_store_explicit(&node->next, NULL, memory_order_relaxed);
     while (1) {
@@ -65,6 +85,11 @@ static void cwist_queue_push(cwist_io_queue *q, job_node_t *node) {
     }
 }
 
+/**
+ * @brief Pop the next executable node from the queue.
+ * @param q Queue to consume from.
+ * @return Next job node, or NULL when the queue is empty.
+ */
 static job_node_t *cwist_queue_pop(cwist_io_queue *q) {
     while (1) {
         job_node_t *head = atomic_load_explicit(&q->head, memory_order_acquire);
@@ -88,6 +113,11 @@ static job_node_t *cwist_queue_pop(cwist_io_queue *q) {
     }
 }
 
+/**
+ * @brief Sleep until work arrives or shutdown is requested.
+ * @param q Queue whose condition variable should be observed.
+ * @return true when work may still arrive, false when the queue is stopping and empty.
+ */
 static bool cwist_queue_wait(cwist_io_queue *q) {
     pthread_mutex_lock(&q->sleep_lock);
     while (atomic_load_explicit(&q->pending_jobs, memory_order_acquire) == 0 &&
@@ -101,6 +131,11 @@ static bool cwist_queue_wait(cwist_io_queue *q) {
     return should_continue;
 }
 
+/**
+ * @brief Allocate a queue instance and install its sentinel node.
+ * @param capacity Requested capacity hint. Currently unused by the select fallback.
+ * @return Queue handle, or NULL when allocation or synchronization setup fails.
+ */
 cwist_io_queue *cwist_io_queue_create(size_t capacity) {
     (void)capacity;
     cwist_io_queue *q = cwist_alloc(sizeof(*q));
@@ -131,6 +166,13 @@ cwist_io_queue *cwist_io_queue_create(size_t capacity) {
     return q;
 }
 
+/**
+ * @brief Submit a callback for asynchronous execution by the queue runner.
+ * @param q Queue that should own the job.
+ * @param func Callback to execute.
+ * @param arg User payload forwarded to @p func.
+ * @return true on success, or false when the queue is shutting down or OOM.
+ */
 bool cwist_io_queue_submit(cwist_io_queue *q, cwist_job_func func, void *arg) {
     if (!q || !func) return false;
     if (!atomic_load_explicit(&q->running, memory_order_acquire)) {
@@ -143,6 +185,10 @@ bool cwist_io_queue_submit(cwist_io_queue *q, cwist_job_func func, void *arg) {
     return true;
 }
 
+/**
+ * @brief Drain queued jobs until shutdown is requested and no work remains.
+ * @param q Queue to run on the current thread.
+ */
 void cwist_io_queue_run(cwist_io_queue *q) {
     if (!q) return;
     while (atomic_load_explicit(&q->running, memory_order_acquire) ||
@@ -164,6 +210,10 @@ void cwist_io_queue_run(cwist_io_queue *q) {
     }
 }
 
+/**
+ * @brief Stop the queue, wake sleepers, and free every remaining node.
+ * @param q Queue instance to destroy.
+ */
 void cwist_io_queue_destroy(cwist_io_queue *q) {
     if (!q) return;
     atomic_store_explicit(&q->running, false, memory_order_release);

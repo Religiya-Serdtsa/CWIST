@@ -4,10 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Forward declaration
+/**
+ * @file template.c
+ * @brief Minimal template renderer supporting variable substitution and simple control flow.
+ */
+
+/** @brief Forward declaration for recursive block rendering. */
 static cwist_sstring* render_internal(const char **template_str, const cJSON *context);
 
-// Helper to get a value from cJSON context, supports dot notation for nested objects.
+/**
+ * @brief Resolve a value from the current JSON context using dotted lookup syntax.
+ * @param context Current object/array context used for template expansion.
+ * @param key Dot-separated key path, or "." for the current loop item.
+ * @return Matching cJSON node, or NULL when the path cannot be resolved.
+ */
 static const cJSON* get_value_from_context(const cJSON *context, const char *key) {
     if (!context || !key) return NULL;
 
@@ -36,6 +46,12 @@ static const cJSON* get_value_from_context(const cJSON *context, const char *key
 }
 
 
+/**
+ * @brief Recursively render a template string until the current control block ends.
+ * @param template_str Cursor into the template source; advanced as tags are consumed.
+ * @param context JSON context used for variable lookups and loop bindings.
+ * @return Newly allocated rendered string fragment, or NULL on invalid input.
+ */
 static cwist_sstring* render_internal(const char **template_str, const cJSON *context) {
     if (!template_str || !*template_str) return NULL;
 
@@ -149,11 +165,23 @@ static cwist_sstring* render_internal(const char **template_str, const cJSON *co
     return output;
 }
 
+/**
+ * @brief Render an in-memory template string against a JSON context object.
+ * @param template_str Template source to render.
+ * @param context JSON object supplying values for substitutions and control flow.
+ * @return Heap-allocated rendered output, or NULL on failure.
+ */
 cwist_sstring* cwist_template_render(const char *template_str, const cJSON *context) {
     const char *p = template_str;
     return render_internal(&p, context);
 }
 
+/**
+ * @brief Load a template file from disk and render it against a JSON context.
+ * @param file_path Path to the template file to open.
+ * @param context JSON object supplying values for substitutions and control flow.
+ * @return Heap-allocated rendered output, or NULL when file IO or rendering fails.
+ */
 cwist_sstring* cwist_template_render_file(const char *file_path, const cJSON *context) {
     FILE *f = fopen(file_path, "rb");
     if (!f) {

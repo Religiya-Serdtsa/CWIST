@@ -6,9 +6,18 @@
 #include <string.h>
 #include <unistd.h>
 
+/**
+ * @file sys_info.c
+ * @brief Cross-platform helpers for estimating available RAM and low-memory pressure.
+ */
+
 #if defined(__linux__)
 #include <sys/sysinfo.h>
 
+/**
+ * @brief Estimate currently available RAM on Linux using sysinfo or /proc/meminfo.
+ * @return Available RAM in bytes, or 0 when the platform cannot provide an estimate.
+ */
 uint64_t cwist_get_available_ram(void) {
     // Attempt 1: sysinfo() (Fastest, standard libc)
     struct sysinfo si;
@@ -41,6 +50,10 @@ uint64_t cwist_get_available_ram(void) {
 #include <sys/types.h>
 #include <sys/sysctl.h>
 
+/**
+ * @brief Estimate currently available RAM on Apple and BSD platforms.
+ * @return Available RAM in bytes, or 0 when the platform cannot provide an estimate.
+ */
 uint64_t cwist_get_available_ram(void) {
     // macOS/BSD Logic
     // Getting strict "Available" like Linux is harder. 
@@ -70,11 +83,20 @@ uint64_t cwist_get_available_ram(void) {
 }
 
 #else
+/**
+ * @brief Fallback RAM estimate for unsupported platforms.
+ * @return Conservative mock availability used when no platform-specific API exists.
+ */
 uint64_t cwist_get_available_ram(void) {
     return CWIST_GIB(1); // Default Mock
 }
 #endif
 
+/**
+ * @brief Check whether the current available RAM is below a caller-supplied threshold.
+ * @param threshold_bytes Threshold in bytes that marks memory as critical.
+ * @return true when the estimated available RAM is below the threshold.
+ */
 bool cwist_is_ram_critical(uint64_t threshold_bytes) {
     uint64_t avail = cwist_get_available_ram();
     if (avail == 0) return false; // Could not detect, assume safe

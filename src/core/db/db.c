@@ -10,6 +10,11 @@
 #include <ctype.h>
 #include <stdbool.h>
 
+/**
+ * @file db.c
+ * @brief SQLite convenience wrappers plus lightweight heuristics for query execution and JSON healing.
+ */
+
 typedef struct {
     uint32_t join_count;
     uint32_t predicate_count;
@@ -17,6 +22,11 @@ typedef struct {
 } cwist_db_plan_hint;
 
 /* Bhaskara II style integer-root refinement keeps everything in integer space. */
+/**
+ * @brief Compute an integer square-root style refinement for heuristic scaling.
+ * @param value Input value to reduce.
+ * @return Integer root approximation used for timeout tuning.
+ */
 static uint64_t cwist_db_integer_root(uint64_t value) {
     if (value == 0) return 0;
     uint64_t x = value;
@@ -28,10 +38,22 @@ static uint64_t cwist_db_integer_root(uint64_t value) {
     return x;
 }
 
+/**
+ * @brief Check whether a character is an ASCII alphabetic letter.
+ * @param c Character to classify.
+ * @return true when @p c is an ASCII letter.
+ */
 static bool cwist_db_is_alpha(char c) {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
+/**
+ * @brief Match an uppercase SQL keyword at a specific position with identifier boundaries.
+ * @param sql SQL string to inspect.
+ * @param pos Candidate keyword start position.
+ * @param kw Uppercase keyword to match.
+ * @return true when the keyword occurs at @p pos with token boundaries.
+ */
 static bool cwist_db_match_keyword(const char *sql, size_t pos, const char *kw) {
     size_t i = 0;
     while (kw[i]) {
@@ -51,6 +73,11 @@ static bool cwist_db_match_keyword(const char *sql, size_t pos, const char *kw) 
     return true;
 }
 
+/**
+ * @brief Derive simple execution heuristics from raw SQL text.
+ * @param sql SQL text to analyze.
+ * @return Hint bundle containing join count, predicate count, and symbolic weight.
+ */
 static cwist_db_plan_hint cwist_db_analyze_sql(const char *sql) {
     cwist_db_plan_hint hint = {0, 0, 0};
     if (!sql) return hint;
@@ -78,6 +105,11 @@ static cwist_db_plan_hint cwist_db_analyze_sql(const char *sql) {
     return hint;
 }
 
+/**
+ * @brief Apply coarse SQLite pragmas and busy timeouts derived from the SQL hint.
+ * @param conn SQLite connection to tune.
+ * @param hint Analyzed SQL complexity hint.
+ */
 static void cwist_db_apply_hint(sqlite3 *conn, const cwist_db_plan_hint *hint) {
     if (!conn || !hint) return;
     uint64_t complexity = hint->symbolic_weight +
@@ -95,6 +127,12 @@ static void cwist_db_apply_hint(sqlite3 *conn, const cwist_db_plan_hint *hint) {
 }
 
 // Make SQLite Error type as cwist_error_t
+/**
+ * @brief Convert an SQLite result code and message into CWIST's JSON error form.
+ * @param rc SQLite result code.
+ * @param msg SQLite-provided human-readable message.
+ * @return JSON-backed CWIST error object.
+ */
 static cwist_error_t make_sqlite_error(int rc, char *msg) {
     cwist_error_t err = make_error(CWIST_ERR_JSON);
     err.error.err_json = cJSON_CreateObject();
@@ -105,6 +143,12 @@ static cwist_error_t make_sqlite_error(int rc, char *msg) {
 
 // Open SQLite database file
 // 0 on success, -1 on failure
+/**
+ * @brief Open a SQLite database and wrap the resulting connection in a CWIST handle.
+ * @param db Output pointer receiving the allocated database wrapper.
+ * @param path Filesystem path or SQLite URI to open.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_db_open(cwist_db **db, const char *path) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     
@@ -134,6 +178,10 @@ cwist_error_t cwist_db_open(cwist_db **db, const char *path) {
     return err;
 }
 
+/**
+ * @brief Close a CWIST database wrapper and its underlying SQLite connection.
+ * @param db Database wrapper to close.
+ */
 void cwist_db_close(cwist_db *db) {
     if (db) {
         if (db->conn) {
@@ -145,6 +193,12 @@ void cwist_db_close(cwist_db *db) {
 
 // Execute given SQL command
 // return errmsg on failure
+/**
+ * @brief Execute an arbitrary SQL statement string without returning rows.
+ * @param db Open database wrapper.
+ * @param sql SQL text to execute.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_db_exec(cwist_db *db, const char *sql) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (!db || !db->conn || !sql) {
@@ -172,6 +226,14 @@ typedef struct {
     cJSON *rows;
 } query_context;
 
+/**
+ * @brief Convert one sqlite3_exec callback row into a cJSON object appended to the result array.
+ * @param data Query context carrying the destination array.
+ * @param argc Number of columns in the row.
+ * @param argv Column values as strings or NULL.
+ * @param azColName Column names for the current row.
+ * @return 0 to continue sqlite3_exec iteration.
+ */
 static int query_callback(void *data, int argc, char **argv, char **azColName) {
     query_context *ctx = (query_context *)data;
     cJSON *row = cJSON_CreateObject();
@@ -192,6 +254,13 @@ static int query_callback(void *data, int argc, char **argv, char **azColName) {
 }
 
 // execute a query and store result at result pointer
+/**
+ * @brief Execute a SQL query and collect every row into a cJSON array.
+ * @param db Open database wrapper.
+ * @param sql SQL text to execute.
+ * @param result Output pointer receiving the cJSON row array.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_db_query(cwist_db *db, const char *sql, cJSON **result) {
     if (!result) {
         cwist_error_t err = make_error(CWIST_ERR_INT16);
@@ -239,6 +308,12 @@ cwist_error_t cwist_db_query(cwist_db *db, const char *sql, cJSON **result) {
  * String values are escaped with %Q; numbers, booleans and nulls are
  * rendered directly.  Nested objects/arrays are serialised to a JSON
  * string so they can be stored as TEXT.
+ */
+/**
+ * @brief Build an INSERT statement from a cJSON object using SQLite-safe quoting.
+ * @param table Destination table name.
+ * @param obj JSON object whose fields become columns and values.
+ * @return sqlite3_malloc-allocated SQL string, or NULL on failure.
  */
 static char *build_insert_sql(const char *table, const cJSON *obj) {
     /* Collect column/value fragments. */
@@ -313,6 +388,15 @@ static char *build_insert_sql(const char *table, const cJSON *obj) {
     return sql;
 }
 
+/**
+ * @brief Heal, validate, and insert a JSON object into a table.
+ * @param db Open database wrapper.
+ * @param table Destination table name.
+ * @param json_str Raw JSON input to heal and insert.
+ * @param schema Optional schema used for alignment and validation.
+ * @param heal_cfg Optional healing configuration overrides.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_db_insert_healed(cwist_db *db, const char *table,
                                       const char *json_str,
                                       const cwist_schema_t  *schema,
@@ -378,6 +462,14 @@ cwist_error_t cwist_db_insert_healed(cwist_db *db, const char *table,
  * cwist_db_query_strict
  * ======================================================================== */
 
+/**
+ * @brief Execute a query and require the result rows to satisfy a CWIST schema.
+ * @param db Open database wrapper.
+ * @param sql SQL text to execute.
+ * @param result Output pointer receiving the cJSON row array on success.
+ * @param schema Schema applied to every returned row.
+ * @return Tagged CWIST error describing success or validation failure.
+ */
 cwist_error_t cwist_db_query_strict(cwist_db *db, const char *sql, cJSON **result,
                                      const cwist_schema_t *schema) {
     /* When no schema is given, behave identically to cwist_db_query(). */

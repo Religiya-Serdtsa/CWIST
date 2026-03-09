@@ -11,6 +11,11 @@
 #include <string.h>
 #include <time.h>
 
+/**
+ * @file jwt.c
+ * @brief HS256 JWT signing, verification, and decoded-claims access helpers.
+ */
+
 /* --------------------------------------------------------------------------
  * Internal: Base64URL helpers
  * -------------------------------------------------------------------------- */
@@ -146,6 +151,13 @@ struct cwist_jwt_claims {
  * Public API
  * -------------------------------------------------------------------------- */
 
+/**
+ * @brief Sign a JSON payload as an HS256 JWT and optionally inject exp/iat claims.
+ * @param payload_json Raw payload JSON string to sign.
+ * @param secret Shared HS256 signing secret.
+ * @param exp_seconds Lifetime in seconds to add when the payload lacks exp/iat.
+ * @return Heap-allocated JWT string, or NULL on parse/signature allocation failure.
+ */
 char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seconds) {
     if (!payload_json || !secret) return NULL;
 
@@ -237,6 +249,12 @@ char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seco
     return token;
 }
 
+/**
+ * @brief Verify a JWT signature, parse its payload, and enforce the exp claim when present.
+ * @param token JWT string in header.payload.signature form.
+ * @param secret Shared HS256 signing secret.
+ * @return Heap-allocated claims object, or NULL when verification/parsing fails.
+ */
 cwist_jwt_claims *cwist_jwt_verify(const char *token, const char *secret) {
     if (!token || !secret) return NULL;
 
@@ -327,6 +345,12 @@ cwist_jwt_claims *cwist_jwt_verify(const char *token, const char *secret) {
     return claims;
 }
 
+/**
+ * @brief Retrieve one string-valued claim from a verified JWT payload.
+ * @param claims Verified claims object.
+ * @param key Claim name to retrieve.
+ * @return Borrowed pointer to the claim string, or NULL when absent/non-string.
+ */
 const char *cwist_jwt_claims_get(const cwist_jwt_claims *claims, const char *key) {
     if (!claims || !key) return NULL;
     cJSON *item = cJSON_GetObjectItemCaseSensitive(claims->json, key);
@@ -336,6 +360,10 @@ const char *cwist_jwt_claims_get(const cwist_jwt_claims *claims, const char *key
     return NULL;
 }
 
+/**
+ * @brief Destroy a verified claims object and its parsed JSON payload.
+ * @param claims Claims object to destroy.
+ */
 void cwist_jwt_claims_destroy(cwist_jwt_claims *claims) {
     if (!claims) return;
     cJSON_Delete(claims->json);

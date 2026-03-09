@@ -2,10 +2,16 @@
 #include <stdio.h>
 #include <string.h>
 
-/* ==========================================================================
- * Internal helpers
- * ======================================================================== */
+/**
+ * @file zod.c
+ * @brief Lightweight schema validation helpers for cJSON payloads.
+ */
 
+/**
+ * @brief Convert an enum field type into the human-readable validation label.
+ * @param t Schema field type to stringify.
+ * @return Static string describing the expected JSON type.
+ */
 static const char *field_type_name(cwist_field_type_t t) {
     switch (t) {
         case CWIST_FIELD_STRING: return "string";
@@ -18,6 +24,12 @@ static const char *field_type_name(cwist_field_type_t t) {
     }
 }
 
+/**
+ * @brief Check whether a cJSON item matches the requested schema type.
+ * @param item JSON node being validated.
+ * @param t Expected CWIST field type.
+ * @return true when the node satisfies the schema type.
+ */
 static bool type_matches(const cJSON *item, cwist_field_type_t t) {
     switch (t) {
         case CWIST_FIELD_STRING: return cJSON_IsString(item);
@@ -30,6 +42,12 @@ static bool type_matches(const cJSON *item, cwist_field_type_t t) {
     }
 }
 
+/**
+ * @brief Append one validation error to the result accumulator.
+ * @param r Validation result being populated.
+ * @param field Field name associated with the error.
+ * @param msg Human-readable validation message.
+ */
 static void add_error(cwist_zod_result_t *r, const char *field, const char *msg) {
     if (r->error_count >= CWIST_ZOD_MAX_ERRORS) return;
     cwist_zod_error_t *e = &r->errors[r->error_count++];
@@ -38,10 +56,12 @@ static void add_error(cwist_zod_result_t *r, const char *field, const char *msg)
     r->valid = false;
 }
 
-/* ==========================================================================
- * Public API
- * ======================================================================== */
-
+/**
+ * @brief Validate a parsed JSON object against a flat CWIST schema.
+ * @param json Parsed JSON object to inspect.
+ * @param schema Expected field list and type requirements.
+ * @return Validation result containing success flag and collected errors.
+ */
 cwist_zod_result_t cwist_zod_validate(const cJSON *json, const cwist_schema_t *schema) {
     cwist_zod_result_t r;
     memset(&r, 0, sizeof(r));
@@ -84,6 +104,13 @@ cwist_zod_result_t cwist_zod_validate(const cJSON *json, const cwist_schema_t *s
     return r;
 }
 
+/**
+ * @brief Parse raw JSON text and validate it against a CWIST schema.
+ * @param raw Raw JSON text to parse.
+ * @param schema Expected field list and type requirements.
+ * @param out Optional output pointer that receives the parsed cJSON object on success.
+ * @return Validation result containing success flag and collected errors.
+ */
 cwist_zod_result_t cwist_zod_parse(const char *raw, const cwist_schema_t *schema,
                                     cJSON **out) {
     cwist_zod_result_t r;
@@ -113,6 +140,10 @@ cwist_zod_result_t cwist_zod_parse(const char *raw, const cwist_schema_t *schema
     return r;
 }
 
+/**
+ * @brief Print validation errors to stderr using the built-in ZOD-like format.
+ * @param r Validation result to print.
+ */
 void cwist_zod_print_errors(const cwist_zod_result_t *r) {
     if (!r) return;
     for (int i = 0; i < r->error_count; i++) {

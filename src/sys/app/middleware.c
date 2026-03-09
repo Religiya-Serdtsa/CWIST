@@ -12,11 +12,18 @@
 #include <unistd.h>
 #include <pthread.h>
 
-/* --- Request ID Middleware --- */
+/**
+ * @file middleware.c
+ * @brief Built-in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth.
+ */
 
 static pthread_mutex_t rid_mutex = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int rid_seed = 0;
 
+/**
+ * @brief Generate a short pseudo-random request identifier for logging and tracing.
+ * @return Heap-allocated 16-character identifier string.
+ */
 static char *generate_request_id() {
     static const char charset[] = "abcdefghijklmnopqrstuvwxyz0123456789";
     char *id = cwist_alloc(17);
@@ -33,6 +40,12 @@ static char *generate_request_id() {
     return id;
 }
 
+/**
+ * @brief Attach an X-Request-Id header to both the request and the response.
+ * @param req Incoming HTTP request.
+ * @param res Outgoing HTTP response.
+ * @param next Next middleware or final handler in the chain.
+ */
 void cwist_mw_request_id_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
     const char *header_name = "X-Request-Id";
     char *existing = cwist_http_header_get(req->headers, header_name);
@@ -51,6 +64,11 @@ void cwist_mw_request_id_handler(cwist_http_request *req, cwist_http_response *r
     cwist_free(rid);
 }
 
+/**
+ * @brief Return the built-in request ID middleware.
+ * @param header_name Currently unused custom header override.
+ * @return Middleware function pointer for request ID injection.
+ */
 cwist_middleware_func cwist_mw_request_id(const char *header_name) {
     CWIST_UNUSED(header_name);
     return cwist_mw_request_id_handler;
@@ -60,6 +78,12 @@ cwist_middleware_func cwist_mw_request_id(const char *header_name) {
 
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/**
+ * @brief Log method, path, status, latency, and payload sizes for one request.
+ * @param req Incoming HTTP request.
+ * @param res Outgoing HTTP response.
+ * @param next Next middleware or final handler in the chain.
+ */
 void cwist_mw_access_log_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
     struct timeval start, end;
     gettimeofday(&start, NULL);
@@ -84,6 +108,11 @@ void cwist_mw_access_log_handler(cwist_http_request *req, cwist_http_response *r
     pthread_mutex_unlock(&log_mutex);
 }
 
+/**
+ * @brief Return the built-in access-log middleware.
+ * @param format Currently unused log format selector.
+ * @return Middleware function pointer for access logging.
+ */
 cwist_middleware_func cwist_mw_access_log(cwist_log_format_t format) {
     CWIST_UNUSED(format);
     return cwist_mw_access_log_handler;
@@ -102,6 +131,12 @@ static ip_limit_t ip_cache[MAX_IP_TRACK];
 static int ip_cache_count = 0;
 static pthread_mutex_t rate_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/**
+ * @brief Enforce a simple per-IP request cap using an in-memory one-minute window.
+ * @param req Incoming HTTP request.
+ * @param res Outgoing HTTP response.
+ * @param next Next middleware or final handler in the chain.
+ */
 void cwist_mw_rate_limit_ip_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
 
     // Get client ip from fd
@@ -151,6 +186,11 @@ void cwist_mw_rate_limit_ip_handler(cwist_http_request *req, cwist_http_response
     next(req, res);
 }
 
+/**
+ * @brief Return the built-in per-IP rate-limiter middleware.
+ * @param requests_per_minute Currently unused custom limit override.
+ * @return Middleware function pointer for per-IP rate limiting.
+ */
 cwist_middleware_func cwist_mw_rate_limit_ip(int requests_per_minute) {
     CWIST_UNUSED(requests_per_minute);
     return cwist_mw_rate_limit_ip_handler;
@@ -158,6 +198,12 @@ cwist_middleware_func cwist_mw_rate_limit_ip(int requests_per_minute) {
 
 /* --- CORS Middleware --- */
 
+/**
+ * @brief Inject permissive CORS headers and short-circuit preflight requests.
+ * @param req Incoming HTTP request.
+ * @param res Outgoing HTTP response.
+ * @param next Next middleware or final handler in the chain.
+ */
 void cwist_mw_cors_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
     // Add standard CORS headers
     cwist_http_header_add(&res->headers, "Access-Control-Allow-Origin", "*");
@@ -176,6 +222,10 @@ void cwist_mw_cors_handler(cwist_http_request *req, cwist_http_response *res, cw
     next(req, res);
 }
 
+/**
+ * @brief Return the built-in permissive CORS middleware.
+ * @return Middleware function pointer for CORS handling.
+ */
 cwist_middleware_func cwist_mw_cors(void) {
     return cwist_mw_cors_handler;
 }
@@ -202,6 +252,12 @@ typedef struct {
     void *prev_private_data;         ///< Previous req->private_data value.
 } cwist_jwt_ctx_t;
 
+/**
+ * @brief Validate a bearer token and expose its decoded claims to downstream handlers.
+ * @param req Incoming HTTP request.
+ * @param res Outgoing HTTP response.
+ * @param next Next middleware or final handler in the chain.
+ */
 void cwist_mw_jwt_auth_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
     /* Retrieve the secret stored in the context tag */
     cwist_jwt_ctx_t *ctx = (cwist_jwt_ctx_t *)req->private_data;
@@ -306,6 +362,11 @@ static cwist_middleware_func s_jwt_wrappers[CWIST_JWT_MAX_SECRETS] = {
     cwist_mw_jwt_wrap_4, cwist_mw_jwt_wrap_5, cwist_mw_jwt_wrap_6, cwist_mw_jwt_wrap_7,
 };
 
+/**
+ * @brief Register a JWT secret in a static slot and return the matching middleware wrapper.
+ * @param secret Borrowed signing secret used to verify bearer tokens.
+ * @return Middleware wrapper bound to the supplied secret, or NULL on overflow.
+ */
 cwist_middleware_func cwist_mw_jwt_auth(const char *secret) {
     if (!secret) return NULL;
 
@@ -332,6 +393,11 @@ cwist_middleware_func cwist_mw_jwt_auth(const char *secret) {
     return s_jwt_wrappers[slot];
 }
 
+/**
+ * @brief Retrieve the active JWT claims object from request private_data when present.
+ * @param req Request currently executing inside the JWT middleware chain.
+ * @return Active decoded claims, or NULL when the request is not inside JWT auth.
+ */
 const cwist_jwt_claims *cwist_mw_jwt_get_claims(const cwist_http_request *req) {
     if (!req || !req->private_data) return NULL;
     cwist_jwt_ctx_t *ctx = (cwist_jwt_ctx_t *)req->private_data;

@@ -11,8 +11,24 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
+/**
+ * @file websocket.c
+ * @brief WebSocket handshake and frame transport helpers for CWIST handlers.
+ */
+
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+/**
+ * @brief Upgrade an HTTP request to a WebSocket connection.
+ *
+ * The function validates the required upgrade headers, computes the
+ * Sec-WebSocket-Accept response, emits the 101 Switching Protocols reply, and
+ * returns a lightweight wrapper around the already-open client socket.
+ *
+ * @param req Parsed HTTP request that requested the upgrade.
+ * @param client_fd Accepted client socket descriptor.
+ * @return WebSocket wrapper on success, or NULL when the handshake fails.
+ */
 cwist_websocket *cwist_websocket_upgrade(cwist_http_request *req, int client_fd) {
     if (!req || client_fd < 0) return NULL;
 
@@ -59,6 +75,13 @@ cwist_websocket *cwist_websocket_upgrade(cwist_http_request *req, int client_fd)
     return ws;
 }
 
+/**
+ * @brief Read exactly @p len bytes from a socket unless the peer closes first.
+ * @param fd Socket descriptor to read from.
+ * @param buf Destination buffer.
+ * @param len Number of bytes required to complete the operation.
+ * @return Number of bytes read, or -1 when the stream cannot satisfy the request.
+ */
 static ssize_t read_exact(int fd, void *buf, size_t len) {
     size_t total = 0;
     while (total < len) {
@@ -69,6 +92,16 @@ static ssize_t read_exact(int fd, void *buf, size_t len) {
     return total;
 }
 
+/**
+ * @brief Receive the next WebSocket frame from a connected client.
+ *
+ * Client frames are required to be masked by RFC 6455, so unmasked payloads are
+ * rejected. Payload data is copied into a heap buffer and null-terminated for
+ * convenience when the caller interprets a text frame as a C string.
+ *
+ * @param ws WebSocket connection wrapper returned by cwist_websocket_upgrade().
+ * @return Newly allocated frame, or NULL when the connection is closed or invalid.
+ */
 cwist_ws_frame *cwist_websocket_receive(cwist_websocket *ws) {
     if (!ws || ws->is_closed) return NULL;
 
@@ -137,6 +170,14 @@ cwist_ws_frame *cwist_websocket_receive(cwist_websocket *ws) {
     return frame;
 }
 
+/**
+ * @brief Send a single FIN-terminated WebSocket frame to the peer.
+ * @param ws Active WebSocket connection wrapper.
+ * @param opcode WebSocket opcode describing the payload semantics.
+ * @param data Optional payload buffer. May be NULL when @p len is zero.
+ * @param len Number of payload bytes to transmit.
+ * @return 0 on success, or -1 when the socket write fails.
+ */
 int cwist_websocket_send(cwist_websocket *ws, cwist_ws_opcode_t opcode, const uint8_t *data, size_t len) {
     if (!ws || ws->is_closed) return -1;
 
@@ -170,6 +211,10 @@ int cwist_websocket_send(cwist_websocket *ws, cwist_ws_opcode_t opcode, const ui
     return 0;
 }
 
+/**
+ * @brief Release a frame and its owned payload buffer.
+ * @param frame Frame object to destroy. NULL is ignored.
+ */
 void cwist_websocket_frame_destroy(cwist_ws_frame *frame) {
     if (frame) {
         if (frame->payload) cwist_free(frame->payload);
@@ -177,6 +222,10 @@ void cwist_websocket_frame_destroy(cwist_ws_frame *frame) {
     }
 }
 
+/**
+ * @brief Initiate a close handshake for the WebSocket wrapper.
+ * @param ws Connection to close. NULL is ignored.
+ */
 void cwist_websocket_close(cwist_websocket *ws) {
     if (ws && !ws->is_closed) {
         cwist_websocket_send(ws, CWIST_WS_FRAME_CLOSE, NULL, 0);
@@ -184,6 +233,10 @@ void cwist_websocket_close(cwist_websocket *ws) {
     }
 }
 
+/**
+ * @brief Destroy the WebSocket wrapper without closing the underlying socket.
+ * @param ws Wrapper to release. NULL is ignored.
+ */
 void cwist_websocket_destroy(cwist_websocket *ws) {
     if (ws) {
         // We don't own fd in terms of closing it immediately if the app wants to, 
