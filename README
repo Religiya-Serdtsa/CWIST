@@ -114,6 +114,43 @@ Run the benchmark:
 | $ wrk -t4 -c128 -d30s http://127.0.0.1:8080/rps      |
 ========================================================
 
+The showcase ships with its own notes in example/rps-showcase/README.md and is
+meant to be the reproducible throughput entry point for the repository.  The
+top-level benchmark snapshot below mirrors the plain-text style of this README
+so the project can be reviewed comfortably from a terminal, pager, or Doxygen's
+main-page import.
+
+== BENCHMARK SNAPSHOT ==
+
+Recorded ApacheBench sample (see BENCHMARK.txt for the full transcript):
+
+* Tool: ApacheBench 2.3
+* Command: ab -n 100 -c 85 -k http://localhost:31744/
+* Requests per second: 2958.40 [#/sec] (mean)
+* Mean time per request: 28.732 ms
+* Mean time across all concurrent requests: 0.338 ms
+* Failed requests: 0
+
+Benchmark host profile captured from the active container:
+
+* Kernel: Linux 6.14.0-1017-azure x86_64
+* CPU allocation: cpuset 0-3 (4 visible logical CPUs via nproc/lscpu)
+* Processor: AMD EPYC 7763 64-Core Processor
+* Topology: 1 socket, 2 cores, 2 threads per core
+* Observed clock during capture: 3.23 GHz to 3.31 GHz
+* Scheduler clock tick: 100 Hz (getconf CLK_TCK)
+* Reported throttling: none in cpu.stat during capture
+
+Suggested throughput workflow:
+
+1. Build and run example/rps-showcase.
+2. Warm the server with a short wrk or ab run.
+3. Capture the exact container/kernel/CPU/timer details shown above.
+4. Save the raw tool transcript next to the environment notes in BENCHMARK.txt.
+
+This keeps the benchmark notes useful as a performance reference instead of a
+single isolated requests-per-second number.
+
 == DEPENDENCIES ==
 
 * cJSON

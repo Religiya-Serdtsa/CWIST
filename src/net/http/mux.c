@@ -7,6 +7,11 @@
 #include <stdio.h>
 #include <stdint.h>
 
+/**
+ * @file mux.c
+ * @brief Fixed-bucket HTTP route dispatch using a lightweight path signature.
+ */
+
 #define CWIST_MUX_DEFAULT_BUCKETS 4099
 
 typedef struct {
@@ -29,10 +34,22 @@ static const uint8_t NAM_LS_SECONDARY[4][4] = {
     {2, 3, 0, 1}
 };
 
+/**
+ * @brief Rotate a 64-bit integer left by the requested number of bits.
+ * @param v Input value.
+ * @param r Rotation width in the inclusive range [0, 63].
+ * @return Rotated value used by the signature mixer.
+ */
 static inline uint64_t mux_rotl64(uint64_t v, unsigned int r) {
     return (v << r) | (v >> (64U - r));
 }
 
+/**
+ * @brief Fold two 2-bit symbols into a compact 4-bit latin-square code.
+ * @param lhs First symbol, usually the route byte.
+ * @param rhs Second symbol, usually the segment-relative position.
+ * @return Merged nibble used to perturb the route signature.
+ */
 static uint8_t nam_latin_merge(uint8_t lhs, uint8_t rhs) {
     uint8_t row = lhs & 0x3;
     uint8_t col = rhs & 0x3;
@@ -41,6 +58,13 @@ static uint8_t nam_latin_merge(uint8_t lhs, uint8_t rhs) {
     return (uint8_t)((a << 2) | b);
 }
 
+/**
+ * @brief Mix one slash-delimited path segment into the route signature.
+ * @param sig Accumulator updated in place.
+ * @param segment Raw segment bytes without the separating slash.
+ * @param len Number of bytes in @p segment.
+ * @param seg_idx Zero-based segment index within the path.
+ */
 static void cwist_mux_mix_segment(cwist_mux_signature *sig, const char *segment, size_t len, size_t seg_idx) {
     uint64_t acc = 0xA0761D6478BD642FULL ^ ((uint64_t)len << (seg_idx & 15));
     for (size_t i = 0; i < len; ++i) {
@@ -56,6 +80,12 @@ static void cwist_mux_mix_segment(cwist_mux_signature *sig, const char *segment,
     sig->lo += mux_rotl64(acc + sig->hi, (unsigned int)(((seg_idx * 17) + 3) & 63));
 }
 
+/**
+ * @brief Derive the lookup signature for an HTTP method and path pair.
+ * @param method HTTP verb associated with the route.
+ * @param path Route path to normalise and hash. NULL is treated as the root.
+ * @return Two-lane signature suitable for bucket selection and fast equality checks.
+ */
 static cwist_mux_signature cwist_mux_signature_from_path(cwist_http_method_t method, const char *path) {
     cwist_mux_signature sig = {
         .hi = 0x6a09e667f3bcc909ULL ^ ((uint64_t)method * 0x9e3779b97f4a7c15ULL),
@@ -84,6 +114,12 @@ static cwist_mux_signature cwist_mux_signature_from_path(cwist_http_method_t met
     return sig;
 }
 
+/**
+ * @brief Select the bucket that should hold a specific route signature.
+ * @param router Router whose bucket array is being indexed.
+ * @param sig Signature produced for the route or request path.
+ * @return Stable bucket index in the router's fixed bucket array.
+ */
 static size_t cwist_mux_bucket_index(const cwist_mux_router *router, const cwist_mux_signature *sig) {
     uint64_t mix = sig->hi ^ mux_rotl64(sig->lo, 23);
     return (size_t)(mix % router->bucket_count);
@@ -91,6 +127,10 @@ static size_t cwist_mux_bucket_index(const cwist_mux_router *router, const cwist
 
 /* --- Mux Router Implementation --- */
 
+/**
+ * @brief Create an empty mux router with the default bucket fan-out.
+ * @return Newly allocated router, or NULL when allocation fails.
+ */
 cwist_mux_router *cwist_mux_router_create(void) {
     cwist_mux_router *router = (cwist_mux_router *)cwist_alloc(sizeof(cwist_mux_router));
     if (!router) return NULL;
@@ -105,6 +145,10 @@ cwist_mux_router *cwist_mux_router_create(void) {
     return router;
 }
 
+/**
+ * @brief Destroy a mux router and all registered route records.
+ * @param router Router to destroy. NULL is ignored.
+ */
 void cwist_mux_router_destroy(cwist_mux_router *router) {
     if (!router) return;
     cwist_mux_route *curr = router->routes;
@@ -118,6 +162,13 @@ void cwist_mux_router_destroy(cwist_mux_router *router) {
     cwist_free(router);
 }
 
+/**
+ * @brief Register a concrete method/path pair inside the mux buckets.
+ * @param router Router that will own the route metadata.
+ * @param method HTTP method to match.
+ * @param path Exact request path to dispatch.
+ * @param handler Callback to invoke for a matching request.
+ */
 void cwist_mux_handle(cwist_mux_router *router, cwist_http_method_t method, const char *path, cwist_http_handler_func handler) {
     if (!router || !path || !handler) return;
 
@@ -140,6 +191,13 @@ void cwist_mux_handle(cwist_mux_router *router, cwist_http_method_t method, cons
     router->routes = route;
 }
 
+/**
+ * @brief Attempt to dispatch an incoming request through the mux table.
+ * @param router Router containing registered exact-match handlers.
+ * @param req Parsed HTTP request with method and path information.
+ * @param res HTTP response object passed through to the matched handler.
+ * @return true when a route was found and its handler was executed, otherwise false.
+ */
 bool cwist_mux_serve(cwist_mux_router *router, cwist_http_request *req, cwist_http_response *res) {
     if (!router || !req || !res) return false;
 
