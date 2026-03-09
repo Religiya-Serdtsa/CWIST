@@ -5,6 +5,11 @@
 #include <stdbool.h>
 
 /**
+ * @file io_uring.c
+ * @brief Linux lock-free queue backend currently used as CWIST's io_uring placeholder.
+ */
+
+/**
  * Lock-free job queue inspired by libttak's SPMC queue samples.
  * We keep a single dummy node (Michael & Scott queue) so producers
  * never contend on a mutex while enqueuing jobs.
@@ -24,6 +29,12 @@ struct cwist_io_queue {
     pthread_cond_t sleep_cond;
 };
 
+/**
+ * @brief Allocate one node that stores a queued callback and its argument.
+ * @param func Callback to execute.
+ * @param arg User payload forwarded to @p func.
+ * @return Heap-allocated queue node, or NULL on allocation failure.
+ */
 static job_node_t *cwist_job_node_create(cwist_job_func func, void *arg) {
     job_node_t *node = cwist_alloc(sizeof(*node));
     if (!node) return NULL;
@@ -33,11 +44,20 @@ static job_node_t *cwist_job_node_create(cwist_job_func func, void *arg) {
     return node;
 }
 
+/**
+ * @brief Release a queue node after it is no longer reachable from the list.
+ * @param node Node to destroy.
+ */
 static void cwist_job_node_destroy(job_node_t *node) {
     if (!node) return;
     cwist_free(node);
 }
 
+/**
+ * @brief Append a node to the lock-free queue and wake sleepers when needed.
+ * @param q Queue that receives the node.
+ * @param node Node to append.
+ */
 static void cwist_queue_push(cwist_io_queue *q, job_node_t *node) {
     atomic_store_explicit(&node->next, NULL, memory_order_relaxed);
     while (1) {
@@ -69,6 +89,11 @@ static void cwist_queue_push(cwist_io_queue *q, job_node_t *node) {
     }
 }
 
+/**
+ * @brief Pop the next executable node from the queue.
+ * @param q Queue to consume from.
+ * @return Next job node, or NULL when the queue is empty.
+ */
 static job_node_t *cwist_queue_pop(cwist_io_queue *q) {
     while (1) {
         job_node_t *head = atomic_load_explicit(&q->head, memory_order_acquire);
@@ -92,6 +117,11 @@ static job_node_t *cwist_queue_pop(cwist_io_queue *q) {
     }
 }
 
+/**
+ * @brief Wait until new work arrives or shutdown has been requested.
+ * @param q Queue whose sleeper condition should be observed.
+ * @return true when work may still arrive, false when the queue should stop.
+ */
 static bool cwist_queue_wait(cwist_io_queue *q) {
     pthread_mutex_lock(&q->sleep_lock);
     while (atomic_load_explicit(&q->pending_jobs, memory_order_acquire) == 0 &&
@@ -105,6 +135,11 @@ static bool cwist_queue_wait(cwist_io_queue *q) {
     return should_continue;
 }
 
+/**
+ * @brief Allocate the queue object and install its sentinel node.
+ * @param capacity Capacity hint accepted for interface parity and currently unused.
+ * @return Queue handle, or NULL when initialization fails.
+ */
 cwist_io_queue *cwist_io_queue_create(size_t capacity) {
     (void)capacity;
     cwist_io_queue *q = cwist_alloc(sizeof(*q));
@@ -135,6 +170,13 @@ cwist_io_queue *cwist_io_queue_create(size_t capacity) {
     return q;
 }
 
+/**
+ * @brief Submit a callback for asynchronous execution by the queue runner.
+ * @param q Queue that should own the job.
+ * @param func Callback to execute.
+ * @param arg User payload forwarded to @p func.
+ * @return true on success, or false when the queue is stopping or OOM.
+ */
 bool cwist_io_queue_submit(cwist_io_queue *q, cwist_job_func func, void *arg) {
     if (!q || !func) return false;
     if (!atomic_load_explicit(&q->running, memory_order_acquire)) {
@@ -147,6 +189,10 @@ bool cwist_io_queue_submit(cwist_io_queue *q, cwist_job_func func, void *arg) {
     return true;
 }
 
+/**
+ * @brief Process queued jobs until shutdown is requested and no work remains.
+ * @param q Queue to run on the current thread.
+ */
 void cwist_io_queue_run(cwist_io_queue *q) {
     if (!q) return;
     while (atomic_load_explicit(&q->running, memory_order_acquire) ||
@@ -170,6 +216,10 @@ void cwist_io_queue_run(cwist_io_queue *q) {
     }
 }
 
+/**
+ * @brief Stop the queue, wake sleepers, and free all remaining nodes.
+ * @param q Queue instance to destroy.
+ */
 void cwist_io_queue_destroy(cwist_io_queue *q) {
     if (!q) return;
     atomic_store_explicit(&q->running, false, memory_order_release);

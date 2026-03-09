@@ -3,7 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* --- SHA1 Implementation --- */
+/**
+ * @file ws_utils.c
+ * @brief Small SHA-1 and Base64 helpers used by the WebSocket handshake path.
+ */
 
 #define ROL(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 
@@ -31,6 +34,11 @@ typedef struct {
     uint8_t buffer[64];
 } SHA1_CTX;
 
+/**
+ * @brief Execute one 64-byte SHA-1 compression round.
+ * @param state Rolling 160-bit digest state.
+ * @param buffer Input block to compress.
+ */
 static void SHA1Transform(uint32_t state[5], const uint8_t buffer[64]) {
     uint32_t a, b, c, d, e;
     typedef union {
@@ -78,6 +86,10 @@ static void SHA1Transform(uint32_t state[5], const uint8_t buffer[64]) {
     state[4] += e;
 }
 
+/**
+ * @brief Initialize a SHA-1 context with the standard IV constants.
+ * @param context SHA-1 context to initialize.
+ */
 static void SHA1Init(SHA1_CTX *context) {
     context->state[0] = 0x67452301;
     context->state[1] = 0xEFCDAB89;
@@ -87,6 +99,12 @@ static void SHA1Init(SHA1_CTX *context) {
     context->count[0] = context->count[1] = 0;
 }
 
+/**
+ * @brief Feed additional bytes into the SHA-1 streaming state.
+ * @param context SHA-1 context being updated.
+ * @param data Input bytes to hash.
+ * @param len Number of input bytes.
+ */
 static void SHA1Update(SHA1_CTX *context, const uint8_t *data, uint32_t len) {
     uint32_t i, j;
     j = context->count[0];
@@ -106,6 +124,11 @@ static void SHA1Update(SHA1_CTX *context, const uint8_t *data, uint32_t len) {
     memcpy(&context->buffer[j], &data[i], len - i);
 }
 
+/**
+ * @brief Finalize a SHA-1 hash and write the 20-byte digest.
+ * @param digest Output buffer that receives the finalized digest.
+ * @param context SHA-1 context to finalize.
+ */
 static void SHA1Final(uint8_t digest[20], SHA1_CTX *context) {
     unsigned i;
     uint8_t finalcount[8];
@@ -125,6 +148,12 @@ static void SHA1Final(uint8_t digest[20], SHA1_CTX *context) {
     }
 }
 
+/**
+ * @brief Compute a SHA-1 digest for the provided input bytes.
+ * @param data Input bytes to hash.
+ * @param len Number of bytes in @p data.
+ * @param hash Output buffer that receives the 20-byte digest.
+ */
 void sha1(const uint8_t *data, size_t len, uint8_t *hash) {
     SHA1_CTX ctx;
     SHA1Init(&ctx);
@@ -144,6 +173,13 @@ static const char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
                                       '4', '5', '6', '7', '8', '9', '+', '/'};
 static const int mod_table[] = {0, 2, 1};
 
+/**
+ * @brief Base64-encode binary data for WebSocket handshake header generation.
+ * @param data Input bytes to encode.
+ * @param input_length Number of input bytes.
+ * @param output_length Output parameter that receives the encoded length.
+ * @return Heap-allocated Base64 string, or NULL when allocation fails.
+ */
 char *base64_encode(const uint8_t *data, size_t input_length, size_t *output_length) {
     *output_length = 4 * ((input_length + 2) / 3);
     char *encoded_data = (char *)cwist_alloc(*output_length + 1);

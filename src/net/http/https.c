@@ -15,8 +15,16 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-/* --- Internal Error Helpers --- */
+/**
+ * @file https.c
+ * @brief OpenSSL-backed HTTPS accept, receive, send, and server-loop helpers.
+ */
 
+/**
+ * @brief Build a JSON-rich cwist_error_t from the latest OpenSSL error state.
+ * @param msg Human-readable message describing the failing HTTPS step.
+ * @return Error object with module, message, and OpenSSL error string fields.
+ */
 static cwist_error_t make_ssl_error(const char *msg) {
     cwist_error_t err = make_error(CWIST_ERR_JSON);
     err.error.err_json = cJSON_CreateObject();
@@ -32,8 +40,13 @@ static cwist_error_t make_ssl_error(const char *msg) {
     return err;
 }
 
-/* --- Context Management --- */
-
+/**
+ * @brief Initialize OpenSSL and create a server TLS context from PEM files.
+ * @param ctx Output pointer that receives the allocated HTTPS context.
+ * @param cert_path Path to the PEM certificate chain.
+ * @param key_path Path to the PEM private key.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *cert_path, const char *key_path) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     
@@ -87,6 +100,10 @@ cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *ce
     return err;
 }
 
+/**
+ * @brief Free an HTTPS context and release its OpenSSL resources.
+ * @param ctx Context to destroy.
+ */
 void cwist_https_destroy_context(cwist_https_context *ctx) {
     if (ctx) {
         if (ctx->ctx) {
@@ -97,8 +114,13 @@ void cwist_https_destroy_context(cwist_https_context *ctx) {
     }
 }
 
-/* --- Connection Handling --- */
-
+/**
+ * @brief Wrap an accepted TCP client socket in an OpenSSL connection object.
+ * @param ctx HTTPS context holding the configured SSL_CTX.
+ * @param client_fd Accepted TCP socket descriptor.
+ * @param conn Output pointer that receives the allocated connection wrapper.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_https_connection **conn) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     
@@ -146,6 +168,10 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
     return err;
 }
 
+/**
+ * @brief Gracefully close an HTTPS connection and free its buffers.
+ * @param conn HTTPS connection wrapper to close.
+ */
 void cwist_https_close_connection(cwist_https_connection *conn) {
     if (conn) {
         if (conn->ssl) {
@@ -160,8 +186,11 @@ void cwist_https_close_connection(cwist_https_connection *conn) {
     }
 }
 
-/* --- I/O Operations --- */
-
+/**
+ * @brief Read from the TLS stream until a full HTTP request has been assembled.
+ * @param conn Active HTTPS connection wrapper.
+ * @return Parsed HTTP request, or NULL on timeout, parse failure, or IO failure.
+ */
 cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
     if (!conn || !conn->ssl || !conn->read_buf) return NULL;
 
@@ -261,6 +290,12 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
     return req;
 }
 
+/**
+ * @brief Serialize an HTTP response and send it over an active TLS connection.
+ * @param conn Active HTTPS connection wrapper.
+ * @param res Response object to serialize.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http_response *res) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
 
@@ -309,6 +344,11 @@ struct https_thread_payload {
     void *user_ctx;
 };
 
+/**
+ * @brief Worker entry point that performs the TLS handshake before dispatching.
+ * @param arg Thread payload containing the accepted socket and dispatch callback.
+ * @return Always NULL for pthread compatibility.
+ */
 static void *https_thread_handler(void *arg) {
     struct https_thread_payload *payload = (struct https_thread_payload *)arg;
     cwist_https_connection *conn = NULL;
@@ -328,6 +368,14 @@ static void *https_thread_handler(void *arg) {
     return NULL;
 }
 
+/**
+ * @brief Accept HTTPS clients in a loop and dispatch each one to the supplied handler.
+ * @param server_fd Bound listening socket descriptor.
+ * @param ctx HTTPS context shared by all accepted connections.
+ * @param handler Callback invoked for each successful TLS client wrapper.
+ * @param user_ctx Opaque pointer forwarded to the handler.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (server_fd < 0 || !ctx || !handler) {

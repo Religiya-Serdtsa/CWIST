@@ -6,12 +6,29 @@
 #include <string.h>
 #include <ctype.h>
 
+/**
+ * @file sstring.c
+ * @brief Mutable string helpers used throughout CWIST for request/response and utility text handling.
+ */
+
+/** @brief Forward declaration for the method-table size callback. */
 size_t cwist_sstring_get_size(cwist_sstring *str);
+/** @brief Forward declaration for the method-table compare callback. */
 int cwist_sstring_compare_sstring(cwist_sstring *left, const cwist_sstring *right);
+/** @brief Forward declaration for the method-table copy callback. */
 cwist_error_t cwist_sstring_copy_sstring(cwist_sstring *origin, const cwist_sstring *from);
+/** @brief Forward declaration for the method-table append callback. */
 cwist_error_t cwist_sstring_append_sstring(cwist_sstring *str, const cwist_sstring *from);
+/** @brief Forward declaration for the escaped-append method-table callback. */
 cwist_error_t cwist_sstring_append_sstring_escaped(cwist_sstring *str, const cwist_sstring *from);
 
+/**
+ * @brief Replace the string contents with an arbitrary byte range.
+ * @param str Target string object.
+ * @param data Source bytes to copy.
+ * @param len Number of source bytes to copy.
+ * @return ERR_SSTRING_OKAY on success, or an error payload describing the failure.
+ */
 cwist_error_t cwist_sstring_assign_len(cwist_sstring *str, const char *data, size_t len) {
     if (!str) {
       cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -36,6 +53,13 @@ cwist_error_t cwist_sstring_assign_len(cwist_sstring *str, const char *data, siz
     return err;
 }
 
+/**
+ * @brief Append an arbitrary byte range to the end of the string.
+ * @param str Target string object.
+ * @param data Source bytes to append.
+ * @param len Number of source bytes to append.
+ * @return ERR_SSTRING_OKAY on success, or an error payload describing the failure.
+ */
 cwist_error_t cwist_sstring_append_len(cwist_sstring *str, const char *data, size_t len) {
     if (!str) {
         cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -68,6 +92,11 @@ cwist_error_t cwist_sstring_append_len(cwist_sstring *str, const char *data, siz
     return err;
 }
 
+/**
+ * @brief Initialize a mutable string with the default append/copy behavior.
+ * @param str String object to initialize in caller-owned storage.
+ * @return ERR_SSTRING_OKAY on success, or ERR_SSTRING_NULL_STRING for NULL input.
+ */
 cwist_error_t cwist_sstring_init(cwist_sstring *str) {
     cwist_error_t err = make_error(CWIST_ERR_INT8);
     if (!str) {
@@ -87,6 +116,11 @@ cwist_error_t cwist_sstring_init(cwist_sstring *str) {
     return err;
 }
 
+/**
+ * @brief Initialize a mutable string whose append helper performs HTML escaping.
+ * @param str String object to initialize in caller-owned storage.
+ * @return ERR_SSTRING_OKAY on success, or ERR_SSTRING_NULL_STRING for NULL input.
+ */
 cwist_error_t cwist_sstring_init_escaped(cwist_sstring *str) {
     cwist_error_t err = make_error(CWIST_ERR_INT8);
     if (!str) {
@@ -106,10 +140,21 @@ cwist_error_t cwist_sstring_init_escaped(cwist_sstring *str) {
     return err;
 }
 
+/**
+ * @brief Return the cached string size in bytes.
+ * @param str String object to inspect.
+ * @return Stored size, or 0 when the string is NULL.
+ */
 size_t cwist_sstring_get_size(cwist_sstring *str) {
     return str ? str->size : 0;
 }
 
+/**
+ * @brief Compare two CWIST string objects using strcmp semantics.
+ * @param left Left-hand string.
+ * @param right Right-hand string.
+ * @return Negative, zero, or positive depending on lexical ordering.
+ */
 int cwist_sstring_compare_sstring(cwist_sstring *left, const cwist_sstring *right) {
     if (!left || !left->data) {
         if (!right || !right->data) return 0;
@@ -119,6 +164,11 @@ int cwist_sstring_compare_sstring(cwist_sstring *left, const cwist_sstring *righ
     return strcmp(left->data, right->data);
 }
 
+/**
+ * @brief Trim leading ASCII whitespace from the string in place.
+ * @param str String object to mutate.
+ * @return ERR_SSTRING_OKAY on success, or ERR_SSTRING_NULL_STRING for invalid input.
+ */
 cwist_error_t cwist_sstring_ltrim(cwist_sstring *str) {
     cwist_error_t err = make_error(CWIST_ERR_INT8);
     err.error.err_i8 = ERR_SSTRING_NULL_STRING;
@@ -139,6 +189,11 @@ cwist_error_t cwist_sstring_ltrim(cwist_sstring *str) {
     return err;                              
 }
 
+/**
+ * @brief Trim trailing ASCII whitespace from the string in place.
+ * @param str String object to mutate.
+ * @return ERR_SSTRING_OKAY on success, or an error describing invalid input.
+ */
 cwist_error_t cwist_sstring_rtrim(cwist_sstring *str) {
     cwist_error_t err = make_error(CWIST_ERR_INT8);
     err.error.err_i8 = ERR_SSTRING_NULL_STRING;
@@ -163,12 +218,24 @@ cwist_error_t cwist_sstring_rtrim(cwist_sstring *str) {
     return err;
 }
 
+/**
+ * @brief Trim both leading and trailing ASCII whitespace from the string.
+ * @param str String object to mutate.
+ * @return ERR_SSTRING_OKAY on success, or the first trim error encountered.
+ */
 cwist_error_t cwist_sstring_trim(cwist_sstring *str) {
     cwist_error_t err = cwist_sstring_rtrim(str);
     if(err.error.err_i8 != ERR_SSTRING_OKAY) return err;
     return cwist_sstring_ltrim(str);
 }
 
+/**
+ * @brief Resize the string buffer, optionally allowing truncation.
+ * @param str String object to resize.
+ * @param new_size Requested new size in bytes.
+ * @param blow_data When true, allow shrinking below the current content length.
+ * @return ERR_SSTRING_OKAY on success, or an error describing the resize failure.
+ */
 cwist_error_t cwist_sstring_change_size(cwist_sstring *str, size_t new_size, bool blow_data) {
     cwist_error_t err = make_error(CWIST_ERR_INT8);
 
@@ -213,6 +280,12 @@ cwist_error_t cwist_sstring_change_size(cwist_sstring *str, size_t new_size, boo
    return err;
 }
 
+/**
+ * @brief Replace the string contents with a NUL-terminated C string.
+ * @param str Target string object.
+ * @param data Source string, or NULL to clear the value.
+ * @return ERR_SSTRING_OKAY on success, or an error payload describing the failure.
+ */
 cwist_error_t cwist_sstring_assign(cwist_sstring *str, char *data) {
     if (!str) {
       cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -257,6 +330,12 @@ cwist_error_t cwist_sstring_assign(cwist_sstring *str, char *data) {
     return err;
 }
 
+/**
+ * @brief Append a NUL-terminated C string to the target string.
+ * @param str Target string object.
+ * @param data Source string to append.
+ * @return ERR_SSTRING_OKAY on success, or an error payload describing the failure.
+ */
 cwist_error_t cwist_sstring_append(cwist_sstring *str, const char *data) {
     if (!str) {
         cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -305,6 +384,12 @@ cwist_error_t cwist_sstring_append(cwist_sstring *str, const char *data) {
     return err;
 }
 
+/**
+ * @brief Append a string while escaping a small HTML-sensitive character set.
+ * @param str Target string object.
+ * @param data Source string to append in escaped form.
+ * @return ERR_SSTRING_OKAY on success, or an error payload describing the failure.
+ */
 cwist_error_t cwist_sstring_append_escaped(cwist_sstring *str, const char *data) {
     if (!str) {
         cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -378,6 +463,12 @@ cwist_error_t cwist_sstring_append_escaped(cwist_sstring *str, const char *data)
     return err;
 }
 
+/**
+ * @brief Append the contents of one CWIST string onto another.
+ * @param str Destination string.
+ * @param from Source CWIST string.
+ * @return ERR_SSTRING_OKAY on success, or an error describing invalid input.
+ */
 cwist_error_t cwist_sstring_append_sstring(cwist_sstring *str, const cwist_sstring *from) {
     if (!str) {
         cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -392,6 +483,12 @@ cwist_error_t cwist_sstring_append_sstring(cwist_sstring *str, const cwist_sstri
     return cwist_sstring_append(str, from->data);
 }
 
+/**
+ * @brief Append one CWIST string to another while escaping HTML-sensitive characters.
+ * @param str Destination string.
+ * @param from Source CWIST string.
+ * @return ERR_SSTRING_OKAY on success, or an error describing invalid input.
+ */
 cwist_error_t cwist_sstring_append_sstring_escaped(cwist_sstring *str, const cwist_sstring *from) {
     if(!str) {
         cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -406,6 +503,13 @@ cwist_error_t cwist_sstring_append_sstring_escaped(cwist_sstring *str, const cwi
     return cwist_sstring_append_escaped(str, from->data);
 }
 
+/**
+ * @brief Copy a suffix of the string into a caller-provided buffer.
+ * @param str Source string object.
+ * @param substr Destination C buffer.
+ * @param location Starting offset inside the source string.
+ * @return ERR_SSTRING_OKAY on success, or an error describing invalid bounds/input.
+ */
 cwist_error_t cwist_sstring_seek(cwist_sstring *str, char *substr, int location) {
     cwist_error_t err = make_error(CWIST_ERR_INT8);
     if (!str || !str->data || !substr) {
@@ -425,6 +529,12 @@ cwist_error_t cwist_sstring_seek(cwist_sstring *str, char *substr, int location)
     return err;
 }
 
+/**
+ * @brief Copy the entire string into a caller-provided destination buffer.
+ * @param origin Source string object.
+ * @param destination Destination C buffer.
+ * @return ERR_SSTRING_OKAY on success, or an error describing invalid input.
+ */
 cwist_error_t cwist_sstring_copy(cwist_sstring *origin, char *destination) {
 
     cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -439,6 +549,12 @@ cwist_error_t cwist_sstring_copy(cwist_sstring *origin, char *destination) {
     return err;
 }
 
+/**
+ * @brief Copy one CWIST string into another.
+ * @param origin Destination string object.
+ * @param from Source string object, or NULL to clear the destination.
+ * @return ERR_SSTRING_OKAY on success, or an error describing invalid input.
+ */
 cwist_error_t cwist_sstring_copy_sstring(cwist_sstring *origin, const cwist_sstring *from) {
     if (!origin) {
         cwist_error_t err = make_error(CWIST_ERR_INT8);
@@ -451,6 +567,10 @@ cwist_error_t cwist_sstring_copy_sstring(cwist_sstring *origin, const cwist_sstr
     return cwist_sstring_assign(origin, from->data);
 }
 
+/**
+ * @brief Allocate and initialize a new heap-owned CWIST string object.
+ * @return Newly allocated string object, or NULL on allocation failure.
+ */
 cwist_sstring *cwist_sstring_create(void) {
     cwist_sstring *str = (cwist_sstring *)cwist_alloc(sizeof(cwist_sstring));
     if (!str) return NULL;
@@ -467,6 +587,10 @@ cwist_sstring *cwist_sstring_create(void) {
     return str;
 }
 
+/**
+ * @brief Destroy a heap-owned CWIST string and its backing buffer.
+ * @param str String object to destroy.
+ */
 void cwist_sstring_destroy(cwist_sstring *str) {
     if (str) {
         if (str->data) cwist_free(str->data);
@@ -474,6 +598,12 @@ void cwist_sstring_destroy(cwist_sstring *str) {
     }
 }
 
+/**
+ * @brief Compare a CWIST string against a raw C string using strcmp semantics.
+ * @param str Left-hand CWIST string.
+ * @param compare_to Right-hand raw C string.
+ * @return Negative, zero, or positive depending on lexical ordering.
+ */
 int cwist_sstring_compare(cwist_sstring *str, const char *compare_to) {
     if (!str || !str->data) {
         if (!compare_to) return 0; // Both NULL-ish (empty treated as NULL for comparison?)
@@ -484,6 +614,13 @@ int cwist_sstring_compare(cwist_sstring *str, const char *compare_to) {
     return strcmp(str->data, compare_to);
 }
 
+/**
+ * @brief Create a heap-owned substring spanning the requested range.
+ * @param str Source string object.
+ * @param start Zero-based starting index.
+ * @param length Requested substring length.
+ * @return Newly allocated substring, or NULL when the range is invalid or OOM occurs.
+ */
 cwist_sstring *cwist_sstring_substr(cwist_sstring *str, int start, int length) {
     if (!str || !str->data || start < 0 || length < 0) return NULL;
     
