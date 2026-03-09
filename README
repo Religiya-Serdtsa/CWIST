@@ -18,7 +18,7 @@ CWIST is a modern, lightweight C web framework designed for building secure and 
 
 1. Installation:
 
-   git clone [https://github.com/your/cwist.git](https://github.com/your/cwist.git)
+   git clone https://github.com/gg582/cwist.git
    cd cwist
    make install
 
