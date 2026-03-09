@@ -147,8 +147,12 @@ static cwist_sstring* render_internal(const char **template_str, const cJSON *co
                     start = p;
 
                 } else if (strcmp(cmd, "endif") == 0 || strcmp(cmd, "endfor") == 0) {
-                    *template_str = p + strlen(cmd) + 4;
-                    cwist_sstring_append_len(output, start, p - (start + 2) - strlen(cmd));
+                    /* At this point p points to the '%' of '%}'.
+                     * Advancing by 2 moves the cursor past '%}' to the first
+                     * character after the closing tag — the caller (if/for
+                     * handler) uses block_end to skip the tag in the outer
+                     * cursor, so we only need to move past '%}' here. */
+                    *template_str = p + 2;
                     return output;
                 } else {
                      p += 2;
