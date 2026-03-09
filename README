@@ -1,25 +1,26 @@
-# CWIST - C Web development Is Still Trustworthy
+CWIST - C Web development Is Still Trustworthy
 
 CWIST is a modern, lightweight C web framework designed for building secure and scalable applications. It brings the ergonomics of modern web frameworks to C without sacrificing performance or control.
 
 == FEATURES ==
 
-- HTTP/1.1 Server: Robust request parsing and response handling.
-- SString: Custom string library with compare and substr support.
-- WebSocket Support: Easy upgrade from HTTP to persistent connections.
-- Middleware System: Chainable processing for logging and security.
-- Path Parameters: Express-style routing with :param support and Mux Router.
-- JSON Builder: Lightweight utility using cJSON for response building.
-- Static Assets & DB Sharing: Serve directories with `cwist_app_static` and reuse SQLite handles via `cwist_app_use_db`.
-- Nuke DB: High-performance In-Memory SQLite with persistent disk synchronization (`cwist_nuke_init`).
-- Secure by Design: Built-in integration with Monocypher.
+* HTTP/1.1 Server: Robust request parsing and response handling.
+* SString: Custom string library with compare and substr support.
+* WebSocket Support: Easy upgrade from HTTP to persistent connections.
+* Middleware System: Chainable processing for logging and security.
+* Path Parameters: Express-style routing with :param support and Mux Router.
+* JSON Builder: Lightweight utility using cJSON for response building.
+* Static Assets & DB Sharing: Serve directories with cwist_app_static and reuse SQLite handles via cwist_app_use_db.
+* Nuke DB: High-performance In-Memory SQLite with persistent disk synchronization (cwist_nuke_init).
+* Secure by Design: Built-in integration with Monocypher.
 
 == QUICK START ==
 
 1. Installation:
-$ git clone [https://github.com/your/cwist.git](https://github.com/your/cwist.git)
-$ cd cwist
-$ make install
+
+   git clone [https://github.com/your/cwist.git](https://github.com/your/cwist.git)
+   cd cwist
+   make install
 
 2. Hello World (main.c):
 
@@ -42,67 +43,88 @@ $ make install
 ===============================================================================
 
 3. Compilation:
-$ gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
-$ ./server
+
+   gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
+   ./server
 
 == NUKE DB ==
 
-Nuke DB is a **Read-Optimal Persistent Store**. It follows a "Read-from-RAM, Write-to-Disk" philosophy:
-- **Ultra-Fast Reads**: All queries are executed against an in-memory SQLite instance, providing sub-millisecond response times for read-heavy workloads.
-- **Reliable Writes**: Every `COMMIT` triggers an immediate background synchronization to the physical disk (WAL mode), ensuring your data is safe even if the process crashes.
-- **Trade-off**: While write performance is slightly affected by disk I/O synchronization, the system guarantees that reads remain unblocked and consistently fast.
-- **Raw Bootstrap**: On startup, the on-disk SQLite file is read directly as a raw image (`sqlite3_deserialize`) so the in-memory copy is hydrated without walking through the backup API.
-- **Integrity Guard**: Each bootstrap runs `PRAGMA integrity_check` against the disk database and aborts if corruption is detected.
-- **Safe Fallback**: When the disk→memory transfer fails, Nuke DB switches to the disk handle so missing-row lookups never crash or read from uninitialised memory.
+Nuke DB is a Read-Optimal Persistent Store.
+It follows a "Read-from-RAM, Write-to-Disk" philosophy.
+
+* Ultra-Fast Reads: All queries execute against an in-memory SQLite instance, providing sub-millisecond response times for read-heavy workloads.
+* Reliable Writes: Every COMMIT triggers an immediate background synchronization to disk using WAL mode.
+* Trade-off: Write performance is slightly affected by disk synchronization, but reads remain consistently fast.
+* Raw Bootstrap: On startup the on-disk SQLite file is read directly as a raw image using sqlite3_deserialize.
+* Integrity Guard: Each bootstrap runs PRAGMA integrity_check and aborts if corruption is detected.
+* Safe Fallback: When the disk-to-memory transfer fails the system switches to the disk handle.
 
 Usage:
-1. `cwist_nuke_init("data.db", 5000);` // Loads data.db to memory, enables auto-sync every 5s + immediate sync on commit.
-2. Use `cwist_nuke_get_db()` to access the high-speed in-memory handle.
-3. On application exit (SIGINT/SIGTERM), Nuke DB performs a final safety sync.
-4. **Safety**: If the initial load from disk fails (corrupted file), Nuke DB enters a read-only disk protection mode to prevent overwriting your data.
+
+1. cwist_nuke_init("data.db", 5000);
+   Loads data.db to memory and enables auto-sync every 5 seconds plus immediate sync on commit.
+
+2. Use cwist_nuke_get_db() to access the in-memory handle.
+
+3. On application exit (SIGINT or SIGTERM) Nuke DB performs a final synchronization.
+
+4. Safety:
+   If the initial load from disk fails due to corruption, Nuke DB enters read-only disk protection mode.
 
 == LIBTTAK PERFORMANCE CORE ==
 
-CWIST links against the in-tree `lib/libttak` build and now exposes the subsystems that landed with the latest drop.
+CWIST links against the in-tree lib/libttak build and exposes the subsystems that landed with the latest drop.
 
-### Generational Arena Allocator
-- Static assets (`cwist_app_static`) and Big Dumb Reply blobs are staged in a tracked arena backed by `ttak_mem_tree`. Replacements do not fragment RSS because each generation is released in one shot.
-- The allocator honors cache-aligned chunks and keeps separate hot/warm rows (see `lib/libttak/tutorials/40-arena-memory`) so high-churn endpoints recycle buffers without calling `malloc`/`free` under load.
+Generational Arena Allocator
 
-### Epoch-Based Reclamation (EBR)
-- Threads pin critical sections with `ttak_epoch_enter/exit` so arena generations can be retired without locking readers.
-- `cwist_fix_server_mem` and the new examples advance epochs during hot reloads; stale buffers are reclaimed the moment no worker is in that epoch, which keeps latency flat even when static files churn.
-- CWIST now exposes `cwist_gc()`/`cwist_gc_shutdown()`/`cwist_reg_ptr()` so applications can enable libttak’s epoch GC without diving into the raw APIs. Call `cwist_gc(&ctx, true)` to activate a manual rotation context, feed allocations through `cwist_reg_ptr(&ctx, ptr)`, and optionally tick `cwist_gc_rotate(&ctx)` from your control loop.
+* Static assets (cwist_app_static) and Big Dumb Reply blobs are staged in a tracked arena backed by ttak_mem_tree.
+* Each generation is released in one shot, preventing RSS fragmentation.
+* Cache-aligned chunks keep hot endpoints from repeatedly calling malloc/free.
 
-### Detachable Memory
-- `ttak_detachable_mem_alloc` layers a tiny-cache + signal-safe arena on top of EBR. CWIST uses it for TLS write buffers, websocket frames, and zero-copy HTTP responses.
-- The detachable cache short-circuits the allocator for tiny payloads (<=16B) while larger slices flow through the same generational rows, so the server sustains >15M ops/s (see `lib/libttak/bench/ttl-cache-multithread-bench`).
+Epoch-Based Reclamation (EBR)
 
-### Lock-Free Job Queue
-- The `cwist_io_queue` backend now mirrors libttak's lock-free approach: a Michael–Scott style CAS queue keeps submitters completely lock-free while a lightweight sleep gate is only touched when the queue is empty.
-- Producers allocate job nodes via `ttak`-compatible allocators and push them with a single atomic swap, so hot paths avoid `pthread_mutex` contention even under heavy fan-in.
-- Consumers drain jobs and reuse the detached nodes as sentinels, which means the queue can run indefinitely without fragmenting memory or blocking readers.
+* Threads pin critical sections with ttak_epoch_enter/exit.
+* Stale buffers are reclaimed once no worker remains in the previous epoch.
+* CWIST exposes cwist_gc(), cwist_gc_shutdown(), and cwist_reg_ptr() to integrate libttak GC easily.
 
-### Big Dumb Reply Guardrails
-- The built-in BDR cache now enforces a rolling sweep that expires entries after 5 minutes or ~100k hits and caps the live payload budget at 32 MiB by default. Oldest blobs are trimmed automatically so a long-running server never hoards stale pages.
-- Tune the policy per app with `cwist_app_configure_bdr(app, CWIST_MIB(16), 60, 5000)` or globally through `cwist_bdr_set_limits` if you are wiring the cache manually.
+Detachable Memory
 
-### RPS Showcase Example
-- `example/rps-showcase/` is a new high-throughput demo that keeps a JSON payload inside a detachable arena, protects it with EBR, and streams it via `cwist_http_response_set_body_ptr`.
-- Thread-local `cwist_gc_t` contexts eliminate lock contention for per-thread scratch buffers (used for trace headers), while payload churn is handled by a dedicated GC instance that retires the previous snapshot when `/refresh` swaps it out.
-- The `/rps` handler now serves a zero-copy snapshot (`rps_payload_refresh`) so steady-state requests never touch the allocator; `/refresh` rebuilds the payload on demand and swaps it atomically.
-- Allocation flags stay cache-aligned while the refresh path serializes writers with a mutex, so we avoid additional allocator contention per libttak’s “single-writer, lock-free readers” guidance.
-- Run `wrk -t4 -c128 -d30s http://127.0.0.1:8080/rps` inside that folder to see how swapping payload generations does not interrupt live traffic.
+* ttak_detachable_mem_alloc layers a small-cache and signal-safe arena on top of EBR.
+* Used for TLS write buffers, websocket frames, and zero-copy HTTP responses.
+
+Lock-Free Job Queue
+
+* cwist_io_queue mirrors libttak’s lock-free queue design.
+* Producers push jobs using a single atomic swap without mutex contention.
+* Consumers reuse detached nodes as sentinels to prevent fragmentation.
+
+Big Dumb Reply Guardrails
+
+* Entries expire after roughly five minutes or about 100k hits.
+* Default payload budget is capped at 32 MiB.
+* Old blobs are trimmed automatically.
+
+RPS Showcase Example
+
+example/rps-showcase demonstrates a high-throughput configuration.
+
+Run the benchmark:
+
+========================================================
+| $ wrk -t4 -c128 -d30s http://127.0.0.1:8080/rps      |
+========================================================
 
 == DEPENDENCIES ==
 
-- cJSON ([https://github.com/DaveGamble/cJSON](https://github.com/DaveGamble/cJSON))
-- OpenSSL (libssl, libcrypto)
-- uriparser
-- libttak ([https://github.com/gg582/libttak](https://github.com/gg582/libttak))
-- (SQLite3 is now statically embedded)
+* cJSON
+* OpenSSL (libssl, libcrypto)
+* uriparser
+* libttak ([https://github.com/gg582/libttak](https://github.com/gg582/libttak))
+* SQLite3
 
 == PAST ROADMAP ==
 
-- Security: CORS middleware and origin / header policy management.
-- RestAPI: Dedicated features for optimized RestAPI server deployment.
+* Security: CORS middleware and origin/header policy management.
+* RestAPI: Dedicated features for optimized RestAPI server deployment.
+
+---
