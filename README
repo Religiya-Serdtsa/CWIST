@@ -126,5 +126,3 @@ Run the benchmark:
 
 * Security: CORS middleware and origin/header policy management.
 * RestAPI: Dedicated features for optimized RestAPI server deployment.
-
----
