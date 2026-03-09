@@ -119,7 +119,7 @@ Run the benchmark:
 * cJSON
 * OpenSSL (libssl, libcrypto)
 * uriparser
-* libttak ([https://github.com/gg582/libttak](https://github.com/gg582/libttak))
+* libttak (https://github.com/gg582/libttak)
 * SQLite3
 
 == PAST ROADMAP ==
