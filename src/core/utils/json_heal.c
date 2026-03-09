@@ -7,6 +7,11 @@
 #include <string.h>
 #include <ctype.h>
 
+/**
+ * @file json_heal.c
+ * @brief Multi-stage JSON recovery pipeline with optional schema alignment.
+ */
+
 /* ==========================================================================
  * Internal dynamic string buffer (heap-backed, cwist_alloc / cwist_realloc)
  * ======================================================================== */
@@ -355,6 +360,18 @@ int cwist_json_schema_align(cJSON *obj, const cwist_schema_t *schema,
  * Public API
  * ======================================================================== */
 
+/**
+ * @brief Recover malformed JSON using syntax repair, schema alignment, and an optional callback.
+ *
+ * The function first attempts a direct parse, then falls back to the internal
+ * L1 syntax healer, and finally consults the user-provided SLLM callback when
+ * configured. Each successful step records the recovery level, confidence, and
+ * a short operator-facing log of the transformations that were applied.
+ *
+ * @param input Raw JSON text that may contain structural defects.
+ * @param cfg Optional recovery configuration. NULL applies the built-in defaults.
+ * @return Result structure describing the best recovery path that succeeded.
+ */
 cwist_heal_result_t cwist_json_heal(const char *input, const cwist_heal_config_t *cfg) {
     cwist_heal_result_t result;
     memset(&result, 0, sizeof(result));
@@ -428,6 +445,10 @@ cwist_heal_result_t cwist_json_heal(const char *input, const cwist_heal_config_t
     return result;
 }
 
+/**
+ * @brief Free heap storage owned by a healing result.
+ * @param r Result object previously populated by cwist_json_heal().
+ */
 void cwist_heal_result_free(cwist_heal_result_t *r) {
     if (!r) return;
     /* result.json comes from cJSON_PrintUnformatted → plain malloc */
