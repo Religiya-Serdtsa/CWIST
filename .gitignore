@@ -26,3 +26,23 @@ test_json_heal
 
 # uriparser build artifacts
 lib/uriparser/build/
+
+# Tutorial binaries
+example/sstring/step-2-compare-copy/step-2-compare-copy
+example/sstring/step-3-substr-append/step-3-substr-append
+example/mem/step-1-alloc/step-1-alloc
+example/mem/step-2-gc/step-2-gc
+example/http/step-1-hello-world/step-1-hello-world
+example/http/step-2-mux-router/step-2-mux-router
+example/http/step-3-query-params/step-3-query-params
+example/http/step-4-json-api/step-4-json-api
+example/jwt/step-1-sign-verify/step-1-sign-verify
+example/jwt/step-2-http-auth/step-2-http-auth
+example/db/step-1-open-query/step-1-open-query
+example/db/step-2-migrations/step-2-migrations
+example/db/step-3-zod-validate/step-3-zod-validate
+example/db/step-4-json-insert/step-4-json-insert
+example/json-builder/step-1-basic/step-1-basic
+example/template/step-1-render/step-1-render
+example/html/step-1-builder/step-1-builder
+example/db-crypt/step-1-seal-open/step-1-seal-open
