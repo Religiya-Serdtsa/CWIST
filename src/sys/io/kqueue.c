@@ -10,15 +10,21 @@
 #include <errno.h>
 
 /**
- * Kqueue implementation for Job Queue.
- * Uses EVFILT_USER for user-space event triggering.
+ * @file kqueue.c
+ * @brief BSD kqueue backend for the generic CWIST job queue interface.
  */
 
 struct cwist_io_queue {
     int kq_fd;
 };
 
+/**
+ * @brief Allocate a kqueue-backed IO queue wrapper.
+ * @param capacity Capacity hint accepted for interface parity and currently unused.
+ * @return Queue handle, or NULL when kqueue setup fails.
+ */
 cwist_io_queue *cwist_io_queue_create(size_t capacity) {
+    (void)capacity;
     cwist_io_queue *q = cwist_alloc(sizeof(cwist_io_queue));
     if (!q) return NULL;
 
@@ -28,18 +34,24 @@ cwist_io_queue *cwist_io_queue_create(size_t capacity) {
         cwist_free(q);
         return NULL;
     }
-    
-    // Register USER event filter mechanism if needed, 
-    // but usually we trigger events via NOTE_TRIGGER on registration.
     return q;
 }
 
-// Wrapper for job data
+/**
+ * @brief Tiny heap object used as kevent user data for one queued callback.
+ */
 struct job_wrapper {
     cwist_job_func func;
     void *arg;
 };
 
+/**
+ * @brief Enqueue one callback by triggering an EVFILT_USER event.
+ * @param q Kqueue-backed queue handle.
+ * @param func Callback to execute when the event is consumed.
+ * @param arg User payload forwarded to @p func.
+ * @return true on success, false when event registration fails.
+ */
 bool cwist_io_queue_submit(cwist_io_queue *q, cwist_job_func func, void *arg) {
     struct job_wrapper *job = cwist_alloc(sizeof(struct job_wrapper));
     job->func = func;
@@ -58,6 +70,10 @@ bool cwist_io_queue_submit(cwist_io_queue *q, cwist_job_func func, void *arg) {
     return true;
 }
 
+/**
+ * @brief Block on kqueue events and execute queued callbacks forever.
+ * @param q Kqueue-backed queue handle.
+ */
 void cwist_io_queue_run(cwist_io_queue *q) {
     struct kevent events[32];
     while (1) {
@@ -80,6 +96,10 @@ void cwist_io_queue_run(cwist_io_queue *q) {
     }
 }
 
+/**
+ * @brief Close the underlying kqueue descriptor and free the queue wrapper.
+ * @param q Queue handle to destroy.
+ */
 void cwist_io_queue_destroy(cwist_io_queue *q) {
     if (q) {
         close(q->kq_fd);

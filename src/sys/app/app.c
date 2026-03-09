@@ -23,10 +23,21 @@
 #define CWIST_ROUTE_BUCKETS 127
 #define CWIST_STATIC_RETIRE_NS TT_SECOND(5)
 
+/**
+ * @brief Read the current libttak tick count used for static-file retirement deadlines.
+ * @return Monotonic tick value compatible with libttak memory APIs.
+ */
 static inline uint64_t cwist_mem_now(void) {
     return ttak_get_tick_count();
 }
 
+/**
+ * @brief Check whether the static-file memory cache can admit a payload after reclamation.
+ * @param mem Static-file memory manager.
+ * @param incoming Size of the candidate payload.
+ * @param reclaimable Bytes that could be reclaimed from an existing entry.
+ * @return true when the projected usage fits inside the configured capacity.
+ */
 static bool cwist_mem_has_capacity(cwist_fix_server_mem *mem, size_t incoming, size_t reclaimable) {
     if (!mem || mem->total_capacity == 0) {
         return true;
@@ -42,6 +53,11 @@ static bool cwist_mem_has_capacity(cwist_fix_server_mem *mem, size_t incoming, s
     return projected <= mem->total_capacity;
 }
 
+/**
+ * @brief Reserve one metadata slot in the static-file registry, growing the array when needed.
+ * @param mem Static-file memory manager.
+ * @return Pointer to the claimed entry slot, or NULL on allocation failure.
+ */
 static cwist_file_t *cwist_mem_claim_entry(cwist_fix_server_mem *mem) {
     if (!mem) return NULL;
     if (mem->file_count >= mem->files_capacity) {
@@ -59,6 +75,15 @@ static cwist_file_t *cwist_mem_claim_entry(cwist_fix_server_mem *mem) {
     return entry;
 }
 
+/**
+ * @brief Load a filesystem object into libttak-managed memory and track its tree node.
+ * @param mem Static-file memory manager.
+ * @param fs_path Filesystem path to read.
+ * @param size Number of bytes to load.
+ * @param data_out Output pointer receiving the allocated payload.
+ * @param node_out Output pointer receiving the libttak tree node.
+ * @return true when the payload was loaded and registered successfully.
+ */
 static bool cwist_mem_create_payload(cwist_fix_server_mem *mem, const char *fs_path, size_t size, void **data_out, ttak_mem_node_t **node_out) {
     if (!mem || !fs_path || !data_out || !node_out) return false;
 
@@ -98,6 +123,11 @@ static bool cwist_mem_create_payload(cwist_fix_server_mem *mem, const char *fs_p
     return true;
 }
 
+/**
+ * @brief Retire an old static-file node after a grace period so in-flight reads can finish.
+ * @param mem Static-file memory manager.
+ * @param node Previous libttak node to release.
+ */
 static void cwist_mem_release_node_delayed(cwist_fix_server_mem *mem, ttak_mem_node_t *node) {
     if (!mem || !node) return;
     uint64_t now = cwist_mem_now();
@@ -107,6 +137,16 @@ static void cwist_mem_release_node_delayed(cwist_fix_server_mem *mem, ttak_mem_n
     ttak_mem_node_release(node);
 }
 
+/**
+ * @brief Populate a registry entry with a freshly loaded static-file payload.
+ * @param mem Static-file memory manager.
+ * @param entry Registry entry to fill.
+ * @param fs_path Filesystem path associated with the payload.
+ * @param st Stat information for the file.
+ * @param data Loaded file bytes.
+ * @param node Libttak node tracking the payload.
+ * @return true when the entry was attached successfully.
+ */
 static bool cwist_mem_attach_entry(cwist_fix_server_mem *mem, cwist_file_t *entry, const char *fs_path, const struct stat *st, void *data, ttak_mem_node_t *node) {
     if (!mem || !entry || !fs_path || !st) return false;
     char *path_copy = cwist_strdup(fs_path);
@@ -126,6 +166,13 @@ static bool cwist_mem_attach_entry(cwist_fix_server_mem *mem, cwist_file_t *entr
     return true;
 }
 
+/**
+ * @brief Register a new static file in the fixed-memory cache.
+ * @param mem Static-file memory manager.
+ * @param fs_path Filesystem path to cache.
+ * @param st Stat information describing the file.
+ * @return true when the file was admitted to the cache.
+ */
 static bool cwist_mem_register_file(cwist_fix_server_mem *mem, const char *fs_path, const struct stat *st) {
     if (!mem || !fs_path || !st) return false;
     if (!cwist_mem_has_capacity(mem, st->st_size, 0)) {
@@ -150,6 +197,13 @@ static bool cwist_mem_register_file(cwist_fix_server_mem *mem, const char *fs_pa
     return true;
 }
 
+/**
+ * @brief Reload a cached static file after detecting a modification on disk.
+ * @param mem Static-file memory manager.
+ * @param entry Existing cache entry to refresh.
+ * @param st Updated stat information for the file.
+ * @return true when the file was refreshed successfully.
+ */
 static bool cwist_mem_refresh_file(cwist_fix_server_mem *mem, cwist_file_t *entry, const struct stat *st) {
     if (!mem || !entry || !st) return false;
     size_t reclaimable = entry->size;
@@ -235,11 +289,23 @@ static void execute_chain(cwist_app *app, cwist_http_request *req, cwist_http_re
 static bool cwist_prepare_static(cwist_app *app, cwist_http_request *req, cwist_static_request_info *info);
 static void cwist_static_handler(cwist_http_request *req, cwist_http_response *res);
 
+/**
+ * @brief Detect whether a route pattern contains colon-prefixed path parameters.
+ * @param path Route pattern to inspect.
+ * @return true when the path contains parameter segments.
+ */
 static bool route_has_params(const char *path) {
     if (!path) return false;
     return strchr(path, ':') != NULL;
 }
 
+/**
+ * @brief Hash a method/path pair into the fixed route-table bucket space.
+ * @param method HTTP method associated with the route.
+ * @param path Route path string.
+ * @param bucket_count Number of buckets in the route table.
+ * @return Bucket index for the route.
+ */
 static size_t cwist_route_hash(cwist_http_method_t method, const char *path, size_t bucket_count) {
     const unsigned long long FNV_OFFSET = 1469598103934665603ULL;
     const unsigned long long FNV_PRIME = 1099511628211ULL;
@@ -269,6 +335,10 @@ static cwist_route_entry *cwist_route_entry_create(const char *path,
     return entry;
 }
 
+/**
+ * @brief Destroy one route entry and its owned path string.
+ * @param entry Route entry to release.
+ */
 static void cwist_route_entry_free(cwist_route_entry *entry) {
     if (!entry) return;
     cwist_free(entry->path);
@@ -288,6 +358,10 @@ static cwist_route_table *cwist_route_table_create(void) {
     return table;
 }
 
+/**
+ * @brief Destroy the route table, including static and parameterized route chains.
+ * @param table Route table to release.
+ */
 static void cwist_route_table_destroy(cwist_route_table *table) {
     if (!table) return;
     for (size_t i = 0; i < table->bucket_count; i++) {
@@ -395,6 +469,11 @@ static cwist_route_entry *cwist_route_table_match_params(cwist_route_table *tabl
     return NULL;
 }
 
+/**
+ * @brief Reject static-file paths that attempt parent-directory traversal.
+ * @param path Relative path component derived from the request.
+ * @return true when the path contains `..` traversal segments.
+ */
 static bool cwist_path_has_parent_ref(const char *path) {
     if (!path) return false;
     const char *cursor = path;
@@ -412,6 +491,14 @@ static bool cwist_path_has_parent_ref(const char *path) {
     return false;
 }
 
+/**
+ * @brief Match a request path against one configured static-directory mapping.
+ * @param entry Static-directory mapping candidate.
+ * @param req_path Request path to inspect.
+ * @param relative_ptr Output pointer receiving the unmatched suffix inside the mapping.
+ * @param use_index Output flag indicating whether an index file should be served.
+ * @return true when the request is covered by the mapping.
+ */
 static bool cwist_static_match_entry(const cwist_static_dir *entry, const char *req_path, const char **relative_ptr, bool *use_index) {
     if (!entry || !req_path || req_path[0] == '\0') return false;
     size_t prefix_len = strlen(entry->url_prefix);
@@ -446,6 +533,13 @@ static bool cwist_static_match_entry(const cwist_static_dir *entry, const char *
     return true;
 }
 
+/**
+ * @brief Resolve a request path to one configured static directory before routing.
+ * @param app Application that owns the static mappings.
+ * @param req Incoming request to inspect.
+ * @param info Output structure receiving the resolved mapping details.
+ * @return true when the request should be served by the static-file handler.
+ */
 static bool cwist_prepare_static(cwist_app *app, cwist_http_request *req, cwist_static_request_info *info) {
     if (!app || !req || !req->path || !req->path->data) return false;
     if (!app->static_dirs) return false;
@@ -469,6 +563,13 @@ static bool cwist_prepare_static(cwist_app *app, cwist_http_request *req, cwist_
     return false;
 }
 
+/**
+ * @brief Recursively scan a static root directory to size or populate the fixed-memory cache.
+ * @param fs_root Filesystem directory to scan.
+ * @param total_size Running byte total accumulated during the scan.
+ * @param mem Static-file memory manager to populate when not in dry-run mode.
+ * @param dry_run When true, only compute the required capacity.
+ */
 static void cwist_scan_recursive(const char *fs_root, size_t *total_size, cwist_fix_server_mem *mem, bool dry_run) {
     DIR *d = opendir(fs_root);
     if (!d) return;
@@ -498,6 +599,10 @@ static void cwist_scan_recursive(const char *fs_root, size_t *total_size, cwist_
     closedir(d);
 }
 
+/**
+ * @brief Initialize the static-file fixed-memory cache based on configured directories.
+ * @param app Application whose static mappings should be scanned and cached.
+ */
 static void cwist_mem_init(cwist_app *app) {
     if (!app || !app->static_dirs) return;
     
@@ -611,6 +716,12 @@ static char *cwist_normalize_directory(const char *directory) {
     return copy;
 }
 
+/**
+ * @brief Cleanup hook used when a response borrows a static-file cache payload.
+ * @param ptr Borrowed body pointer.
+ * @param len Borrowed body length.
+ * @param ctx Cache entry that owns the libttak node.
+ */
 static void cwist_static_release_body(const void *ptr, size_t len, void *ctx) {
     (void)ptr;
     (void)len;
@@ -620,6 +731,11 @@ static void cwist_static_release_body(const void *ptr, size_t len, void *ctx) {
     }
 }
 
+/**
+ * @brief Serve a static file response from the fixed-memory cache or disk fallback.
+ * @param req Incoming request targeting a static mapping.
+ * @param res Response object to populate.
+ */
 static void cwist_static_handler(cwist_http_request *req, cwist_http_response *res) {
     mw_executor_ctx *ctx = (mw_executor_ctx *)req->private_data;
     cwist_static_request_info *info = ctx ? (cwist_static_request_info *)ctx->handler_data : NULL;
@@ -871,6 +987,11 @@ void cwist_app_destroy(cwist_app *app) {
     cwist_free(app);
 }
 
+/**
+ * @brief Advance the middleware chain or invoke the final route handler.
+ * @param req Active request object.
+ * @param res Active response object.
+ */
 static void mw_next_wrapper(cwist_http_request *req, cwist_http_response *res) {
     mw_executor_ctx *ctx = (mw_executor_ctx *)req->private_data;
     if (!ctx) return;
@@ -885,6 +1006,14 @@ static void mw_next_wrapper(cwist_http_request *req, cwist_http_response *res) {
     }
 }
 
+/**
+ * @brief Execute the application's middleware list around one final route handler.
+ * @param app Application whose middleware chain should run.
+ * @param req Active request object.
+ * @param res Active response object.
+ * @param final_handler Route handler to invoke after middleware.
+ * @param handler_data Reserved handler payload slot.
+ */
 static void execute_chain(cwist_app *app, cwist_http_request *req, cwist_http_response *res, cwist_handler_func final_handler, void *handler_data) {
     mw_executor_ctx ctx = { app->middlewares, final_handler, handler_data };
     req->private_data = &ctx;

@@ -32,6 +32,11 @@
 #include <sys/event.h>
 #endif
 
+/**
+ * @file http.c
+ * @brief Core HTTP request/response allocation, serialization, socket, and server-loop helpers.
+ */
+
 const int CWIST_CREATE_SOCKET_FAILED     = -1;
 const int CWIST_HTTP_UNAVAILABLE_ADDRESS = -2;
 const int CWIST_HTTP_BIND_FAILED         = -3;
@@ -40,6 +45,11 @@ const int CWIST_HTTP_LISTEN_FAILED       = -5;
 
 /* --- Helpers --- */
 
+/**
+ * @brief Convert a HTTP method enum into its wire-format token.
+ * @param method HTTP method enum value.
+ * @return Static string name for the method.
+ */
 const char *cwist_http_method_to_string(cwist_http_method_t method) {
     switch (method) {
         case CWIST_HTTP_GET: return "GET";
@@ -53,6 +63,11 @@ const char *cwist_http_method_to_string(cwist_http_method_t method) {
     }
 }
 
+/**
+ * @brief Parse a method token into CWIST's HTTP method enum.
+ * @param method_str Raw method token from the request line.
+ * @return Parsed enum value, or CWIST_HTTP_UNKNOWN when unsupported.
+ */
 cwist_http_method_t cwist_http_string_to_method(const char *method_str) {
     if (strcmp(method_str, "GET") == 0) return CWIST_HTTP_GET;
     if (strcmp(method_str, "POST") == 0) return CWIST_HTTP_POST;
@@ -66,6 +81,13 @@ cwist_http_method_t cwist_http_string_to_method(const char *method_str) {
 
 /* --- Header Manipulation --- */
 
+/**
+ * @brief Prepend one header node to the linked-list header collection.
+ * @param head Header-list head pointer to update.
+ * @param key Header name to store.
+ * @param value Header value to store.
+ * @return Tagged CWIST error describing success or allocation failure.
+ */
 cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *key, const char *value) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     
@@ -91,6 +113,12 @@ cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *k
     return err;
 }
 
+/**
+ * @brief Find a header value using case-insensitive header-name comparison.
+ * @param head Head of the header linked list.
+ * @param key Header name to search for.
+ * @return Raw header value string, or NULL when absent.
+ */
 char *cwist_http_header_get(cwist_http_header_node *head, const char *key) {
     cwist_http_header_node *curr = head;
     while (curr) {
@@ -102,6 +130,10 @@ char *cwist_http_header_get(cwist_http_header_node *head, const char *key) {
     return NULL;
 }
 
+/**
+ * @brief Destroy every node in a request or response header list.
+ * @param head Head of the header linked list.
+ */
 void cwist_http_header_free_all(cwist_http_header_node *head) {
     cwist_http_header_node *curr = head;
     while (curr) {
@@ -113,21 +145,41 @@ void cwist_http_header_free_all(cwist_http_header_node *head) {
     }
 }
 
+/**
+ * @brief Check whether a header key names the Connection header.
+ * @param key Header key to inspect.
+ * @return true when the key is "connection" ignoring case.
+ */
 static bool header_key_is_connection(const char *key) {
     if (!key) return false;
     return strcasecmp(key, "connection") == 0;
 }
 
+/**
+ * @brief Check whether a Connection header requests socket closure.
+ * @param value Header value to inspect.
+ * @return true when the value equals "close" ignoring case.
+ */
 static bool header_value_is_close(const char *value) {
     if (!value) return false;
     return strcasecmp(value, "close") == 0;
 }
 
+/**
+ * @brief Check whether a Connection header requests persistent keep-alive.
+ * @param value Header value to inspect.
+ * @return true when the value equals "keep-alive" ignoring case.
+ */
 static bool header_value_is_keep_alive(const char *value) {
     if (!value) return false;
     return strcasecmp(value, "keep-alive") == 0;
 }
 
+/**
+ * @brief Detect whether the current header list already contains a Connection header.
+ * @param head Head of the header linked list.
+ * @return true when a Connection header is present.
+ */
 static bool headers_have_connection(cwist_http_header_node *head) {
     cwist_http_header_node *curr = head;
     while (curr) {
@@ -141,6 +193,10 @@ static bool headers_have_connection(cwist_http_header_node *head) {
 
 /* --- Request Lifecycle --- */
 
+/**
+ * @brief Allocate and initialize a default HTTP request object.
+ * @return Newly allocated request, or NULL on allocation failure.
+ */
 cwist_http_request *cwist_http_request_create(void) {
     cwist_http_request *req = (cwist_http_request *)cwist_alloc(sizeof(cwist_http_request));
     if (!req) return NULL;
@@ -171,7 +227,11 @@ cwist_http_request *cwist_http_request_create(void) {
 
 /* --- Request Data Processing */
 
-// Get client IP from client file descriptor                                                                           
+/**
+ * @brief Resolve the peer IP address for a connected client socket.
+ * @param fd Connected client socket descriptor.
+ * @return Heap-allocated string containing the textual IP address.
+ */
 cwist_sstring* cwist_get_client_ip_from_fd(int fd) {
     cwist_sstring *s = cwist_sstring_create();
     cwist_sstring_assign(s, "127.0.0.1");
@@ -203,6 +263,10 @@ cwist_sstring* cwist_get_client_ip_from_fd(int fd) {
     return s;
 }
 
+/**
+ * @brief Destroy a parsed HTTP request and all nested allocations it owns.
+ * @param req Request object to destroy.
+ */
 void cwist_http_request_destroy(cwist_http_request *req) {
     if (req) {
         cwist_sstring_destroy(req->path);
@@ -218,6 +282,10 @@ void cwist_http_request_destroy(cwist_http_request *req) {
 
 /* --- Response Lifecycle --- */
 
+/**
+ * @brief Release any file-stream state attached to a response.
+ * @param res Response object whose streaming fields should be reset.
+ */
 static void cwist_http_response_release_file_stream(cwist_http_response *res) {
     if (!res || !res->use_file_stream) return;
     if (res->file_stream_auto_close && res->file_stream_fd >= 0) {
@@ -230,6 +298,10 @@ static void cwist_http_response_release_file_stream(cwist_http_response *res) {
     res->file_stream_auto_close = false;
 }
 
+/**
+ * @brief Release any zero-copy pointer-body cleanup hook attached to a response.
+ * @param res Response object whose pointer-body state should be reset.
+ */
 static void cwist_http_response_release_ptr_body(cwist_http_response *res) {
     if (!res || !res->is_ptr_body) return;
     if (res->ptr_body_cleanup && res->ptr_body) {
@@ -242,6 +314,10 @@ static void cwist_http_response_release_ptr_body(cwist_http_response *res) {
     res->ptr_body_cleanup_ctx = NULL;
 }
 
+/**
+ * @brief Allocate and initialize a default HTTP response object.
+ * @return Newly allocated response, or NULL on allocation failure.
+ */
 cwist_http_response *cwist_http_response_create(void) {
     cwist_http_response *res = (cwist_http_response *)cwist_alloc(sizeof(cwist_http_response));
     if (!res) return NULL;
@@ -271,6 +347,10 @@ cwist_http_response *cwist_http_response_create(void) {
     return res;
 }
 
+/**
+ * @brief Destroy an HTTP response and release any attached body resources.
+ * @param res Response object to destroy.
+ */
 void cwist_http_response_destroy(cwist_http_response *res) {
     if (res) {
         cwist_http_response_release_ptr_body(res);
@@ -283,10 +363,24 @@ void cwist_http_response_destroy(cwist_http_response *res) {
     }
 }
 
+/**
+ * @brief Attach an unmanaged zero-copy body pointer to a response.
+ * @param res Response object to modify.
+ * @param ptr External body pointer.
+ * @param len Length of the external body in bytes.
+ */
 void cwist_http_response_set_body_ptr(cwist_http_response *res, const void *ptr, size_t len) {
     cwist_http_response_set_body_ptr_managed(res, ptr, len, NULL, NULL);
 }
 
+/**
+ * @brief Attach a managed zero-copy body pointer and optional cleanup hook to a response.
+ * @param res Response object to modify.
+ * @param ptr External body pointer.
+ * @param len Length of the external body in bytes.
+ * @param cleanup Optional cleanup callback for the body pointer.
+ * @param ctx Opaque context forwarded to the cleanup callback.
+ */
 void cwist_http_response_set_body_ptr_managed(cwist_http_response *res, const void *ptr, size_t len, cwist_http_body_cleanup_fn cleanup, void *ctx) {
     if (!res) return;
     cwist_http_response_release_file_stream(res);
@@ -300,6 +394,11 @@ void cwist_http_response_set_body_ptr_managed(cwist_http_response *res, const vo
 
 // ... (request parsing omitted) ...
 
+/**
+ * @brief Detect whether a header list already defines Content-Length.
+ * @param headers Header linked list to scan.
+ * @return 1 when a Content-Length header is present, otherwise 0.
+ */
 int headers_have_content_length(cwist_http_header_node *headers) {
     cwist_http_header_node *curr = headers;
     while (curr) {
@@ -311,7 +410,13 @@ int headers_have_content_length(cwist_http_header_node *headers) {
     return 0;
 }
 
-// Helper to serialize headers only
+/**
+ * @brief Serialize the HTTP status line and headers into a caller-provided buffer.
+ * @param res Response object to serialize.
+ * @param buf Destination buffer for the header block.
+ * @param buf_size Total capacity of @p buf in bytes.
+ * @return Number of bytes written into the buffer.
+ */
 static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_size) {
     size_t body_len = 0;
     if (res->use_file_stream) {
@@ -356,6 +461,12 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
 
 #include <sys/uio.h> // For writev and BSD sendfile
 
+/**
+ * @brief Attempt an optimized file-stream send path using platform sendfile support.
+ * @param client_fd Connected client socket descriptor.
+ * @param res Response object configured for file streaming.
+ * @return true when the file body and headers were transmitted successfully.
+ */
 static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res) {
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
     if (!res || !res->use_file_stream || res->file_stream_fd < 0) return false;
@@ -413,6 +524,12 @@ static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res)
 #endif
 }
 
+/**
+ * @brief Serialize and send an HTTP response to a connected client socket.
+ * @param client_fd Connected client socket descriptor.
+ * @param res Response object to send.
+ * @return Tagged CWIST error describing success or transmission failure.
+ */
 cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
 
@@ -476,6 +593,11 @@ cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) 
     return err;
 }
 
+/**
+ * @brief Materialize an HTTP response into a contiguous string for debugging or TLS writes.
+ * @param res Response object to stringify.
+ * @return Heap-allocated response string, or NULL on invalid input.
+ */
 cwist_sstring *cwist_http_stringify_response(cwist_http_response *res) {
     // Deprecated / Debug only
     if (!res) return NULL;
@@ -491,6 +613,11 @@ cwist_sstring *cwist_http_stringify_response(cwist_http_response *res) {
     return s;
 }
 
+/**
+ * @brief Parse a raw HTTP request buffer into a CWIST request object.
+ * @param raw_request NUL-terminated request buffer containing headers and optional body.
+ * @return Parsed request object, or NULL on malformed input.
+ */
 cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     if (!raw_request) return NULL;
 
@@ -602,6 +729,14 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
 
 
 
+/**
+ * @brief Read from a client socket until a complete HTTP request is available.
+ * @param client_fd Connected client socket descriptor.
+ * @param read_buf Reusable receive buffer supplied by the caller.
+ * @param buf_size Total capacity of @p read_buf.
+ * @param buf_len In/out length of buffered leftover data.
+ * @return Parsed request object, or NULL on timeout, parse failure, or IO failure.
+ */
 cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len) {
     size_t total_received = *buf_len;
     char *header_end = NULL;
@@ -726,6 +861,14 @@ static const char *cwist_guess_mime(const char *file_path) {
     return "application/octet-stream";
 }
 
+/**
+ * @brief Prepare a response to serve a file either by buffering or direct streaming.
+ * @param res Response object to populate.
+ * @param file_path Filesystem path to the file that should be served.
+ * @param content_type_hint Optional MIME type override.
+ * @param out_size Optional output pointer receiving the file size in bytes.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_http_response_send_file(cwist_http_response *res, const char *file_path, const char *content_type_hint, size_t *out_size) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (!res || !file_path) {
@@ -841,6 +984,14 @@ const char CWIST_BLOB_500[] = "HTTP/1.1 500 Internal Server Error\r\nContent-Len
 
 /* --- Socket Manipulation --- */
 
+/**
+ * @brief Create, configure, bind, and listen on an IPv4 TCP socket.
+ * @param sockv4 Output sockaddr structure populated for the bind call.
+ * @param address IPv4 address string to bind.
+ * @param port TCP port to listen on.
+ * @param backlog Listen backlog passed to listen(2).
+ * @return Listening socket fd on success, or a negative CWIST socket error code.
+ */
 int cwist_make_socket_ipv4(struct sockaddr_in *sockv4, const char *address, uint16_t port, uint16_t backlog) {
   int server_fd = -1;
   int opt = 1;
@@ -911,6 +1062,11 @@ int cwist_make_socket_ipv4(struct sockaddr_in *sockv4, const char *address, uint
   return server_fd;
 }
 
+/**
+ * @brief Decide whether an accept(2) error should be treated as transient.
+ * @param err errno value returned by accept(2).
+ * @return true when the caller should retry the accept loop.
+ */
 static bool cwist_accept_error_should_retry(int err) {
     switch (err) {
         case EINTR:
@@ -933,6 +1089,10 @@ static bool cwist_accept_error_should_retry(int err) {
     }
 }
 
+/**
+ * @brief Apply a small sleep when repeated accept failures suggest resource pressure.
+ * @param err errno value returned by accept(2).
+ */
 static void cwist_accept_error_backoff(int err) {
     switch (err) {
         case EMFILE:
@@ -967,6 +1127,12 @@ static void *thread_handler(void *arg) {
     return NULL;
 }
 
+/**
+ * @brief Service one accepted client in a forked child process.
+ * @param client_fd Accepted client socket descriptor.
+ * @param handler_func Request handler callback.
+ * @param ctx Opaque callback context.
+ */
 static void handle_client_forking(int client_fd, void (*handler_func)(int, void *), void *ctx) {
     pid_t pid = fork();
     if (pid == 0) {
@@ -978,6 +1144,14 @@ static void handle_client_forking(int client_fd, void (*handler_func)(int, void 
     }
 }
 
+/**
+ * @brief Accept one client connection and dispatch it according to the current server strategy.
+ * @param server_fd Listening server socket.
+ * @param sockv4 Scratch sockaddr buffer for accept(2).
+ * @param handler_func Callback that handles one accepted client.
+ * @param ctx Opaque callback context.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_accept_socket(int server_fd, struct sockaddr *sockv4, void (*handler_func)(int client_fd, void *), void *ctx) {
   int client_fd = -1;
   struct sockaddr_in peer_addr;
@@ -1006,6 +1180,14 @@ cwist_error_t cwist_accept_socket(int server_fd, struct sockaddr *sockv4, void (
   return err;
 }
 
+/**
+ * @brief Run the main HTTP accept loop using the configured concurrency strategy.
+ * @param server_fd Listening server socket.
+ * @param config Server concurrency configuration flags.
+ * @param handler Callback that handles one accepted client.
+ * @param ctx Opaque callback context.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config, void (*handler)(int, void *), void *ctx) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (!config || server_fd < 0 || !handler) {

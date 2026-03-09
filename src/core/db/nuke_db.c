@@ -16,12 +16,22 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+/**
+ * @file nuke_db.c
+ * @brief In-memory SQLite mirroring layer that can fall back to disk under memory pressure.
+ */
+
 static cwist_nuke_db_t g_nuke = {0};
 static pthread_t g_sync_thread = 0;
 static volatile bool g_running = false;
 static pthread_mutex_t g_nuke_lock = PTHREAD_MUTEX_INITIALIZER;
 static sigset_t g_sigset;
 
+/**
+ * @brief Estimate the RAM budget needed to mirror a disk database into memory.
+ * @param disk_path Path to the on-disk SQLite database.
+ * @return Estimated required bytes including overhead.
+ */
 static uint64_t nuke_estimate_required_ram(const char *disk_path) {
     struct stat st;
     uint64_t db_size = 0;
@@ -36,6 +46,11 @@ static uint64_t nuke_estimate_required_ram(const char *disk_path) {
     return required;
 }
 
+/**
+ * @brief Detect whether the disk database already contains any tables.
+ * @param db Open SQLite handle for the disk database.
+ * @return true when sqlite_master reports at least one table.
+ */
 static bool nuke_disk_has_tables(sqlite3 *db) {
     if (!db) return true;
     sqlite3_stmt *stmt = NULL;
@@ -53,6 +68,11 @@ static bool nuke_disk_has_tables(sqlite3 *db) {
     return has_tables;
 }
 
+/**
+ * @brief Run SQLite's integrity check pragma against a database handle.
+ * @param db Open SQLite handle to verify.
+ * @return true when the pragma reports "ok".
+ */
 static bool nuke_integrity_ok(sqlite3 *db) {
     if (!db) return false;
     sqlite3_stmt *stmt = NULL;
@@ -68,6 +88,12 @@ static bool nuke_integrity_ok(sqlite3 *db) {
 }
 
 // Helper: Backup source_db to dest_db
+/**
+ * @brief Copy the complete contents of one SQLite database into another.
+ * @param dest Destination SQLite connection.
+ * @param source Source SQLite connection.
+ * @return 0 on success, or -1 when the backup API fails.
+ */
 static int nuke_backup(sqlite3 *dest, sqlite3 *source) {
     if (!dest || !source) return -1;
     sqlite3_backup *backup = sqlite3_backup_init(dest, "main", source, "main");
@@ -85,6 +111,9 @@ static int nuke_backup(sqlite3 *dest, sqlite3 *source) {
     return (rc == SQLITE_DONE) ? 0 : -1;
 }
 
+/**
+ * @brief Switch the live NUKE database into disk mode after a low-memory event.
+ */
 static void nuke_switch_to_disk(void) {
     if (g_nuke.is_disk_mode) return;
 
@@ -104,6 +133,11 @@ static void nuke_switch_to_disk(void) {
 }
 
 // Internal commit hook to trigger immediate sync
+/**
+ * @brief SQLite commit hook that wakes the sync thread for immediate persistence.
+ * @param arg Unused hook context.
+ * @return 0 so SQLite proceeds with the commit.
+ */
 static int nuke_commit_hook(void *arg) {
     CWIST_UNUSED(arg);
     if (g_running && !g_nuke.is_disk_mode && g_sync_thread != 0) {
@@ -113,6 +147,10 @@ static int nuke_commit_hook(void *arg) {
     return 0;
 }
 
+/**
+ * @brief Persist the current in-memory database back to disk or checkpoint WAL mode.
+ * @return 0 on success, or -1 when syncing is impossible or fails.
+ */
 int cwist_nuke_sync(void) {
     pthread_mutex_lock(&g_nuke_lock);
     
@@ -143,6 +181,9 @@ int cwist_nuke_sync(void) {
 }
 
 // Internal idempotent cleanup
+/**
+ * @brief Reset global NUKE state and close any open SQLite handles.
+ */
 static void nuke_cleanup_internal(void) {
     pthread_mutex_lock(&g_nuke_lock);
     
@@ -171,6 +212,9 @@ static void nuke_cleanup_internal(void) {
     pthread_mutex_unlock(&g_nuke_lock);
 }
 
+/**
+ * @brief Stop the sync thread, flush state, and tear down the global NUKE context.
+ */
 void cwist_nuke_close(void) {
     if (!g_running) return;
     g_running = false;
@@ -186,6 +230,11 @@ void cwist_nuke_close(void) {
     nuke_cleanup_internal();
 }
 
+/**
+ * @brief Background sync thread that handles periodic checkpoints and signal-driven flushes.
+ * @param arg Unused thread argument.
+ * @return Always NULL for pthread compatibility.
+ */
 static void *sync_thread_func(void *arg) {
     CWIST_UNUSED(arg);
     struct timespec timeout;
@@ -240,6 +289,12 @@ static void *sync_thread_func(void *arg) {
     return NULL;
 }
 
+/**
+ * @brief Initialize the global NUKE database mirror around one disk database.
+ * @param disk_path Path to the on-disk SQLite database.
+ * @param sync_interval_ms Background sync interval in milliseconds.
+ * @return NUKE status code describing success, low-memory fallback, or failure.
+ */
 int cwist_nuke_init(const char *disk_path, int sync_interval_ms) {
     if (g_running) return CWIST_NUKE_ERR_GENERIC; // Already running
     if (!disk_path) return CWIST_NUKE_ERR_GENERIC;

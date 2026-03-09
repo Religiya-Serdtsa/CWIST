@@ -15,16 +15,20 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-/* -------------------------------------------------------------------------
- * Protocol constants
- * ---------------------------------------------------------------------- */
+/**
+ * @file db_sync.c
+ * @brief Minimal TCP protocol for shipping encrypted SQLite snapshots between peers.
+ */
 
 static const unsigned char SYNC_MAGIC[4] = { 0x43, 0x57, 0x53, 0x59 }; /* "CWSY" */
 
-/* -------------------------------------------------------------------------
- * Internal I/O helpers (handle short reads/writes on TCP)
- * ---------------------------------------------------------------------- */
-
+/**
+ * @brief Write exactly the requested number of bytes to a socket.
+ * @param fd Connected socket descriptor.
+ * @param buf Source buffer to write.
+ * @param len Number of bytes to send.
+ * @return 0 on success, or -1 on short/failed writes.
+ */
 static int write_all(int fd, const void *buf, size_t len) {
     const unsigned char *p = (const unsigned char *)buf;
     while (len > 0) {
@@ -36,6 +40,13 @@ static int write_all(int fd, const void *buf, size_t len) {
     return 0;
 }
 
+/**
+ * @brief Read exactly the requested number of bytes from a socket.
+ * @param fd Connected socket descriptor.
+ * @param buf Destination buffer to fill.
+ * @param len Number of bytes to read.
+ * @return 0 on success, or -1 on short/failed reads.
+ */
 static int read_all(int fd, void *buf, size_t len) {
     unsigned char *p = (unsigned char *)buf;
     while (len > 0) {
@@ -47,10 +58,13 @@ static int read_all(int fd, void *buf, size_t len) {
     return 0;
 }
 
-/* -------------------------------------------------------------------------
- * Public API
- * ---------------------------------------------------------------------- */
-
+/**
+ * @brief Serialize and encrypt a SQLite database, then serve it to one TCP client.
+ * @param db SQLite connection whose main database should be transferred.
+ * @param ctx Encryption context used to seal the serialized bytes.
+ * @param port TCP port to listen on, or the default when <= 0.
+ * @return CWIST_DB_SYNC_OK on success, or a protocol/network/crypto error code.
+ */
 int cwist_db_sync_serve(sqlite3 *db, const cwist_db_crypt_ctx_t *ctx, int port) {
     if (!db || !ctx) return CWIST_DB_SYNC_ERR_ARGS;
     if (port <= 0) port = CWIST_DB_SYNC_DEFAULT_PORT;
@@ -143,6 +157,15 @@ int cwist_db_sync_serve(sqlite3 *db, const cwist_db_crypt_ctx_t *ctx, int port) 
     return CWIST_DB_SYNC_OK;
 }
 
+/**
+ * @brief Connect to a sync server, download the encrypted snapshot, and decrypt it.
+ * @param host Remote host name or address to connect to.
+ * @param port Remote TCP port, or the default when <= 0.
+ * @param ctx Encryption context used to decrypt the transferred blob.
+ * @param out_bytes Output pointer that receives the decrypted SQLite image.
+ * @param out_len Output pointer that receives the decrypted byte count.
+ * @return CWIST_DB_SYNC_OK on success, or a protocol/network/crypto error code.
+ */
 int cwist_db_sync_pull(const char *host, int port,
                        const cwist_db_crypt_ctx_t *ctx,
                        unsigned char **out_bytes, size_t *out_len) {

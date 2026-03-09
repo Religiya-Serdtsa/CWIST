@@ -3,11 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* -------------------------------------------------------------------------
- * Helpers
- * ---------------------------------------------------------------------- */
+/**
+ * @file migrate.c
+ * @brief Schema migration helpers for applying and rolling back ordered SQL revisions.
+ */
 
-/** Create the history table if it does not already exist. */
+/**
+ * @brief Create the migration history table when the target database lacks it.
+ * @param db SQLite connection to prepare for migration tracking.
+ * @return CWIST_MIGRATE_OK on success, or a migration SQL error code on failure.
+ */
 static int migrate_ensure_table(sqlite3 *db) {
     const char *sql =
         "CREATE TABLE IF NOT EXISTS _cwist_migrations ("
@@ -25,7 +30,14 @@ static int migrate_ensure_table(sqlite3 *db) {
     return CWIST_MIGRATE_OK;
 }
 
-/** Execute a (possibly multi-statement) SQL string inside a transaction. */
+/**
+ * @brief Execute a migration SQL blob inside an explicit transaction.
+ * @param db SQLite connection to mutate.
+ * @param sql SQL text for the up/down migration step.
+ * @param version Migration version being applied.
+ * @param direction Human-readable direction label used in logs.
+ * @return CWIST_MIGRATE_OK on success, or a migration SQL error code on failure.
+ */
 static int migrate_exec_sql(sqlite3 *db, const char *sql, int version,
                              const char *direction) {
     char *errmsg = NULL;
@@ -57,24 +69,35 @@ static int migrate_exec_sql(sqlite3 *db, const char *sql, int version,
     return CWIST_MIGRATE_OK;
 }
 
-/** Comparison function for qsort (ascending version). */
+/**
+ * @brief qsort comparator that orders migrations by ascending version.
+ * @param a Left migration pointer.
+ * @param b Right migration pointer.
+ * @return Negative, zero, or positive depending on version ordering.
+ */
 static int migration_cmp_asc(const void *a, const void *b) {
     const cwist_migration_t *ma = (const cwist_migration_t *)a;
     const cwist_migration_t *mb = (const cwist_migration_t *)b;
     return ma->version - mb->version;
 }
 
-/** Comparison function for qsort (descending version). */
+/**
+ * @brief qsort comparator that orders migrations by descending version.
+ * @param a Left migration pointer.
+ * @param b Right migration pointer.
+ * @return Negative, zero, or positive depending on reverse version ordering.
+ */
 static int migration_cmp_desc(const void *a, const void *b) {
     const cwist_migration_t *ma = (const cwist_migration_t *)a;
     const cwist_migration_t *mb = (const cwist_migration_t *)b;
     return mb->version - ma->version;
 }
 
-/* -------------------------------------------------------------------------
- * Public API
- * ---------------------------------------------------------------------- */
-
+/**
+ * @brief Query the highest applied migration version recorded in the database.
+ * @param db SQLite connection to inspect.
+ * @return Highest applied version, or -1 when the query fails.
+ */
 int cwist_migrate_version(sqlite3 *db) {
     if (!db) return -1;
     if (migrate_ensure_table(db) != CWIST_MIGRATE_OK) return -1;
@@ -94,6 +117,13 @@ int cwist_migrate_version(sqlite3 *db) {
     return version;
 }
 
+/**
+ * @brief Apply all pending up migrations after sorting them by version.
+ * @param db SQLite connection to migrate.
+ * @param migrations Caller-supplied migration array.
+ * @param count Number of entries in @p migrations.
+ * @return CWIST_MIGRATE_OK on success, or a specific migration error code.
+ */
 int cwist_migrate_up(sqlite3 *db, const cwist_migration_t *migrations,
                      int count) {
     if (!db || !migrations || count <= 0) return CWIST_MIGRATE_ERR_ARGS;
@@ -142,6 +172,14 @@ int cwist_migrate_up(sqlite3 *db, const cwist_migration_t *migrations,
     return CWIST_MIGRATE_OK;
 }
 
+/**
+ * @brief Roll back applied migrations in reverse version order.
+ * @param db SQLite connection to migrate.
+ * @param migrations Caller-supplied migration array.
+ * @param count Number of entries in @p migrations.
+ * @param steps Maximum number of applied versions to roll back, or all when <= 0.
+ * @return CWIST_MIGRATE_OK on success, or a specific migration error code.
+ */
 int cwist_migrate_down(sqlite3 *db, const cwist_migration_t *migrations,
                        int count, int steps) {
     if (!db || !migrations || count <= 0) return CWIST_MIGRATE_ERR_ARGS;
