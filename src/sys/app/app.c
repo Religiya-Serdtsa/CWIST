@@ -707,6 +707,10 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
 #include <limits.h>
 #include <errno.h>
 
+/**
+ * @brief Allocate and initialize the top-level CWIST application object.
+ * @return Newly created application, or NULL when allocation fails.
+ */
 cwist_app *cwist_app_create(void) {
     cwist_app *app = (cwist_app *)cwist_alloc(sizeof(cwist_app));
     if (!app) return NULL;
@@ -734,6 +738,11 @@ cwist_app *cwist_app_create(void) {
     return app;
 }
 
+/**
+ * @brief Append a middleware callback to the application's execution chain.
+ * @param app Application being configured.
+ * @param mw Middleware callback to append.
+ */
 void cwist_app_use(cwist_app *app, cwist_middleware_func mw) {
     if (!app || !mw) return;
     cwist_middleware_node *node = cwist_alloc(sizeof(cwist_middleware_node));
@@ -749,19 +758,40 @@ void cwist_app_use(cwist_app *app, cwist_middleware_func mw) {
     }
 }
 
+/**
+ * @brief Override the static file memory budget used by cwist_mem_init().
+ * @param app Application being configured.
+ * @param size Maximum bytes reserved for static payload caching.
+ */
 void cwist_app_set_max_memspace(cwist_app *app, size_t size) {
     if (app) app->max_mem_space = size;
 }
 
+/**
+ * @brief Install a custom HTTP error callback.
+ * @param app Application being configured.
+ * @param handler Handler invoked for framework-generated errors such as 404 responses.
+ */
 void cwist_app_set_error_handler(cwist_app *app, cwist_error_handler_func handler) {
     if (app) app->error_handler = handler;
 }
 
+/**
+ * @brief Configure the Big Dumb Reply cache thresholds for the application.
+ * @param app Application whose BDR context should be tuned.
+ * @param max_bytes Maximum total cache footprint.
+ * @param max_entry_age_sec Maximum age for cached entries.
+ * @param revalidate_hits Hit count that forces revalidation.
+ */
 void cwist_app_configure_bdr(cwist_app *app, size_t max_bytes, time_t max_entry_age_sec, uint64_t revalidate_hits) {
     if (!app || !app->bdr_ctx) return;
     cwist_bdr_set_limits(app->bdr_ctx, max_bytes, max_entry_age_sec, revalidate_hits);
 }
 
+/**
+ * @brief Release every resource owned by the application object.
+ * @param app Application instance to destroy.
+ */
 void cwist_app_destroy(cwist_app *app) {
     if (!app) return;
     if (app->cert_path) cwist_free(app->cert_path);
@@ -862,6 +892,13 @@ static void execute_chain(cwist_app *app, cwist_http_request *req, cwist_http_re
     req->private_data = NULL;
 }
 
+/**
+ * @brief Enable TLS for the application using the supplied certificate pair.
+ * @param app Application being configured.
+ * @param cert_path PEM certificate chain path.
+ * @param key_path PEM private key path.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const char *key_path) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (!app || !cert_path || !key_path) {
@@ -876,6 +913,12 @@ cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const c
     return cwist_https_init_context(&app->ssl_ctx, cert_path, key_path);
 }
 
+/**
+ * @brief Open a SQLite database and attach it as the shared application handle.
+ * @param app Application being configured.
+ * @param db_path Filesystem path or SQLite URI to open.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_app_use_db(cwist_app *app, const char *db_path) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (!app || !db_path) {
@@ -902,6 +945,13 @@ cwist_error_t cwist_app_use_db(cwist_app *app, const char *db_path) {
     return err;
 }
 
+/**
+ * @brief Enable NUKE DB and fall back to standard SQLite when RAM bootstrap fails.
+ * @param app Application being configured.
+ * @param db_path On-disk database file to mirror into memory.
+ * @param sync_interval_ms Synchronization interval forwarded to NUKE DB.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_app_use_nuke_db(cwist_app *app, const char *db_path, int sync_interval_ms) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (!app || !db_path) {
@@ -948,6 +998,11 @@ cwist_error_t cwist_app_use_nuke_db(cwist_app *app, const char *db_path, int syn
     return err;
 }
 
+/**
+ * @brief Return the active shared database wrapper for the application.
+ * @param app Application whose database handle should be queried.
+ * @return Database wrapper, or NULL when no database is configured.
+ */
 cwist_db *cwist_app_get_db(cwist_app *app) {
     if (!app) return NULL;
     if (app->nuke_enabled) {
@@ -956,6 +1011,13 @@ cwist_db *cwist_app_get_db(cwist_app *app) {
     return app->db;
 }
 
+/**
+ * @brief Register a filesystem directory to be served beneath a URL prefix.
+ * @param app Application being configured.
+ * @param url_prefix Request-path prefix such as "/static".
+ * @param directory Filesystem directory that backs the mapping.
+ * @return Tagged CWIST error describing success or failure.
+ */
 cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const char *directory) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (!app || !url_prefix || !directory) {
@@ -1005,27 +1067,66 @@ static void add_route(cwist_app *app,
     cwist_route_table_insert(app->router, path, method, handler, NULL, opts);
 }
 
+/**
+ * @brief Register a GET handler with default endpoint options.
+ * @param app Application being configured.
+ * @param path Exact route path.
+ * @param handler HTTP handler invoked for matching requests.
+ */
 void cwist_app_get(cwist_app *app, const char *path, cwist_handler_func handler) {
     add_route(app, path, CWIST_HTTP_GET, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
+/**
+ * @brief Register a POST handler with default endpoint options.
+ * @param app Application being configured.
+ * @param path Exact route path.
+ * @param handler HTTP handler invoked for matching requests.
+ */
 void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler) {
     add_route(app, path, CWIST_HTTP_POST, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
+/**
+ * @brief Register a WebSocket upgrade endpoint with default options.
+ * @param app Application being configured.
+ * @param path Exact GET route that should upgrade to WebSocket.
+ * @param handler WebSocket handler invoked after a successful upgrade.
+ */
 void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handler) {
     if (!app || !app->router || !path) return;
     cwist_route_table_insert(app->router, path, CWIST_HTTP_GET, NULL, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
+/**
+ * @brief Register a GET handler with explicit endpoint options.
+ * @param app Application being configured.
+ * @param path Exact route path.
+ * @param handler HTTP handler invoked for matching requests.
+ * @param opts Endpoint flags controlling cache and transport behavior.
+ */
 void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts) {
     add_route(app, path, CWIST_HTTP_GET, handler, opts);
 }
 
+/**
+ * @brief Register a POST handler with explicit endpoint options.
+ * @param app Application being configured.
+ * @param path Exact route path.
+ * @param handler HTTP handler invoked for matching requests.
+ * @param opts Endpoint flags controlling cache and transport behavior.
+ */
 void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts) {
     add_route(app, path, CWIST_HTTP_POST, handler, opts);
 }
 
+/**
+ * @brief Register a WebSocket route with explicit endpoint options.
+ * @param app Application being configured.
+ * @param path Exact GET route that should upgrade to WebSocket.
+ * @param handler WebSocket handler invoked after a successful upgrade.
+ * @param opts Endpoint flags associated with the route.
+ */
 void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func handler, cwist_endpoint_opt_t opts) {
     if (!app || !app->router || !path) return;
     if (opts == 0) {
@@ -1225,6 +1326,12 @@ static void static_http_handler(int client_fd, void *ctx) {
     close(client_fd);
 }
 
+/**
+ * @brief Initialize runtime services and enter the HTTP or HTTPS server loop.
+ * @param app Application instance to run.
+ * @param port TCP port to bind.
+ * @return 0 on success, or -1 when initialization or bind fails.
+ */
 int cwist_app_listen(cwist_app *app, int port) {
     if (!app) return -1;
     app->port = port;
