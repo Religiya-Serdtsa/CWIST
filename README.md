@@ -13,6 +13,8 @@
 
 CWIST is a modern, lightweight C web framework designed for building secure and scalable applications. It brings the ergonomics of modern web frameworks to C without sacrificing performance or control.
 
+[TEXT Readme](./README)
+
 ## Features
 
 - **HTTP/1.1 Server**: Robust request parsing and response handling.
@@ -33,9 +35,11 @@ CWIST is a modern, lightweight C web framework designed for building secure and 
 git clone https://github.com/gg582/cwist.git
 cd cwist
 make install
+```
 
 2. Hello World
 
+```c
 #include <cwist/sys/app/app.h>
 #include <cwist/core/sstring/sstring.h>
 
@@ -52,11 +56,14 @@ int main(void) {
     cwist_app_destroy(app);
     return 0;
 }
+```
 
 3. Compilation
 
+```
 gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
 ./server
+```
 
 Nuke DB
 
