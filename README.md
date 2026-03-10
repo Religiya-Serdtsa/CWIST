@@ -150,11 +150,15 @@ Old blobs are trimmed automatically.
 
 RPS Showcase Example
 
+```
 example/rps-showcase demonstrates a high-throughput configuration.
+```
 
 Run the benchmark:
 
+```
 wrk -t4 -c128 -d30s http://127.0.0.1:8080/rps
+```
 
 The showcase ships with its own notes in example/rps-showcase/README.md and is meant to be the reproducible throughput entry point for the repository.
 
