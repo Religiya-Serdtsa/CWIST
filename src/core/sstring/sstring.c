@@ -107,6 +107,7 @@ cwist_error_t cwist_sstring_init(cwist_sstring *str) {
     str->data = NULL;
     str->size = 0;
     str->is_fixed = false;
+    str->owns_storage = false;
     str->get_size = cwist_sstring_get_size;
     str->compare = cwist_sstring_compare_sstring;
     str->copy = cwist_sstring_copy_sstring;
@@ -131,6 +132,7 @@ cwist_error_t cwist_sstring_init_escaped(cwist_sstring *str) {
     str->data = NULL;
     str->size = 0;
     str->is_fixed = false;
+    str->owns_storage = false;
     str->get_size = cwist_sstring_get_size;
     str->compare = cwist_sstring_compare_sstring;
     str->copy = cwist_sstring_copy_sstring;
@@ -577,6 +579,7 @@ cwist_sstring *cwist_sstring_create(void) {
 
     memset(str, 0, sizeof(cwist_sstring));
     str->is_fixed = false;
+    str->owns_storage = true;
     str->size = 0;
     str->data = NULL; // Initially empty
     str->get_size = cwist_sstring_get_size;
@@ -592,9 +595,21 @@ cwist_sstring *cwist_sstring_create(void) {
  * @param str String object to destroy.
  */
 void cwist_sstring_destroy(cwist_sstring *str) {
-    if (str) {
-        if (str->data) cwist_free(str->data);
+    if (!str) return;
+
+    if (str->data) {
+        cwist_free(str->data);
+        str->data = NULL;
+    }
+    str->size = 0;
+
+    if (str->owns_storage) {
         cwist_free(str);
+    } else {
+        str->get_size = NULL;
+        str->compare = NULL;
+        str->copy = NULL;
+        str->append = NULL;
     }
 }
 
