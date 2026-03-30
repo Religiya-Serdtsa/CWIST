@@ -26,6 +26,20 @@
     - [ ] Thread Pool implementation (move away from simple thread-per-request dispatch in `cwist_http_server_loop`).
     - [ ] Event Loop integration (register client FDs with epoll/kqueue for non-blocking I/O instead of synchronous handlers).
 
+## Mathematics-Inspired Enhancements
+- [ ] **Matrix & Magic-Square Router Grid**:
+    - Reframe the route hash map as a sparse adjacency matrix where each method-path pair lands on a deterministic coordinate.
+    - Use magic-square balancing (equal row/column sums) to keep bucket pressure uniform as route counts grow, mirroring Joseon-era arrangement logic for evenly distributed gyesantteul.
+- [ ] **Jungseung Gaebang Weighting**:
+    - Apply the Jeungseung Gaebangbeop ratio technique from Joseon Sanhak to scale middleware and database weights when computing routing decisions (Jeung involves multiplication/Seung involves scaling, Gaebang brings normalization).
+    - Encode the ratios inside a small coefficient matrix that can be solved quickly for each request, giving predictable transitions between hot/cold paths.
+- [ ] **Dawonsul-Based Concurrency Tuning**:
+    - Model the thread pool and event loop knobs as multi-variable unknowns and search for stable solutions using Joseon Sanhak Dawonsul rules (simultaneous linear systems).
+    - Combine the multi-variable solver with the existing rate limiter to ensure fairness when latency, queue depth, and CPU availability shift independently.
+- [ ] **Al-Kashi & Euler Optimization Layer**:
+    - Use al-Kāshī-style iterative refinement (high-order root/exponential approximations) for the matrix solver that picks router buckets, minimizing rehash computations.
+    - Apply Euler's method to predict short-term load trajectories so the dispatcher can pre-warm worker epochs, referencing the line-integral form used in the event loop backlog model.
+
 ## Phase 3: Developer Experience
 - [ ] Template Engine (Simple replacement or Mustache).
 - [ ] CLI Tool for scaffolding projects (`cwist new myapp`).
