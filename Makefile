@@ -72,6 +72,7 @@ endif
 SRCS = src/core/sstring/sstring.c \
        src/sys/err/error.c \
        src/net/http/http.c \
+       src/net/http/http2.c \
        src/net/http/https.c \
        src/net/http/mux.c \
        src/net/http/query.c \
@@ -164,6 +165,14 @@ test_json_heal: $(LIB_NAME) tests/test_json_heal.c
 	$(CC) $(CFLAGS) -o test_json_heal tests/test_json_heal.c $(LIB_NAME) $(LIBS)
 	./test_json_heal
 
+test_https: $(LIB_NAME) tests/test_https.c
+	$(CC) $(CFLAGS) -o test_https tests/test_https.c $(LIB_NAME) $(LIBS)
+	./test_https
+
+test_http2: $(LIB_NAME) tests/test_http2.c
+	$(CC) $(CFLAGS) -o test_http2 tests/test_http2.c $(LIB_NAME) $(LIBS)
+	./test_http2
+
 # ... (other tests omitted for brevity, keeping standard ones)
 
 install: $(LIB_NAME)
@@ -193,6 +202,8 @@ clean:
 	rm -f $(OBJS) $(LIB_NAME)
 	rm -rf include/cwist/vendor
 	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket test_jwt test_migrate test_json_heal
+	rm -f test_https
+	rm -f test_http2
 	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
 	rm -rf $(URIPARSER_BUILD_DIR)
 	@$(MAKE) -C $(LIBTTAK_DIR) clean

@@ -65,7 +65,7 @@ gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
 ./server
 ```
 
-Nuke DB
+## Nuke DB
 
 Nuke DB is a read-optimal persistent store.
 
@@ -84,7 +84,7 @@ Integrity Guard: Each bootstrap runs PRAGMA integrity_check and aborts if corrup
 Safe Fallback: When the disk-to-memory transfer fails the system switches to the disk handle.
 
 
-Usage
+### Usage
 
 1. cwist_nuke_init("data.db", 5000);
 Loads data.db to memory and enables auto-sync every 5 seconds plus immediate sync on commit.
@@ -101,11 +101,11 @@ If the initial load from disk fails due to corruption, Nuke DB enters read-only 
 
 
 
-LibTTAK Performance Core
+## LibTTAK Performance Core
 
 CWIST links against the in-tree lib/libttak build and exposes the subsystems that landed with the latest drop.
 
-Generational Arena Allocator
+### Generational Arena Allocator
 
 Static assets (cwist_app_static) and Big Dumb Reply blobs are staged in a tracked arena backed by ttak_mem_tree.
 
@@ -114,7 +114,7 @@ Each generation is released in one shot, preventing RSS fragmentation.
 Cache-aligned chunks keep hot endpoints from repeatedly calling malloc and free.
 
 
-Epoch-Based Reclamation (EBR)
+### Epoch-Based Reclamation (EBR)
 
 Threads pin critical sections with ttak_epoch_enter and ttak_epoch_exit.
 
@@ -123,14 +123,14 @@ Stale buffers are reclaimed once no worker remains in the previous epoch.
 CWIST exposes cwist_gc(), cwist_gc_shutdown(), and cwist_reg_ptr() to integrate libttak GC easily.
 
 
-Detachable Memory
+### Detachable Memory
 
 ttak_detachable_mem_alloc layers a small-cache and signal-safe arena on top of EBR.
 
 Used for TLS write buffers, WebSocket frames, and zero-copy HTTP responses.
 
 
-Lock-Free Job Queue
+### Lock-Free Job Queue
 
 cwist_io_queue mirrors libttak’s lock-free queue design.
 
@@ -139,7 +139,7 @@ Producers push jobs using a single atomic swap without mutex contention.
 Consumers reuse detached nodes as sentinels to prevent fragmentation.
 
 
-Big Dumb Reply Guardrails
+### Big Dumb Reply Guardrails
 
 Entries expire after roughly five minutes or about 100k hits.
 
@@ -148,7 +148,7 @@ Default payload budget is capped at 32 MiB.
 Old blobs are trimmed automatically.
 
 
-RPS Showcase Example
+## RPS Showcase Example
 
 ```
 example/rps-showcase demonstrates a high-throughput configuration.
@@ -162,7 +162,7 @@ wrk -t4 -c128 -d30s http://127.0.0.1:8080/rps
 
 The showcase ships with its own notes in example/rps-showcase/README.md and is meant to be the reproducible throughput entry point for the repository.
 
-Benchmark Snapshot
+## Benchmark Snapshot
 
 Recorded ApacheBench sample (see BENCHMARK.txt for the full transcript):
 
@@ -196,7 +196,7 @@ Scheduler clock tick: 100 Hz (getconf CLK_TCK)
 Reported throttling: none in cpu.stat during capture
 
 
-Suggested throughput workflow:
+### Suggested throughput workflow:
 
 1. Build and run example/rps-showcase.
 
@@ -213,7 +213,7 @@ Suggested throughput workflow:
 
 This keeps the benchmark notes useful as a performance reference instead of a single isolated requests-per-second number.
 
-Dependencies
+## Dependencies
 
 cJSON
 
@@ -226,7 +226,7 @@ libttak (https://github.com/gg582/libttak)
 SQLite3
 
 
-Past Roadmap
+## Past Roadmap
 
 Security: CORS middleware and origin/header policy management
 
