@@ -14,6 +14,12 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <stdint.h>
+
+#define CWIST_ALPN_HTTP11 ((const unsigned char *)"\x08http/1.1")
+#define CWIST_ALPN_H2_HTTP11 ((const unsigned char *)"\x02h2\x08http/1.1")
+#define CWIST_ALPN_HTTP11_LEN 9
+#define CWIST_ALPN_H2_HTTP11_LEN 12
 
 /**
  * @file https.c
@@ -47,8 +53,73 @@ static cwist_error_t make_ssl_error(const char *msg) {
  * @param key_path Path to the PEM private key.
  * @return Tagged CWIST error describing success or failure.
  */
-cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *cert_path, const char *key_path) {
+static void cwist_https_apply_base_tls_defaults(SSL_CTX *ssl_ctx) {
+    SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_COMPRESSION);
+#ifdef SSL_OP_NO_RENEGOTIATION
+    SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_RENEGOTIATION);
+#endif
+    SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
+}
+
+static cwist_error_t cwist_https_apply_http2_tls_profile(SSL_CTX *ssl_ctx) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (SSL_CTX_set_cipher_list(ssl_ctx,
+                                "ECDHE-ECDSA-AES128-GCM-SHA256:"
+                                "ECDHE-RSA-AES128-GCM-SHA256:"
+                                "ECDHE-ECDSA-AES256-GCM-SHA384:"
+                                "ECDHE-RSA-AES256-GCM-SHA384:"
+                                "ECDHE-ECDSA-CHACHA20-POLY1305:"
+                                "ECDHE-RSA-CHACHA20-POLY1305") != 1) {
+        return make_ssl_error("Unable to apply HTTP/2-compatible TLS 1.2 cipher profile");
+    }
+#ifdef SSL_CTX_set_ciphersuites
+    if (SSL_CTX_set_ciphersuites(ssl_ctx,
+                                 "TLS_AES_128_GCM_SHA256:"
+                                 "TLS_AES_256_GCM_SHA384:"
+                                 "TLS_CHACHA20_POLY1305_SHA256") != 1) {
+        return make_ssl_error("Unable to apply HTTP/2-compatible TLS 1.3 cipher suites");
+    }
+#endif
+    SSL_CTX_set_options(ssl_ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+    err.error.err_i16 = 0;
+    return err;
+}
+
+static int cwist_https_alpn_select_cb(SSL *ssl,
+                                      const unsigned char **out,
+                                      unsigned char *outlen,
+                                      const unsigned char *in,
+                                      unsigned int inlen,
+                                      void *arg) {
+    (void)ssl;
+    bool enable_http2 = (bool)(uintptr_t)arg;
+    const unsigned char *supported = enable_http2 ? CWIST_ALPN_H2_HTTP11 : CWIST_ALPN_HTTP11;
+    unsigned int supported_len = enable_http2 ? CWIST_ALPN_H2_HTTP11_LEN : CWIST_ALPN_HTTP11_LEN;
+
+    if (SSL_select_next_proto((unsigned char **)out,
+                              outlen,
+                              supported,
+                              supported_len,
+                              in,
+                              inlen) == OPENSSL_NPN_NEGOTIATED) {
+        return SSL_TLSEXT_ERR_OK;
+    }
+
+    return SSL_TLSEXT_ERR_NOACK;
+}
+
+/* --- Context Management --- */
+
+cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *cert_path, const char *key_path) {
+    return cwist_https_init_context_with_options(ctx, cert_path, key_path, NULL);
+}
+
+cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
+                                                    const char *cert_path,
+                                                    const char *key_path,
+                                                    const cwist_https_options *options) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    bool enable_http2 = options && options->enable_http2;
     
     if (!ctx || !cert_path || !key_path) {
         err.error.err_i16 = -1;
@@ -69,7 +140,19 @@ cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *ce
         SSL_CTX_free(ssl_ctx);
         return make_ssl_error("Unable to enforce TLS minimum version");
     }
-    SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_COMPRESSION);
+    cwist_https_apply_base_tls_defaults(ssl_ctx);
+
+    if (enable_http2) {
+        err = cwist_https_apply_http2_tls_profile(ssl_ctx);
+        if (err.errtype != CWIST_ERR_INT16 || err.error.err_i16 != 0) {
+            SSL_CTX_free(ssl_ctx);
+            return err;
+        }
+    }
+
+    SSL_CTX_set_alpn_select_cb(ssl_ctx,
+                               cwist_https_alpn_select_cb,
+                               (void *)(uintptr_t)enable_http2);
 
     // Load Cert and Key
     if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path, SSL_FILETYPE_PEM) <= 0) {
@@ -95,6 +178,7 @@ cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *ce
         return err;
     }
     (*ctx)->ctx = ssl_ctx;
+    (*ctx)->http2_enabled = enable_http2;
 
     err.error.err_i16 = 0; // Success
     return err;
@@ -163,6 +247,14 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
     }
     (*conn)->buf_len = 0;
     (*conn)->read_buf[0] = '\0';
+    (*conn)->negotiated_http2 = false;
+
+    const unsigned char *alpn = NULL;
+    unsigned int alpn_len = 0;
+    SSL_get0_alpn_selected(ssl, &alpn, &alpn_len);
+    if (alpn && alpn_len == 2 && memcmp(alpn, "h2", 2) == 0) {
+        (*conn)->negotiated_http2 = true;
+    }
 
     err.error.err_i16 = 0;
     return err;
@@ -172,6 +264,10 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
  * @brief Gracefully close an HTTPS connection and free its buffers.
  * @param conn HTTPS connection wrapper to close.
  */
+bool cwist_https_connection_uses_http2(const cwist_https_connection *conn) {
+    return conn && conn->negotiated_http2;
+}
+
 void cwist_https_close_connection(cwist_https_connection *conn) {
     if (conn) {
         if (conn->ssl) {

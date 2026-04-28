@@ -2,6 +2,7 @@
 #define _DEFAULT_SOURCE
 #include <cwist/sys/app/app.h>
 #include <cwist/net/http/http.h>
+#include <cwist/net/http/http2.h>
 #include <cwist/net/http/https.h>
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/core/db/nuke_db.h>
@@ -827,14 +828,45 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
  * @brief Allocate and initialize the top-level CWIST application object.
  * @return Newly created application, or NULL when allocation fails.
  */
+static cwist_error_t cwist_app_refresh_https_context(cwist_app *app) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app || !app->cert_path || !app->key_path) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    if (app->ssl_ctx) {
+        cwist_https_destroy_context(app->ssl_ctx);
+        app->ssl_ctx = NULL;
+    }
+
+    cwist_https_options options = {
+        .enable_http2 = app->use_http2
+    };
+    return cwist_https_init_context_with_options(&app->ssl_ctx,
+                                                 app->cert_path,
+                                                 app->key_path,
+                                                 &options);
+}
+
+static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx);
+static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx);
+
+static void cwist_app_refresh_https_request_handler(cwist_app *app) {
+    if (!app) return;
+    app->https_request_handler = app->use_http2 ? static_ssl_http2_handler : static_ssl_http1_handler;
+}
+
 cwist_app *cwist_app_create(void) {
     cwist_app *app = (cwist_app *)cwist_alloc(sizeof(cwist_app));
     if (!app) return NULL;
     
     app->port = 8080;
     app->use_ssl = false;
+    app->use_http2 = false;
     app->cert_path = NULL;
     app->key_path = NULL;
+    app->https_request_handler = NULL;
     app->router = cwist_route_table_create();
     if (!app->router) {
         cwist_free(app);
@@ -850,6 +882,7 @@ cwist_app *cwist_app_create(void) {
     app->max_mem_space = 0;
     app->mem_manager = NULL;
     app->bdr_ctx = cwist_bdr_create();
+    cwist_app_refresh_https_request_handler(app);
     
     return app;
 }
@@ -1036,10 +1069,43 @@ cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const c
     }
 
     app->use_ssl = true;
+    if (app->cert_path) cwist_free(app->cert_path);
+    if (app->key_path) cwist_free(app->key_path);
     app->cert_path = cwist_strdup(cert_path);
     app->key_path = cwist_strdup(key_path);
 
-    return cwist_https_init_context(&app->ssl_ctx, cert_path, key_path);
+    if (!app->cert_path || !app->key_path) {
+        if (app->cert_path) {
+            cwist_free(app->cert_path);
+            app->cert_path = NULL;
+        }
+        if (app->key_path) {
+            cwist_free(app->key_path);
+            app->key_path = NULL;
+        }
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    return cwist_app_refresh_https_context(app);
+}
+
+cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    app->use_http2 = enabled;
+    cwist_app_refresh_https_request_handler(app);
+    err.error.err_i16 = 0;
+
+    if (!app->use_ssl || !app->cert_path || !app->key_path) {
+        return err;
+    }
+
+    return cwist_app_refresh_https_context(app);
 }
 
 /**
@@ -1347,7 +1413,21 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
     }
 }
 
+static void static_http2_route_bridge(void *user_ctx, cwist_http_request *req, cwist_http_response *res) {
+    cwist_app *app = (cwist_app *)user_ctx;
+    if (!app || !req || !res) return;
+    req->app = app;
+    req->db = app->db;
+    internal_route_handler(app, req, res);
+}
+
 static void static_ssl_handler(cwist_https_connection *conn, void *ctx) {
+    cwist_app *app = (cwist_app *)ctx;
+    if (!app || !app->https_request_handler) return;
+    app->https_request_handler(conn, ctx);
+}
+
+static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
     cwist_http_request *req = cwist_https_receive_request(conn);
     if (!req) return;
@@ -1360,6 +1440,14 @@ static void static_ssl_handler(cwist_https_connection *conn, void *ctx) {
     cwist_https_send_response(conn, res);
     cwist_http_response_destroy(res);
     cwist_http_request_destroy(req);
+}
+
+static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx) {
+    cwist_app *app = (cwist_app *)ctx;
+    cwist_error_t err = cwist_http2_serve_connection(conn, app, static_http2_route_bridge);
+    if (err.errtype == CWIST_ERR_JSON && err.error.err_json) {
+        cJSON_Delete(err.error.err_json);
+    }
 }
 
 static void static_http_handler(int client_fd, void *ctx) {

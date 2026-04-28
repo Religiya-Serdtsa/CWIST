@@ -10,6 +10,7 @@
 
 typedef struct cwist_https_context {
     SSL_CTX *ctx;
+    bool http2_enabled;
 } cwist_https_context;
 
 typedef struct cwist_https_connection {
@@ -17,7 +18,12 @@ typedef struct cwist_https_connection {
     SSL *ssl;
     char *read_buf;
     size_t buf_len;
+    bool negotiated_http2;
 } cwist_https_connection;
+
+typedef struct cwist_https_options {
+    bool enable_http2;
+} cwist_https_options;
 
 /** --- API Functions --- */
 
@@ -26,6 +32,16 @@ typedef struct cwist_https_connection {
  * Loads certificate and private key.
  */
 cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *cert_path, const char *key_path);
+
+/**
+ * Initialize an HTTPS context with explicit transport options.
+ * The HTTP/2 option only applies the standard TLS/ALPN profile today.
+ * Application request handling remains HTTP/1.1 unless a frame engine is added.
+ */
+cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
+                                                    const char *cert_path,
+                                                    const char *key_path,
+                                                    const cwist_https_options *options);
 
 /**
  * Destroy the HTTPS context and cleanup OpenSSL.
@@ -37,6 +53,11 @@ void cwist_https_destroy_context(cwist_https_context *ctx);
  * Returns a new cwist_https_connection wrapper.
  */
 cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_https_connection **conn);
+
+/**
+ * Returns true when ALPN negotiated h2 on this TLS connection.
+ */
+bool cwist_https_connection_uses_http2(const cwist_https_connection *conn);
 
 /**
  * Close and free the HTTPS connection.

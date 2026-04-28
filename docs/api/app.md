@@ -16,6 +16,18 @@ cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const c
 ```
 Enables HTTPS for the application.
 
+### `cwist_app_use_https2` / `cwist_use_https2`
+```c
+cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled);
+
+// Convenience macro when your app variable is named `app`
+cwist_use_https2(true);
+```
+Keeps the default HTTPS request path in legacy `HTTP/1.1` mode unless explicitly enabled.
+When enabled, CWIST rebuilds the TLS context with an HTTP/2-compatible TLS profile, negotiates `h2` through ALPN, and swaps in the HTTPS/2 request-handler slot for the app.
+The HTTP/2 handler feeds decoded requests into the existing routing/middleware stack, so handler code does not need to change.
+The current implementation is intentionally narrow: one request stream is handled at a time per TLS connection, with support for the standard client preface, `SETTINGS`, `HEADERS`, `CONTINUATION`, `DATA`, `PING`, and `GOAWAY`.
+
 ### `cwist_app_use_db`
 ```c
 cwist_error_t cwist_app_use_db(cwist_app *app, const char *db_path);
