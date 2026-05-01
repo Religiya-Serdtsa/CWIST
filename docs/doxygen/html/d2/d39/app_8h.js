@@ -26,6 +26,8 @@ var app_8h =
     [ "cwist_app_static", "d2/d39/app_8h.html#a20e28e85252e5fb13c3fff2c07639f21", null ],
     [ "cwist_app_use", "d2/d39/app_8h.html#a88046a9e7f5c0f069c94aefd233dd815", null ],
     [ "cwist_app_use_db", "d2/d39/app_8h.html#a5b408c1929ae8c1bbf52610f2e27a6db", null ],
+    [ "cwist_app_use_http2", "d2/d39/app_8h.html#a98600c9c267a433596a5658fe533070a", null ],
+    [ "cwist_app_use_http3", "d2/d39/app_8h.html#aa68a9c9cf46732d9a03efe9b4e308223", null ],
     [ "cwist_app_use_https", "d2/d39/app_8h.html#af780881525511196767c3e61e69c652c", null ],
     [ "cwist_app_use_nuke_db", "d2/d39/app_8h.html#a1e1c1169f8c26cd00fd2efea1729b7e8", null ],
     [ "cwist_app_ws", "d2/d39/app_8h.html#ae4d097319d239ddd750eebffd027ccef", null ],

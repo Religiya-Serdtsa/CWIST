@@ -1,7 +1,10 @@
 # Compiler and Flags
 CC ?= gcc
 
-INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include
+CURL_CFLAGS := $(shell pkg-config --cflags libcurl 2>/dev/null)
+NGHTTP2_CFLAGS := $(shell pkg-config --cflags libnghttp2 2>/dev/null)
+
+INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src -I./lib/boringssl/include -I./lib/lsquic/include -I./lib/multipart-parser-c $(CURL_CFLAGS) $(NGHTTP2_CFLAGS)
 COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
 COMMON_WARNINGS = -std=c17 -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
@@ -41,7 +44,24 @@ URIPARSER_CMAKE_FLAGS = -DCMAKE_BUILD_TYPE=Release \
                         -DURIPARSER_BUILD_FUZZERS=OFF \
                         -DURIPARSER_BUILD_TOOLS=OFF
 
-LIBS = -L$(URIPARSER_BUILD_DIR) -L./lib/libttak/lib -L./lib/cjson -pthread -lcjson -lssl -lcrypto -luriparser -ldl -lttak
+BORINGSSL_DIR = lib/boringssl
+BORINGSSL_BUILD_DIR = $(BORINGSSL_DIR)/build
+BORINGSSL_SSL_LIB = $(BORINGSSL_BUILD_DIR)/libssl.a
+BORINGSSL_CRYPTO_LIB = $(BORINGSSL_BUILD_DIR)/libcrypto.a
+
+LSQUIC_DIR = lib/lsquic
+LSQUIC_BUILD_DIR = $(LSQUIC_DIR)/build
+LSQUIC_LIB = $(LSQUIC_BUILD_DIR)/src/liblsquic/liblsquic.a
+
+CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null)
+NGHTTP2_LIBS := $(shell pkg-config --libs libnghttp2 2>/dev/null)
+
+LIBS = -pthread -ldl -lm -lstdc++ -lz \
+       $(LSQUIC_LIB) \
+       $(BORINGSSL_SSL_LIB) \
+       $(BORINGSSL_CRYPTO_LIB) \
+       $(CURL_LIBS) \
+       $(NGHTTP2_LIBS)
 
 # SQLite Automation
 SQLITE_YEAR = 2024
@@ -73,8 +93,13 @@ SRCS = src/core/sstring/sstring.c \
        src/sys/err/error.c \
        src/net/http/http.c \
        src/net/http/http2.c \
+       src/net/http/http3.c \
+       src/net/http/http_client.c \
+       src/net/http/http3_client.c \
        src/net/http/https.c \
        src/net/http/mux.c \
+       src/net/http/multipart.c \
+       lib/multipart-parser-c/multipart_parser.c \
        src/net/http/query.c \
        src/sys/session/session_manager.c \
        src/core/siphash/siphash.c \
@@ -88,8 +113,13 @@ SRCS = src/core/sstring/sstring.c \
        src/core/utils/json_heal.c \
        src/core/utils/zod.c \
        src/sys/app/middleware.c \
+       src/sys/app/config.c \
+       src/sys/app/logger.c \
+       src/sys/app/test_client.c \
+       src/sys/session/flash.c \
        src/core/template/template.c \
        src/core/html/builder.c \
+       src/core/html/css_composer.c \
        src/sys/app/big_dumb_reply.c \
        src/sys/sys_info.c \
        src/core/mem/alloc.c \
@@ -97,7 +127,9 @@ SRCS = src/core/sstring/sstring.c \
        lib/sqlite3/sqlite3.c \
        src/security/jwt/jwt.c \
        src/security/db_crypt/db_crypt.c \
+       src/security/tls/ech.c \
        src/net/db_sync/db_sync.c \
+       src/net/nats/cwist_nats.c \
        $(IO_SRC)
 
 # Object Files and Target
@@ -107,6 +139,8 @@ LIBTTAK_DIR = lib/libttak
 LIBTTAK_LIB = $(LIBTTAK_DIR)/lib/libttak.a
 CJSON_DIR = lib/cjson
 CJSON_LIB = $(CJSON_DIR)/libcjson.a
+CNATS_DIR = lib/cnats
+CNATS_LIB = $(CNATS_DIR)/build/lib/libnats_static.a
 
 # Installation Paths
 PREFIX ?= /usr/local
@@ -115,7 +149,7 @@ INCLUDEDIR = $(PREFIX)/include
 
 # --- Build Targets ---
 
-all: $(LIBTTAK_LIB) $(CJSON_LIB) $(URIPARSER_LIB) $(SQLITE_DIR)/sqlite3.c $(LIB_NAME)
+all: $(LIBTTAK_LIB) $(CJSON_LIB) $(URIPARSER_LIB) $(SQLITE_DIR)/sqlite3.c $(LSQUIC_LIB) $(LIB_NAME)
 
 # SQLite Download & Extraction Rule
 $(SQLITE_DIR)/sqlite3.c:
@@ -127,9 +161,29 @@ $(SQLITE_DIR)/sqlite3.c:
 	@rm $(SQLITE_DIR)/$(SQLITE_ZIP)
 	@echo "SQLite Ready."
 
-$(LIB_NAME): $(URIPARSER_LIB) $(OBJS)
+# Ensure lsquic submodule is checked out before compiling objects that need its headers
+$(OBJS): | lib/lsquic/include/lsquic.h
+
+lib/lsquic/include/lsquic.h:
+	@if [ ! -f "$@" ]; then \
+		echo "Initializing lsquic submodule..."; \
+		git submodule update --init --recursive $(LSQUIC_DIR); \
+	fi
+
+$(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB) $(LSQUIC_LIB) $(OBJS)
 	@echo "Creating static library..."
-	ar rcs $@ $^
+	@rm -rf .lib_merge_tmp
+	@mkdir -p .lib_merge_tmp
+	@cd .lib_merge_tmp && \
+		ar x $(abspath $(URIPARSER_LIB)) && \
+		ar x $(abspath $(CJSON_LIB)) && \
+		ar x $(abspath $(LIBTTAK_LIB)) && \
+		ar x $(abspath $(CNATS_LIB)) && \
+		ar x $(abspath $(LSQUIC_LIB)) && \
+		ar x $(abspath $(BORINGSSL_SSL_LIB)) && \
+		ar x $(abspath $(BORINGSSL_CRYPTO_LIB))
+	ar rcs $@ $(OBJS) .lib_merge_tmp/*.o
+	@rm -rf .lib_merge_tmp
 
 $(LIBTTAK_LIB):
 	@echo "Building libttak..."
@@ -147,11 +201,85 @@ $(URIPARSER_LIB):
 	@echo "Building uriparser..."
 	cmake --build $(URIPARSER_BUILD_DIR) --target uriparser
 
+BORINGSSL_STAMP = $(BORINGSSL_BUILD_DIR)/.boringssl_built
+
+$(BORINGSSL_STAMP):
+	@echo "Building BoringSSL..."
+	@mkdir -p $(BORINGSSL_BUILD_DIR)
+	cmake -S $(BORINGSSL_DIR) -B $(BORINGSSL_BUILD_DIR) \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_CXX_COMPILER=$(CXX) \
+		-DCMAKE_BUILD_TYPE=Release
+	cmake --build $(BORINGSSL_BUILD_DIR) --target ssl crypto
+	@touch $@
+
+$(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB): $(BORINGSSL_STAMP)
+
+$(LSQUIC_LIB): $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB)
+	@echo "Building lsquic..."
+	@mkdir -p $(LSQUIC_BUILD_DIR)
+	cmake -S $(LSQUIC_DIR) -B $(LSQUIC_BUILD_DIR) \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBORINGSSL_DIR=$(abspath $(BORINGSSL_DIR)) \
+		-DBORINGSSL_LIB_ssl=$(abspath $(BORINGSSL_SSL_LIB)) \
+		-DBORINGSSL_LIB_crypto=$(abspath $(BORINGSSL_CRYPTO_LIB)) \
+		-DBORINGSSL_INCLUDE=$(abspath $(BORINGSSL_DIR)/include) \
+		-DBUILD_SHARED_LIBS=OFF
+	cmake --build $(LSQUIC_BUILD_DIR) --target lsquic
+
+$(CNATS_LIB):
+	@echo "Building cnats..."
+	@mkdir -p $(CNATS_DIR)/build
+	cmake -S $(CNATS_DIR) -B $(CNATS_DIR)/build \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_SHARED_LIBS=OFF \
+		-DNATS_BUILD_WITH_TLS=OFF \
+		-DNATS_BUILD_STREAMING=OFF
+	cmake --build $(CNATS_DIR)/build --target nats_static
+
 # --- Test Targets ---
 
-test: $(LIB_NAME) tests/test_sstring.c
+TEST_TARGETS = test_sstring \
+               test_http \
+               test_siphash \
+               test_mux \
+               test_mux_param \
+               stress_test \
+               test_cors \
+               test_websocket \
+               test_jwt \
+               test_migrate \
+               test_json_heal \
+               test_https \
+               test_http2 \
+               test_http3 \
+               nuke_missing_user_test
+
+.PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild
+
+test: $(TEST_TARGETS)
+
+test_sstring: $(LIB_NAME) tests/test_sstring.c
 	$(CC) $(CFLAGS) -o test_sstring tests/test_sstring.c $(LIB_NAME) $(LIBS)
 	./test_sstring
+
+test_http: $(LIB_NAME) tests/test_http.c
+	$(CC) $(CFLAGS) -o test_http tests/test_http.c $(LIB_NAME) $(LIBS)
+	./test_http
+
+test_siphash: $(LIB_NAME) tests/test_siphash.c
+	$(CC) $(CFLAGS) -o test_siphash tests/test_siphash.c $(LIB_NAME) $(LIBS)
+	./test_siphash
+
+test_mux: $(LIB_NAME) tests/test_mux.c
+	$(CC) $(CFLAGS) -o test_mux tests/test_mux.c $(LIB_NAME) $(LIBS)
+	./test_mux
+
+test_mux_param: $(LIB_NAME) tests/test_mux_param.c
+	$(CC) $(CFLAGS) -o test_mux_param tests/test_mux_param.c $(LIB_NAME) $(LIBS)
+	./test_mux_param
 
 test_jwt: $(LIB_NAME) tests/test_jwt.c
 	$(CC) $(CFLAGS) -o test_jwt tests/test_jwt.c $(LIB_NAME) $(LIBS)
@@ -173,7 +301,25 @@ test_http2: $(LIB_NAME) tests/test_http2.c
 	$(CC) $(CFLAGS) -o test_http2 tests/test_http2.c $(LIB_NAME) $(LIBS)
 	./test_http2
 
-# ... (other tests omitted for brevity, keeping standard ones)
+test_http3: $(LIB_NAME) tests/test_http3.c
+	$(CC) $(CFLAGS) -o test_http3 tests/test_http3.c $(LIB_NAME) $(LIBS)
+	./test_http3
+
+stress_test: $(LIB_NAME) tests/stress_test.c
+	$(CC) $(CFLAGS) -o stress_test tests/stress_test.c $(LIB_NAME) $(LIBS)
+	./stress_test
+
+test_cors: $(LIB_NAME) tests/test_cors.c
+	$(CC) $(CFLAGS) -o test_cors tests/test_cors.c $(LIB_NAME) $(LIBS)
+	./test_cors
+
+test_websocket: $(LIB_NAME) tests/test_websocket.c
+	$(CC) $(CFLAGS) -o test_websocket tests/test_websocket.c $(LIB_NAME) $(LIBS)
+	./test_websocket
+
+nuke_missing_user_test: $(LIB_NAME) tests/nuke_missing_user_test.c
+	$(CC) $(CFLAGS) -o nuke_missing_user_test tests/nuke_missing_user_test.c $(LIB_NAME) $(LIBS)
+	./nuke_missing_user_test
 
 install: $(LIB_NAME)
 	@echo "Installing library to $(LIBDIR)..."
@@ -201,11 +347,13 @@ clean:
 	@echo "Cleaning up build artifacts..."
 	rm -f $(OBJS) $(LIB_NAME)
 	rm -rf include/cwist/vendor
-	rm -f test_sstring test_http test_siphash test_mux stress_test test_cors test_websocket test_jwt test_migrate test_json_heal
-	rm -f test_https
-	rm -f test_http2
+	rm -f $(TEST_TARGETS)
 	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
 	rm -rf $(URIPARSER_BUILD_DIR)
-	@$(MAKE) -C $(LIBTTAK_DIR) clean
+	rm -rf .lib_merge_tmp
+	@rm -rf $(CNATS_DIR)/build
+	@rm -rf $(BORINGSSL_BUILD_DIR)
+	@rm -rf $(LSQUIC_BUILD_DIR)
+	-@$(MAKE) -C $(LIBTTAK_DIR) clean || true
 
 rebuild: clean all

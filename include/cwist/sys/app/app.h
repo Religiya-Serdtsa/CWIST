@@ -34,6 +34,12 @@ typedef void (*cwist_ws_handler_func)(cwist_websocket *ws);
  */
 typedef void (*cwist_error_handler_func)(cwist_http_request *req, cwist_http_response *res, cwist_http_status_t status);
 
+typedef struct cwist_error_handler_entry {
+    cwist_http_status_t status_code;
+    cwist_error_handler_func handler;
+    struct cwist_error_handler_entry *next;
+} cwist_error_handler_entry;
+
 /**
  * @brief Middleware type that receives req/res pair and the next stage in the chain.
  */
@@ -50,6 +56,8 @@ typedef struct cwist_middleware_node {
 
 typedef struct cwist_route_table cwist_route_table;
 typedef struct cwist_static_dir cwist_static_dir;
+typedef struct cwist_config cwist_config;
+typedef struct cwist_logger cwist_logger;
 
 /**
  * @brief Main Application Context.
@@ -60,7 +68,10 @@ typedef struct cwist_static_dir cwist_static_dir;
 typedef struct cwist_app {
     int port;
     bool use_ssl;
-    bool use_http2;
+    bool use_http2;   ///< Cleartext HTTP/2 (h2c)
+    bool use_http3;   ///< Ephemeral (Zero-config) HTTP/3
+    bool use_https2;  ///< TLS HTTP/2 (h2)
+    bool use_https3;  ///< TLS HTTP/3
     char *cert_path;
     char *key_path;
     cwist_https_request_handler_func https_request_handler;
@@ -70,9 +81,14 @@ typedef struct cwist_app {
     cwist_route_table *router; ///< Router definition.
     cwist_static_dir *static_dirs; ///< Static directory mappings.
     
-    cwist_error_handler_func error_handler; ///< Error handling callback.
+    cwist_error_handler_func error_handler; ///< Global fallback error handler.
+    cwist_error_handler_entry *error_handlers; ///< Per-status-code error handlers.
+
+    struct cwist_config *config; ///< Application configuration.
+    struct cwist_logger *logger; ///< Application logger.
 
     cwist_https_context *ssl_ctx; ///< SSL context when TLS is enabled.
+    struct cwist_http3_context *h3_ctx; ///< HTTP/3 QUIC Context.
     cwist_db *db; ///< Shared database handle.
     char *db_path; ///< Database path (if set).
     bool nuke_enabled; ///< True when NUKE DB integration is active.
@@ -152,6 +168,7 @@ void cwist_app_use(cwist_app *app, cwist_middleware_func mw);
 /** @name Error Handling Configuration */
 /** @{ */
 void cwist_app_set_error_handler(cwist_app *app, cwist_error_handler_func handler);
+void cwist_app_register_error_handler(cwist_app *app, cwist_http_status_t status, cwist_error_handler_func handler);
 /** @} */
 
 /**
@@ -165,11 +182,33 @@ void cwist_app_configure_bdr(cwist_app *app, size_t max_bytes, time_t max_entry_
 
 cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const char *key_path);
 cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled);
+cwist_error_t cwist_app_use_https3(cwist_app *app, bool enabled);
+
+/**
+ * @brief Enable HTTP/2 cleartext (h2c) over standard TCP.
+ * @param app Application context.
+ * @param enabled True to enable h2c.
+ * @return cwist_error_t Status.
+ */
+cwist_error_t cwist_app_use_http2(cwist_app *app, bool enabled);
+
+/**
+ * @brief Enable HTTP/3 (QUIC) without manual SSL configuration.
+ * Auto-generates an ephemeral self-signed certificate internally.
+ * @param app Application context.
+ * @param enabled True to enable zero-config HTTP/3.
+ * @return cwist_error_t Status.
+ */
+cwist_error_t cwist_app_use_http3(cwist_app *app, bool enabled);
+
 cwist_error_t cwist_app_use_db(cwist_app *app, const char *db_path);
 cwist_error_t cwist_app_use_nuke_db(cwist_app *app, const char *db_path, int sync_interval_ms);
 cwist_db *cwist_app_get_db(cwist_app *app);
 
 #define cwist_use_https2(enabled) cwist_app_use_https2((app), (enabled))
+#define cwist_use_https3(enabled) cwist_app_use_https3((app), (enabled))
+#define cwist_use_http2(enabled) cwist_app_use_http2((app), (enabled))
+#define cwist_use_http3(enabled) cwist_app_use_http3((app), (enabled))
 
 /** @name Routing */
 /** @{ */
@@ -182,6 +221,10 @@ void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handle
 void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
 void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
 void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func handler, cwist_endpoint_opt_t opts);
+
+void cwist_app_get_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
+void cwist_app_post_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
+char *cwist_url_for(cwist_app *app, const char *name, cwist_query_map *params);
 
 /**
  * @brief Serves a directory of static files at a URL prefix.
@@ -198,5 +241,11 @@ cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const cha
 /** @{ */
 int cwist_app_listen(cwist_app *app, int port);
 /** @} */
+
+/**
+ * @brief Dispatch a request internally through the app's router and middleware.
+ * Used by the test client and advanced integrations.
+ */
+void cwist_app_dispatch(cwist_app *app, cwist_http_request *req, cwist_http_response *res);
 
 #endif

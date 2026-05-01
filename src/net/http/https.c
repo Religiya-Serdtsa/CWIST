@@ -16,10 +16,12 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 
-#define CWIST_ALPN_HTTP11 ((const unsigned char *)"\x08http/1.1")
-#define CWIST_ALPN_H2_HTTP11 ((const unsigned char *)"\x02h2\x08http/1.1")
-#define CWIST_ALPN_HTTP11_LEN 9
-#define CWIST_ALPN_H2_HTTP11_LEN 12
+#define CWIST_ALPN_HTTP11       ((const unsigned char *)"\x08http/1.1")
+#define CWIST_ALPN_H2_HTTP11    ((const unsigned char *)"\x02h2\x08http/1.1")
+#define CWIST_ALPN_H3_H2_HTTP11 ((const unsigned char *)"\x02h3\x02h2\x08http/1.1")
+#define CWIST_ALPN_HTTP11_LEN       9
+#define CWIST_ALPN_H2_HTTP11_LEN    12
+#define CWIST_ALPN_H3_H2_HTTP11_LEN 15
 
 /**
  * @file https.c
@@ -92,9 +94,19 @@ static int cwist_https_alpn_select_cb(SSL *ssl,
                                       unsigned int inlen,
                                       void *arg) {
     (void)ssl;
-    bool enable_http2 = (bool)(uintptr_t)arg;
-    const unsigned char *supported = enable_http2 ? CWIST_ALPN_H2_HTTP11 : CWIST_ALPN_HTTP11;
-    unsigned int supported_len = enable_http2 ? CWIST_ALPN_H2_HTTP11_LEN : CWIST_ALPN_HTTP11_LEN;
+    const cwist_https_context *hctx = (const cwist_https_context *)arg;
+    bool enable_http2 = hctx && hctx->http2_enabled;
+
+    const unsigned char *supported;
+    unsigned int supported_len;
+
+    if (enable_http2) {
+        supported = CWIST_ALPN_H2_HTTP11;
+        supported_len = CWIST_ALPN_H2_HTTP11_LEN;
+    } else {
+        supported = CWIST_ALPN_HTTP11;
+        supported_len = CWIST_ALPN_HTTP11_LEN;
+    }
 
     if (SSL_select_next_proto((unsigned char **)out,
                               outlen,
@@ -119,7 +131,8 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
                                                     const char *key_path,
                                                     const cwist_https_options *options) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
-    bool enable_http2 = options && options->enable_http2;
+    bool enable_http3 = options && options->enable_http3;
+    bool enable_http2 = options && (options->enable_http2 || enable_http3);
     
     if (!ctx || !cert_path || !key_path) {
         err.error.err_i16 = -1;
@@ -150,10 +163,6 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
         }
     }
 
-    SSL_CTX_set_alpn_select_cb(ssl_ctx,
-                               cwist_https_alpn_select_cb,
-                               (void *)(uintptr_t)enable_http2);
-
     // Load Cert and Key
     if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path, SSL_FILETYPE_PEM) <= 0) {
         SSL_CTX_free(ssl_ctx);
@@ -179,6 +188,11 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
     }
     (*ctx)->ctx = ssl_ctx;
     (*ctx)->http2_enabled = enable_http2;
+    (*ctx)->http3_enabled = enable_http3;
+
+    SSL_CTX_set_alpn_select_cb(ssl_ctx,
+                               cwist_https_alpn_select_cb,
+                               (void *)*ctx);
 
     err.error.err_i16 = 0; // Success
     return err;
@@ -248,13 +262,17 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
     (*conn)->buf_len = 0;
     (*conn)->read_buf[0] = '\0';
     (*conn)->negotiated_http2 = false;
+    (*conn)->negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP11;
+    (*conn)->http3_enabled = ctx->http3_enabled;
 
     const unsigned char *alpn = NULL;
     unsigned int alpn_len = 0;
     SSL_get0_alpn_selected(ssl, &alpn, &alpn_len);
     if (alpn && alpn_len == 2 && memcmp(alpn, "h2", 2) == 0) {
         (*conn)->negotiated_http2 = true;
+        (*conn)->negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2;
     }
+    /* h3 is QUIC-only and never negotiated over TCP TLS */
 
     err.error.err_i16 = 0;
     return err;
@@ -265,7 +283,12 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
  * @param conn HTTPS connection wrapper to close.
  */
 bool cwist_https_connection_uses_http2(const cwist_https_connection *conn) {
-    return conn && conn->negotiated_http2;
+    return conn && conn->negotiated_protocol == CWIST_HTTPS_PROTOCOL_HTTP2;
+}
+
+cwist_https_protocol cwist_https_connection_protocol(const cwist_https_connection *conn) {
+    if (!conn) return CWIST_HTTPS_PROTOCOL_NONE;
+    return conn->negotiated_protocol;
 }
 
 void cwist_https_close_connection(cwist_https_connection *conn) {
@@ -398,6 +421,23 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
     if (!conn || !conn->ssl || !res) {
         err.error.err_i16 = -1;
         return err;
+    }
+
+    // Inject Alt-Svc when HTTP/3 is enabled so clients discover the QUIC endpoint
+    if (conn->http3_enabled) {
+        struct sockaddr_storage ss;
+        socklen_t ss_len = sizeof(ss);
+        int port = 443;
+        if (getsockname(conn->fd, (struct sockaddr *)&ss, &ss_len) == 0) {
+            if (ss.ss_family == AF_INET) {
+                port = ntohs(((struct sockaddr_in *)&ss)->sin_port);
+            } else if (ss.ss_family == AF_INET6) {
+                port = ntohs(((struct sockaddr_in6 *)&ss)->sin6_port);
+            }
+        }
+        char alt_svc[64];
+        snprintf(alt_svc, sizeof(alt_svc), "h3=\":%d\"; ma=86400", port);
+        cwist_http_header_add(&res->headers, "Alt-Svc", alt_svc);
     }
 
     // 1. Serialize using existing HTTP logic

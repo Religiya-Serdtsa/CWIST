@@ -213,6 +213,7 @@ cwist_http_request *cwist_http_request_create(void) {
     req->client_fd = -1;
     req->app = NULL;
     req->db = NULL;
+    req->flash = cwist_query_map_create();
     req->upgraded = false;
     req->content_length = 0;
     req->private_data = NULL;
@@ -275,6 +276,7 @@ void cwist_http_request_destroy(cwist_http_request *req) {
         cwist_query_map_destroy(req->path_params);
         cwist_sstring_destroy(req->version);
         cwist_sstring_destroy(req->body);
+        cwist_query_map_destroy(req->flash);
         cwist_http_header_free_all(req->headers);
         cwist_free(req);
     }
@@ -359,6 +361,7 @@ void cwist_http_response_destroy(cwist_http_response *res) {
         cwist_sstring_destroy(res->status_text);
         cwist_sstring_destroy(res->body);
         cwist_http_header_free_all(res->headers);
+        cwist_free(res->alt_svc);
         cwist_free(res);
     }
 }
@@ -390,6 +393,23 @@ void cwist_http_response_set_body_ptr_managed(cwist_http_response *res, const vo
     res->ptr_body_len = len;
     res->ptr_body_cleanup = cleanup;
     res->ptr_body_cleanup_ctx = ctx;
+}
+
+/**
+ * @brief Set the Alt-Svc header value for HTTP/3 upgrade advertisement.
+ * @param res Response object to modify.
+ * @param alt_svc Alt-Svc header value (e.g., `h3=":443"; ma=86400`).
+ *        Pass NULL to clear any previously set value.
+ */
+void cwist_http_response_set_alt_svc(cwist_http_response *res, const char *alt_svc) {
+    if (!res) return;
+    if (res->alt_svc) {
+        cwist_free(res->alt_svc);
+        res->alt_svc = NULL;
+    }
+    if (alt_svc) {
+        res->alt_svc = strdup(alt_svc);
+    }
 }
 
 // ... (request parsing omitted) ...
@@ -453,6 +473,10 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
         } else {
             offset += snprintf(buf + offset, buf_size - offset, "Connection: close\r\n");
         }
+    }
+
+    if (res->alt_svc) {
+        offset += snprintf(buf + offset, buf_size - offset, "Alt-Svc: %s\r\n", res->alt_svc);
     }
 
     offset += snprintf(buf + offset, buf_size - offset, "\r\n");

@@ -1,8 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 #include <cwist/sys/app/app.h>
+#include <cwist/sys/app/config.h>
+#include <cwist/sys/app/logger.h>
 #include <cwist/net/http/http.h>
 #include <cwist/net/http/http2.h>
+#include <cwist/net/http/http3.h>
 #include <cwist/net/http/https.h>
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/core/db/nuke_db.h>
@@ -13,6 +16,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+#include <signal.h>
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -243,6 +247,7 @@ static bool cwist_mem_refresh_file(cwist_fix_server_mem *mem, cwist_file_t *entr
 
 typedef struct cwist_route_entry {
     char *path;
+    char *name;
     bool has_params;
     cwist_http_method_t method;
     cwist_handler_func handler;
@@ -279,6 +284,7 @@ static cwist_route_table *cwist_route_table_create(void);
 static void cwist_route_table_destroy(cwist_route_table *table);
 static void cwist_route_table_insert(cwist_route_table *table,
                                      const char *path,
+                                     const char *name,
                                      cwist_http_method_t method,
                                      cwist_handler_func handler,
                                      cwist_ws_handler_func ws_handler,
@@ -320,6 +326,7 @@ static size_t cwist_route_hash(cwist_http_method_t method, const char *path, siz
 }
 
 static cwist_route_entry *cwist_route_entry_create(const char *path,
+                                                   const char *name,
                                                    cwist_http_method_t method,
                                                    cwist_handler_func handler,
                                                    cwist_ws_handler_func ws_handler,
@@ -327,6 +334,7 @@ static cwist_route_entry *cwist_route_entry_create(const char *path,
     cwist_route_entry *entry = (cwist_route_entry *)cwist_alloc(sizeof(cwist_route_entry));
     if (!entry) return NULL;
     entry->path = cwist_strdup(path ? path : "/");
+    entry->name = name ? cwist_strdup(name) : NULL;
     entry->method = method;
     entry->handler = handler;
     entry->ws_handler = ws_handler;
@@ -343,6 +351,7 @@ static cwist_route_entry *cwist_route_entry_create(const char *path,
 static void cwist_route_entry_free(cwist_route_entry *entry) {
     if (!entry) return;
     cwist_free(entry->path);
+    cwist_free(entry->name);
     cwist_free(entry);
 }
 
@@ -386,12 +395,13 @@ static void cwist_route_table_destroy(cwist_route_table *table) {
 
 static void cwist_route_table_insert(cwist_route_table *table,
                                      const char *path,
+                                     const char *name,
                                      cwist_http_method_t method,
                                      cwist_handler_func handler,
                                      cwist_ws_handler_func ws_handler,
                                      cwist_endpoint_opt_t opts) {
     if (!table || !path) return;
-    cwist_route_entry *entry = cwist_route_entry_create(path, method, handler, ws_handler, opts);
+    cwist_route_entry *entry = cwist_route_entry_create(path, name, method, handler, ws_handler, opts);
     if (!entry) return;
 
     if (entry->has_params) {
@@ -841,7 +851,8 @@ static cwist_error_t cwist_app_refresh_https_context(cwist_app *app) {
     }
 
     cwist_https_options options = {
-        .enable_http2 = app->use_http2
+        .enable_http2 = app->use_https2,
+        .enable_http3 = app->use_https3
     };
     return cwist_https_init_context_with_options(&app->ssl_ctx,
                                                  app->cert_path,
@@ -854,7 +865,36 @@ static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx);
 
 static void cwist_app_refresh_https_request_handler(cwist_app *app) {
     if (!app) return;
-    app->https_request_handler = app->use_http2 ? static_ssl_http2_handler : static_ssl_http1_handler;
+    app->https_request_handler = app->use_https2 ? static_ssl_http2_handler : static_ssl_http1_handler;
+}
+
+/**
+ * @brief Initialize or refresh the HTTP/3 context based on current settings.
+ */
+static cwist_error_t cwist_app_refresh_http3_context(cwist_app *app) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app || !app->cert_path || !app->key_path) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    if (app->h3_ctx) {
+        cwist_http3_destroy_context(app->h3_ctx);
+        app->h3_ctx = NULL;
+    }
+
+    if (app->use_https3 || app->use_http3) {
+        if (app->use_https3 && app->cert_path && app->key_path) {
+            err = cwist_http3_init_context(&app->h3_ctx, app->cert_path, app->key_path);
+        } else if (app->use_http3) {
+            err = cwist_http3_init_context_ephemeral(&app->h3_ctx);
+        } else {
+            err.error.err_i16 = -1; // Missing config for strict https3
+        }
+    } else {
+        err.error.err_i16 = 0;
+    }
+    return err;
 }
 
 cwist_app *cwist_app_create(void) {
@@ -864,6 +904,9 @@ cwist_app *cwist_app_create(void) {
     app->port = 8080;
     app->use_ssl = false;
     app->use_http2 = false;
+    app->use_http3 = false;
+    app->use_https2 = false;
+    app->use_https3 = false;
     app->cert_path = NULL;
     app->key_path = NULL;
     app->https_request_handler = NULL;
@@ -874,8 +917,12 @@ cwist_app *cwist_app_create(void) {
     }
     app->middlewares = NULL;
     app->ssl_ctx = NULL;
+    app->h3_ctx = NULL;
     app->error_handler = NULL;
+    app->error_handlers = NULL;
     app->static_dirs = NULL;
+    app->config = cwist_config_create();
+    app->logger = cwist_logger_create("cwist");
     app->db = NULL;
     app->db_path = NULL;
     app->nuke_enabled = false;
@@ -925,6 +972,35 @@ void cwist_app_set_error_handler(cwist_app *app, cwist_error_handler_func handle
     if (app) app->error_handler = handler;
 }
 
+void cwist_app_register_error_handler(cwist_app *app, cwist_http_status_t status, cwist_error_handler_func handler) {
+    if (!app || !handler) return;
+    cwist_error_handler_entry *curr = app->error_handlers;
+    while (curr) {
+        if (curr->status_code == status) {
+            curr->handler = handler;
+            return;
+        }
+        curr = curr->next;
+    }
+    cwist_error_handler_entry *entry = (cwist_error_handler_entry *)cwist_alloc(sizeof(cwist_error_handler_entry));
+    entry->status_code = status;
+    entry->handler = handler;
+    entry->next = app->error_handlers;
+    app->error_handlers = entry;
+}
+
+static cwist_error_handler_func cwist_app_find_error_handler(cwist_app *app, cwist_http_status_t status) {
+    if (!app) return NULL;
+    cwist_error_handler_entry *curr = app->error_handlers;
+    while (curr) {
+        if (curr->status_code == status) {
+            return curr->handler;
+        }
+        curr = curr->next;
+    }
+    return app->error_handler;
+}
+
 /**
  * @brief Configure the Big Dumb Reply cache thresholds for the application.
  * @param app Application whose BDR context should be tuned.
@@ -946,6 +1022,7 @@ void cwist_app_destroy(cwist_app *app) {
     if (app->cert_path) cwist_free(app->cert_path);
     if (app->key_path) cwist_free(app->key_path);
     if (app->ssl_ctx) cwist_https_destroy_context(app->ssl_ctx);
+    if (app->h3_ctx) cwist_http3_destroy_context(app->h3_ctx);
 
     cwist_route_table_destroy(app->router);
 
@@ -955,6 +1032,16 @@ void cwist_app_destroy(cwist_app *app) {
         cwist_free(curr_m);
         curr_m = next;
     }
+
+    cwist_error_handler_entry *curr_e = app->error_handlers;
+    while (curr_e) {
+        cwist_error_handler_entry *next = curr_e->next;
+        cwist_free(curr_e);
+        curr_e = next;
+    }
+
+    if (app->config) cwist_config_destroy(app->config);
+    if (app->logger) cwist_logger_destroy(app->logger);
 
     cwist_static_dir *curr_s = app->static_dirs;
     while (curr_s) {
@@ -1087,6 +1174,9 @@ cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const c
         return err;
     }
 
+    if (app->use_https3 || app->use_http3) {
+        cwist_app_refresh_http3_context(app);
+    }
     return cwist_app_refresh_https_context(app);
 }
 
@@ -1097,7 +1187,7 @@ cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled) {
         return err;
     }
 
-    app->use_http2 = enabled;
+    app->use_https2 = enabled;
     cwist_app_refresh_https_request_handler(app);
     err.error.err_i16 = 0;
 
@@ -1106,6 +1196,48 @@ cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled) {
     }
 
     return cwist_app_refresh_https_context(app);
+}
+
+cwist_error_t cwist_app_use_https3(cwist_app *app, bool enabled) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    app->use_https3 = enabled;
+    err.error.err_i16 = 0;
+
+    if (!app->use_ssl || !app->cert_path || !app->key_path) {
+        return err;
+    }
+
+    cwist_app_refresh_http3_context(app);
+    return cwist_app_refresh_https_context(app);
+}
+
+cwist_error_t cwist_app_use_http2(cwist_app *app, bool enabled) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    app->use_http2 = enabled;
+    err.error.err_i16 = 0;
+    return err;
+}
+
+cwist_error_t cwist_app_use_http3(cwist_app *app, bool enabled) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    app->use_http3 = enabled;
+    err.error.err_i16 = 0;
+    return cwist_app_refresh_http3_context(app);
 }
 
 /**
@@ -1250,16 +1382,25 @@ cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const cha
     return err;
 }
 
+static void add_route_named(cwist_app *app,
+                            const char *path,
+                            const char *name,
+                            cwist_http_method_t method,
+                            cwist_handler_func handler,
+                            cwist_endpoint_opt_t opts) {
+    if (!app || !app->router || !path) return;
+    if (opts == 0) {
+        opts = CWIST_ENDPOINT_DEFAULT;
+    }
+    cwist_route_table_insert(app->router, path, name, method, handler, NULL, opts);
+}
+
 static void add_route(cwist_app *app,
                       const char *path,
                       cwist_http_method_t method,
                       cwist_handler_func handler,
                       cwist_endpoint_opt_t opts) {
-    if (!app || !app->router || !path) return;
-    if (opts == 0) {
-        opts = CWIST_ENDPOINT_DEFAULT;
-    }
-    cwist_route_table_insert(app->router, path, method, handler, NULL, opts);
+    add_route_named(app, path, NULL, method, handler, opts);
 }
 
 /**
@@ -1272,6 +1413,10 @@ void cwist_app_get(cwist_app *app, const char *path, cwist_handler_func handler)
     add_route(app, path, CWIST_HTTP_GET, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
+void cwist_app_get_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler) {
+    add_route_named(app, path, name, CWIST_HTTP_GET, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
 /**
  * @brief Register a POST handler with default endpoint options.
  * @param app Application being configured.
@@ -1282,6 +1427,10 @@ void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler
     add_route(app, path, CWIST_HTTP_POST, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
+void cwist_app_post_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler) {
+    add_route_named(app, path, name, CWIST_HTTP_POST, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
 /**
  * @brief Register a WebSocket upgrade endpoint with default options.
  * @param app Application being configured.
@@ -1290,7 +1439,7 @@ void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler
  */
 void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handler) {
     if (!app || !app->router || !path) return;
-    cwist_route_table_insert(app->router, path, CWIST_HTTP_GET, NULL, handler, CWIST_ENDPOINT_DEFAULT);
+    cwist_route_table_insert(app->router, path, NULL, CWIST_HTTP_GET, NULL, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
 /**
@@ -1327,7 +1476,7 @@ void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func ha
     if (opts == 0) {
         opts = CWIST_ENDPOINT_DEFAULT;
     }
-    cwist_route_table_insert(app->router, path, CWIST_HTTP_GET, NULL, handler, opts);
+    cwist_route_table_insert(app->router, path, NULL, CWIST_HTTP_GET, NULL, handler, opts);
 }
 
 static bool match_path(const char *pattern, const char *actual, cwist_query_map *params) {
@@ -1356,6 +1505,70 @@ static bool match_path(const char *pattern, const char *actual, cwist_query_map 
     }
 
     return tok_p == NULL && tok_a == NULL;
+}
+
+static cwist_route_entry *cwist_route_table_find_by_name(cwist_route_table *table, const char *name) {
+    if (!table || !name) return NULL;
+    for (size_t i = 0; i < table->bucket_count; i++) {
+        cwist_route_entry *curr = table->buckets[i];
+        while (curr) {
+            if (curr->name && strcmp(curr->name, name) == 0) return curr;
+            curr = curr->next;
+        }
+    }
+    cwist_route_entry *curr = table->param_routes;
+    while (curr) {
+        if (curr->name && strcmp(curr->name, name) == 0) return curr;
+        curr = curr->next;
+    }
+    return NULL;
+}
+
+char *cwist_url_for(cwist_app *app, const char *name, cwist_query_map *params) {
+    if (!app || !app->router || !name) return NULL;
+    cwist_route_entry *entry = cwist_route_table_find_by_name(app->router, name);
+    if (!entry) return NULL;
+    const char *path = entry->path;
+    if (!params || !entry->has_params) {
+        return cwist_strdup(path);
+    }
+    // Build URL by replacing :param segments
+    cwist_sstring *result = cwist_sstring_create();
+    if (!result) return NULL;
+    char path_copy[512];
+    strncpy(path_copy, path, sizeof(path_copy) - 1);
+    path_copy[sizeof(path_copy) - 1] = '\0';
+    char *saveptr;
+    char *tok = strtok_r(path_copy, "/", &saveptr);
+    int first = 1;
+    while (tok) {
+        if (!first) cwist_sstring_append(result, "/");
+        first = 0;
+        if (tok[0] == ':') {
+            const char *val = cwist_query_map_get(params, tok + 1);
+            if (val) {
+                cwist_sstring_append(result, val);
+            } else {
+                cwist_sstring_append(result, tok);
+            }
+        } else {
+            cwist_sstring_append(result, tok);
+        }
+        tok = strtok_r(NULL, "/", &saveptr);
+    }
+    char *out = cwist_strdup(result->data);
+    cwist_sstring_destroy(result);
+    return out;
+}
+
+// Forward declaration
+static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwist_http_response *res);
+
+void cwist_app_dispatch(cwist_app *app, cwist_http_request *req, cwist_http_response *res) {
+    if (!app || !req || !res) return;
+    req->app = app;
+    req->db = app->db;
+    internal_route_handler(app, req, res);
 }
 
 // Internal Router Logic
@@ -1403,11 +1616,12 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
         } else {
             execute_chain(app, req, res, found_route->handler, NULL);
         }
+    } else {
+        cwist_error_handler_func eh = cwist_app_find_error_handler(app, CWIST_HTTP_NOT_FOUND);
+        if (eh) {
+            eh(req, res, CWIST_HTTP_NOT_FOUND);
         } else {
-            if (app->error_handler) {
-                app->error_handler(req, res, CWIST_HTTP_NOT_FOUND);
-            } else {
-                res->status_code = CWIST_HTTP_NOT_FOUND;
+            res->status_code = CWIST_HTTP_NOT_FOUND;
             cwist_sstring_assign(res->body, "404 Not Found");
         }
     }
@@ -1421,10 +1635,24 @@ static void static_http2_route_bridge(void *user_ctx, cwist_http_request *req, c
     internal_route_handler(app, req, res);
 }
 
+static void static_http3_route_bridge(void *user_ctx, cwist_http_request *req, cwist_http_response *res) {
+    cwist_app *app = (cwist_app *)user_ctx;
+    if (!app || !req || !res) return;
+    req->app = app;
+    req->db = app->db;
+    internal_route_handler(app, req, res);
+}
+
 static void static_ssl_handler(cwist_https_connection *conn, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
-    if (!app || !app->https_request_handler) return;
-    app->https_request_handler(conn, ctx);
+    if (!app || !conn) return;
+
+    if (cwist_https_connection_uses_http2(conn)) {
+        static_ssl_http2_handler(conn, ctx);
+        return;
+    }
+
+    static_ssl_http1_handler(conn, ctx);
 }
 
 static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
@@ -1444,6 +1672,11 @@ static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
 
 static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
+    if (!cwist_https_connection_uses_http2(conn)) {
+        static_ssl_http1_handler(conn, ctx);
+        return;
+    }
+
     cwist_error_t err = cwist_http2_serve_connection(conn, app, static_http2_route_bridge);
     if (err.errtype == CWIST_ERR_JSON && err.error.err_json) {
         cJSON_Delete(err.error.err_json);
@@ -1452,6 +1685,18 @@ static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx) {
 
 static void static_http_handler(int client_fd, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
+    
+    if (app->use_http2) {
+        char peek_buf[24];
+        ssize_t peeked = recv(client_fd, peek_buf, 24, MSG_PEEK);
+        if (peeked >= 24 && memcmp(peek_buf, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24) == 0) {
+            cwist_https_connection conn = { .fd = client_fd, .ssl = NULL, .negotiated_http2 = true, .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2 };
+            cwist_http2_serve_connection(&conn, app, static_http2_route_bridge);
+            close(client_fd);
+            return;
+        }
+    }
+
     char *read_buf = cwist_alloc(CWIST_HTTP_READ_BUFFER_SIZE);
     if (!read_buf) {
         close(client_fd);
@@ -1543,6 +1788,18 @@ static void static_http_handler(int client_fd, void *ctx) {
     close(client_fd);
 }
 
+struct h3_thread_payload {
+    int udp_fd;
+    cwist_app *app;
+};
+
+static void *h3_server_thread_func(void *arg) {
+    struct h3_thread_payload *payload = arg;
+    cwist_http3_server_loop(payload->udp_fd, payload->app->h3_ctx, static_http3_route_bridge, payload->app);
+    free(payload);
+    return NULL;
+}
+
 /**
  * @brief Initialize runtime services and enter the HTTP or HTTPS server loop.
  * @param app Application instance to run.
@@ -1550,14 +1807,76 @@ static void static_http_handler(int client_fd, void *ctx) {
  * @return 0 on success, or -1 when initialization or bind fails.
  */
 int cwist_app_listen(cwist_app *app, int port) {
+    // Ignore SIGPIPE
+    signal(SIGPIPE, SIG_IGN);
     if (!app) return -1;
     app->port = port;
     
+    // Validate protocol combinations for the same port
+    if (app->use_ssl) {
+        if (app->use_http2) {
+            fprintf(stderr, "Assertion failed: Cannot use cleartext HTTP/2 and HTTPS on the same port.\n");
+            abort();
+        }
+    } else {
+        if (app->use_https2) {
+            fprintf(stderr, "Assertion failed: Cannot use HTTPS/2 without configuring SSL via cwist_app_use_https.\n");
+            abort();
+        }
+    }
+
+    if (app->use_http3 && app->use_https3) {
+        fprintf(stderr, "Assertion failed: Cannot use both ephemeral HTTP/3 and TLS HTTP/3 simultaneously on the same port.\n");
+        abort();
+    }
+
     // Initialize Memory Manager
     cwist_mem_init(app);
     if (app->mem_manager) {
         app->mem_manager->watcher_running = true;
         pthread_create(&app->mem_manager->watcher_thread, NULL, cwist_mem_watcher, app);
+    }
+
+    if (app->h3_ctx && (app->use_http3 || app->use_https3)) {
+        int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (udp_fd >= 0) {
+            struct sockaddr_in udp_addr;
+            memset(&udp_addr, 0, sizeof(udp_addr));
+            udp_addr.sin_family = AF_INET;
+            udp_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+            udp_addr.sin_port = htons(port);
+            
+            int opt = 1;
+            setsockopt(udp_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#ifdef SO_REUSEPORT
+            setsockopt(udp_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+#endif
+            int rcvbuf = 2 * 1024 * 1024;
+            int sndbuf = 2 * 1024 * 1024;
+            setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+            setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
+            
+            if (bind(udp_fd, (struct sockaddr *)&udp_addr, sizeof(udp_addr)) == 0) {
+                struct h3_thread_payload *h3_p = malloc(sizeof(*h3_p));
+                if (h3_p) {
+                    h3_p->udp_fd = udp_fd;
+                    h3_p->app = app;
+                    pthread_t h3_tid;
+                    if (pthread_create(&h3_tid, NULL, h3_server_thread_func, h3_p) == 0) {
+                        pthread_detach(h3_tid);
+                        printf("HTTP/3 (QUIC) enabled on UDP port %d\n", port);
+                    } else {
+                        free(h3_p);
+                        close(udp_fd);
+                    }
+                } else {
+                    close(udp_fd);
+                }
+            } else {
+                perror("Failed to bind UDP port for HTTP/3");
+                close(udp_fd);
+            }
+        }
     }
     
     struct sockaddr_in addr;

@@ -1,30 +1,31 @@
 <map id="src/core/sstring/sstring.c" name="src/core/sstring/sstring.c">
-<area shape="rect" id="Node000001" title="Mutable string helpers used throughout CWIST for request/response and utility text handling." alt="" coords="267,5,446,33"/>
-<area shape="rect" id="Node000002" href="$d1/d34/sstring_8h_source.html" title=" " alt="" coords="172,81,307,126"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="339,36,284,74,281,70,336,31"/>
+<area shape="rect" id="Node000001" title="Mutable string helpers used throughout CWIST for request/response and utility text handling." alt="" coords="224,5,404,33"/>
+<area shape="rect" id="Node000002" href="$d1/d34/sstring_8h_source.html" title=" " alt="" coords="141,81,276,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="299,36,250,73,247,69,295,31"/>
 <area shape="rect" id="Node000003" title=" " alt="" coords="5,182,76,210"/>
-<area shape="poly" id="edge14_Node000001_Node000003" title=" " alt="" coords="267,34,199,52,165,66,134,83,110,102,89,125,57,170,53,167,85,122,106,98,131,79,163,61,198,47,266,29"/>
+<area shape="poly" id="edge15_Node000001_Node000003" title=" " alt="" coords="224,35,166,53,138,67,113,83,93,102,76,124,53,169,48,166,72,122,89,99,110,79,136,62,164,48,223,30"/>
 <area shape="rect" id="Node000004" title=" " alt="" coords="99,182,168,210"/>
-<area shape="poly" id="edge13_Node000001_Node000004" title=" " alt="" coords="267,31,210,49,184,63,161,83,148,102,141,123,135,167,130,166,135,122,144,99,157,79,181,59,208,44,265,26"/>
-<area shape="rect" id="Node000006" href="$d7/d82/cwist__err_8h_source.html" title=" " alt="" coords="299,174,440,218"/>
-<area shape="poly" id="edge11_Node000001_Node000006" title=" " alt="" coords="360,33,370,158,364,158,355,34"/>
-<area shape="rect" id="Node000009" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="394,90,567,117"/>
-<area shape="poly" id="edge8_Node000001_Node000009" title=" " alt="" coords="378,31,450,79,447,83,375,36"/>
-<area shape="rect" id="Node000012" title=" " alt="" coords="590,90,656,117"/>
-<area shape="poly" id="edge12_Node000001_Node000012" title=" " alt="" coords="417,31,495,51,580,78,585,80,583,85,578,84,494,56,415,36"/>
-<area shape="rect" id="Node000013" title=" " alt="" coords="680,90,750,117"/>
-<area shape="poly" id="edge15_Node000001_Node000013" title=" " alt="" coords="447,30,554,49,669,78,676,81,674,86,668,84,553,54,446,35"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="193,129,84,178,82,173,190,124"/>
-<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="216,128,162,174,159,170,212,124"/>
-<area shape="rect" id="Node000005" title=" " alt="" coords="193,182,274,210"/>
-<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="241,126,238,167,233,166,235,126"/>
-<area shape="poly" id="edge5_Node000002_Node000006" title=" " alt="" coords="272,124,328,163,325,167,269,128"/>
-<area shape="rect" id="Node000007" title=" " alt="" coords="277,266,348,294"/>
-<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="357,220,333,255,328,252,353,217"/>
-<area shape="rect" id="Node000008" title=" " alt="" coords="372,266,482,294"/>
-<area shape="poly" id="edge7_Node000006_Node000008" title=" " alt="" coords="387,217,411,252,407,255,383,220"/>
-<area shape="rect" id="Node000010" title=" " alt="" coords="465,182,538,210"/>
-<area shape="poly" id="edge9_Node000009_Node000010" title=" " alt="" coords="486,117,498,166,493,168,481,118"/>
-<area shape="rect" id="Node000011" title=" " alt="" coords="562,182,703,210"/>
-<area shape="poly" id="edge10_Node000009_Node000011" title=" " alt="" coords="504,115,599,172,596,176,501,120"/>
+<area shape="poly" id="edge14_Node000001_Node000004" title=" " alt="" coords="224,30,198,37,172,48,149,63,131,82,122,102,119,124,126,167,121,168,114,124,117,101,126,80,146,59,170,43,196,32,223,25"/>
+<area shape="rect" id="Node000006" href="$d7/d82/cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="243,174,384,218"/>
+<area shape="poly" id="edge12_Node000001_Node000006" title=" " alt="" coords="316,34,316,158,311,158,311,34"/>
+<area shape="rect" id="Node000009" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="352,90,524,117"/>
+<area shape="poly" id="edge9_Node000001_Node000009" title=" " alt="" coords="335,31,407,79,404,83,332,36"/>
+<area shape="rect" id="Node000012" title=" " alt="" coords="548,90,613,117"/>
+<area shape="poly" id="edge13_Node000001_Node000012" title=" " alt="" coords="374,31,452,51,537,78,542,80,540,85,536,84,451,56,373,36"/>
+<area shape="rect" id="Node000013" title=" " alt="" coords="638,90,707,117"/>
+<area shape="poly" id="edge16_Node000001_Node000013" title=" " alt="" coords="404,30,512,49,627,78,633,81,631,86,625,84,511,54,403,35"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="170,129,80,177,77,172,167,124"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="193,128,156,172,152,168,189,124"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="158,266,240,294"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="210,126,203,251,198,251,205,126"/>
+<area shape="poly" id="edge5_Node000002_Node000006" title=" " alt="" coords="235,124,279,161,275,165,232,128"/>
+<area shape="poly" id="edge7_Node000006_Node000005" title=" " alt="" coords="285,221,232,259,228,255,282,217"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="399,266,469,294"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="347,217,404,255,401,259,344,221"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="264,266,374,294"/>
+<area shape="poly" id="edge8_Node000006_Node000008" title=" " alt="" coords="318,219,320,251,315,251,313,219"/>
+<area shape="rect" id="Node000010" title=" " alt="" coords="409,182,482,210"/>
+<area shape="poly" id="edge10_Node000009_Node000010" title=" " alt="" coords="442,117,446,167,441,167,436,118"/>
+<area shape="rect" id="Node000011" title=" " alt="" coords="506,182,647,210"/>
+<area shape="poly" id="edge11_Node000009_Node000011" title=" " alt="" coords="459,115,545,171,542,176,456,120"/>
 </map>

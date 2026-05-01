@@ -140,7 +140,7 @@ void cwist_html_element_add_child(cwist_html_element_t *el, cwist_html_element_t
 static void render_element(cwist_html_element_t *el, cwist_sstring *out) {
     if (!el) return;
     
-    if(el->tag) {
+    if (el->tag && el->tag->data && *el->tag->data) {
         cwist_sstring_append(out, "<");
         cwist_sstring_append(out, el->tag->data);
         cJSON *attr = NULL;
@@ -152,23 +152,24 @@ static void render_element(cwist_html_element_t *el, cwist_sstring *out) {
             cwist_sstring_append(out, "\"");
         }
         cwist_sstring_append(out, ">");
-    } else if(el->inner_text) {
+        
+        if (el->inner_text && el->inner_text->data) {
+            cwist_sstring_append(out, el->inner_text->data);
+        }
+        
+        if (el->children) {
+            for (int i = 0; i < el->child_count; i++) {
+                render_element(el->children[i], out);
+            }
+        }
+        
+        cwist_sstring_append(out, "</");
+        cwist_sstring_append(out, el->tag->data);
+        cwist_sstring_append(out, ">");
+    } else if (el->inner_text && el->inner_text->data) {
+        // If no tag, just render the text (escaped)
         cwist_sstring_append_escaped(out, el->inner_text->data);
     }
-    
-    if (el->inner_text) {
-        cwist_sstring_append(out, el->inner_text->data);
-    }
-    
-    if (el->children) {
-        for (int i = 0; i < el->child_count; i++) {
-            render_element(el->children[i], out);
-        }
-    }
-    
-    cwist_sstring_append(out, "</");
-    cwist_sstring_append(out, el->tag->data);
-    cwist_sstring_append(out, ">");
 }
 
 /**

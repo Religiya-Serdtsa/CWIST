@@ -8,9 +8,17 @@
 
 /** --- SSL Structures --- */
 
+typedef enum cwist_https_protocol {
+    CWIST_HTTPS_PROTOCOL_NONE = 0,
+    CWIST_HTTPS_PROTOCOL_HTTP11,
+    CWIST_HTTPS_PROTOCOL_HTTP2,
+    CWIST_HTTPS_PROTOCOL_HTTP3
+} cwist_https_protocol;
+
 typedef struct cwist_https_context {
     SSL_CTX *ctx;
     bool http2_enabled;
+    bool http3_enabled;
 } cwist_https_context;
 
 typedef struct cwist_https_connection {
@@ -19,10 +27,13 @@ typedef struct cwist_https_connection {
     char *read_buf;
     size_t buf_len;
     bool negotiated_http2;
+    cwist_https_protocol negotiated_protocol;
+    bool http3_enabled;
 } cwist_https_connection;
 
 typedef struct cwist_https_options {
     bool enable_http2;
+    bool enable_http3;
 } cwist_https_options;
 
 /** --- API Functions --- */
@@ -58,6 +69,11 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
  * Returns true when ALPN negotiated h2 on this TLS connection.
  */
 bool cwist_https_connection_uses_http2(const cwist_https_connection *conn);
+
+/**
+ * Returns the protocol selected by ALPN, or HTTP/1.1 when no higher protocol matched.
+ */
+cwist_https_protocol cwist_https_connection_protocol(const cwist_https_connection *conn);
 
 /**
  * Close and free the HTTPS connection.

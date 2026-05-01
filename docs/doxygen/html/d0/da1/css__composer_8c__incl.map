@@ -1,0 +1,27 @@
+<map id="src/core/html/css_composer.c" name="src/core/html/css_composer.c">
+<area shape="rect" id="Node000001" title="Dynamic CSS Synthesis and Color Mathematics Implementation." alt="" coords="294,5,506,33"/>
+<area shape="rect" id="Node000002" href="$da/d0a/css__composer_8h.html" title="Dynamic CSS Synthesis and Color Mathematics." alt="" coords="5,81,152,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="349,36,168,82,166,77,348,31"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="115,275,186,302"/>
+<area shape="poly" id="edge13_Node000001_Node000004" title=" " alt="" coords="381,36,304,92,258,131,217,175,186,220,164,262,160,260,182,217,212,172,255,128,301,88,378,32"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="425,275,494,302"/>
+<area shape="poly" id="edge12_Node000001_Node000005" title=" " alt="" coords="405,33,456,259,451,260,400,34"/>
+<area shape="rect" id="Node000010" title=" " alt="" coords="438,90,503,117"/>
+<area shape="poly" id="edge11_Node000001_Node000010" title=" " alt="" coords="413,32,452,76,448,80,409,35"/>
+<area shape="rect" id="Node000011" title=" " alt="" coords="528,90,595,117"/>
+<area shape="poly" id="edge14_Node000001_Node000011" title=" " alt="" coords="427,31,523,80,521,85,425,36"/>
+<area shape="rect" id="Node000003" href="$d1/d34/sstring_8h_source.html" title=" " alt="" coords="227,174,362,218"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="131,124,230,165,228,170,129,129"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="170,359,251,387"/>
+<area shape="poly" id="edge10_Node000002_Node000006" title=" " alt="" coords="78,126,75,164,76,212,85,263,94,287,106,309,129,333,157,350,154,355,125,337,102,313,89,289,80,264,71,212,70,164,73,126"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="261,221,185,269,182,264,259,217"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="335,217,424,265,421,269,333,221"/>
+<area shape="poly" id="edge5_Node000003_Node000006" title=" " alt="" coords="280,220,250,268,233,307,221,345,216,343,228,305,245,265,276,217"/>
+<area shape="rect" id="Node000007" href="$d7/d82/cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="260,266,401,311"/>
+<area shape="poly" id="edge6_Node000003_Node000007" title=" " alt="" coords="306,218,319,251,314,253,301,220"/>
+<area shape="poly" id="edge8_Node000007_Node000006" title=" " alt="" coords="300,314,244,352,241,348,297,309"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="410,359,480,387"/>
+<area shape="poly" id="edge7_Node000007_Node000008" title=" " alt="" coords="362,309,416,347,413,352,359,314"/>
+<area shape="rect" id="Node000009" title=" " alt="" coords="275,359,386,387"/>
+<area shape="poly" id="edge9_Node000007_Node000009" title=" " alt="" coords="333,311,333,343,328,343,328,311"/>
+</map>

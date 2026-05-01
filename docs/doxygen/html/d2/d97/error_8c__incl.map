@@ -1,9 +1,11 @@
 <map id="src/sys/err/error.c" name="src/sys/err/error.c">
-<area shape="rect" id="Node000001" title="Minimal constructors for the framework&#39;s tagged error container." alt="" coords="31,5,164,33"/>
-<area shape="rect" id="Node000002" href="$d7/d82/cwist__err_8h_source.html" title=" " alt="" coords="27,81,168,126"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="100,34,100,65,95,65,95,34"/>
+<area shape="rect" id="Node000001" title="Minimal constructors for the framework&#39;s tagged error container." alt="" coords="74,5,207,33"/>
+<area shape="rect" id="Node000002" href="$d7/d82/cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="70,81,211,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="143,34,143,65,138,65,138,34"/>
 <area shape="rect" id="Node000003" title=" " alt="" coords="5,174,76,201"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="85,128,61,162,56,159,81,125"/>
-<area shape="rect" id="Node000004" title=" " alt="" coords="100,174,210,201"/>
-<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="115,125,139,159,135,162,111,128"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="116,128,70,166,67,161,113,124"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="100,174,181,201"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="143,126,143,158,138,158,138,126"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="205,174,316,201"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="174,124,230,162,227,167,171,128"/>
 </map>
