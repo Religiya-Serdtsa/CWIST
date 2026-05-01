@@ -3,6 +3,7 @@
 #include <cwist/sys/app/app.h>
 #include <cwist/net/http/http.h>
 #include <cwist/net/http/http2.h>
+#include <cwist/net/http/http3.h>
 #include <cwist/net/http/https.h>
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/core/db/nuke_db.h>
@@ -854,7 +855,36 @@ static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx);
 
 static void cwist_app_refresh_https_request_handler(cwist_app *app) {
     if (!app) return;
-    app->https_request_handler = app->use_http2 ? static_ssl_http2_handler : static_ssl_http1_handler;
+    app->https_request_handler = app->use_https2 ? static_ssl_http2_handler : static_ssl_http1_handler;
+}
+
+/**
+ * @brief Initialize or refresh the HTTP/3 context based on current settings.
+ */
+static cwist_error_t cwist_app_refresh_http3_context(cwist_app *app) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app || !app->cert_path || !app->key_path) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    if (app->h3_ctx) {
+        cwist_http3_destroy_context(app->h3_ctx);
+        app->h3_ctx = NULL;
+    }
+
+    if (app->use_https3 || app->use_http3) {
+        if (app->use_https3 && app->cert_path && app->key_path) {
+            err = cwist_http3_init_context(&app->h3_ctx, app->cert_path, app->key_path);
+        } else if (app->use_http3) {
+            err = cwist_http3_init_context_ephemeral(&app->h3_ctx);
+        } else {
+            err.error.err_i16 = -1; // Missing config for strict https3
+        }
+    } else {
+        err.error.err_i16 = 0;
+    }
+    return err;
 }
 
 cwist_app *cwist_app_create(void) {
@@ -864,6 +894,9 @@ cwist_app *cwist_app_create(void) {
     app->port = 8080;
     app->use_ssl = false;
     app->use_http2 = false;
+    app->use_http3 = false;
+    app->use_https2 = false;
+    app->use_https3 = false;
     app->cert_path = NULL;
     app->key_path = NULL;
     app->https_request_handler = NULL;
@@ -874,6 +907,7 @@ cwist_app *cwist_app_create(void) {
     }
     app->middlewares = NULL;
     app->ssl_ctx = NULL;
+    app->h3_ctx = NULL;
     app->error_handler = NULL;
     app->static_dirs = NULL;
     app->db = NULL;
@@ -946,6 +980,7 @@ void cwist_app_destroy(cwist_app *app) {
     if (app->cert_path) cwist_free(app->cert_path);
     if (app->key_path) cwist_free(app->key_path);
     if (app->ssl_ctx) cwist_https_destroy_context(app->ssl_ctx);
+    if (app->h3_ctx) cwist_http3_destroy_context(app->h3_ctx);
 
     cwist_route_table_destroy(app->router);
 
@@ -1087,6 +1122,9 @@ cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const c
         return err;
     }
 
+    if (app->use_https3 || app->use_http3) {
+        cwist_app_refresh_http3_context(app);
+    }
     return cwist_app_refresh_https_context(app);
 }
 
@@ -1097,7 +1135,7 @@ cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled) {
         return err;
     }
 
-    app->use_http2 = enabled;
+    app->use_https2 = enabled;
     cwist_app_refresh_https_request_handler(app);
     err.error.err_i16 = 0;
 
@@ -1106,6 +1144,47 @@ cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled) {
     }
 
     return cwist_app_refresh_https_context(app);
+}
+
+cwist_error_t cwist_app_use_https3(cwist_app *app, bool enabled) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    app->use_https3 = enabled;
+    err.error.err_i16 = 0;
+
+    if (!app->use_ssl || !app->cert_path || !app->key_path) {
+        return err;
+    }
+
+    return cwist_app_refresh_http3_context(app);
+}
+
+cwist_error_t cwist_app_use_http2(cwist_app *app, bool enabled) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    app->use_http2 = enabled;
+    err.error.err_i16 = 0;
+    return err;
+}
+
+cwist_error_t cwist_app_use_http3(cwist_app *app, bool enabled) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    app->use_http3 = enabled;
+    err.error.err_i16 = 0;
+    return cwist_app_refresh_http3_context(app);
 }
 
 /**
@@ -1421,6 +1500,14 @@ static void static_http2_route_bridge(void *user_ctx, cwist_http_request *req, c
     internal_route_handler(app, req, res);
 }
 
+static void static_http3_route_bridge(void *user_ctx, cwist_http_request *req, cwist_http_response *res) {
+    cwist_app *app = (cwist_app *)user_ctx;
+    if (!app || !req || !res) return;
+    req->app = app;
+    req->db = app->db;
+    internal_route_handler(app, req, res);
+}
+
 static void static_ssl_handler(cwist_https_connection *conn, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
     if (!app || !app->https_request_handler) return;
@@ -1452,6 +1539,18 @@ static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx) {
 
 static void static_http_handler(int client_fd, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
+    
+    if (app->use_http2) {
+        char peek_buf[24];
+        ssize_t peeked = recv(client_fd, peek_buf, 24, MSG_PEEK);
+        if (peeked >= 24 && memcmp(peek_buf, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24) == 0) {
+            cwist_https_connection conn = { .fd = client_fd, .ssl = NULL, .negotiated_http2 = true };
+            cwist_http2_serve_connection(&conn, app, static_http2_route_bridge);
+            close(client_fd);
+            return;
+        }
+    }
+
     char *read_buf = cwist_alloc(CWIST_HTTP_READ_BUFFER_SIZE);
     if (!read_buf) {
         close(client_fd);
@@ -1543,6 +1642,18 @@ static void static_http_handler(int client_fd, void *ctx) {
     close(client_fd);
 }
 
+struct h3_thread_payload {
+    int udp_fd;
+    cwist_app *app;
+};
+
+static void *h3_server_thread_func(void *arg) {
+    struct h3_thread_payload *payload = arg;
+    cwist_http3_server_loop(payload->udp_fd, payload->app->h3_ctx, static_http3_route_bridge, payload->app);
+    free(payload);
+    return NULL;
+}
+
 /**
  * @brief Initialize runtime services and enter the HTTP or HTTPS server loop.
  * @param app Application instance to run.
@@ -1553,11 +1664,56 @@ int cwist_app_listen(cwist_app *app, int port) {
     if (!app) return -1;
     app->port = port;
     
+    // Validate protocol combinations for the same port
+    if (app->use_ssl) {
+        if (app->use_http2) {
+            fprintf(stderr, "Assertion failed: Cannot use cleartext HTTP/2 and HTTPS on the same port.\n");
+            abort();
+        }
+    } else {
+        if (app->use_https2) {
+            fprintf(stderr, "Assertion failed: Cannot use HTTPS/2 without configuring SSL via cwist_app_use_https.\n");
+            abort();
+        }
+    }
+
+    if (app->use_http3 && app->use_https3) {
+        fprintf(stderr, "Assertion failed: Cannot use both ephemeral HTTP/3 and TLS HTTP/3 simultaneously on the same port.\n");
+        abort();
+    }
+
     // Initialize Memory Manager
     cwist_mem_init(app);
     if (app->mem_manager) {
         app->mem_manager->watcher_running = true;
         pthread_create(&app->mem_manager->watcher_thread, NULL, cwist_mem_watcher, app);
+    }
+
+    if (app->h3_ctx && (app->use_http3 || app->use_https3)) {
+        int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (udp_fd >= 0) {
+            struct sockaddr_in udp_addr;
+            memset(&udp_addr, 0, sizeof(udp_addr));
+            udp_addr.sin_family = AF_INET;
+            udp_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+            udp_addr.sin_port = htons(port);
+            
+            int opt = 1;
+            setsockopt(udp_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+            
+            if (bind(udp_fd, (struct sockaddr *)&udp_addr, sizeof(udp_addr)) == 0) {
+                struct h3_thread_payload *h3_p = malloc(sizeof(*h3_p));
+                h3_p->udp_fd = udp_fd;
+                h3_p->app = app;
+                pthread_t h3_tid;
+                pthread_create(&h3_tid, NULL, h3_server_thread_func, h3_p);
+                pthread_detach(h3_tid);
+                printf("HTTP/3 (QUIC) enabled on UDP port %d\n", port);
+            } else {
+                perror("Failed to bind UDP port for HTTP/3");
+                close(udp_fd);
+            }
+        }
     }
     
     struct sockaddr_in addr;

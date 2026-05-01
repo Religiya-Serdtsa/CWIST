@@ -60,7 +60,10 @@ typedef struct cwist_static_dir cwist_static_dir;
 typedef struct cwist_app {
     int port;
     bool use_ssl;
-    bool use_http2;
+    bool use_http2;   ///< Cleartext HTTP/2 (h2c)
+    bool use_http3;   ///< Ephemeral (Zero-config) HTTP/3
+    bool use_https2;  ///< TLS HTTP/2 (h2)
+    bool use_https3;  ///< TLS HTTP/3
     char *cert_path;
     char *key_path;
     cwist_https_request_handler_func https_request_handler;
@@ -73,6 +76,7 @@ typedef struct cwist_app {
     cwist_error_handler_func error_handler; ///< Error handling callback.
 
     cwist_https_context *ssl_ctx; ///< SSL context when TLS is enabled.
+    struct cwist_http3_context *h3_ctx; ///< HTTP/3 QUIC Context.
     cwist_db *db; ///< Shared database handle.
     char *db_path; ///< Database path (if set).
     bool nuke_enabled; ///< True when NUKE DB integration is active.
@@ -165,11 +169,33 @@ void cwist_app_configure_bdr(cwist_app *app, size_t max_bytes, time_t max_entry_
 
 cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const char *key_path);
 cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled);
+cwist_error_t cwist_app_use_https3(cwist_app *app, bool enabled);
+
+/**
+ * @brief Enable HTTP/2 cleartext (h2c) over standard TCP.
+ * @param app Application context.
+ * @param enabled True to enable h2c.
+ * @return cwist_error_t Status.
+ */
+cwist_error_t cwist_app_use_http2(cwist_app *app, bool enabled);
+
+/**
+ * @brief Enable HTTP/3 (QUIC) without manual SSL configuration.
+ * Auto-generates an ephemeral self-signed certificate internally.
+ * @param app Application context.
+ * @param enabled True to enable zero-config HTTP/3.
+ * @return cwist_error_t Status.
+ */
+cwist_error_t cwist_app_use_http3(cwist_app *app, bool enabled);
+
 cwist_error_t cwist_app_use_db(cwist_app *app, const char *db_path);
 cwist_error_t cwist_app_use_nuke_db(cwist_app *app, const char *db_path, int sync_interval_ms);
 cwist_db *cwist_app_get_db(cwist_app *app);
 
 #define cwist_use_https2(enabled) cwist_app_use_https2((app), (enabled))
+#define cwist_use_https3(enabled) cwist_app_use_https3((app), (enabled))
+#define cwist_use_http2(enabled) cwist_app_use_http2((app), (enabled))
+#define cwist_use_http3(enabled) cwist_app_use_http3((app), (enabled))
 
 /** @name Routing */
 /** @{ */

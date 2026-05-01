@@ -275,6 +275,7 @@ cwist_mux_router *cwist_mux_router_create(void) {
     }
     memset(router->buckets, 0, router->bucket_count * sizeof(cwist_mux_route *));
     router->routes = NULL;
+    router->param_routes = NULL;
     return router;
 }
 
@@ -313,15 +314,69 @@ void cwist_mux_handle(cwist_mux_router *router, cwist_http_method_t method, cons
     cwist_sstring_assign(route->path, (char *)path);
     route->handler = handler;
     route->bucket_next = NULL;
+    route->param_next = NULL;
     route->next = router->routes;
-    cwist_mux_signature signature = cwist_mux_signature_from_path(method, path);
-    route->signature_hi = signature.hi;
-    route->signature_lo = signature.lo;
-
-    size_t idx = cwist_mux_bucket_index(router, &signature);
-    route->bucket_next = router->buckets[idx];
-    router->buckets[idx] = route;
     router->routes = route;
+
+    route->is_parametric = (strchr(path, ':') != NULL);
+
+    if (route->is_parametric) {
+        route->param_next = router->param_routes;
+        router->param_routes = route;
+    } else {
+        cwist_mux_signature signature = cwist_mux_signature_from_path(method, path);
+        route->signature_hi = signature.hi;
+        route->signature_lo = signature.lo;
+
+        size_t idx = cwist_mux_bucket_index(router, &signature);
+        route->bucket_next = router->buckets[idx];
+        router->buckets[idx] = route;
+    }
+}
+
+static bool match_parametric_route(const char *route_tmpl, const char *req_path, cwist_query_map **out_params) {
+    const char *t = route_tmpl;
+    const char *p = req_path;
+    cwist_query_map *params = NULL;
+
+    while (*t && *p) {
+        if (*t == ':') {
+            t++;
+            const char *t_next = strchr(t, '/');
+            size_t t_len = t_next ? (size_t)(t_next - t) : strlen(t);
+            char param_name[256] = {0};
+            if (t_len < sizeof(param_name)) memcpy(param_name, t, t_len);
+
+            const char *p_next = strchr(p, '/');
+            size_t p_len = p_next ? (size_t)(p_next - p) : strlen(p);
+            char param_value[256] = {0};
+            if (p_len < sizeof(param_value)) memcpy(param_value, p, p_len);
+
+            if (!params) params = cwist_query_map_create();
+            cwist_query_map_set(params, param_name, param_value);
+
+            t += t_len;
+            p += p_len;
+        } else if (*t == *p) {
+            t++;
+            p++;
+        } else {
+            if (params) cwist_query_map_destroy(params);
+            return false;
+        }
+    }
+
+    // Ignore trailing slashes
+    if (*t == '/' && *(t + 1) == '\0') t++;
+    if (*p == '/' && *(p + 1) == '\0') p++;
+
+    if (*t == '\0' && *p == '\0') {
+        *out_params = params;
+        return true;
+    }
+
+    if (params) cwist_query_map_destroy(params);
+    return false;
 }
 
 /**
@@ -338,6 +393,8 @@ bool cwist_mux_serve(cwist_mux_router *router, cwist_http_request *req, cwist_ht
     cwist_mux_signature signature = cwist_mux_signature_from_path(req->method, path);
     size_t idx = cwist_mux_bucket_index(router, &signature);
     cwist_mux_route *curr = router->buckets[idx];
+    
+    // 1. Try exact match (O(1))
     while (curr) {
         if (curr->method == req->method &&
             curr->signature_hi == signature.hi &&
@@ -349,5 +406,26 @@ bool cwist_mux_serve(cwist_mux_router *router, cwist_http_request *req, cwist_ht
         }
         curr = curr->bucket_next;
     }
+
+    // 2. Try parametric matching (linear search)
+    curr = router->param_routes;
+    while (curr) {
+        if (curr->method == req->method && curr->path && curr->path->data) {
+            cwist_query_map *extracted_params = NULL;
+            if (match_parametric_route(curr->path->data, path, &extracted_params)) {
+                if (extracted_params) {
+                    if (req->path_params) {
+                        // Free old params if any (should be none, but just to be safe)
+                        cwist_query_map_destroy(req->path_params);
+                    }
+                    req->path_params = extracted_params;
+                }
+                curr->handler(req, res);
+                return true;
+            }
+        }
+        curr = curr->param_next;
+    }
+
     return false;
 }

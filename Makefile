@@ -73,6 +73,7 @@ SRCS = src/core/sstring/sstring.c \
        src/sys/err/error.c \
        src/net/http/http.c \
        src/net/http/http2.c \
+       src/net/http/http3.c \
        src/net/http/https.c \
        src/net/http/mux.c \
        src/net/http/query.c \
@@ -90,6 +91,7 @@ SRCS = src/core/sstring/sstring.c \
        src/sys/app/middleware.c \
        src/core/template/template.c \
        src/core/html/builder.c \
+       src/core/html/css_composer.c \
        src/sys/app/big_dumb_reply.c \
        src/sys/sys_info.c \
        src/core/mem/alloc.c \
@@ -153,6 +155,14 @@ test: $(LIB_NAME) tests/test_sstring.c
 	$(CC) $(CFLAGS) -o test_sstring tests/test_sstring.c $(LIB_NAME) $(LIBS)
 	./test_sstring
 
+test_mux: $(LIB_NAME) tests/test_mux.c
+	$(CC) $(CFLAGS) -o test_mux tests/test_mux.c $(LIB_NAME) $(LIBS)
+	./test_mux
+
+test_mux_param: $(LIB_NAME) tests/test_mux_param.c
+	$(CC) $(CFLAGS) -o test_mux_param tests/test_mux_param.c $(LIB_NAME) $(LIBS)
+	./test_mux_param
+
 test_jwt: $(LIB_NAME) tests/test_jwt.c
 	$(CC) $(CFLAGS) -o test_jwt tests/test_jwt.c $(LIB_NAME) $(LIBS)
 	./test_jwt
@@ -172,6 +182,10 @@ test_https: $(LIB_NAME) tests/test_https.c
 test_http2: $(LIB_NAME) tests/test_http2.c
 	$(CC) $(CFLAGS) -o test_http2 tests/test_http2.c $(LIB_NAME) $(LIBS)
 	./test_http2
+
+test_http3: $(LIB_NAME) tests/test_http3.c
+	$(CC) $(CFLAGS) -o test_http3 tests/test_http3.c $(LIB_NAME) $(LIBS)
+	./test_http3
 
 # ... (other tests omitted for brevity, keeping standard ones)
 

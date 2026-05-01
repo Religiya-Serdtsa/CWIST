@@ -1,0 +1,19 @@
+<map id="include/cwist/core/html/css_composer.h" name="include/cwist/core/html/css_composer.h">
+<area shape="rect" id="Node000001" title="Dynamic CSS Synthesis and Color Mathematics." alt="" coords="5,5,168,50"/>
+<area shape="rect" id="Node000002" href="$d1/d34/sstring_8h_source.html" title=" " alt="" coords="102,98,237,143"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="108,49,142,85,138,89,104,52"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="200,283,282,311"/>
+<area shape="poly" id="edge9_Node000001_Node000005" title=" " alt="" coords="72,52,47,90,25,138,18,163,16,188,20,212,31,234,55,250,94,265,186,285,185,290,92,270,52,255,27,237,15,214,11,188,13,162,20,136,42,87,67,49"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="134,199,204,227"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="172,143,172,184,166,184,166,143"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="41,199,110,227"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="149,145,102,190,98,186,145,141"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="189,141,218,190,232,230,240,268,235,269,227,231,213,192,184,144"/>
+<area shape="rect" id="Node000006" href="$d7/d82/cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="278,191,420,235"/>
+<area shape="poly" id="edge5_Node000002_Node000006" title=" " alt="" coords="213,141,294,181,292,186,211,146"/>
+<area shape="poly" id="edge7_Node000006_Node000005" title=" " alt="" coords="322,238,272,276,269,271,319,234"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="310,283,380,311"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="351,236,349,268,344,268,345,236"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="405,283,515,311"/>
+<area shape="poly" id="edge8_Node000006_Node000008" title=" " alt="" coords="380,234,432,272,428,276,377,238"/>
+</map>

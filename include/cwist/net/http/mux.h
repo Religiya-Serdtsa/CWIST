@@ -15,14 +15,17 @@ typedef struct cwist_mux_route {
     cwist_http_handler_func handler;
     uint64_t signature_hi;
     uint64_t signature_lo;
-    struct cwist_mux_route *bucket_next;
-    struct cwist_mux_route *next;
+    bool is_parametric; ///< True if path contains parameters like :id
+    struct cwist_mux_route *bucket_next; ///< Used for exact matches
+    struct cwist_mux_route *param_next;  ///< Used for parametric routes
+    struct cwist_mux_route *next;        ///< Used for global cleanup
 } cwist_mux_route;
 
 typedef struct cwist_mux_router {
     size_t bucket_count;
     cwist_mux_route **buckets;
     cwist_mux_route *routes;
+    cwist_mux_route *param_routes; ///< Head of the parametric routes list
 } cwist_mux_router;
 
 /** @name Lifecycle */

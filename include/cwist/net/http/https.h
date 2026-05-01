@@ -23,6 +23,7 @@ typedef struct cwist_https_connection {
 
 typedef struct cwist_https_options {
     bool enable_http2;
+    bool enable_http3;
 } cwist_https_options;
 
 /** --- API Functions --- */

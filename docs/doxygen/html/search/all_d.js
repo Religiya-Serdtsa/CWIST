@@ -1,7 +1,7 @@
 var searchData=
 [
   ['macros_2eh_0',['macros.h',['../de/d3c/macros_8h.html',1,'']]],
-  ['make_5ferror_1',['make_error',['../db/dcc/error_8c.html#acebd12423b82bb0e4580503397972ac0',1,'error.c']]],
+  ['make_5ferror_1',['make_error',['../d7/d82/cwist__err_8h.html#acebd12423b82bb0e4580503397972ac0',1,'make_error(cwist_errtype_t type):&#160;error.c'],['../db/dcc/error_8c.html#acebd12423b82bb0e4580503397972ac0',1,'make_error(cwist_errtype_t type):&#160;error.c']]],
   ['max_5fbytes_2',['max_bytes',['../d9/d90/structcwist__bdr__t.html#a6c224571b874ac111326d99deb0ca2c9',1,'cwist_bdr_t']]],
   ['max_5fentry_5fage_5fsec_3',['max_entry_age_sec',['../d9/d90/structcwist__bdr__t.html#a49d315bce92eae0216a0c5c1f47c680f',1,'cwist_bdr_t']]],
   ['max_5fmem_5fspace_4',['max_mem_space',['../dc/da0/structcwist__app.html#a0dd0babfca6fb67cfe27d3d8c789443c',1,'cwist_app']]],
