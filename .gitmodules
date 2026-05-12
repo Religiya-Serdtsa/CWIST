@@ -1,3 +1,6 @@
+[submodule "lib/boringssl"]
+	path = lib/boringssl
+	url = https://github.com/google/boringssl
 [submodule "lib/cjson"]
 	path = lib/cjson
 	url = https://github.com/DaveGamble/cJSON
