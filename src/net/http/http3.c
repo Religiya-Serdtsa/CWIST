@@ -156,6 +156,120 @@ void cwist_http3_destroy_context(cwist_http3_context *ctx) {
     }
 }
 
+
+#define CWIST_HTTP3_FRAME_DATA 0x00
+#define CWIST_HTTP3_FRAME_HEADERS 0x01
+
+static size_t h3_encode_varint(uint64_t value, unsigned char out[8]) {
+    if (value <= 0x3f) {
+        out[0] = (unsigned char)value;
+        return 1;
+    }
+    if (value <= 0x3fff) {
+        out[0] = (unsigned char)(0x40 | ((value >> 8) & 0x3f));
+        out[1] = (unsigned char)(value & 0xff);
+        return 2;
+    }
+    if (value <= 0x3fffffff) {
+        out[0] = (unsigned char)(0x80 | ((value >> 24) & 0x3f));
+        out[1] = (unsigned char)((value >> 16) & 0xff);
+        out[2] = (unsigned char)((value >> 8) & 0xff);
+        out[3] = (unsigned char)(value & 0xff);
+        return 4;
+    }
+    out[0] = (unsigned char)(0xc0 | ((value >> 56) & 0x3f));
+    out[1] = (unsigned char)((value >> 48) & 0xff);
+    out[2] = (unsigned char)((value >> 40) & 0xff);
+    out[3] = (unsigned char)((value >> 32) & 0xff);
+    out[4] = (unsigned char)((value >> 24) & 0xff);
+    out[5] = (unsigned char)((value >> 16) & 0xff);
+    out[6] = (unsigned char)((value >> 8) & 0xff);
+    out[7] = (unsigned char)(value & 0xff);
+    return 8;
+}
+
+static int h3_decode_varint(const unsigned char *buf, size_t len, size_t *pos, uint64_t *value) {
+    if (*pos >= len) return -1;
+    unsigned char first = buf[*pos];
+    size_t width = (size_t)1u << (first >> 6);
+    if (*pos + width > len) return -1;
+
+    uint64_t v = (uint64_t)(first & 0x3f);
+    for (size_t i = 1; i < width; i++) {
+        v = (v << 8) | buf[*pos + i];
+    }
+    *pos += width;
+    *value = v;
+    return 0;
+}
+
+static int h3_ssl_write_all(SSL *stream, const void *buf, size_t len) {
+    const unsigned char *p = (const unsigned char *)buf;
+    while (len > 0) {
+        int n = SSL_write(stream, p, len);
+        if (n <= 0) return -1;
+        p += n;
+        len -= (size_t)n;
+    }
+    return 0;
+}
+
+static int h3_write_frame(SSL *stream, uint64_t type, const unsigned char *payload, size_t payload_len) {
+    unsigned char header[16];
+    unsigned char encoded[8];
+    size_t header_len = 0;
+
+    size_t n = h3_encode_varint(type, encoded);
+    memcpy(header + header_len, encoded, n);
+    header_len += n;
+    n = h3_encode_varint(payload_len, encoded);
+    memcpy(header + header_len, encoded, n);
+    header_len += n;
+
+    if (h3_ssl_write_all(stream, header, header_len) != 0) return -1;
+    if (payload_len > 0 && payload) return h3_ssl_write_all(stream, payload, payload_len);
+    return 0;
+}
+
+static void h3_apply_minimal_request_headers(cwist_http_request *req,
+                                             const unsigned char *buf,
+                                             size_t len) {
+    size_t pos = 0;
+    while (pos < len) {
+        uint64_t type = 0;
+        uint64_t frame_len = 0;
+        if (h3_decode_varint(buf, len, &pos, &type) != 0 ||
+            h3_decode_varint(buf, len, &pos, &frame_len) != 0 ||
+            pos + frame_len > len) {
+            break;
+        }
+
+        if (type == CWIST_HTTP3_FRAME_HEADERS && frame_len >= 3) {
+            const unsigned char *block = buf + pos;
+            /* Minimal QPACK awareness: skip required-insert-count and delta-base.
+             * Full request decoding is intentionally left to a future QPACK table implementation. */
+            if (block[0] == 0x00 && block[1] == 0x00) {
+                req->method = CWIST_HTTP_GET;
+            }
+        }
+        pos += frame_len;
+    }
+}
+
+static int h3_send_response(SSL *stream, cwist_http_response *res) {
+    /* QPACK header block: required insert count = 0, delta base = 0,
+     * indexed static field line :status 200. */
+    static const unsigned char headers_200[] = { 0x00, 0x00, 0xd9 };
+    size_t body_len = res->body ? res->body->size : 0;
+    const char *body_data = res->body ? res->body->data : "";
+
+    if (h3_write_frame(stream, CWIST_HTTP3_FRAME_HEADERS, headers_200, sizeof(headers_200)) != 0) {
+        return -1;
+    }
+    return h3_write_frame(stream, CWIST_HTTP3_FRAME_DATA,
+                          (const unsigned char *)body_data, body_len);
+}
+
 /**
  * @brief Handle an individual QUIC stream.
  *
@@ -167,55 +281,49 @@ void cwist_http3_destroy_context(cwist_http3_context *ctx) {
  * @param user_ctx Opaque pointer.
  */
 static void cwist_http3_handle_stream(SSL *stream, cwist_http3_request_handler_func handler, void *user_ctx) {
-    bool connected = true;
-    while (connected) {
-        /* HTTP/3 frames consist of a Variable-Length Integer for Type and Length */
-        /* For this standard structural skeleton, we mock reading a basic frame to fulfill stream lifecycle */
-        unsigned char buf[1024];
-        int n = SSL_read(stream, buf, sizeof(buf));
-        if (n <= 0) {
-            int ssl_err = SSL_get_error(stream, n);
-            if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
-                /* In a fully non-blocking implementation, we'd return to the poll loop.
-                 * For standard multi-threaded or blocking stream handle, we'd sleep or poll. */
-                usleep(1000);
-                continue;
-            }
-            break; /* Stream closed or error */
+    unsigned char buf[4096];
+    size_t buffered = 0;
+
+    while (buffered < sizeof(buf)) {
+        int n = SSL_read(stream, buf + buffered, sizeof(buf) - buffered);
+        if (n > 0) {
+            buffered += (size_t)n;
+            break;
         }
 
-        /* 
-         * Typical HTTP/3 QPACK and framing parsing happens here.
-         * Since OpenSSL provides transport, we extract the path from the QPACK block.
-         */
-        
-        cwist_http_request *req = cwist_http_request_create();
-        cwist_sstring_assign(req->version, "HTTP/3");
-        cwist_sstring_assign(req->path, "/"); /* Default fallback */
-
-        cwist_http_response *res = cwist_http_response_create();
-        
-        if (handler) {
-            handler(user_ctx, req, res);
+        int ssl_err = SSL_get_error(stream, n);
+        if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
+            usleep(1000);
+            continue;
         }
-
-        /* Encode HTTP/3 Headers and Data frames.
-         * We write a minimal static response block for now to satisfy stream lifecycle.
-         */
-        size_t body_len = res->body ? res->body->size : 0;
-        const char *body_data = res->body ? res->body->data : "";
-        
-        if (body_len > 0) {
-            /* Very basic simulated frame header write */
-            SSL_write(stream, body_data, body_len);
+        if (ssl_err == SSL_ERROR_ZERO_RETURN) {
+            break;
         }
+        break;
+    }
 
+    cwist_http_request *req = cwist_http_request_create();
+    cwist_http_response *res = cwist_http_response_create();
+    if (!req || !res) {
         cwist_http_request_destroy(req);
         cwist_http_response_destroy(res);
-        break; /* Single request per unidirectional/bidirectional stream standard in HTTP/3 */
+        SSL_free(stream);
+        return;
     }
-    
-    /* Conclude stream */
+
+    cwist_sstring_assign(req->version, "HTTP/3");
+    cwist_sstring_assign(req->path, "/");
+    h3_apply_minimal_request_headers(req, buf, buffered);
+
+    if (handler) {
+        handler(user_ctx, req, res);
+    }
+
+    h3_send_response(stream, res);
+    SSL_stream_conclude(stream, 0);
+
+    cwist_http_request_destroy(req);
+    cwist_http_response_destroy(res);
     SSL_free(stream);
 }
 
