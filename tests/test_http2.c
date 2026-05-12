@@ -91,7 +91,8 @@ static void *http2_server_thread(void *arg) {
         .ssl = ssl,
         .read_buf = NULL,
         .buf_len = 0,
-        .negotiated_http2 = true
+        .negotiated_http2 = true,
+        .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2
     };
     ctx->result = cwist_http2_serve_connection(&conn, NULL, http2_test_handler);
 
@@ -119,7 +120,8 @@ static void *http2_big_server_thread(void *arg) {
         .ssl = ssl,
         .read_buf = NULL,
         .buf_len = 0,
-        .negotiated_http2 = true
+        .negotiated_http2 = true,
+        .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2
     };
     ctx->result = cwist_http2_serve_connection(&conn, NULL, http2_big_handler);
 
