@@ -9,7 +9,17 @@
 #include <cwist/net/http/http.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <openssl/ssl.h>
-#include <openssl/quic.h>
+#include <openssl/opensslv.h>
+#if defined(__has_include)
+#  if __has_include(<openssl/quic.h>) && OPENSSL_VERSION_NUMBER >= 0x30200000L
+#    include <openssl/quic.h>
+#    define CWIST_HAVE_OPENSSL_QUIC 1
+#  else
+#    define CWIST_HAVE_OPENSSL_QUIC 0
+#  endif
+#else
+#  define CWIST_HAVE_OPENSSL_QUIC 0
+#endif
 
 /** --- HTTP/3 Structures --- */
 
