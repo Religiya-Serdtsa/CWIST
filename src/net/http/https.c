@@ -248,12 +248,14 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
     (*conn)->buf_len = 0;
     (*conn)->read_buf[0] = '\0';
     (*conn)->negotiated_http2 = false;
+    (*conn)->negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP11;
 
     const unsigned char *alpn = NULL;
     unsigned int alpn_len = 0;
     SSL_get0_alpn_selected(ssl, &alpn, &alpn_len);
     if (alpn && alpn_len == 2 && memcmp(alpn, "h2", 2) == 0) {
         (*conn)->negotiated_http2 = true;
+        (*conn)->negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2;
     }
 
     err.error.err_i16 = 0;
@@ -265,7 +267,12 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
  * @param conn HTTPS connection wrapper to close.
  */
 bool cwist_https_connection_uses_http2(const cwist_https_connection *conn) {
-    return conn && conn->negotiated_http2;
+    return conn && conn->negotiated_protocol == CWIST_HTTPS_PROTOCOL_HTTP2;
+}
+
+cwist_https_protocol cwist_https_connection_protocol(const cwist_https_connection *conn) {
+    if (!conn) return CWIST_HTTPS_PROTOCOL_NONE;
+    return conn->negotiated_protocol;
 }
 
 void cwist_https_close_connection(cwist_https_connection *conn) {

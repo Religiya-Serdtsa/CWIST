@@ -24,6 +24,8 @@
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 
+#if CWIST_HAVE_OPENSSL_QUIC
+
 /**
  * @brief Initialize HTTP/3 context for a UDP socket.
  *
@@ -433,3 +435,54 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     err.error.err_i16 = 0;
     return err;
 }
+
+#else
+
+static cwist_error_t cwist_http3_quic_unavailable(void) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    err.error.err_i16 = -1;
+    return err;
+}
+
+cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
+                                       const char *cert_path,
+                                       const char *key_path) {
+    (void)cert_path;
+    (void)key_path;
+    if (ctx) *ctx = NULL;
+    return cwist_http3_quic_unavailable();
+}
+
+cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
+    if (ctx) *ctx = NULL;
+    return cwist_http3_quic_unavailable();
+}
+
+void cwist_http3_destroy_context(cwist_http3_context *ctx) {
+    if (ctx) {
+        if (ctx->ssl_ctx) SSL_CTX_free(ctx->ssl_ctx);
+        cwist_free(ctx);
+    }
+}
+
+cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
+                                           void *user_ctx,
+                                           cwist_http3_request_handler_func handler) {
+    (void)conn;
+    (void)user_ctx;
+    (void)handler;
+    return cwist_http3_quic_unavailable();
+}
+
+cwist_error_t cwist_http3_server_loop(int udp_fd,
+                                      cwist_http3_context *ctx,
+                                      cwist_http3_request_handler_func handler,
+                                      void *user_ctx) {
+    (void)udp_fd;
+    (void)ctx;
+    (void)handler;
+    (void)user_ctx;
+    return cwist_http3_quic_unavailable();
+}
+
+#endif /* CWIST_HAVE_OPENSSL_QUIC */
