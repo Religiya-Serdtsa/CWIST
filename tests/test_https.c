@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <signal.h>
 
 static const char *TEST_CERT = "example/othello-web/server.crt";
 static const char *TEST_KEY = "example/othello-web/server.key";
@@ -118,6 +119,7 @@ static void test_app_http2_toggle_rebuilds_context(void) {
 }
 
 int main(void) {
+    signal(SIGPIPE, SIG_IGN);
     test_https_defaults();
     test_https_alpn_negotiates_h2_and_http11_fallback();
     test_app_http2_toggle_rebuilds_context();
