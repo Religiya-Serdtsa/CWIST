@@ -1,7 +1,7 @@
 # Compiler and Flags
 CC ?= gcc
 
-INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src
+INCLUDE_PATHS = -I./include -I./lib -I./lib/boringssl/include -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src
 COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
 COMMON_WARNINGS = -std=c17 -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
@@ -41,7 +41,12 @@ URIPARSER_CMAKE_FLAGS = -DCMAKE_BUILD_TYPE=Release \
                         -DURIPARSER_BUILD_FUZZERS=OFF \
                         -DURIPARSER_BUILD_TOOLS=OFF
 
-LIBS = -pthread -lssl -lcrypto -ldl -lm
+LIBS = -pthread -ldl -lm -lstdc++
+
+BORINGSSL_DIR = lib/boringssl
+BORINGSSL_BUILD_DIR = $(BORINGSSL_DIR)/build
+BORINGSSL_SSL_LIB = $(BORINGSSL_BUILD_DIR)/libssl.a
+BORINGSSL_CRYPTO_LIB = $(BORINGSSL_BUILD_DIR)/libcrypto.a
 
 # SQLite Automation
 SQLITE_YEAR = 2024
@@ -121,7 +126,7 @@ INCLUDEDIR = $(PREFIX)/include
 
 # --- Build Targets ---
 
-all: $(LIBTTAK_LIB) $(CJSON_LIB) $(URIPARSER_LIB) $(SQLITE_DIR)/sqlite3.c $(LIB_NAME)
+all: $(LIBTTAK_LIB) $(CJSON_LIB) $(URIPARSER_LIB) $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB) $(SQLITE_DIR)/sqlite3.c $(LIB_NAME)
 
 # SQLite Download & Extraction Rule
 $(SQLITE_DIR)/sqlite3.c:
@@ -133,7 +138,7 @@ $(SQLITE_DIR)/sqlite3.c:
 	@rm $(SQLITE_DIR)/$(SQLITE_ZIP)
 	@echo "SQLite Ready."
 
-$(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(OBJS)
+$(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB) $(OBJS)
 	@echo "Creating static library..."
 	@rm -rf .lib_merge_tmp
 	@mkdir -p .lib_merge_tmp
@@ -141,7 +146,9 @@ $(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(OBJS)
 		ar x $(abspath $(URIPARSER_LIB)) && \
 		ar x $(abspath $(CJSON_LIB)) && \
 		ar x $(abspath $(LIBTTAK_LIB)) && \
-		ar x $(abspath $(CNATS_LIB))
+		ar x $(abspath $(CNATS_LIB)) && \
+		ar x $(abspath $(BORINGSSL_SSL_LIB)) && \
+		ar x $(abspath $(BORINGSSL_CRYPTO_LIB))
 	ar rcs $@ $(OBJS) .lib_merge_tmp/*.o
 	@rm -rf .lib_merge_tmp
 
@@ -160,6 +167,17 @@ $(URIPARSER_LIB):
 	cmake -S $(URIPARSER_DIR) -B $(URIPARSER_BUILD_DIR) -DCMAKE_C_COMPILER=$(CC) $(URIPARSER_CMAKE_FLAGS)
 	@echo "Building uriparser..."
 	cmake --build $(URIPARSER_BUILD_DIR) --target uriparser
+
+$(CNATS_LIB):
+	@echo "Building cnats..."
+	@mkdir -p $(CNATS_DIR)/build
+	cmake -S $(CNATS_DIR) -B $(CNATS_DIR)/build \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_SHARED_LIBS=OFF \
+		-DNATS_BUILD_WITH_TLS=OFF \
+		-DNATS_BUILD_STREAMING=OFF
+	cmake --build $(CNATS_DIR)/build --target nats_static
 
 # --- Test Targets ---
 
@@ -220,7 +238,7 @@ test_https: $(LIB_NAME) tests/test_https.c
 	./test_https
 
 test_http2: $(LIB_NAME) tests/test_http2.c
-	$(CC) $(CFLAGS) -o test_http2 tests/test_http2.c $(LIB_NAME) $(LIBS)
+	$(CC) $(CFLAGS) -o test_http2 tests/test_http2.c $(LIB_NAME) $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB) $(LIBS)
 	./test_http2
 
 test_http3: $(LIB_NAME) tests/test_http3.c
@@ -273,6 +291,8 @@ clean:
 	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
 	rm -rf $(URIPARSER_BUILD_DIR)
 	rm -rf .lib_merge_tmp
-	@$(MAKE) -C $(LIBTTAK_DIR) clean
+	@rm -rf $(BORINGSSL_BUILD_DIR)
+	@rm -rf $(CNATS_DIR)/build
+	-@$(MAKE) -C $(LIBTTAK_DIR) clean || true
 
 rebuild: clean all

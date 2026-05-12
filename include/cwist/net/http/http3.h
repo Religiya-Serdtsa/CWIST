@@ -10,7 +10,9 @@
 #include <cwist/sys/err/cwist_err.h>
 #include <openssl/ssl.h>
 #include <openssl/opensslv.h>
-#if defined(__has_include)
+#if defined(BORINGSSL_API_VERSION)
+#  define CWIST_HAVE_OPENSSL_QUIC 0
+#elif defined(__has_include)
 #  if __has_include(<openssl/quic.h>) && OPENSSL_VERSION_NUMBER >= 0x30200000L
 #    include <openssl/quic.h>
 #    define CWIST_HAVE_OPENSSL_QUIC 1

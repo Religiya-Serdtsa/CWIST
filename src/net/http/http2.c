@@ -46,7 +46,7 @@
  * and stream management information.
  */
 typedef struct {
-    SSL *ssl;                 /**< Pointer to the underlying OpenSSL SSL object */
+    SSL *ssl;                 /**< Pointer to the underlying BoringSSL SSL object */
     bool preface_received;    /**< Flag indicating if the HTTP/2 connection preface was received */
     uint32_t last_stream_id;  /**< The highest stream ID seen on this connection */
 } cwist_http2_conn_internal;

@@ -7,6 +7,7 @@
 
 #include <assert.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -379,6 +380,7 @@ static void test_http2_response_headers(void) {
 }
 
 int main(void) {
+    signal(SIGPIPE, SIG_IGN);
     test_http2_roundtrip();
     test_http2_large_body_interleave();
     test_http2_response_headers();
