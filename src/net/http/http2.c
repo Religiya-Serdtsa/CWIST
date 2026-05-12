@@ -441,7 +441,12 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
 
         if (name_index > 0) {
             const cwist_http2_static_header *entry = h2_static_header(name_index);
-            if (!entry || !entry->name) break;
+            if (!entry || !entry->name) {
+                /* Dynamic table reference or invalid index - skip value and continue */
+                char *discard = h2_decode_string(payload, len, &pos);
+                free(discard);
+                continue;
+            }
             name = strdup(entry->name);
         } else {
             name = h2_decode_string(payload, len, &pos);
@@ -727,7 +732,8 @@ cwist_error_t cwist_http2_serve_connection(
         return result;
     }
 
-    if (h2_write_frame(conn, CWIST_HTTP2_FRAME_SETTINGS, 0, 0, NULL, 0) != 0) {
+    unsigned char settings[6] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x00}; /* SETTINGS_HEADER_TABLE_SIZE = 0 */
+    if (h2_write_frame(conn, CWIST_HTTP2_FRAME_SETTINGS, 0, 0, settings, sizeof(settings)) != 0) {
         result = make_error(CWIST_ERR_INT16);
         result.error.err_i16 = -1;
         return result;
