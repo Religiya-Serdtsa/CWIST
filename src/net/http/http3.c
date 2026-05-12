@@ -9,6 +9,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 #include <cwist/net/http/http3.h>
+#include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/sys/err/cwist_err.h>
 
@@ -452,6 +453,66 @@ static int h3_write_frame(SSL *stream, uint64_t type, const unsigned char *paylo
     return 0;
 }
 
+static void h3_apply_header(cwist_http_request *req, const char *name, const char *value) {
+    if (!req || !name || !value) return;
+
+    if (strcmp(name, ":method") == 0) {
+        req->method = cwist_http_string_to_method(value);
+    } else if (strcmp(name, ":path") == 0) {
+        cwist_sstring_assign(req->path, (char *)value);
+    } else if (strcmp(name, ":authority") == 0 || strcmp(name, "host") == 0) {
+        cwist_http_header_add(&req->headers, "host", value);
+    } else if (strcmp(name, ":scheme") != 0 && name[0] != ':') {
+        cwist_http_header_add(&req->headers, name, value);
+    }
+}
+
+static int qpack_decode_integer(const unsigned char *buf, size_t len, size_t *pos, uint8_t prefix_bits, uint32_t *value) {
+    if (*pos >= len || prefix_bits == 0 || prefix_bits > 8) return -1;
+    uint8_t mask = (uint8_t)((1u << prefix_bits) - 1u);
+    uint32_t n = buf[*pos] & mask;
+    (*pos)++;
+    if (n < mask) {
+        *value = n;
+        return 0;
+    }
+
+    uint32_t m = 0;
+    while (*pos < len) {
+        uint8_t b = buf[(*pos)++];
+        if (m > 28) return -1;
+        n += (uint32_t)(b & 0x7f) << m;
+        if ((b & 0x80) == 0) {
+            *value = n;
+            return 0;
+        }
+        m += 7;
+    }
+    return -1;
+}
+
+static char *qpack_decode_string(const unsigned char *buf, size_t len, size_t *pos) {
+    if (*pos >= len) return NULL;
+    bool huffman = (buf[*pos] & 0x80) != 0;
+    uint32_t str_len = 0;
+    if (qpack_decode_integer(buf, len, pos, 7, &str_len) != 0) return NULL;
+    if (*pos + str_len > len) return NULL;
+
+    if (huffman) {
+        size_t decoded_len = 0;
+        char *out = h2_huffman_decode(buf + *pos, str_len, &decoded_len);
+        *pos += str_len;
+        return out;
+    }
+
+    char *out = (char *)malloc((size_t)str_len + 1);
+    if (!out) return NULL;
+    memcpy(out, buf + *pos, str_len);
+    out[str_len] = '\0';
+    *pos += str_len;
+    return out;
+}
+
 static void h3_apply_minimal_request_headers(cwist_http_request *req,
                                              const unsigned char *buf,
                                              size_t len) {
@@ -465,14 +526,70 @@ static void h3_apply_minimal_request_headers(cwist_http_request *req,
             break;
         }
 
-        if (type == CWIST_HTTP3_FRAME_HEADERS && frame_len >= 3) {
+        if (type == CWIST_HTTP3_FRAME_HEADERS && frame_len >= 2) {
             const unsigned char *block = buf + pos;
-            /* Minimal QPACK awareness: skip required-insert-count and delta-base.
-             * Full request decoding is intentionally left to a future QPACK table implementation. */
-            if (block[0] == 0x00 && block[1] == 0x00) {
-                req->method = CWIST_HTTP_GET;
+            size_t block_len = (size_t)frame_len;
+            size_t block_pos = 0;
+
+            // Skip QPACK Encoded Field Section Prefix
+            uint64_t ric = 0;
+            if (h3_decode_varint(block, block_len, &block_pos, &ric) != 0) goto next_frame;
+            if (block_pos >= block_len) goto next_frame;
+            unsigned char base_first = block[block_pos];
+            size_t base_width = (size_t)1u << (base_first >> 6);
+            if (block_pos + base_width > block_len) goto next_frame;
+            block_pos += base_width;
+
+            // Parse field lines
+            while (block_pos < block_len) {
+                unsigned char b = block[block_pos];
+
+                if (b & 0x80) {
+                    // Indexed Field Line: 1 T XXXXXX
+                    uint32_t idx = 0;
+                    size_t tmp = block_pos;
+                    if (qpack_decode_integer(block, block_len, &tmp, 6, &idx) != 0) break;
+                    block_pos = tmp;
+                    bool is_static = (b & 0x40) == 0;
+                    if (is_static && idx < QPACK_STATIC_TABLE_COUNT) {
+                        h3_apply_header(req, qpack_static_table[idx].name, qpack_static_table[idx].value);
+                    }
+                } else if ((b & 0xC0) == 0x40) {
+                    // Literal Field Line with Post-Base Index: 01...
+                    // Skip - not supported in minimal implementation
+                    break;
+                } else if ((b & 0xE0) == 0x20) {
+                    // Literal Field Line with Literal Name: 001xxxxx
+                    uint32_t name_len = 0;
+                    size_t tmp = block_pos;
+                    if (qpack_decode_integer(block, block_len, &tmp, 5, &name_len) != 0) break;
+                    block_pos = tmp;
+                    char *name = qpack_decode_string(block, block_len, &block_pos);
+                    char *value = qpack_decode_string(block, block_len, &block_pos);
+                    if (name && value) {
+                        h3_apply_header(req, name, value);
+                    }
+                    free(name);
+                    free(value);
+                } else if ((b & 0xF0) == 0x00) {
+                    // Literal Field Line with Name Reference: 0000 N IIII
+                    uint32_t name_idx = 0;
+                    size_t tmp = block_pos;
+                    if (qpack_decode_integer(block, block_len, &tmp, 4, &name_idx) != 0) break;
+                    block_pos = tmp;
+                    bool is_static = (b & 0x08) == 0;
+                    char *value = qpack_decode_string(block, block_len, &block_pos);
+                    if (value && is_static && name_idx < QPACK_STATIC_TABLE_COUNT) {
+                        h3_apply_header(req, qpack_static_table[name_idx].name, value);
+                    }
+                    free(value);
+                } else {
+                    // Unknown or unsupported
+                    break;
+                }
             }
         }
+next_frame:
         pos += frame_len;
     }
 }
@@ -566,7 +683,6 @@ static void cwist_http3_handle_stream(SSL *stream, cwist_http3_request_handler_f
     }
 
     cwist_sstring_assign(req->version, "HTTP/3");
-    cwist_sstring_assign(req->path, "/");
     h3_apply_minimal_request_headers(req, buf, buffered);
 
     if (handler) {

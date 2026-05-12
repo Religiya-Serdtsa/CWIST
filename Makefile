@@ -1,7 +1,7 @@
 # Compiler and Flags
 CC ?= gcc
 
-INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include
+INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src
 COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
 COMMON_WARNINGS = -std=c17 -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
@@ -41,7 +41,7 @@ URIPARSER_CMAKE_FLAGS = -DCMAKE_BUILD_TYPE=Release \
                         -DURIPARSER_BUILD_FUZZERS=OFF \
                         -DURIPARSER_BUILD_TOOLS=OFF
 
-LIBS = -L$(URIPARSER_BUILD_DIR) -L./lib/libttak/lib -L./lib/cjson -pthread -lcjson -lssl -lcrypto -luriparser -ldl -lttak
+LIBS = -pthread -lssl -lcrypto -ldl -lm
 
 # SQLite Automation
 SQLITE_YEAR = 2024
@@ -99,7 +99,9 @@ SRCS = src/core/sstring/sstring.c \
        lib/sqlite3/sqlite3.c \
        src/security/jwt/jwt.c \
        src/security/db_crypt/db_crypt.c \
+       src/security/tls/ech.c \
        src/net/db_sync/db_sync.c \
+       src/net/nats/cwist_nats.c \
        $(IO_SRC)
 
 # Object Files and Target
@@ -109,6 +111,8 @@ LIBTTAK_DIR = lib/libttak
 LIBTTAK_LIB = $(LIBTTAK_DIR)/lib/libttak.a
 CJSON_DIR = lib/cjson
 CJSON_LIB = $(CJSON_DIR)/libcjson.a
+CNATS_DIR = lib/cnats
+CNATS_LIB = $(CNATS_DIR)/build/lib/libnats_static.a
 
 # Installation Paths
 PREFIX ?= /usr/local
@@ -129,9 +133,17 @@ $(SQLITE_DIR)/sqlite3.c:
 	@rm $(SQLITE_DIR)/$(SQLITE_ZIP)
 	@echo "SQLite Ready."
 
-$(LIB_NAME): $(URIPARSER_LIB) $(OBJS)
+$(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(OBJS)
 	@echo "Creating static library..."
-	ar rcs $@ $^
+	@rm -rf .lib_merge_tmp
+	@mkdir -p .lib_merge_tmp
+	@cd .lib_merge_tmp && \
+		ar x $(abspath $(URIPARSER_LIB)) && \
+		ar x $(abspath $(CJSON_LIB)) && \
+		ar x $(abspath $(LIBTTAK_LIB)) && \
+		ar x $(abspath $(CNATS_LIB))
+	ar rcs $@ $(OBJS) .lib_merge_tmp/*.o
+	@rm -rf .lib_merge_tmp
 
 $(LIBTTAK_LIB):
 	@echo "Building libttak..."
@@ -260,6 +272,7 @@ clean:
 	rm -f $(TEST_TARGETS)
 	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
 	rm -rf $(URIPARSER_BUILD_DIR)
+	rm -rf .lib_merge_tmp
 	@$(MAKE) -C $(LIBTTAK_DIR) clean
 
 rebuild: clean all

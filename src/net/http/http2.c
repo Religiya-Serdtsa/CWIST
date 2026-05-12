@@ -173,7 +173,7 @@ static int h2_write_frame(cwist_https_connection *conn,
     return 0;
 }
 
-static int h2_decode_integer(const unsigned char *buf,
+int h2_decode_integer(const unsigned char *buf,
                              size_t len,
                              size_t *pos,
                              uint8_t prefix_bits,
@@ -312,7 +312,7 @@ static void h2_huffman_init(void) {
     }
 }
 
-static char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_len) {
+char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_len) {
     h2_huffman_init();
     size_t cap = src_len * 2 + 1;
     if (cap < 16) cap = 16;
@@ -364,7 +364,7 @@ static char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t 
     return out;
 }
 
-static char *h2_decode_string(const unsigned char *buf, size_t len, size_t *pos) {
+char *h2_decode_string(const unsigned char *buf, size_t len, size_t *pos) {
     if (*pos >= len) return NULL;
     bool huffman = (buf[*pos] & 0x80) != 0;
     uint32_t str_len = 0;
@@ -420,6 +420,12 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
             if (h2_decode_integer(payload, len, &pos, 7, &index) != 0) break;
             const cwist_http2_static_header *entry = h2_static_header(index);
             if (entry && entry->name) h2_apply_header(req, entry->name, entry->value);
+            continue;
+        }
+
+        if ((b & 0xE0) == 0x20) {
+            uint32_t new_size = 0;
+            if (h2_decode_integer(payload, len, &pos, 5, &new_size) != 0) break;
             continue;
         }
 
