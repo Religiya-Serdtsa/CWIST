@@ -1,6 +1,3 @@
-[submodule "lib/cwist_crypto"]
-	path = lib/cwist_crypto
-	url = ../cwist_crypto
 [submodule "lib/cjson"]
 	path = lib/cjson
 	url = https://github.com/DaveGamble/cJSON
@@ -8,8 +5,11 @@
 	path = lib/monocypher
 	url = https://github.com/LoupVaillant/Monocypher
 [submodule "lib/libttak"]
-    path = lib/libttak
-    url  = https://github.com/religiya-serdtsa/libttak
+	path = lib/libttak
+	url = https://github.com/religiya-serdtsa/libttak
 [submodule "lib/uriparser"]
 	path = lib/uriparser
 	url = https://github.com/uriparser/uriparser
+[submodule "lib/cnats"]
+	path = lib/cnats
+	url = https://github.com/nats-io/nats.c
