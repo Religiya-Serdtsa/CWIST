@@ -14,7 +14,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
-#include <sigpipe.h>
+#include <signal.h>
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <sys/stat.h>
