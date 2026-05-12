@@ -49,6 +49,7 @@ static void http2_test_handler(void *user_ctx, cwist_http_request *req, cwist_ht
     assert(strcmp(req->version->data, "HTTP/2") == 0);
     if (strcmp(req->path->data, "/") == 0) {
         cwist_http_header_add(&res->headers, "content-type", "text/plain");
+        cwist_http_header_add(&res->headers, "x-custom", "test");
         cwist_sstring_assign(res->body, "h2 ok");
         return;
     }
@@ -306,9 +307,81 @@ static void test_http2_large_body_interleave(void) {
     printf("Passed HTTP/2 large-body interleave.\n");
 }
 
+static void test_http2_response_headers(void) {
+    printf("Testing HTTP/2 response headers...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16)
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    static const unsigned char headers_frame[] = {
+        0x00, 0x00, 0x03, 0x01, 0x05, 0x00, 0x00, 0x00, 0x01,
+        0x82, 0x87, 0x84
+    };
+
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+    assert(ssl_write_all(client, headers_frame, sizeof(headers_frame)) == 0);
+
+    bool saw_headers = false;
+    bool saw_data = false;
+    for (int i = 0; i < 10; ++i) {
+        unsigned char hdr[9];
+        assert(ssl_read_exact(client, hdr, sizeof(hdr)) == 0);
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | (uint32_t)hdr[2];
+        uint8_t type = hdr[3];
+        uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
+                             ((uint32_t)hdr[7] << 8) | hdr[8];
+        unsigned char payload[256] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
+
+        if (type == 0x1 && stream_id == 1) {
+            /* HEADERS frame should contain :status, content-length,
+             * content-type, and x-custom. Old code sent only 1 byte (0x88). */
+            assert(len > 1);
+            saw_headers = true;
+        }
+        if (type == 0x0 && stream_id == 1) {
+            assert(memcmp(payload, "h2 ok", 5) == 0);
+            saw_data = true;
+        }
+        if (saw_headers && saw_data) break;
+    }
+
+    assert(saw_headers);
+    assert(saw_data);
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    printf("Passed HTTP/2 response headers.\n");
+}
+
 int main(void) {
     test_http2_roundtrip();
     test_http2_large_body_interleave();
+    test_http2_response_headers();
     printf("All HTTP/2 tests passed!\n");
     return 0;
 }

@@ -23,8 +23,227 @@
 #include <openssl/x509.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
+#include <ctype.h>
 
 #if CWIST_HAVE_OPENSSL_QUIC
+
+static const struct {
+    const char *name;
+    const char *value;
+} qpack_static_table[] = {
+    {":authority", ""}, {":path", "/"}, {"age", "0"},
+    {"content-disposition", ""}, {"content-length", "0"}, {"cookie", ""},
+    {"date", ""}, {"etag", ""}, {"if-modified-since", ""},
+    {"if-none-match", ""}, {"last-modified", ""}, {"link", ""},
+    {"location", ""}, {"referer", ""}, {"set-cookie", ""},
+    {":method", "CONNECT"}, {":method", "DELETE"}, {":method", "GET"},
+    {":method", "HEAD"}, {":method", "OPTIONS"}, {":method", "POST"},
+    {":method", "PUT"}, {":scheme", "http"}, {":scheme", "https"},
+    {":status", "103"}, {":status", "200"}, {":status", "304"},
+    {":status", "404"}, {":status", "503"}, {"accept", "*/*"},
+    {"accept", "application/dns-message"}, {"accept-encoding", "gzip, deflate, br"},
+    {"accept-ranges", "bytes"}, {"access-control-allow-headers", "cache-control"},
+    {"access-control-allow-headers", "content-type"}, {"access-control-allow-origin", "*"},
+    {"cache-control", "max-age=0"}, {"cache-control", "max-age=2592000"},
+    {"cache-control", "max-age=604800"}, {"cache-control", "no-cache"},
+    {"cache-control", "no-store"}, {"cache-control", "public, max-age=31536000"},
+    {"content-encoding", "br"}, {"content-encoding", "gzip"},
+    {"content-type", "application/dns-message"}, {"content-type", "application/javascript"},
+    {"content-type", "application/json"}, {"content-type", "application/x-www-form-urlencoded"},
+    {"content-type", "image/gif"}, {"content-type", "image/jpeg"},
+    {"content-type", "image/png"}, {"content-type", "text/css"},
+    {"content-type", "text/html; charset=utf-8"}, {"content-type", "text/plain"},
+    {"content-type", "text/plain;charset=utf-8"}, {"range", "bytes=0-"},
+    {"strict-transport-security", "max-age=31536000"},
+    {"strict-transport-security", "max-age=31536000; includesubdomains"},
+    {"strict-transport-security", "max-age=31536000; includesubdomains; preload"},
+    {"vary", "accept-encoding"}, {"vary", "origin"},
+    {"x-content-type-options", "nosniff"}, {"x-xss-protection", "1; mode=block"},
+    {":status", "100"}, {":status", "204"}, {":status", "206"},
+    {":status", "302"}, {":status", "400"}, {":status", "403"},
+    {":status", "421"}, {":status", "425"}, {":status", "500"},
+    {"accept-language", ""}, {"access-control-allow-credentials", "FALSE"},
+    {"access-control-allow-credentials", "TRUE"}, {"access-control-allow-headers", "*"},
+    {"access-control-allow-methods", "get"}, {"access-control-allow-methods", "get, post, options"},
+    {"access-control-allow-methods", "options"}, {"access-control-expose-headers", "content-length"},
+    {"access-control-request-headers", "content-type"}, {"access-control-request-method", "get"},
+    {"access-control-request-method", "post"}, {"alt-svc", "clear"},
+    {"authorization", ""}, {"content-security-policy", "script-src 'none'; object-src 'none'; base-uri 'none'"},
+    {"early-data", "1"}, {"expect-ct", ""}, {"forwarded", ""},
+    {"if-range", ""}, {"origin", ""}, {"purpose", "prefetch"},
+    {"server", ""}, {"timing-allow-origin", "*"}, {"upgrade-insecure-requests", "1"},
+    {"user-agent", ""}, {"x-forwarded-for", ""}, {"x-frame-options", "deny"},
+    {"x-frame-options", "sameorigin"}
+};
+
+#define QPACK_STATIC_TABLE_COUNT (sizeof(qpack_static_table)/sizeof(qpack_static_table[0]))
+
+static size_t qpack_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t value, uint8_t prefix_bits) {
+    uint8_t mask = (uint8_t)((1u << prefix_bits) - 1u);
+    unsigned char first = dst[0] & ~mask;
+    if (value < mask) {
+        dst[0] = first | (uint8_t)value;
+        return 1;
+    }
+    dst[0] = first | mask;
+    value -= mask;
+    size_t i = 1;
+    while (value >= 128) {
+        if (i >= dst_cap) return 0;
+        dst[i++] = (unsigned char)((value & 0x7F) | 0x80);
+        value >>= 7;
+    }
+    if (i >= dst_cap) return 0;
+    dst[i++] = (unsigned char)value;
+    return i;
+}
+
+static size_t qpack_encode_string(unsigned char *dst, size_t dst_cap, const char *str) {
+    size_t len = strlen(str);
+    dst[0] = 0x00; /* literal, no huffman */
+    size_t n = qpack_encode_integer(dst, dst_cap, (uint32_t)len, 7);
+    if (n == 0 || n + len > dst_cap) return 0;
+    memcpy(dst + n, str, len);
+    return n + len;
+}
+
+static int qpack_static_table_find_name(const char *name) {
+    for (size_t i = 0; i < QPACK_STATIC_TABLE_COUNT; ++i) {
+        if (qpack_static_table[i].name && strcasecmp(qpack_static_table[i].name, name) == 0)
+            return (int)i;
+    }
+    return -1;
+}
+
+static int qpack_static_status_index(int status_code) {
+    switch (status_code) {
+        case 100: return 63;
+        case 103: return 24;
+        case 200: return 25;
+        case 204: return 64;
+        case 206: return 65;
+        case 302: return 66;
+        case 304: return 26;
+        case 400: return 67;
+        case 403: return 68;
+        case 404: return 27;
+        case 421: return 69;
+        case 425: return 70;
+        case 500: return 71;
+        case 503: return 28;
+        default: return -1;
+    }
+}
+
+static size_t qpack_encode_response_headers(cwist_http_response *res,
+                                             unsigned char *dst, size_t dst_cap) {
+    size_t pos = 0;
+    /* Encoded Field Section Prefix: Required Insert Count = 0, Base = 0 */
+    if (pos + 2 > dst_cap) return 0;
+    dst[pos++] = 0x00;
+    dst[pos++] = 0x00;
+
+    /* :status */
+    int status_idx = qpack_static_status_index(res->status_code);
+    if (status_idx >= 0 && status_idx < 64) {
+        if (pos + 1 > dst_cap) return 0;
+        dst[pos++] = (unsigned char)(0xC0 | status_idx); /* Indexed Field Line, static */
+    } else {
+        char status_str[16];
+        int status_len = snprintf(status_str, sizeof(status_str), "%d", res->status_code);
+        if (pos + 1 > dst_cap) return 0;
+        dst[pos] = 0x20; /* Literal Field Line with Literal Name, H=0 */
+        size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, 7, 4); /* ":status" len */
+        if (n == 0) return 0;
+        pos += n;
+        if (pos + 7 > dst_cap) return 0;
+        memcpy(dst + pos, ":status", 7);
+        pos += 7;
+        n = qpack_encode_string(dst + pos, dst_cap - pos, status_str);
+        if (n == 0) return 0;
+        pos += n;
+    }
+
+    /* Auto content-length */
+    size_t body_len = 0;
+    if (res->use_file_stream) body_len = res->file_stream_len;
+    else if (res->is_ptr_body) body_len = res->ptr_body_len;
+    else if (res->body) body_len = res->body->size;
+
+    if (!headers_have_content_length(res->headers)) {
+        char cl_str[32];
+        int cl_len = snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
+        int name_idx = qpack_static_table_find_name("content-length");
+        if (name_idx >= 0 && name_idx < 16) {
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x50; /* Literal with Name Reference, static, indexed name */
+            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_idx, 4);
+            if (n == 0) return 0;
+            pos += n;
+        } else {
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x20; /* Literal with Literal Name */
+            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, 14, 4);
+            if (n == 0) return 0;
+            pos += n;
+            if (pos + 14 > dst_cap) return 0;
+            memcpy(dst + pos, "content-length", 14);
+            pos += 14;
+        }
+        size_t n = qpack_encode_string(dst + pos, dst_cap - pos, cl_str);
+        if (n == 0) return 0;
+        pos += n;
+    }
+
+    /* User headers */
+    cwist_http_header_node *curr = res->headers;
+    while (curr) {
+        if (!curr->key || !curr->key->data || !curr->value || !curr->value->data) {
+            curr = curr->next;
+            continue;
+        }
+        if (strcasecmp(curr->key->data, "connection") == 0 ||
+            strcasecmp(curr->key->data, "keep-alive") == 0 ||
+            strcasecmp(curr->key->data, "transfer-encoding") == 0 ||
+            strcasecmp(curr->key->data, "upgrade") == 0) {
+            curr = curr->next;
+            continue;
+        }
+
+        char lower_name[256];
+        size_t name_len = strlen(curr->key->data);
+        if (name_len >= sizeof(lower_name)) name_len = sizeof(lower_name) - 1;
+        for (size_t i = 0; i < name_len; ++i) {
+            lower_name[i] = (char)tolower((unsigned char)curr->key->data[i]);
+        }
+        lower_name[name_len] = '\0';
+
+        int name_idx = qpack_static_table_find_name(lower_name);
+        if (name_idx >= 0 && name_idx < 16) {
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x50; /* Literal with Name Reference, static */
+            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_idx, 4);
+            if (n == 0) return 0;
+            pos += n;
+        } else {
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x20; /* Literal with Literal Name */
+            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_len, 4);
+            if (n == 0) return 0;
+            pos += n;
+            if (pos + name_len > dst_cap) return 0;
+            memcpy(dst + pos, lower_name, name_len);
+            pos += name_len;
+        }
+        size_t n = qpack_encode_string(dst + pos, dst_cap - pos, curr->value->data);
+        if (n == 0) return 0;
+        pos += n;
+
+        curr = curr->next;
+    }
+
+    return pos;
+}
 
 /**
  * @brief Initialize HTTP/3 context for a UDP socket.
@@ -259,17 +478,50 @@ static void h3_apply_minimal_request_headers(cwist_http_request *req,
 }
 
 static int h3_send_response(SSL *stream, cwist_http_response *res) {
-    /* QPACK header block: required insert count = 0, delta base = 0,
-     * indexed static field line :status 200. */
-    static const unsigned char headers_200[] = { 0x00, 0x00, 0xd9 };
-    size_t body_len = res->body ? res->body->size : 0;
-    const char *body_data = res->body ? res->body->data : "";
+    unsigned char header_block[8192];
+    size_t block_len = qpack_encode_response_headers(res, header_block, sizeof(header_block));
+    if (block_len == 0) return -1;
 
-    if (h3_write_frame(stream, CWIST_HTTP3_FRAME_HEADERS, headers_200, sizeof(headers_200)) != 0) {
+    if (h3_write_frame(stream, CWIST_HTTP3_FRAME_HEADERS, header_block, block_len) != 0) {
         return -1;
     }
-    return h3_write_frame(stream, CWIST_HTTP3_FRAME_DATA,
-                          (const unsigned char *)body_data, body_len);
+
+    size_t body_len = 0;
+    const unsigned char *body_data = NULL;
+    if (res->use_file_stream) {
+        body_len = res->file_stream_len;
+    } else if (res->is_ptr_body) {
+        body_len = res->ptr_body_len;
+        body_data = (const unsigned char *)res->ptr_body;
+    } else if (res->body) {
+        body_len = res->body->size;
+        body_data = (const unsigned char *)res->body->data;
+    }
+
+    if (res->use_file_stream && res->file_stream_fd >= 0) {
+        off_t offset = res->file_stream_offset;
+        size_t remaining = res->file_stream_len;
+        while (remaining > 0) {
+            size_t chunk = remaining > 16384 ? 16384 : remaining;
+            unsigned char *chunk_buf = (unsigned char *)malloc(chunk);
+            if (!chunk_buf) return -1;
+            ssize_t r = pread(res->file_stream_fd, chunk_buf, chunk, offset);
+            if (r <= 0) { free(chunk_buf); return -1; }
+            if (h3_write_frame(stream, CWIST_HTTP3_FRAME_DATA, chunk_buf, (size_t)r) != 0) {
+                free(chunk_buf); return -1;
+            }
+            free(chunk_buf);
+            offset += r;
+            remaining -= (size_t)r;
+        }
+    } else {
+        if (body_len > 0) {
+            if (h3_write_frame(stream, CWIST_HTTP3_FRAME_DATA, body_data, body_len) != 0) {
+                return -1;
+            }
+        }
+    }
+    return 0;
 }
 
 /**

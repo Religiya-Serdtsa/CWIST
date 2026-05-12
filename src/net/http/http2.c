@@ -14,6 +14,7 @@
 #include <string.h>
 #include <poll.h>
 #include <fcntl.h>
+#include <ctype.h>
 
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
@@ -97,6 +98,29 @@ static const cwist_http2_static_header cwist_http2_static_table[] = {
     { "expires", "" },
     { "from", "" },
     { "host", "" },
+    { "if-match", "" },
+    { "if-modified-since", "" },
+    { "if-none-match", "" },
+    { "if-range", "" },
+    { "if-unmodified-since", "" },
+    { "last-modified", "" },
+    { "link", "" },
+    { "location", "" },
+    { "max-forwards", "" },
+    { "proxy-authenticate", "" },
+    { "proxy-authorization", "" },
+    { "range", "" },
+    { "referer", "" },
+    { "refresh", "" },
+    { "retry-after", "" },
+    { "server", "" },
+    { "set-cookie", "" },
+    { "strict-transport-security", "" },
+    { "transfer-encoding", "" },
+    { "user-agent", "" },
+    { "vary", "" },
+    { "via", "" },
+    { "www-authenticate", "" },
 };
 
 static int h2_read(cwist_https_connection *conn, void *buf, int len) {
@@ -177,12 +201,182 @@ static int h2_decode_integer(const unsigned char *buf,
     return -1;
 }
 
+/* --- Huffman Decoder (RFC 7541 Appendix B) --- */
+
+typedef struct h2_huffman_node {
+    struct h2_huffman_node *child[2];
+    int symbol;
+    bool is_terminal;
+} h2_huffman_node;
+
+static h2_huffman_node h2_huffman_pool[4096];
+static size_t h2_huffman_pool_used = 0;
+static h2_huffman_node *h2_huffman_root = NULL;
+
+static h2_huffman_node *h2_huffman_alloc_node(void) {
+    if (h2_huffman_pool_used >= sizeof(h2_huffman_pool)/sizeof(h2_huffman_pool[0]))
+        return NULL;
+    h2_huffman_node *node = &h2_huffman_pool[h2_huffman_pool_used++];
+    node->child[0] = node->child[1] = NULL;
+    node->symbol = -1;
+    node->is_terminal = false;
+    return node;
+}
+
+static void h2_huffman_init(void) {
+    if (h2_huffman_root) return;
+
+    static const struct {
+        uint32_t code;
+        uint8_t bits;
+    } table[257] = {
+        {0x00001ff8, 13}, {0x007fffd8, 23}, {0x0fffffe2, 28}, {0x0fffffe3, 28},
+        {0x0fffffe4, 28}, {0x0fffffe5, 28}, {0x0fffffe6, 28}, {0x0fffffe7, 28},
+        {0x0fffffe8, 28}, {0x00ffffea, 24}, {0x3ffffffc, 30}, {0x0fffffe9, 28},
+        {0x0fffffea, 28}, {0x3ffffffd, 30}, {0x0fffffeb, 28}, {0x0fffffec, 28},
+        {0x0fffffed, 28}, {0x0fffffee, 28}, {0x0fffffef, 28}, {0x0ffffff0, 28},
+        {0x0ffffff1, 28}, {0x0ffffff2, 28}, {0x3ffffffe, 30}, {0x0ffffff3, 28},
+        {0x0ffffff4, 28}, {0x0ffffff5, 28}, {0x0ffffff6, 28}, {0x0ffffff7, 28},
+        {0x0ffffff8, 28}, {0x0ffffff9, 28}, {0x0ffffffa, 28}, {0x0ffffffb, 28},
+        {0x00000014,  6}, {0x000003f8, 10}, {0x000003f9, 10}, {0x00000ffa, 12},
+        {0x00001ff9, 13}, {0x00000015,  6}, {0x000000f8,  8}, {0x000007fa, 11},
+        {0x000003fa, 10}, {0x000003fb, 10}, {0x000000f9,  8}, {0x000007fb, 11},
+        {0x000000fa,  8}, {0x00000016,  6}, {0x00000017,  6}, {0x00000018,  6},
+        {0x00000000,  5}, {0x00000001,  5}, {0x00000002,  5}, {0x00000019,  6},
+        {0x0000001a,  6}, {0x0000001b,  6}, {0x0000001c,  6}, {0x0000001d,  6},
+        {0x0000001e,  6}, {0x0000001f,  6}, {0x0000005c,  7}, {0x000000fb,  8},
+        {0x00007ffc, 15}, {0x00000020,  6}, {0x00000ffb, 12}, {0x000003fc, 10},
+        {0x00001ffa, 13}, {0x00000021,  6}, {0x0000005d,  7}, {0x0000005e,  7},
+        {0x0000005f,  7}, {0x00000060,  7}, {0x00000061,  7}, {0x00000062,  7},
+        {0x00000063,  7}, {0x00000064,  7}, {0x00000065,  7}, {0x00000066,  7},
+        {0x00000067,  7}, {0x00000068,  7}, {0x00000069,  7}, {0x0000006a,  7},
+        {0x0000006b,  7}, {0x0000006c,  7}, {0x0000006d,  7}, {0x0000006e,  7},
+        {0x0000006f,  7}, {0x00000070,  7}, {0x00000071,  7}, {0x00000072,  7},
+        {0x000000fc,  8}, {0x00000073,  7}, {0x000000fd,  8}, {0x00001ffb, 13},
+        {0x0007fff0, 19}, {0x00001ffc, 13}, {0x00003ffc, 14}, {0x00000022,  6},
+        {0x00007ffd, 15}, {0x00000003,  5}, {0x00000023,  6}, {0x00000004,  5},
+        {0x00000024,  6}, {0x00000005,  5}, {0x00000025,  6}, {0x00000026,  6},
+        {0x00000027,  6}, {0x00000006,  5}, {0x00000074,  7}, {0x00000075,  7},
+        {0x00000028,  6}, {0x00000029,  6}, {0x0000002a,  6}, {0x00000007,  5},
+        {0x0000002b,  6}, {0x00000076,  7}, {0x0000002c,  6}, {0x00000008,  5},
+        {0x00000009,  5}, {0x0000002d,  6}, {0x00000077,  7}, {0x00000078,  7},
+        {0x00000079,  7}, {0x0000007a,  7}, {0x0000007b,  7}, {0x00007ffe, 15},
+        {0x000007fc, 11}, {0x00003ffd, 14}, {0x00001ffd, 13}, {0x0ffffffc, 28},
+        {0x000fffe6, 20}, {0x003fffd0, 22}, {0x0001fffd, 17}, {0x0ffffffd, 28},
+        {0x0ffffffe, 28}, {0x00fffff4, 24}, {0x00fffff5, 24}, {0x003ffffe, 22},
+        {0x00fffff6, 24}, {0x00fffff7, 24}, {0x00fffff8, 24}, {0x03fffff0, 26},
+        {0x03fffff1, 26}, {0x03fffff2, 26}, {0x007ffffe, 23}, {0x00fffff9, 24},
+        {0x01ffffea, 25}, {0x07fffff0, 27}, {0x07fffff1, 27}, {0x03fffff3, 26},
+        {0x03fffff4, 26}, {0x03fffff5, 26}, {0x07fffff2, 27}, {0x00fffffa, 24},
+        {0x03fffff6, 26}, {0x01ffffeb, 25}, {0x03fffff7, 26}, {0x07fffff3, 27},
+        {0x03fffff8, 26}, {0x01ffffec, 25}, {0x03fffff9, 26}, {0x01ffffed, 25},
+        {0x07fffff4, 27}, {0x01ffffee, 25}, {0x01ffffef, 25}, {0x01fffff0, 25},
+        {0x01fffff1, 25}, {0x03fffffa, 26}, {0x01fffff2, 25}, {0x07fffff5, 27},
+        {0x03fffffb, 26}, {0x01fffff3, 25}, {0x01fffff4, 25}, {0x01fffff5, 25},
+        {0x03fffffc, 26}, {0x01fffff6, 25}, {0x07fffff6, 27}, {0x01fffff7, 25},
+        {0x01fffff8, 25}, {0x07fffff7, 27}, {0x01fffff9, 25}, {0x01fffffa, 25},
+        {0x01fffffb, 25}, {0x07fffff8, 27}, {0x07fffff9, 27}, {0x07fffffa, 27},
+        {0x07fffffb, 27}, {0x0ffffff6, 28}, {0x03fffffd, 26}, {0x07fffffc, 27},
+        {0x03fffffe, 26}, {0x00fffffb, 24}, {0x01fffffc, 25}, {0x07fffffd, 27},
+        {0x01fffffd, 25}, {0x07fffffe, 27}, {0x01fffffe, 25}, {0x3ffffff0, 28},
+        {0x01ffffff, 25}, {0x00fffffc, 24}, {0x00fffffd, 24}, {0x07ffffff, 27},
+        {0x3ffffff1, 28}, {0x3ffffff2, 28}, {0x3ffffff3, 28}, {0x3ffffff4, 28},
+        {0x07ffffff, 27}, {0x3ffffff5, 28}, {0x3ffffff6, 28}, {0x3ffffff7, 28},
+        {0x3ffffff8, 28}, {0x3ffffff9, 28}, {0x3ffffffa, 28}, {0x3ffffffb, 28},
+        {0x3ffffffc, 28}, {0x3ffffffd, 28}, {0x3ffffffe, 28}, {0x3ffffffff, 28},
+        {0x00000000,  4}, {0x00000001,  4}, {0x00000002,  4}, {0x00000003,  4},
+        {0x00000004,  4}, {0x00000005,  4}, {0x00000006,  4}, {0x00000007,  4},
+        {0x00000008,  4}, {0x00000009,  4}, {0x0000000a,  4}, {0x0000000b,  4},
+        {0x0000000c,  4}, {0x0000000d,  4}, {0x0000000e,  4}, {0x0000000f,  4},
+        {0x00000010,  4}, {0x00000011,  4}, {0x00000012,  4}, {0x00000013,  4},
+        {0x00000014,  4}, {0x00000015,  4}, {0x00000016,  4}, {0x00000017,  4},
+        {0x00000018,  4}, {0x00000019,  4}, {0x0000001a,  4}, {0x0000001b,  4},
+        {0x0000001c,  4}, {0x0000001d,  4}, {0x0000001e,  4}, {0x0000001f,  4},
+        {0x00000020,  4}, {0x00000021,  4}, {0x00000022,  4}, {0x00000023,  4},
+        {0x00000024,  4}, {0x00000025,  4}, {0x00000026,  4}, {0x00000027,  4},
+        {0x3fffffff, 30}
+    };
+
+    h2_huffman_root = h2_huffman_alloc_node();
+    for (int sym = 0; sym <= 256; ++sym) {
+        uint32_t code = table[sym].code;
+        uint8_t bits = table[sym].bits;
+        h2_huffman_node *node = h2_huffman_root;
+        for (int i = bits - 1; i >= 0; --i) {
+            int bit = (int)((code >> i) & 1);
+            if (!node->child[bit]) node->child[bit] = h2_huffman_alloc_node();
+            node = node->child[bit];
+        }
+        node->symbol = sym;
+        node->is_terminal = true;
+    }
+}
+
+static char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_len) {
+    h2_huffman_init();
+    size_t cap = src_len * 2 + 1;
+    if (cap < 16) cap = 16;
+    char *out = (char *)malloc(cap);
+    if (!out) return NULL;
+    size_t out_pos = 0;
+
+    h2_huffman_node *node = h2_huffman_root;
+    for (size_t i = 0; i < src_len; ++i) {
+        unsigned char byte = src[i];
+        for (int b = 7; b >= 0; --b) {
+            int bit = (byte >> b) & 1;
+            node = node->child[bit];
+            if (!node) { free(out); return NULL; }
+            if (node->is_terminal) {
+                if (node->symbol == 256) {
+                    /* EOS reached before end of input - error per RFC 7541 */
+                    free(out);
+                    return NULL;
+                }
+                if (out_pos + 1 >= cap) {
+                    cap *= 2;
+                    char *tmp = (char *)realloc(out, cap);
+                    if (!tmp) { free(out); return NULL; }
+                    out = tmp;
+                }
+                out[out_pos++] = (char)node->symbol;
+                node = h2_huffman_root;
+            }
+        }
+    }
+
+    /* If we ended mid-tree, the remaining bits must be a prefix of EOS (all 1s).
+     * Check that the current node is on the path to EOS. */
+    if (node != h2_huffman_root) {
+        /* Walk the remaining bits as 1s to see if we reach EOS */
+        h2_huffman_node *check = node;
+        while (check && !check->is_terminal) {
+            check = check->child[1];
+        }
+        if (!check || check->symbol != 256) {
+            free(out);
+            return NULL;
+        }
+    }
+
+    out[out_pos] = '\0';
+    if (out_len) *out_len = out_pos;
+    return out;
+}
+
 static char *h2_decode_string(const unsigned char *buf, size_t len, size_t *pos) {
     if (*pos >= len) return NULL;
     bool huffman = (buf[*pos] & 0x80) != 0;
     uint32_t str_len = 0;
     if (h2_decode_integer(buf, len, pos, 7, &str_len) != 0) return NULL;
-    if (huffman || *pos + str_len > len) return NULL;
+    if (*pos + str_len > len) return NULL;
+
+    if (huffman) {
+        size_t decoded_len = 0;
+        char *out = h2_huffman_decode(buf + *pos, str_len, &decoded_len);
+        *pos += str_len;
+        return out;
+    }
 
     char *out = (char *)malloc((size_t)str_len + 1);
     if (!out) return NULL;
@@ -206,7 +400,7 @@ static void h2_apply_header(cwist_http_request *req, const char *name, const cha
     } else if (strcmp(name, ":path") == 0) {
         cwist_sstring_assign(req->path, (char *)value);
     } else if (strcmp(name, ":authority") == 0 || strcmp(name, "host") == 0) {
-        cwist_http_header_add(&req->headers, "Host", value);
+        cwist_http_header_add(&req->headers, "host", value);
     } else if (strcmp(name, ":scheme") != 0 && name[0] != ':') {
         cwist_http_header_add(&req->headers, name, value);
     }
@@ -258,29 +452,216 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
     }
 }
 
+/* --- HPACK Response Encoder --- */
+
+static size_t h2_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t value, uint8_t prefix_bits) {
+    uint8_t mask = (uint8_t)((1u << prefix_bits) - 1u);
+    unsigned char first = dst[0] & ~mask;
+    if (value < mask) {
+        dst[0] = first | (uint8_t)value;
+        return 1;
+    }
+    dst[0] = first | mask;
+    value -= mask;
+    size_t i = 1;
+    while (value >= 128) {
+        if (i >= dst_cap) return 0;
+        dst[i++] = (unsigned char)((value & 0x7F) | 0x80);
+        value >>= 7;
+    }
+    if (i >= dst_cap) return 0;
+    dst[i++] = (unsigned char)value;
+    return i;
+}
+
+static size_t h2_encode_string(unsigned char *dst, size_t dst_cap, const char *str) {
+    size_t len = strlen(str);
+    dst[0] = 0x00; /* literal, no huffman */
+    size_t n = h2_encode_integer(dst, dst_cap, (uint32_t)len, 7);
+    if (n == 0 || n + len > dst_cap) return 0;
+    memcpy(dst + n, str, len);
+    return n + len;
+}
+
+static int h2_static_table_find_name(const char *name) {
+    size_t count = sizeof(cwist_http2_static_table) / sizeof(cwist_http2_static_table[0]);
+    for (size_t i = 1; i < count; ++i) {
+        if (cwist_http2_static_table[i].name && strcasecmp(cwist_http2_static_table[i].name, name) == 0)
+            return (int)i;
+    }
+    return 0;
+}
+
+static size_t h2_encode_response_headers(cwist_http_response *res,
+                                          unsigned char *dst, size_t dst_cap) {
+    size_t pos = 0;
+
+    /* :status */
+    switch (res->status_code) {
+        case 200: if (pos >= dst_cap) return 0; dst[pos++] = 0x88; break;
+        case 204: if (pos >= dst_cap) return 0; dst[pos++] = 0x89; break;
+        case 206: if (pos >= dst_cap) return 0; dst[pos++] = 0x8a; break;
+        case 304: if (pos >= dst_cap) return 0; dst[pos++] = 0x8b; break;
+        case 400: if (pos >= dst_cap) return 0; dst[pos++] = 0x8c; break;
+        case 404: if (pos >= dst_cap) return 0; dst[pos++] = 0x8d; break;
+        case 500: if (pos >= dst_cap) return 0; dst[pos++] = 0x8e; break;
+        default: {
+            char status_str[16];
+            int status_len = snprintf(status_str, sizeof(status_str), "%d", res->status_code);
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x00; /* literal without indexing, literal name */
+            size_t n = h2_encode_integer(dst + pos, dst_cap - pos, 0, 4);
+            if (n == 0) return 0;
+            pos += n;
+            n = h2_encode_string(dst + pos, dst_cap - pos, ":status");
+            if (n == 0) return 0;
+            pos += n;
+            n = h2_encode_string(dst + pos, dst_cap - pos, status_str);
+            if (n == 0) return 0;
+            pos += n;
+            break;
+        }
+    }
+
+    /* Auto content-length */
+    size_t body_len = 0;
+    if (res->use_file_stream) body_len = res->file_stream_len;
+    else if (res->is_ptr_body) body_len = res->ptr_body_len;
+    else if (res->body) body_len = res->body->size;
+
+    if (!headers_have_content_length(res->headers)) {
+        char cl_str[32];
+        int cl_len = snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
+        int name_idx = h2_static_table_find_name("content-length");
+        if (name_idx > 0) {
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x00; /* literal without indexing, indexed name */
+            size_t n = h2_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_idx, 4);
+            if (n == 0) return 0;
+            pos += n;
+        } else {
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x00;
+            size_t n = h2_encode_integer(dst + pos, dst_cap - pos, 0, 4);
+            if (n == 0) return 0;
+            pos += n;
+            n = h2_encode_string(dst + pos, dst_cap - pos, "content-length");
+            if (n == 0) return 0;
+            pos += n;
+        }
+        size_t n = h2_encode_string(dst + pos, dst_cap - pos, cl_str);
+        if (n == 0) return 0;
+        pos += n;
+    }
+
+    /* User headers */
+    cwist_http_header_node *curr = res->headers;
+    while (curr) {
+        if (!curr->key || !curr->key->data || !curr->value || !curr->value->data) {
+            curr = curr->next;
+            continue;
+        }
+        /* Skip connection-specific headers (HTTP/2 forbids these in responses) */
+        if (strcasecmp(curr->key->data, "connection") == 0 ||
+            strcasecmp(curr->key->data, "keep-alive") == 0 ||
+            strcasecmp(curr->key->data, "transfer-encoding") == 0 ||
+            strcasecmp(curr->key->data, "upgrade") == 0) {
+            curr = curr->next;
+            continue;
+        }
+
+        char lower_name[256];
+        size_t name_len = strlen(curr->key->data);
+        if (name_len >= sizeof(lower_name)) name_len = sizeof(lower_name) - 1;
+        for (size_t i = 0; i < name_len; ++i) {
+            lower_name[i] = (char)tolower((unsigned char)curr->key->data[i]);
+        }
+        lower_name[name_len] = '\0';
+
+        int name_idx = h2_static_table_find_name(lower_name);
+        if (name_idx > 0) {
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x00; /* literal without indexing, indexed name */
+            size_t n = h2_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_idx, 4);
+            if (n == 0) return 0;
+            pos += n;
+        } else {
+            if (pos + 1 > dst_cap) return 0;
+            dst[pos] = 0x00;
+            size_t n = h2_encode_integer(dst + pos, dst_cap - pos, 0, 4);
+            if (n == 0) return 0;
+            pos += n;
+            n = h2_encode_string(dst + pos, dst_cap - pos, lower_name);
+            if (n == 0) return 0;
+            pos += n;
+        }
+        size_t n = h2_encode_string(dst + pos, dst_cap - pos, curr->value->data);
+        if (n == 0) return 0;
+        pos += n;
+
+        curr = curr->next;
+    }
+
+    return pos;
+}
+
 static int h2_send_response(cwist_https_connection *conn, uint32_t stream_id, cwist_http_response *res) {
-    unsigned char status_200[] = { 0x88 };
-    size_t body_len = res->body ? res->body->size : 0;
-    const char *body_data = res->body ? res->body->data : "";
+    unsigned char header_block[8192];
+    size_t block_len = h2_encode_response_headers(res, header_block, sizeof(header_block));
+    if (block_len == 0) return -1;
+
     uint8_t header_flags = CWIST_HTTP2_FLAG_END_HEADERS;
+
+    size_t body_len = 0;
+    const unsigned char *body_data = NULL;
+    if (res->use_file_stream) {
+        body_len = res->file_stream_len;
+    } else if (res->is_ptr_body) {
+        body_len = res->ptr_body_len;
+        body_data = (const unsigned char *)res->ptr_body;
+    } else if (res->body) {
+        body_len = res->body->size;
+        body_data = (const unsigned char *)res->body->data;
+    }
+
     if (body_len == 0) header_flags |= CWIST_HTTP2_FLAG_END_STREAM;
 
     if (h2_write_frame(conn, CWIST_HTTP2_FRAME_HEADERS, header_flags, stream_id,
-                       status_200, sizeof(status_200)) != 0) {
+                       header_block, (uint32_t)block_len) != 0) {
         return -1;
     }
 
-    size_t sent = 0;
-    while (sent < body_len) {
-        size_t remaining = body_len - sent;
-        uint32_t chunk = (uint32_t)(remaining > CWIST_HTTP2_MAX_FRAME_SIZE ?
-                                   CWIST_HTTP2_MAX_FRAME_SIZE : remaining);
-        uint8_t flags = (sent + chunk == body_len) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
-        if (h2_write_frame(conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
-                           (const unsigned char *)body_data + sent, chunk) != 0) {
-            return -1;
+    if (res->use_file_stream && res->file_stream_fd >= 0) {
+        off_t offset = res->file_stream_offset;
+        size_t remaining = res->file_stream_len;
+        while (remaining > 0) {
+            uint32_t chunk = (uint32_t)(remaining > CWIST_HTTP2_MAX_FRAME_SIZE ?
+                                       CWIST_HTTP2_MAX_FRAME_SIZE : remaining);
+            unsigned char *chunk_buf = (unsigned char *)malloc(chunk);
+            if (!chunk_buf) return -1;
+            ssize_t r = pread(res->file_stream_fd, chunk_buf, chunk, offset);
+            if (r <= 0) { free(chunk_buf); return -1; }
+            uint8_t flags = (remaining == (size_t)r) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
+            if (h2_write_frame(conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id, chunk_buf, (uint32_t)r) != 0) {
+                free(chunk_buf); return -1;
+            }
+            free(chunk_buf);
+            offset += r;
+            remaining -= (size_t)r;
         }
-        sent += chunk;
+    } else {
+        size_t sent = 0;
+        while (sent < body_len) {
+            size_t remaining = body_len - sent;
+            uint32_t chunk = (uint32_t)(remaining > CWIST_HTTP2_MAX_FRAME_SIZE ?
+                                       CWIST_HTTP2_MAX_FRAME_SIZE : remaining);
+            uint8_t flags = (sent + chunk == body_len) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
+            if (h2_write_frame(conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
+                               body_data + sent, chunk) != 0) {
+                return -1;
+            }
+            sent += chunk;
+        }
     }
     return 0;
 }
