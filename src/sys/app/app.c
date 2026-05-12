@@ -14,6 +14,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+#include <sigpipe.h>
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -1672,6 +1673,8 @@ static void *h3_server_thread_func(void *arg) {
  * @return 0 on success, or -1 when initialization or bind fails.
  */
 int cwist_app_listen(cwist_app *app, int port) {
+    // Ignore SIGPIPE
+    signal(SIGPIPE, SIG_IGN);
     if (!app) return -1;
     app->port = port;
     
