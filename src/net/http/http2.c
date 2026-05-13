@@ -15,6 +15,8 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
@@ -993,6 +995,21 @@ cwist_error_t cwist_http2_serve_connection(
             cwist_http_response *res = cwist_http_response_create();
             if (res) {
                 handler(user_ctx, req, res);
+                if (conn->http3_enabled) {
+                    struct sockaddr_storage ss;
+                    socklen_t ss_len = sizeof(ss);
+                    int port = 443;
+                    if (getsockname(conn->fd, (struct sockaddr *)&ss, &ss_len) == 0) {
+                        if (ss.ss_family == AF_INET) {
+                            port = ntohs(((struct sockaddr_in *)&ss)->sin_port);
+                        } else if (ss.ss_family == AF_INET6) {
+                            port = ntohs(((struct sockaddr_in6 *)&ss)->sin6_port);
+                        }
+                    }
+                    char alt_svc[64];
+                    snprintf(alt_svc, sizeof(alt_svc), "h3=\":%d\"; ma=86400", port);
+                    cwist_http_header_add(&res->headers, "Alt-Svc", alt_svc);
+                }
                 if (h2_send_response(conn, stream_id, res) != 0) connected = false;
                 cwist_http_response_destroy(res);
             }

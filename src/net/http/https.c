@@ -95,16 +95,12 @@ static int cwist_https_alpn_select_cb(SSL *ssl,
                                       void *arg) {
     (void)ssl;
     const cwist_https_context *hctx = (const cwist_https_context *)arg;
-    bool enable_http3 = hctx && hctx->http3_enabled;
-    bool enable_http2 = hctx && (hctx->http2_enabled || enable_http3);
+    bool enable_http2 = hctx && hctx->http2_enabled;
 
     const unsigned char *supported;
     unsigned int supported_len;
 
-    if (enable_http3) {
-        supported = CWIST_ALPN_H3_H2_HTTP11;
-        supported_len = CWIST_ALPN_H3_H2_HTTP11_LEN;
-    } else if (enable_http2) {
+    if (enable_http2) {
         supported = CWIST_ALPN_H2_HTTP11;
         supported_len = CWIST_ALPN_H2_HTTP11_LEN;
     } else {
@@ -275,9 +271,8 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
     if (alpn && alpn_len == 2 && memcmp(alpn, "h2", 2) == 0) {
         (*conn)->negotiated_http2 = true;
         (*conn)->negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2;
-    } else if (alpn && alpn_len == 2 && memcmp(alpn, "h3", 2) == 0) {
-        (*conn)->negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP3;
     }
+    /* h3 is QUIC-only and never negotiated over TCP TLS */
 
     err.error.err_i16 = 0;
     return err;

@@ -860,6 +860,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 
     struct sockaddr_storage local_addr;
     socklen_t local_addr_len = sizeof(local_addr);
+    memset(&local_addr, 0, sizeof(local_addr));
     if (getsockname(udp_fd, (struct sockaddr *)&local_addr, &local_addr_len) != 0) {
         local_addr_len = 0;
     }
@@ -981,7 +982,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 #endif
                     }
                     lsquic_engine_packet_in(engine, pkt_buf, (size_t)nr,
-                                            (struct sockaddr *)&local_addr,
+                                            local_addr_len ? (struct sockaddr *)&local_addr : NULL,
                                             (struct sockaddr *)&peer_addr,
                                             &ecn, sizeof(ecn));
                 } else if (nr < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
