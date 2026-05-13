@@ -843,7 +843,8 @@ static cwist_error_t cwist_app_refresh_https_context(cwist_app *app) {
     }
 
     cwist_https_options options = {
-        .enable_http2 = app->use_https2
+        .enable_http2 = app->use_https2,
+        .enable_http3 = app->use_https3
     };
     return cwist_https_init_context_with_options(&app->ssl_ctx,
                                                  app->cert_path,
@@ -1161,7 +1162,8 @@ cwist_error_t cwist_app_use_https3(cwist_app *app, bool enabled) {
         return err;
     }
 
-    return cwist_app_refresh_http3_context(app);
+    cwist_app_refresh_http3_context(app);
+    return cwist_app_refresh_https_context(app);
 }
 
 cwist_error_t cwist_app_use_http2(cwist_app *app, bool enabled) {
