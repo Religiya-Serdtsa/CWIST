@@ -16,3 +16,6 @@
 [submodule "lib/cnats"]
 	path = lib/cnats
 	url = https://github.com/nats-io/nats.c
+[submodule "lib/lsquic"]
+	path = lib/lsquic
+	url = https://github.com/litespeedtech/lsquic.git
