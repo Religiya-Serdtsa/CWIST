@@ -1,10 +1,10 @@
 /**
  * @file http3.c
- * @brief Implementation of HTTP/3 protocol handler for CWIST.
+ * @brief lsquic/BoringSSL-based HTTP/3 server for CWIST.
  *
- * This file implements an HTTP/3 server using OpenSSL's QUIC support.
- * It manages the QUIC connection, accepts multiplexed incoming QUIC streams,
- * parses basic HTTP/3 frames, and dispatches requests.
+ * Implements a full HTTP/3 server using LiteSpeed's lsquic library
+ * linked statically against BoringSSL.  Handles QUIC transport,
+ * QPACK, and HTTP/3 framing per RFC 9114.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -18,951 +18,798 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
+#include <sys/stat.h>
 #include <poll.h>
 #include <pthread.h>
+#ifdef __linux__
+#include <sys/epoll.h>
+#endif
+#include <ctype.h>
+#include <strings.h>
+
+#include <openssl/ssl.h>
 #include <openssl/x509.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
-#include <ctype.h>
+#include <openssl/bn.h>
 
-#if CWIST_HAVE_OPENSSL_QUIC
+#include <lsquic.h>
+#include <lsxpack_header.h>
 
-static int cwist_http3_alpn_select_cb(SSL *ssl,
-                                      const unsigned char **out,
-                                      unsigned char *outlen,
-                                      const unsigned char *in,
-                                      unsigned int inlen,
-                                      void *arg) {
+/* ------------------------------------------------------------------ */
+/* Globals                                                            */
+/* ------------------------------------------------------------------ */
+
+static pthread_mutex_t g_h3_global_mtx = PTHREAD_MUTEX_INITIALIZER;
+static int             g_h3_global_ref = 0;
+
+static void h3_global_init(void) {
+    pthread_mutex_lock(&g_h3_global_mtx);
+    if (g_h3_global_ref == 0) {
+        lsquic_global_init(LSQUIC_GLOBAL_SERVER);
+    }
+    g_h3_global_ref++;
+    pthread_mutex_unlock(&g_h3_global_mtx);
+}
+
+static void h3_global_cleanup(void) {
+    pthread_mutex_lock(&g_h3_global_mtx);
+    if (g_h3_global_ref > 0) {
+        g_h3_global_ref--;
+        if (g_h3_global_ref == 0) {
+            lsquic_global_cleanup();
+        }
+    }
+    pthread_mutex_unlock(&g_h3_global_mtx);
+}
+
+/* ------------------------------------------------------------------ */
+/* Internal stream context                                            */
+/* ------------------------------------------------------------------ */
+
+typedef struct h3_stream_ctx {
+    lsquic_stream_t *stream;
+    cwist_http_request *req;
+    cwist_http_response *res;
+    char *body;
+    size_t body_len;
+    size_t body_cap;
+    int headers_done;
+    int response_ready;
+    int write_state; /* 0=headers, 1=body, 2=done */
+    size_t body_sent;
+    int is_webtransport;
+} h3_stream_ctx_t;
+
+/* ------------------------------------------------------------------ */
+/* Header-set interface for lsquic (QPACK decode)                     */
+/* ------------------------------------------------------------------ */
+
+#define H3_MAX_HEADERS 64
+#define H3_DECODE_BUF_SIZE 65536
+
+typedef struct cwist_h3_hset {
+    lsquic_stream_t *stream;
+    struct lsxpack_header headers[H3_MAX_HEADERS];
+    size_t count;
+    char decode_buf[H3_DECODE_BUF_SIZE];
+    size_t decode_off;
+} cwist_h3_hset_t;
+
+static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
+                                 int is_push_promise) {
+    (void)is_push_promise;
+    cwist_h3_hset_t *hset = calloc(1, sizeof(*hset));
+    if (!hset) return NULL;
+    hset->stream = stream;
+    return hset;
+}
+
+static struct lsxpack_header *
+cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
+    cwist_h3_hset_t *hset = hset_p;
+    if (xhdr) {
+        /* Previous header now has its final size known; advance offset. */
+        size_t name_len  = xhdr->buf + xhdr->name_offset  - (hset->decode_buf + hset->decode_off);
+        size_t value_len = xhdr->buf + xhdr->val_offset   - (hset->decode_buf + hset->decode_off);
+        /* The header structure itself was prepared at decode_off. After
+         * decoding finishes lsquic tells us the used space via xhdr.
+         * We bump decode_off by the total occupied bytes. */
+        size_t total = name_len + value_len + 2; /* +2 for separator/padding */
+        if (total > sizeof(hset->decode_buf) - hset->decode_off)
+            total = sizeof(hset->decode_buf) - hset->decode_off;
+        hset->decode_off += total;
+        if (hset->count < H3_MAX_HEADERS)
+            hset->count++;
+    }
+    if (hset->count >= H3_MAX_HEADERS)
+        return NULL;
+    if (req_space > sizeof(hset->decode_buf) - hset->decode_off)
+        return NULL;
+    lsxpack_header_prepare_decode(&hset->headers[hset->count],
+                                  hset->decode_buf, hset->decode_off,
+                                  sizeof(hset->decode_buf) - hset->decode_off);
+    return &hset->headers[hset->count];
+}
+
+static int cwist_h3_hsi_process_header(void *hset_p, struct lsxpack_header *xhdr) {
+    (void)hset_p;
+    (void)xhdr;
+    return 0; /* success */
+}
+
+static void cwist_h3_hsi_discard(void *hset_p) {
+    free(hset_p);
+}
+
+static const struct lsquic_hset_if cwist_h3_hset_if = {
+    .hsi_create_header_set = cwist_h3_hsi_create,
+    .hsi_prepare_decode    = cwist_h3_hsi_prepare,
+    .hsi_process_header    = cwist_h3_hsi_process_header,
+    .hsi_discard_header_set= cwist_h3_hsi_discard,
+};
+
+/* ------------------------------------------------------------------ */
+/* Packet-out callback                                                */
+/* ------------------------------------------------------------------ */
+
+static int cwist_h3_packets_out(void *ctx,
+                                  const struct lsquic_out_spec *specs,
+                                  unsigned n_specs) {
+    int udp_fd = *(int *)ctx;
+    unsigned i;
+    for (i = 0; i < n_specs; ++i) {
+        const struct lsquic_out_spec *spec = &specs[i];
+        struct msghdr msg = {0};
+        msg.msg_name = (void *)spec->dest_sa;
+        msg.msg_namelen = (spec->dest_sa && spec->dest_sa->sa_family == AF_INET)
+                          ? sizeof(struct sockaddr_in)
+                          : sizeof(struct sockaddr_in6);
+        msg.msg_iov = (struct iovec *)spec->iov;
+        msg.msg_iovlen = spec->iovlen;
+        ssize_t nw = sendmsg(udp_fd, &msg, MSG_DONTWAIT);
+        if (nw < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            /* Non-fatal errors: log and continue if possible */
+            if (errno == ECONNREFUSED || errno == ENETUNREACH ||
+                errno == EHOSTUNREACH || errno == EMSGSIZE)
+                continue;
+            return -1;
+        }
+    }
+    return (int)i;
+}
+
+/* ------------------------------------------------------------------ */
+/* ALPN selection callback (BoringSSL)                                */
+/* ------------------------------------------------------------------ */
+
+static int cwist_h3_alpn_select_cb(SSL *ssl, const uint8_t **out, uint8_t *outlen,
+                                    const uint8_t *in, unsigned inlen, void *arg) {
     (void)ssl;
     (void)arg;
-    static const unsigned char h3_alpn[] = "\x02h3";
-    if (SSL_select_next_proto((unsigned char **)out,
-                              outlen,
-                              h3_alpn, sizeof(h3_alpn) - 1,
-                              in, inlen) == OPENSSL_NPN_NEGOTIATED) {
-        return SSL_TLSEXT_ERR_OK;
+    static const char *const protos[] = { "h3", "h3-29" };
+    for (size_t p = 0; p < sizeof(protos) / sizeof(protos[0]); ++p) {
+        const char *proto = protos[p];
+        size_t plen = strlen(proto);
+        const uint8_t *ptr = in;
+        const uint8_t *end = in + inlen;
+        while (ptr < end) {
+            uint8_t len = *ptr++;
+            if (ptr + len > end) break;
+            if (len == plen && memcmp(ptr, proto, plen) == 0) {
+                *out = ptr;
+                *outlen = (uint8_t)plen;
+                return SSL_TLSEXT_ERR_OK;
+            }
+            ptr += len;
+        }
     }
     return SSL_TLSEXT_ERR_NOACK;
 }
 
-static const struct {
-    const char *name;
-    const char *value;
-} qpack_static_table[] = {
-    {":authority", ""}, {":path", "/"}, {"age", "0"},
-    {"content-disposition", ""}, {"content-length", "0"}, {"cookie", ""},
-    {"date", ""}, {"etag", ""}, {"if-modified-since", ""},
-    {"if-none-match", ""}, {"last-modified", ""}, {"link", ""},
-    {"location", ""}, {"referer", ""}, {"set-cookie", ""},
-    {":method", "CONNECT"}, {":method", "DELETE"}, {":method", "GET"},
-    {":method", "HEAD"}, {":method", "OPTIONS"}, {":method", "POST"},
-    {":method", "PUT"}, {":scheme", "http"}, {":scheme", "https"},
-    {":status", "103"}, {":status", "200"}, {":status", "304"},
-    {":status", "404"}, {":status", "503"}, {"accept", "*/*"},
-    {"accept", "application/dns-message"}, {"accept-encoding", "gzip, deflate, br"},
-    {"accept-ranges", "bytes"}, {"access-control-allow-headers", "cache-control"},
-    {"access-control-allow-headers", "content-type"}, {"access-control-allow-origin", "*"},
-    {"cache-control", "max-age=0"}, {"cache-control", "max-age=2592000"},
-    {"cache-control", "max-age=604800"}, {"cache-control", "no-cache"},
-    {"cache-control", "no-store"}, {"cache-control", "public, max-age=31536000"},
-    {"content-encoding", "br"}, {"content-encoding", "gzip"},
-    {"content-type", "application/dns-message"}, {"content-type", "application/javascript"},
-    {"content-type", "application/json"}, {"content-type", "application/x-www-form-urlencoded"},
-    {"content-type", "image/gif"}, {"content-type", "image/jpeg"},
-    {"content-type", "image/png"}, {"content-type", "text/css"},
-    {"content-type", "text/html; charset=utf-8"}, {"content-type", "text/plain"},
-    {"content-type", "text/plain;charset=utf-8"}, {"range", "bytes=0-"},
-    {"strict-transport-security", "max-age=31536000"},
-    {"strict-transport-security", "max-age=31536000; includesubdomains"},
-    {"strict-transport-security", "max-age=31536000; includesubdomains; preload"},
-    {"vary", "accept-encoding"}, {"vary", "origin"},
-    {"x-content-type-options", "nosniff"}, {"x-xss-protection", "1; mode=block"},
-    {":status", "100"}, {":status", "204"}, {":status", "206"},
-    {":status", "302"}, {":status", "400"}, {":status", "403"},
-    {":status", "421"}, {":status", "425"}, {":status", "500"},
-    {"accept-language", ""}, {"access-control-allow-credentials", "FALSE"},
-    {"access-control-allow-credentials", "TRUE"}, {"access-control-allow-headers", "*"},
-    {"access-control-allow-methods", "get"}, {"access-control-allow-methods", "get, post, options"},
-    {"access-control-allow-methods", "options"}, {"access-control-expose-headers", "content-length"},
-    {"access-control-request-headers", "content-type"}, {"access-control-request-method", "get"},
-    {"access-control-request-method", "post"}, {"alt-svc", "clear"},
-    {"authorization", ""}, {"content-security-policy", "script-src 'none'; object-src 'none'; base-uri 'none'"},
-    {"early-data", "1"}, {"expect-ct", ""}, {"forwarded", ""},
-    {"if-range", ""}, {"origin", ""}, {"purpose", "prefetch"},
-    {"server", ""}, {"timing-allow-origin", "*"}, {"upgrade-insecure-requests", "1"},
-    {"user-agent", ""}, {"x-forwarded-for", ""}, {"x-frame-options", "deny"},
-    {"x-frame-options", "sameorigin"}
+/* ------------------------------------------------------------------ */
+/* Stream callbacks                                                   */
+/* ------------------------------------------------------------------ */
+
+static lsquic_conn_ctx_t *cwist_h3_on_new_conn(void *stream_if_ctx,
+                                                lsquic_conn_t *conn) {
+    cwist_http3_context *h3_ctx = stream_if_ctx;
+    lsquic_conn_set_ctx(conn, (lsquic_conn_ctx_t *)h3_ctx);
+    return (lsquic_conn_ctx_t *)h3_ctx;
+}
+
+static void cwist_h3_on_conn_closed(lsquic_conn_t *conn) {
+    (void)conn;
+}
+
+static lsquic_stream_ctx_t *cwist_h3_on_new_stream(void *stream_if_ctx,
+                                                    lsquic_stream_t *stream) {
+    cwist_http3_context *h3_ctx = (cwist_http3_context *)stream_if_ctx;
+    h3_stream_ctx_t *st = calloc(1, sizeof(*st));
+    if (!st) return NULL;
+    st->stream = stream;
+    st->req = cwist_http_request_create();
+    if (!st->req) {
+        free(st);
+        return NULL;
+    }
+    cwist_sstring_assign(st->req->version, "HTTP/3");
+    st->req->private_data = stream;
+    st->is_webtransport = 0;
+
+    /* Handle server-pushed streams */
+    if (h3_ctx && h3_ctx->push_enabled && lsquic_stream_is_pushed(stream)) {
+        /* Pushed streams have their request headers already included
+         * in the PUSH_PROMISE.  We process them the same way. */
+        lsquic_stream_wantread(stream, 1);
+        return (lsquic_stream_ctx_t *)st;
+    }
+
+    /* Default priority (middle of 1-256 range) */
+    lsquic_stream_set_priority(stream, 128);
+    lsquic_stream_wantread(stream, 1);
+    return (lsquic_stream_ctx_t *)st;
+}
+
+static void h3_parse_path(cwist_http_request *req, const char *path) {
+    const char *q = strchr(path, '?');
+    if (q) {
+        cwist_sstring_assign_len(req->path, (char *)path, (size_t)(q - path));
+        cwist_sstring_assign(req->query, (char *)(q + 1));
+        if (req->query_params) {
+            cwist_query_map_clear(req->query_params);
+        } else {
+            req->query_params = cwist_query_map_create();
+        }
+        if (req->query_params && req->query->size > 0) {
+            cwist_query_map_parse(req->query_params, req->query->data);
+        }
+    } else {
+        cwist_sstring_assign(req->path, (char *)path);
+    }
+}
+
+static void h3_apply_header(cwist_http_request *req,
+                            const char *name, const char *value) {
+    if (strcmp(name, ":method") == 0) {
+        req->method = cwist_http_string_to_method(value);
+    } else if (strcmp(name, ":path") == 0) {
+        h3_parse_path(req, value);
+    } else if (strcmp(name, ":authority") == 0 || strcmp(name, "host") == 0) {
+        cwist_http_header_add(&req->headers, "host", value);
+    } else if (strcmp(name, ":scheme") == 0) {
+        /* RFC 9114: silently ignore pseudo-headers we don't need to expose */
+    } else if (strcmp(name, "content-length") == 0) {
+        char *endptr = NULL;
+        unsigned long long cl = strtoull(value, &endptr, 10);
+        if (endptr && *endptr == '\0') {
+            req->content_length = (size_t)cl;
+        }
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "content-type") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "cookie") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "authorization") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "accept") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "user-agent") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "accept-encoding") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "accept-language") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "referer") == 0 || strcmp(name, "referrer") == 0) {
+        cwist_http_header_add(&req->headers, "referer", value);
+    } else if (strcmp(name, "origin") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "x-requested-with") == 0) {
+        cwist_http_header_add(&req->headers, name, value);
+    } else if (strcmp(name, "priority") == 0) {
+        /* RFC 9218 Extensible Priorities: u=urgency, i=incremental */
+        cwist_http_header_add(&req->headers, name, value);
+        /* Parse urgency value (u=N) where N is 0-7 */
+        const char *u = strstr(value, "u=");
+        if (u) {
+            int urgency = atoi(u + 2);
+            if (urgency >= 0 && urgency <= 7) {
+                /* Map HTTP urgency (0=high, 7=low) to lsquic priority (1=high, 256=low) */
+                unsigned pri = 1 + (unsigned)(urgency * 36);
+                if (pri > 256) pri = 256;
+                if (req->private_data) {
+                    lsquic_stream_set_priority((lsquic_stream_t *)req->private_data, pri);
+                }
+            }
+        }
+    } else if (name[0] != ':') {
+        /* Any other non-pseudo header */
+        cwist_http_header_add(&req->headers, name, value);
+    }
+}
+
+static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
+    h3_stream_ctx_t *st = (h3_stream_ctx_t *)st_h;
+    if (!st) return;
+
+    unsigned char buf[8192];
+    ssize_t nread;
+
+    if (!st->headers_done) {
+        void *hset = lsquic_stream_get_hset(stream);
+        if (hset) {
+            cwist_h3_hset_t *hs = hset;
+            size_t i;
+            for (i = 0; i < hs->count; ++i) {
+                const char *name  = lsxpack_header_get_name(&hs->headers[i]);
+                const char *value = lsxpack_header_get_value(&hs->headers[i]);
+                if (name && value) {
+                    h3_apply_header(st->req, name, value);
+                    if (strcmp(name, ":protocol") == 0 && strcmp(value, "webtransport") == 0) {
+                        st->is_webtransport = 1;
+                    }
+                }
+            }
+            st->headers_done = 1;
+        }
+    }
+
+    while ((nread = lsquic_stream_read(stream, buf, sizeof(buf))) > 0) {
+        size_t need = st->body_len + (size_t)nread;
+        if (need > CWIST_HTTP_MAX_BODY_SIZE) {
+            /* Body too large: abort stream */
+            lsquic_stream_close(stream);
+            return;
+        }
+        if (need > st->body_cap) {
+            size_t new_cap = st->body_cap ? st->body_cap * 2 : 4096;
+            while (new_cap < need) new_cap *= 2;
+            char *tmp = realloc(st->body, new_cap);
+            if (!tmp) {
+                lsquic_stream_close(stream);
+                return;
+            }
+            st->body = tmp;
+            st->body_cap = new_cap;
+        }
+        memcpy(st->body + st->body_len, buf, (size_t)nread);
+        st->body_len += (size_t)nread;
+    }
+
+    if (nread == 0) {
+        /* End of stream (FIN received) */
+        if (!st->headers_done) {
+            /* Malformed request: no headers before FIN */
+            st->res = cwist_http_response_create();
+            if (st->res) {
+                st->res->status_code = CWIST_HTTP_BAD_REQUEST;
+            }
+            st->response_ready = 1;
+            lsquic_stream_wantread(stream, 0);
+            lsquic_stream_wantwrite(stream, 1);
+            return;
+        }
+
+        if (st->body_len > 0 && st->req && st->req->body) {
+            cwist_sstring_assign_len(st->req->body, st->body, st->body_len);
+        }
+
+        st->res = cwist_http_response_create();
+        if (st->res && st->req) {
+            cwist_http3_context *h3_ctx = (cwist_http3_context *)
+                lsquic_conn_get_ctx(lsquic_stream_conn(stream));
+            if (st->is_webtransport && h3_ctx && h3_ctx->wt_handler) {
+                h3_ctx->wt_handler(st->req, st->res, stream);
+            } else if (h3_ctx && h3_ctx->handler) {
+                h3_ctx->handler(h3_ctx->user_ctx, st->req, st->res);
+            }
+        }
+        st->response_ready = 1;
+        lsquic_stream_wantread(stream, 0);
+        lsquic_stream_wantwrite(stream, 1);
+    } else if (nread < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        lsquic_stream_close(stream);
+    }
+}
+
+static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
+    h3_stream_ctx_t *st = (h3_stream_ctx_t *)st_h;
+    if (!st || !st->response_ready) return;
+
+    if (st->write_state == 0) {
+        struct lsxpack_header headers_arr[64];
+        char hbuf[8192];
+        size_t hbuf_off = 0;
+        size_t hdr_count = 0;
+
+        /* :status */
+        char status_str[16];
+        snprintf(status_str, sizeof(status_str), "%d", st->res->status_code);
+        size_t slen = strlen(status_str);
+        if (hdr_count < 64 && hbuf_off + 7 + 2 + slen <= sizeof(hbuf)) {
+            memcpy(hbuf + hbuf_off, ":status", 7);
+            memcpy(hbuf + hbuf_off + 9, status_str, slen);
+            lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                       0, 7, 9, slen);
+            hbuf_off += 9 + slen;
+            hdr_count++;
+        }
+
+        /* content-length */
+        size_t body_len = 0;
+        if (st->res->use_file_stream) body_len = st->res->file_stream_len;
+        else if (st->res->is_ptr_body) body_len = st->res->ptr_body_len;
+        else if (st->res->body) body_len = st->res->body->size;
+
+        if (body_len > 0 && hdr_count < 64) {
+            char cl_str[32];
+            snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
+            size_t cl_name_len = strlen("content-length");
+            size_t cl_val_len  = strlen(cl_str);
+            size_t total = cl_name_len + 2 + cl_val_len;
+            if (hbuf_off + total <= sizeof(hbuf)) {
+                memcpy(hbuf + hbuf_off, "content-length", cl_name_len);
+                memcpy(hbuf + hbuf_off + cl_name_len + 2, cl_str, cl_val_len);
+                lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                           0, cl_name_len, cl_name_len + 2, cl_val_len);
+                hbuf_off += total;
+                hdr_count++;
+            }
+        }
+
+        /* content-type (if present) */
+        if (st->res->headers) {
+            char *ct = cwist_http_header_get(st->res->headers, "content-type");
+            if (ct && hdr_count < 64) {
+                size_t klen = strlen("content-type");
+                size_t vlen = strlen(ct);
+                if (hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
+                    memcpy(hbuf + hbuf_off, "content-type", klen);
+                    memcpy(hbuf + hbuf_off + klen + 2, ct, vlen);
+                    lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                               0, klen, klen + 2, vlen);
+                    hbuf_off += klen + 2 + vlen;
+                    hdr_count++;
+                }
+            }
+        }
+
+        /* user headers (skip content-length/content-type already handled) */
+        cwist_http_header_node *node = st->res->headers;
+        while (node && hdr_count < 64) {
+            if (node->key && node->key->data && node->value && node->value->data) {
+                /* Skip pseudo-headers and duplicates we already sent */
+                if (node->key->data[0] == ':') {
+                    node = node->next;
+                    continue;
+                }
+                if (strncasecmp(node->key->data, "content-length", node->key->size) == 0 ||
+                    strncasecmp(node->key->data, "content-type",   node->key->size) == 0) {
+                    node = node->next;
+                    continue;
+                }
+                size_t klen = node->key->size;
+                size_t vlen = node->value->size;
+                if (hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
+                    memcpy(hbuf + hbuf_off, node->key->data, klen);
+                    memcpy(hbuf + hbuf_off + klen + 2, node->value->data, vlen);
+                    lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                               0, klen, klen + 2, vlen);
+                    hbuf_off += klen + 2 + vlen;
+                    hdr_count++;
+                }
+            }
+            node = node->next;
+        }
+
+        lsquic_http_headers_t headers = {
+            .count = (unsigned)hdr_count,
+            .headers = headers_arr,
+        };
+        if (lsquic_stream_send_headers(stream, &headers, body_len == 0) != 0) {
+            lsquic_stream_close(stream);
+            return;
+        }
+        st->write_state = 1;
+        if (body_len == 0) {
+            st->write_state = 2;
+            lsquic_stream_wantwrite(stream, 0);
+            return;
+        }
+    }
+
+    if (st->write_state == 1 && st->res) {
+        size_t body_len = 0;
+        const char *body_data = NULL;
+
+        if (st->res->use_file_stream) {
+            /* Read file chunk into temporary buffer and write */
+            if (st->res->file_stream_fd >= 0 && st->res->file_stream_len > 0) {
+                static __thread char file_buf[65536];
+                off_t offset = st->res->file_stream_offset + (off_t)st->body_sent;
+                size_t to_read = st->res->file_stream_len - st->body_sent;
+                if (to_read > sizeof(file_buf)) to_read = sizeof(file_buf);
+                ssize_t nr = pread(st->res->file_stream_fd, file_buf, to_read, offset);
+                if (nr > 0) {
+                    ssize_t nw = lsquic_stream_write(stream, file_buf, (size_t)nr);
+                    if (nw < 0) {
+                        lsquic_stream_close(stream);
+                        return;
+                    }
+                    st->body_sent += (size_t)nw;
+                } else if (nr == 0) {
+                    /* EOF: mark everything as sent */
+                    st->body_sent = st->res->file_stream_len;
+                } else if (nr < 0) {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        /* Retry next tick */
+                    } else {
+                        lsquic_stream_close(stream);
+                        return;
+                    }
+                }
+                body_len = st->res->file_stream_len;
+            }
+        } else if (st->res->is_ptr_body) {
+            body_len = st->res->ptr_body_len;
+            body_data = (const char *)st->res->ptr_body;
+        } else if (st->res->body) {
+            body_len = st->res->body->size;
+            body_data = st->res->body->data;
+        }
+
+        if (body_data && body_len > 0 && st->body_sent < body_len) {
+            ssize_t n = lsquic_stream_write(stream, body_data + st->body_sent,
+                                            body_len - st->body_sent);
+            if (n < 0) {
+                lsquic_stream_close(stream);
+                return;
+            }
+            st->body_sent += (size_t)n;
+        }
+
+        if (st->body_sent >= body_len) {
+            st->write_state = 2;
+            lsquic_stream_shutdown(stream, 1);
+            lsquic_stream_wantwrite(stream, 0);
+        }
+    }
+}
+
+static void cwist_h3_on_close(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
+    h3_stream_ctx_t *st = (h3_stream_ctx_t *)st_h;
+    if (st) {
+        cwist_http_request_destroy(st->req);
+        cwist_http_response_destroy(st->res);
+        free(st->body);
+        free(st);
+    }
+    (void)stream;
+}
+
+static struct {
+    lsquic_conn_t *conn;
+    char *data;
+    size_t len;
+} g_h3_dgram = {0};
+
+static ssize_t cwist_h3_on_dg_write(lsquic_conn_t *conn, void *buf, size_t len) {
+    if (g_h3_dgram.conn == conn && g_h3_dgram.data && g_h3_dgram.len > 0) {
+        size_t to_copy = g_h3_dgram.len < len ? g_h3_dgram.len : len;
+        memcpy(buf, g_h3_dgram.data, to_copy);
+        free(g_h3_dgram.data);
+        g_h3_dgram.data = NULL;
+        g_h3_dgram.len = 0;
+        g_h3_dgram.conn = NULL;
+        lsquic_conn_want_datagram_write(conn, 0);
+        return (ssize_t)to_copy;
+    }
+    return 0;
+}
+
+static void cwist_h3_on_datagram(lsquic_conn_t *conn, const void *buf, size_t len) {
+    cwist_http3_context *ctx = (cwist_http3_context *)lsquic_conn_get_ctx(conn);
+    if (ctx && ctx->datagram_cb) {
+        ctx->datagram_cb(buf, len, ctx->datagram_user_ctx);
+    }
+}
+
+static const struct lsquic_stream_if cwist_h3_stream_if = {
+    .on_new_conn    = cwist_h3_on_new_conn,
+    .on_conn_closed = cwist_h3_on_conn_closed,
+    .on_new_stream  = cwist_h3_on_new_stream,
+    .on_read        = cwist_h3_on_read,
+    .on_write       = cwist_h3_on_write,
+    .on_close       = cwist_h3_on_close,
+    .on_dg_write    = cwist_h3_on_dg_write,
+    .on_datagram    = cwist_h3_on_datagram,
 };
 
-#define QPACK_STATIC_TABLE_COUNT (sizeof(qpack_static_table)/sizeof(qpack_static_table[0]))
+/* ------------------------------------------------------------------ */
+/* Context management                                                 */
+/* ------------------------------------------------------------------ */
 
-static size_t qpack_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t value, uint8_t prefix_bits) {
-    uint8_t mask = (uint8_t)((1u << prefix_bits) - 1u);
-    unsigned char first = dst[0] & ~mask;
-    if (value < mask) {
-        dst[0] = first | (uint8_t)value;
-        return 1;
+static int cwist_h3_ssl_ctx_init(SSL_CTX *ssl_ctx, int early_data) {
+    SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_3_VERSION);
+    SSL_CTX_set_max_proto_version(ssl_ctx, TLS1_3_VERSION);
+    SSL_CTX_set_default_verify_paths(ssl_ctx);
+    SSL_CTX_set_alpn_select_cb(ssl_ctx, cwist_h3_alpn_select_cb, NULL);
+
+    if (early_data) {
+        SSL_CTX_set_early_data_enabled(ssl_ctx, 1);
     }
-    dst[0] = first | mask;
-    value -= mask;
-    size_t i = 1;
-    while (value >= 128) {
-        if (i >= dst_cap) return 0;
-        dst[i++] = (unsigned char)((value & 0x7F) | 0x80);
-        value >>= 7;
-    }
-    if (i >= dst_cap) return 0;
-    dst[i++] = (unsigned char)value;
-    return i;
+
+    /* Server-side QUIC transport parameters will be supplied by lsquic */
+    return 0;
 }
 
-static size_t qpack_encode_string(unsigned char *dst, size_t dst_cap, const char *str) {
-    size_t len = strlen(str);
-    dst[0] = 0x00; /* literal, no huffman */
-    size_t n = qpack_encode_integer(dst, dst_cap, (uint32_t)len, 7);
-    if (n == 0 || n + len > dst_cap) return 0;
-    memcpy(dst + n, str, len);
-    return n + len;
-}
-
-static int qpack_static_table_find_name(const char *name) {
-    for (size_t i = 0; i < QPACK_STATIC_TABLE_COUNT; ++i) {
-        if (qpack_static_table[i].name && strcasecmp(qpack_static_table[i].name, name) == 0)
-            return (int)i;
-    }
-    return -1;
-}
-
-static int qpack_static_status_index(int status_code) {
-    switch (status_code) {
-        case 100: return 63;
-        case 103: return 24;
-        case 200: return 25;
-        case 204: return 64;
-        case 206: return 65;
-        case 302: return 66;
-        case 304: return 26;
-        case 400: return 67;
-        case 403: return 68;
-        case 404: return 27;
-        case 421: return 69;
-        case 425: return 70;
-        case 500: return 71;
-        case 503: return 28;
-        default: return -1;
-    }
-}
-
-static size_t qpack_encode_response_headers(cwist_http_response *res,
-                                             unsigned char *dst, size_t dst_cap) {
-    size_t pos = 0;
-    /* Encoded Field Section Prefix: Required Insert Count = 0, Base = 0 */
-    if (pos + 2 > dst_cap) return 0;
-    dst[pos++] = 0x00;
-    dst[pos++] = 0x00;
-
-    /* :status */
-    int status_idx = qpack_static_status_index(res->status_code);
-    if (status_idx >= 0 && status_idx < 64) {
-        if (pos + 1 > dst_cap) return 0;
-        dst[pos++] = (unsigned char)(0xC0 | status_idx); /* Indexed Field Line, static */
-    } else {
-        char status_str[16];
-        int status_len = snprintf(status_str, sizeof(status_str), "%d", res->status_code);
-        (void)status_len;
-        if (pos + 1 > dst_cap) return 0;
-        dst[pos] = 0x20; /* Literal Field Line with Literal Name, H=0 */
-        size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, 7, 5); /* ":status" len */
-        if (n == 0) return 0;
-        pos += n;
-        if (pos + 7 > dst_cap) return 0;
-        memcpy(dst + pos, ":status", 7);
-        pos += 7;
-        n = qpack_encode_string(dst + pos, dst_cap - pos, status_str);
-        if (n == 0) return 0;
-        pos += n;
-    }
-
-    /* Auto content-length */
-    size_t body_len = 0;
-    if (res->use_file_stream) body_len = res->file_stream_len;
-    else if (res->is_ptr_body) body_len = res->ptr_body_len;
-    else if (res->body) body_len = res->body->size;
-
-    if (!headers_have_content_length(res->headers)) {
-        char cl_str[32];
-        int cl_len = snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
-        (void)cl_len;
-        int name_idx = qpack_static_table_find_name("content-length");
-        if (name_idx >= 0 && name_idx < 16) {
-            if (pos + 1 > dst_cap) return 0;
-            dst[pos] = 0x50; /* Literal with Name Reference, static, indexed name */
-            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_idx, 4);
-            if (n == 0) return 0;
-            pos += n;
-        } else {
-            if (pos + 1 > dst_cap) return 0;
-            dst[pos] = 0x20; /* Literal with Literal Name */
-            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, 14, 5);
-            if (n == 0) return 0;
-            pos += n;
-            if (pos + 14 > dst_cap) return 0;
-            memcpy(dst + pos, "content-length", 14);
-            pos += 14;
-        }
-        size_t n = qpack_encode_string(dst + pos, dst_cap - pos, cl_str);
-        if (n == 0) return 0;
-        pos += n;
-    }
-
-    /* User headers */
-    cwist_http_header_node *curr = res->headers;
-    while (curr) {
-        if (!curr->key || !curr->key->data || !curr->value || !curr->value->data) {
-            curr = curr->next;
-            continue;
-        }
-        if (strcasecmp(curr->key->data, "connection") == 0 ||
-            strcasecmp(curr->key->data, "keep-alive") == 0 ||
-            strcasecmp(curr->key->data, "transfer-encoding") == 0 ||
-            strcasecmp(curr->key->data, "upgrade") == 0) {
-            curr = curr->next;
-            continue;
-        }
-
-        char lower_name[256];
-        size_t name_len = strlen(curr->key->data);
-        if (name_len >= sizeof(lower_name)) name_len = sizeof(lower_name) - 1;
-        for (size_t i = 0; i < name_len; ++i) {
-            lower_name[i] = (char)tolower((unsigned char)curr->key->data[i]);
-        }
-        lower_name[name_len] = '\0';
-
-        int name_idx = qpack_static_table_find_name(lower_name);
-        if (name_idx >= 0 && name_idx < 16) {
-            if (pos + 1 > dst_cap) return 0;
-            dst[pos] = 0x50; /* Literal with Name Reference, static */
-            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_idx, 4);
-            if (n == 0) return 0;
-            pos += n;
-        } else {
-            if (pos + 1 > dst_cap) return 0;
-            dst[pos] = 0x20; /* Literal with Literal Name */
-            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_len, 5);
-            if (n == 0) return 0;
-            pos += n;
-            if (pos + name_len > dst_cap) return 0;
-            memcpy(dst + pos, lower_name, name_len);
-            pos += name_len;
-        }
-        size_t n = qpack_encode_string(dst + pos, dst_cap - pos, curr->value->data);
-        if (n == 0) return 0;
-        pos += n;
-
-        curr = curr->next;
-    }
-
-    return pos;
-}
-
-/**
- * @brief Initialize HTTP/3 context for a UDP socket.
- *
- * @param ctx Output pointer for the created context.
- * @param cert_path Path to the TLS certificate.
- * @param key_path Path to the TLS private key.
- * @return cwist_error_t Success or error status.
- */
 cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
                                        const char *cert_path,
                                        const char *key_path) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
-
     if (!ctx || !cert_path || !key_path) {
         err.error.err_i16 = -1;
         return err;
     }
 
-    /* 1. Create OpenSSL QUIC server context */
-    const SSL_METHOD *method = OSSL_QUIC_server_method();
+    h3_global_init();
+
+    const SSL_METHOD *method = TLS_method();
     SSL_CTX *ssl_ctx = SSL_CTX_new(method);
     if (!ssl_ctx) {
+        h3_global_cleanup();
         err.error.err_i16 = -1;
         return err;
     }
 
-    /* 2. Load certificates */
+    cwist_h3_ssl_ctx_init(ssl_ctx, 0);
+
     if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path, SSL_FILETYPE_PEM) <= 0 ||
         SSL_CTX_use_PrivateKey_file(ssl_ctx, key_path, SSL_FILETYPE_PEM) <= 0) {
         SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
         err.error.err_i16 = -1;
         return err;
     }
 
-    /* 3. Set ALPN for HTTP/3 (server-side callback) */
-    SSL_CTX_set_alpn_select_cb(ssl_ctx, cwist_http3_alpn_select_cb, NULL);
+    if (SSL_CTX_check_private_key(ssl_ctx) != 1) {
+        SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
+        err.error.err_i16 = -1;
+        return err;
+    }
 
     *ctx = (cwist_http3_context *)cwist_alloc(sizeof(cwist_http3_context));
     if (!*ctx) {
         SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
         err.error.err_i16 = -1;
         return err;
     }
 
+    memset(*ctx, 0, sizeof(cwist_http3_context));
     (*ctx)->ssl_ctx = ssl_ctx;
     (*ctx)->udp_fd = -1;
-
     err.error.err_i16 = 0;
     return err;
 }
 
-/**
- * @brief Initialize an HTTP/3 context without manual certificates.
- *
- * Generates an ephemeral self-signed RSA certificate in memory.
- * Ideal for local testing or zero-config QUIC setups.
- *
- * @param ctx Output pointer for the created context.
- * @return cwist_error_t Success or error status.
- */
 cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
-
     if (!ctx) {
         err.error.err_i16 = -1;
         return err;
     }
 
-    const SSL_METHOD *method = OSSL_QUIC_server_method();
+    h3_global_init();
+
+    const SSL_METHOD *method = TLS_method();
     SSL_CTX *ssl_ctx = SSL_CTX_new(method);
     if (!ssl_ctx) {
+        h3_global_cleanup();
         err.error.err_i16 = -1;
         return err;
     }
 
-    EVP_PKEY *pkey = EVP_PKEY_Q_keygen(NULL, NULL, "RSA", 2048);
-    if (!pkey) {
+    cwist_h3_ssl_ctx_init(ssl_ctx, 0);
+
+    EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+    if (!pctx) {
         SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
         err.error.err_i16 = -1;
         return err;
     }
+    if (EVP_PKEY_keygen_init(pctx) <= 0 ||
+        EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, 2048) <= 0) {
+        EVP_PKEY_CTX_free(pctx);
+        SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
+        err.error.err_i16 = -1;
+        return err;
+    }
+    EVP_PKEY *pkey = NULL;
+    if (EVP_PKEY_keygen(pctx, &pkey) <= 0 || !pkey) {
+        EVP_PKEY_CTX_free(pctx);
+        SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
+        err.error.err_i16 = -1;
+        return err;
+    }
+    EVP_PKEY_CTX_free(pctx);
 
     X509 *x509 = X509_new();
     if (!x509) {
         EVP_PKEY_free(pkey);
         SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
         err.error.err_i16 = -1;
         return err;
     }
-
     ASN1_INTEGER_set(X509_get_serialNumber(x509), 1);
     X509_gmtime_adj(X509_get_notBefore(x509), 0);
-    X509_gmtime_adj(X509_get_notAfter(x509), 31536000L); // 1 year
+    X509_gmtime_adj(X509_get_notAfter(x509), 31536000L);
     X509_set_pubkey(x509, pkey);
+
+    /* Self-signed subject */
+    X509_NAME *subj = X509_get_subject_name(x509);
+    X509_NAME_add_entry_by_txt(subj, "CN", MBSTRING_ASC,
+                               (const unsigned char *)"localhost", -1, -1, 0);
+    X509_set_issuer_name(x509, subj);
     X509_sign(x509, pkey, EVP_sha256());
 
-    SSL_CTX_use_certificate(ssl_ctx, x509);
-    SSL_CTX_use_PrivateKey(ssl_ctx, pkey);
+    if (SSL_CTX_use_certificate(ssl_ctx, x509) != 1 ||
+        SSL_CTX_use_PrivateKey(ssl_ctx, pkey) != 1) {
+        X509_free(x509);
+        EVP_PKEY_free(pkey);
+        SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
+        err.error.err_i16 = -1;
+        return err;
+    }
 
     X509_free(x509);
     EVP_PKEY_free(pkey);
 
-    SSL_CTX_set_alpn_select_cb(ssl_ctx, cwist_http3_alpn_select_cb, NULL);
-
     *ctx = (cwist_http3_context *)cwist_alloc(sizeof(cwist_http3_context));
     if (!*ctx) {
         SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
         err.error.err_i16 = -1;
         return err;
     }
 
+    memset(*ctx, 0, sizeof(cwist_http3_context));
     (*ctx)->ssl_ctx = ssl_ctx;
     (*ctx)->udp_fd = -1;
-
     err.error.err_i16 = 0;
     return err;
 }
 
-/**
- * @brief Destroy HTTP/3 context.
- *
- * @param ctx Context to be destroyed.
- */
 void cwist_http3_destroy_context(cwist_http3_context *ctx) {
     if (ctx) {
-        if (ctx->ssl_ctx) SSL_CTX_free(ctx->ssl_ctx);
+        if (ctx->engine) {
+            lsquic_engine_destroy((lsquic_engine_t *)ctx->engine);
+            ctx->engine = NULL;
+        }
+        if (ctx->ssl_ctx) {
+            SSL_CTX_free(ctx->ssl_ctx);
+            ctx->ssl_ctx = NULL;
+        }
         cwist_free(ctx);
+        h3_global_cleanup();
     }
 }
 
-
-
-#define CWIST_HTTP3_FRAME_DATA     0x00
-#define CWIST_HTTP3_FRAME_HEADERS  0x01
-#define CWIST_HTTP3_FRAME_SETTINGS 0x04
-#define CWIST_HTTP3_FRAME_GOAWAY   0x07
-
-static size_t h3_encode_varint(uint64_t value, unsigned char out[8]) {
-    if (value <= 0x3f) {
-        out[0] = (unsigned char)value;
-        return 1;
-    }
-    if (value <= 0x3fff) {
-        out[0] = (unsigned char)(0x40 | ((value >> 8) & 0x3f));
-        out[1] = (unsigned char)(value & 0xff);
-        return 2;
-    }
-    if (value <= 0x3fffffff) {
-        out[0] = (unsigned char)(0x80 | ((value >> 24) & 0x3f));
-        out[1] = (unsigned char)((value >> 16) & 0xff);
-        out[2] = (unsigned char)((value >> 8) & 0xff);
-        out[3] = (unsigned char)(value & 0xff);
-        return 4;
-    }
-    out[0] = (unsigned char)(0xc0 | ((value >> 56) & 0x3f));
-    out[1] = (unsigned char)((value >> 48) & 0xff);
-    out[2] = (unsigned char)((value >> 40) & 0xff);
-    out[3] = (unsigned char)((value >> 32) & 0xff);
-    out[4] = (unsigned char)((value >> 24) & 0xff);
-    out[5] = (unsigned char)((value >> 16) & 0xff);
-    out[6] = (unsigned char)((value >> 8) & 0xff);
-    out[7] = (unsigned char)(value & 0xff);
-    return 8;
-}
-
-static int h3_decode_varint(const unsigned char *buf, size_t len, size_t *pos, uint64_t *value) {
-    if (*pos >= len) return -1;
-    unsigned char first = buf[*pos];
-    size_t width = (size_t)1u << (first >> 6);
-    if (*pos + width > len) return -1;
-
-    uint64_t v = (uint64_t)(first & 0x3f);
-    for (size_t i = 1; i < width; i++) {
-        v = (v << 8) | buf[*pos + i];
-    }
-    *pos += width;
-    *value = v;
-    return 0;
-}
-
-static int h3_ssl_write_all(SSL *stream, const void *buf, size_t len) {
-    const unsigned char *p = (const unsigned char *)buf;
-    while (len > 0) {
-        int n = SSL_write(stream, p, len);
-        if (n <= 0) return -1;
-        p += n;
-        len -= (size_t)n;
-    }
-    return 0;
-}
-
-static int h3_write_frame(SSL *stream, uint64_t type, const unsigned char *payload, size_t payload_len) {
-    unsigned char header[16];
-    unsigned char encoded[8];
-    size_t header_len = 0;
-
-    size_t n = h3_encode_varint(type, encoded);
-    memcpy(header + header_len, encoded, n);
-    header_len += n;
-    n = h3_encode_varint(payload_len, encoded);
-    memcpy(header + header_len, encoded, n);
-    header_len += n;
-
-    if (h3_ssl_write_all(stream, header, header_len) != 0) return -1;
-    if (payload_len > 0 && payload) return h3_ssl_write_all(stream, payload, payload_len);
-    return 0;
-}
-
-static int h3_read_frame(SSL *stream, uint64_t *type, uint64_t *payload_len,
-                         unsigned char **payload, bool *closed) {
-    *closed = false;
-    unsigned char buf[16];
-
-    int n = SSL_read(stream, buf, 1);
-    if (n <= 0) {
-        int err = SSL_get_error(stream, n);
-        if (err == SSL_ERROR_ZERO_RETURN) {
-            *closed = true;
-        }
-        return -1;
-    }
-
-    size_t got = 1;
-    while (got < sizeof(buf)) {
-        size_t pos = 0;
-        uint64_t t;
-        if (h3_decode_varint(buf, got, &pos, &t) == 0) {
-            uint64_t l;
-            size_t pos2 = pos;
-            if (h3_decode_varint(buf, got, &pos2, &l) == 0) {
-                *type = t;
-                *payload_len = l;
-                if (l == 0) {
-                    *payload = NULL;
-                    return 0;
-                }
-                *payload = (unsigned char *)malloc((size_t)l);
-                if (!*payload) return -1;
-                size_t payload_got = 0;
-                while (payload_got < l) {
-                    n = SSL_read(stream, *payload + payload_got, (int)(l - payload_got));
-                    if (n <= 0) {
-                        int ssl_err = SSL_get_error(stream, n);
-                        if (ssl_err == SSL_ERROR_ZERO_RETURN) {
-                            *closed = true;
-                            free(*payload);
-                            return -1;
-                        }
-                        if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
-                            usleep(1000);
-                            continue;
-                        }
-                        free(*payload);
-                        return -1;
-                    }
-                    payload_got += n;
-                }
-                return 0;
-            }
-        }
-
-        n = SSL_read(stream, buf + got, 1);
-        if (n <= 0) {
-            int ssl_err = SSL_get_error(stream, n);
-            if (ssl_err == SSL_ERROR_ZERO_RETURN) {
-                *closed = true;
-            }
-            return -1;
-        }
-        got++;
-    }
-    return -1;
-}
-
-static int h3_send_settings(SSL *stream) {
-    unsigned char settings[32];
-    size_t pos = 0;
-    /* SETTINGS_MAX_FIELD_SECTION_SIZE (0x06) = 16384 */
-    pos += h3_encode_varint(0x06, settings + pos);
-    pos += h3_encode_varint(16384, settings + pos);
-    /* SETTINGS_QPACK_MAX_TABLE_CAPACITY (0x01) = 0 (no dynamic table) */
-    pos += h3_encode_varint(0x01, settings + pos);
-    pos += h3_encode_varint(0, settings + pos);
-    return h3_write_frame(stream, CWIST_HTTP3_FRAME_SETTINGS, settings, pos);
-}
-
-static int h3_setup_server_control_streams(SSL *quic_conn) {
-    /* Server control stream (unidirectional, type = 0x00) */
-    SSL *ctrl = SSL_new_stream(quic_conn, SSL_STREAM_FLAG_UNI);
-    if (!ctrl) return -1;
-
-    unsigned char stream_type = 0x00;
-    if (SSL_write(ctrl, &stream_type, 1) != 1) {
-        SSL_free(ctrl);
-        return -1;
-    }
-
-    if (h3_send_settings(ctrl) != 0) {
-        SSL_free(ctrl);
-        return -1;
-    }
-
-    SSL_stream_conclude(ctrl, 0);
-    SSL_free(ctrl);
-
-    /* Server QPACK decoder stream (unidirectional, type = 0x03) */
-    SSL *decoder = SSL_new_stream(quic_conn, SSL_STREAM_FLAG_UNI);
-    if (decoder) {
-        stream_type = 0x03;
-        SSL_write(decoder, &stream_type, 1);
-        SSL_stream_conclude(decoder, 0);
-        SSL_free(decoder);
-    }
-
-    return 0;
-}
-
-static void h3_handle_client_control_stream(SSL *stream) {
-    unsigned char stream_type;
-    int n = SSL_read(stream, &stream_type, 1);
-    if (n != 1 || stream_type != 0x00) {
-        return;
-    }
-
-    uint64_t ftype, flen;
-    unsigned char *payload = NULL;
-    bool closed = false;
-    if (h3_read_frame(stream, &ftype, &flen, &payload, &closed) == 0) {
-        if (ftype == CWIST_HTTP3_FRAME_SETTINGS) {
-            /* Accept client settings */
-        }
-        free(payload);
-    }
-}
-
-static void h3_handle_client_qpack_stream(SSL *stream) {
-    unsigned char stream_type;
-    int n = SSL_read(stream, &stream_type, 1);
-    if (n != 1 || stream_type != 0x02) {
-        return;
-    }
-    char discard[1024];
-    while ((n = SSL_read(stream, discard, sizeof(discard))) > 0) {
-        /* discard dynamic table instructions */
-    }
-}
-
-static void h3_apply_header(cwist_http_request *req, const char *name, const char *value) {
-    if (!req || !name || !value) return;
-
-    if (strcmp(name, ":method") == 0) {
-        req->method = cwist_http_string_to_method(value);
-    } else if (strcmp(name, ":path") == 0) {
-        cwist_sstring_assign(req->path, (char *)value);
-    } else if (strcmp(name, ":authority") == 0 || strcmp(name, "host") == 0) {
-        cwist_http_header_add(&req->headers, "host", value);
-    } else if (strcmp(name, "content-length") == 0) {
-        req->content_length = atol(value);
-        cwist_http_header_add(&req->headers, name, value);
-    } else if (strcmp(name, ":scheme") != 0 && name[0] != ':') {
-        cwist_http_header_add(&req->headers, name, value);
-    }
-}
-
-static int qpack_decode_integer(const unsigned char *buf, size_t len, size_t *pos, uint8_t prefix_bits, uint32_t *value) {
-    if (*pos >= len || prefix_bits == 0 || prefix_bits > 8) return -1;
-    uint8_t mask = (uint8_t)((1u << prefix_bits) - 1u);
-    uint32_t n = buf[*pos] & mask;
-    (*pos)++;
-    if (n < mask) {
-        *value = n;
-        return 0;
-    }
-
-    uint32_t m = 0;
-    while (*pos < len) {
-        uint8_t b = buf[(*pos)++];
-        if (m > 28) return -1;
-        n += (uint32_t)(b & 0x7f) << m;
-        if ((b & 0x80) == 0) {
-            *value = n;
-            return 0;
-        }
-        m += 7;
-    }
-    return -1;
-}
-
-static char *qpack_decode_string(const unsigned char *buf, size_t len, size_t *pos) {
-    if (*pos >= len) return NULL;
-    bool huffman = (buf[*pos] & 0x80) != 0;
-    uint32_t str_len = 0;
-    if (qpack_decode_integer(buf, len, pos, 7, &str_len) != 0) return NULL;
-    if (*pos + str_len > len) return NULL;
-
-    if (huffman) {
-        size_t decoded_len = 0;
-        char *out = h2_huffman_decode(buf + *pos, str_len, &decoded_len);
-        *pos += str_len;
-        return out;
-    }
-
-    char *out = (char *)malloc((size_t)str_len + 1);
-    if (!out) return NULL;
-    memcpy(out, buf + *pos, str_len);
-    out[str_len] = '\0';
-    *pos += str_len;
-    return out;
-}
-
-static void h3_apply_minimal_request_headers(cwist_http_request *req,
-                                             const unsigned char *buf,
-                                             size_t len) {
-    size_t pos = 0;
-    while (pos < len) {
-        uint64_t type = 0;
-        uint64_t frame_len = 0;
-        if (h3_decode_varint(buf, len, &pos, &type) != 0 ||
-            h3_decode_varint(buf, len, &pos, &frame_len) != 0 ||
-            pos + frame_len > len) {
-            break;
-        }
-
-        if (type == CWIST_HTTP3_FRAME_HEADERS && frame_len >= 2) {
-            const unsigned char *block = buf + pos;
-            size_t block_len = (size_t)frame_len;
-            size_t block_pos = 0;
-
-            // Skip QPACK Encoded Field Section Prefix
-            uint64_t ric = 0;
-            if (h3_decode_varint(block, block_len, &block_pos, &ric) != 0) goto next_frame;
-            if (block_pos >= block_len) goto next_frame;
-            unsigned char base_first = block[block_pos];
-            size_t base_width = (size_t)1u << (base_first >> 6);
-            if (block_pos + base_width > block_len) goto next_frame;
-            block_pos += base_width;
-
-            // Parse field lines
-            while (block_pos < block_len) {
-                unsigned char b = block[block_pos];
-
-                if (b & 0x80) {
-                    // Indexed Field Line: 1 T XXXXXX
-                    uint32_t idx = 0;
-                    size_t tmp = block_pos;
-                    if (qpack_decode_integer(block, block_len, &tmp, 6, &idx) != 0) break;
-                    block_pos = tmp;
-                    bool is_static = (b & 0x40) == 0;
-                    if (is_static && idx < QPACK_STATIC_TABLE_COUNT) {
-                        h3_apply_header(req, qpack_static_table[idx].name, qpack_static_table[idx].value);
-                    }
-                } else if ((b & 0xC0) == 0x40) {
-                    // Literal Field Line with Post-Base Index: 01...
-                    // Skip - not supported in minimal implementation
-                    break;
-                } else if ((b & 0xE0) == 0x20) {
-                    // Literal Field Line with Literal Name: 001xxxxx
-                    uint32_t name_len = 0;
-                    size_t tmp = block_pos;
-                    if (qpack_decode_integer(block, block_len, &tmp, 5, &name_len) != 0) break;
-                    block_pos = tmp;
-                    char *name = qpack_decode_string(block, block_len, &block_pos);
-                    char *value = qpack_decode_string(block, block_len, &block_pos);
-                    if (name && value) {
-                        h3_apply_header(req, name, value);
-                    }
-                    free(name);
-                    free(value);
-                } else if ((b & 0xF0) == 0x00) {
-                    // Literal Field Line with Name Reference: 0000 N IIII
-                    uint32_t name_idx = 0;
-                    size_t tmp = block_pos;
-                    if (qpack_decode_integer(block, block_len, &tmp, 4, &name_idx) != 0) break;
-                    block_pos = tmp;
-                    bool is_static = (b & 0x08) == 0;
-                    char *value = qpack_decode_string(block, block_len, &block_pos);
-                    if (value && is_static && name_idx < QPACK_STATIC_TABLE_COUNT) {
-                        h3_apply_header(req, qpack_static_table[name_idx].name, value);
-                    }
-                    free(value);
-                } else {
-                    // Unknown or unsupported
-                    break;
-                }
-            }
-        }
-next_frame:
-        pos += frame_len;
-    }
-}
-
-static int h3_send_response(SSL *stream, cwist_http_response *res) {
-    unsigned char header_block[8192];
-    size_t block_len = qpack_encode_response_headers(res, header_block, sizeof(header_block));
-    if (block_len == 0) return -1;
-
-    if (h3_write_frame(stream, CWIST_HTTP3_FRAME_HEADERS, header_block, block_len) != 0) {
-        return -1;
-    }
-
-    size_t body_len = 0;
-    const unsigned char *body_data = NULL;
-    if (res->use_file_stream) {
-        body_len = res->file_stream_len;
-    } else if (res->is_ptr_body) {
-        body_len = res->ptr_body_len;
-        body_data = (const unsigned char *)res->ptr_body;
-    } else if (res->body) {
-        body_len = res->body->size;
-        body_data = (const unsigned char *)res->body->data;
-    }
-
-    if (res->use_file_stream && res->file_stream_fd >= 0) {
-        off_t offset = res->file_stream_offset;
-        size_t remaining = res->file_stream_len;
-        while (remaining > 0) {
-            size_t chunk = remaining > 16384 ? 16384 : remaining;
-            unsigned char *chunk_buf = (unsigned char *)malloc(chunk);
-            if (!chunk_buf) return -1;
-            ssize_t r = pread(res->file_stream_fd, chunk_buf, chunk, offset);
-            if (r <= 0) { free(chunk_buf); return -1; }
-            if (h3_write_frame(stream, CWIST_HTTP3_FRAME_DATA, chunk_buf, (size_t)r) != 0) {
-                free(chunk_buf); return -1;
-            }
-            free(chunk_buf);
-            offset += r;
-            remaining -= (size_t)r;
-        }
-    } else {
-        if (body_len > 0) {
-            if (h3_write_frame(stream, CWIST_HTTP3_FRAME_DATA, body_data, body_len) != 0) {
-                return -1;
-            }
-        }
-    }
-    return 0;
-}
-
-struct h3_stream_thread_ctx {
-    SSL *stream;
-    cwist_http3_request_handler_func handler;
-    void *user_ctx;
-};
-
-static void *h3_stream_thread_func(void *arg) {
-    struct h3_stream_thread_ctx *ctx = (struct h3_stream_thread_ctx *)arg;
-    SSL *stream = ctx->stream;
-    cwist_http3_request_handler_func handler = ctx->handler;
-    void *user_ctx = ctx->user_ctx;
-    free(ctx);
-
-    cwist_http_request *req = cwist_http_request_create();
-    cwist_http_response *res = cwist_http_response_create();
-    if (!req || !res) {
-        goto stream_cleanup;
-    }
-
-    cwist_sstring_assign(req->version, "HTTP/3");
-
-    unsigned char *body_buf = NULL;
-    size_t body_len = 0;
-    size_t body_cap = 0;
-    bool headers_received = false;
-    bool stream_closed = false;
-
-    while (!stream_closed) {
-        uint64_t frame_type, frame_len;
-        unsigned char *payload = NULL;
-
-        if (h3_read_frame(stream, &frame_type, &frame_len, &payload, &stream_closed) != 0) {
-            break;
-        }
-
-        if (frame_type == CWIST_HTTP3_FRAME_HEADERS && !headers_received) {
-            h3_apply_minimal_request_headers(req, payload, (size_t)frame_len);
-            headers_received = true;
-        } else if (frame_type == CWIST_HTTP3_FRAME_DATA && headers_received) {
-            if (frame_len > 0 && payload) {
-                size_t need = body_len + (size_t)frame_len;
-                if (need > body_cap) {
-                    size_t new_cap = body_cap ? body_cap * 2 : 4096;
-                    while (new_cap < need) new_cap *= 2;
-                    unsigned char *nb = (unsigned char *)realloc(body_buf, new_cap);
-                    if (!nb) {
-                        free(payload);
-                        goto stream_cleanup;
-                    }
-                    body_buf = nb;
-                    body_cap = new_cap;
-                }
-                memcpy(body_buf + body_len, payload, (size_t)frame_len);
-                body_len += (size_t)frame_len;
-            }
-        } else if (frame_type == CWIST_HTTP3_FRAME_HEADERS && headers_received) {
-            /* Trailer headers - ignore for now */
-        }
-        /* Other frame types are ignored for request streams */
-
-        free(payload);
-
-        if (req->content_length > 0 && body_len >= (size_t)req->content_length) {
-            break;
-        }
-    }
-
-    if (body_len > 0) {
-        cwist_sstring_assign_len(req->body, (char *)body_buf, body_len);
-    }
-
-    if (handler && headers_received) {
-        handler(user_ctx, req, res);
-        h3_send_response(stream, res);
-    } else if (!headers_received) {
-        res->status_code = CWIST_HTTP_BAD_REQUEST;
-        h3_send_response(stream, res);
-    }
-
-    SSL_stream_conclude(stream, 0);
-
-stream_cleanup:
-    if (body_buf) free(body_buf);
-    cwist_http_request_destroy(req);
-    cwist_http_response_destroy(res);
-    SSL_free(stream);
-    return NULL;
-}
-
-static void cwist_http3_handle_stream(SSL *stream, cwist_http3_request_handler_func handler, void *user_ctx) {
-    struct h3_stream_thread_ctx *ctx = (struct h3_stream_thread_ctx *)malloc(sizeof(*ctx));
-    if (!ctx) {
-        SSL_free(stream);
-        return;
-    }
-    ctx->stream = stream;
-    ctx->handler = handler;
-    ctx->user_ctx = user_ctx;
-
-    pthread_t tid;
-    if (pthread_create(&tid, NULL, h3_stream_thread_func, ctx) != 0) {
-        free(ctx);
-        SSL_free(stream);
-        return;
-    }
-    pthread_detach(tid);
-}
-
-cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
-                                           void *user_ctx,
-                                           cwist_http3_request_handler_func handler) {
-    cwist_error_t err = make_error(CWIST_ERR_INT16);
-
-    if (!conn || !conn->quic_ssl || !handler) {
-        err.error.err_i16 = -1;
-        return err;
-    }
-
-    /* Create server control streams before accepting client streams */
-    h3_setup_server_control_streams(conn->quic_ssl);
-
-    /* Accept and dispatch all incoming streams */
-    while (1) {
-        SSL *stream = SSL_accept_stream(conn->quic_ssl, SSL_STREAM_FLAG_NO_BLOCK);
-        if (!stream) {
-            int ssl_err = SSL_get_error(conn->quic_ssl, 0);
-            if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
-                struct pollfd pfd = { .fd = conn->udp_fd, .events = POLLIN };
-                poll(&pfd, 1, 100);
-                continue;
-            }
-            if (ssl_err == SSL_ERROR_ZERO_RETURN) {
-                break; /* Connection closed */
-            }
-            break; /* Other error */
-        }
-
-        int stype = SSL_get_stream_type(stream);
-        if (stype == SSL_STREAM_TYPE_BIDI) {
-            cwist_http3_handle_stream(stream, handler, user_ctx);
-        } else {
-            /* Unidirectional stream: control (0x00), push (0x01), or qpack encoder (0x02) */
-            unsigned char stream_type_byte;
-            int n = SSL_read(stream, &stream_type_byte, 1);
-            if (n == 1) {
-                if (stream_type_byte == 0x00) {
-                    h3_handle_client_control_stream(stream);
-                } else if (stream_type_byte == 0x02) {
-                    h3_handle_client_qpack_stream(stream);
-                }
-            }
-            SSL_free(stream);
-        }
-    }
-
-    err.error.err_i16 = 0;
-    return err;
-}
+/* ------------------------------------------------------------------ */
+/* Server loop                                                        */
+/* ------------------------------------------------------------------ */
 
 cwist_error_t cwist_http3_server_loop(int udp_fd,
                                       cwist_http3_context *ctx,
@@ -974,86 +821,341 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
         return err;
     }
 
-    printf("[HTTP/3] Listening on UDP socket %d\n", udp_fd);
+    struct lsquic_engine_settings settings;
+    lsquic_engine_init_settings(&settings, LSENG_HTTP_SERVER);
+    settings.es_versions = (1 << LSQVER_I001) | (1 << LSQVER_I002);
+    settings.es_init_max_data = 1048576;
+    settings.es_init_max_stream_data_bidi_local = 524288;
+    settings.es_init_max_stream_data_bidi_remote = 524288;
+    settings.es_max_streams_in = 100;
+    settings.es_support_push = ctx->push_enabled;
+    settings.es_allow_migration = ctx->allow_migration ? ctx->allow_migration : 1;
+    settings.es_max_delayed_0rtt_packets = 32;
+    settings.es_datagrams = ctx->datagram_enabled;
 
-    while (1) {
-        SSL *quic_conn = SSL_new(ctx->ssl_ctx);
-        if (!quic_conn) {
-            usleep(10000);
-            continue;
-        }
+    struct lsquic_engine_api api = {
+        .ea_stream_if        = &cwist_h3_stream_if,
+        .ea_stream_if_ctx    = ctx,
+        .ea_packets_out      = cwist_h3_packets_out,
+        .ea_packets_out_ctx  = &udp_fd,
+        .ea_hsi_if           = &cwist_h3_hset_if,
+        .ea_hsi_ctx          = NULL,
+        .ea_settings         = &settings,
+        .ea_alpn             = "h3",
+    };
 
-        SSL_set_fd(quic_conn, udp_fd);
-
-        if (SSL_accept(quic_conn) <= 0) {
-            SSL_free(quic_conn);
-            usleep(10000);
-            continue;
-        }
-
-        cwist_http3_connection conn = {
-            .quic_ssl = quic_conn,
-            .udp_fd = udp_fd,
-            .peer_addr_len = sizeof(struct sockaddr_storage)
-        };
-
-        cwist_http3_serve_connection(&conn, user_ctx, handler);
-
-        SSL_shutdown(quic_conn);
-        SSL_free(quic_conn);
+    lsquic_engine_t *engine = lsquic_engine_new(LSENG_HTTP_SERVER, &api);
+    if (!engine) {
+        err.error.err_i16 = -1;
+        return err;
     }
 
+    ctx->engine = engine;
+    ctx->handler = handler;
+    ctx->user_ctx = user_ctx;
+    ctx->udp_fd = udp_fd;
+    ctx->running = 1;
+
+    printf("[HTTP/3] Listening on UDP socket %d\n", udp_fd);
+
+    struct sockaddr_storage local_addr;
+    socklen_t local_addr_len = sizeof(local_addr);
+    if (getsockname(udp_fd, (struct sockaddr *)&local_addr, &local_addr_len) != 0) {
+        local_addr_len = 0;
+    }
+
+    /* Make socket non-blocking for polling */
+    int flags = fcntl(udp_fd, F_GETFL, 0);
+    if (flags >= 0) fcntl(udp_fd, F_SETFL, flags | O_NONBLOCK);
+
+    /* Enable ECN reception for congestion control feedback */
+    int on = 1;
+    setsockopt(udp_fd, IPPROTO_IP, IP_RECVTOS, &on, sizeof(on));
+#ifdef IPV6_RECVTCLASS
+    setsockopt(udp_fd, IPPROTO_IPV6, IPV6_RECVTCLASS, &on, sizeof(on));
+#endif
+
+    unsigned char *pkt_buf = malloc(65535);
+    if (!pkt_buf) {
+        lsquic_engine_destroy(engine);
+        ctx->engine = NULL;
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+#ifdef __linux__
+    int epoll_fd = epoll_create1(0);
+    if (epoll_fd < 0) {
+        err.error.err_i16 = -1;
+        lsquic_engine_destroy(engine);
+        ctx->engine = NULL;
+        return err;
+    }
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = udp_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_fd, &ev) < 0) {
+        close(epoll_fd);
+        err.error.err_i16 = -1;
+        lsquic_engine_destroy(engine);
+        ctx->engine = NULL;
+        return err;
+    }
+#endif
+
+    while (ctx && ctx->running) {
+        int diff = 100000; /* default 100 ms in microseconds */
+        if (lsquic_engine_earliest_adv_tick(engine, &diff)) {
+            if (diff <= 0)
+                diff = 0;
+            else if (diff > 1000000)
+                diff = 1000000;
+        }
+
+#ifdef __linux__
+        struct epoll_event events[1];
+        int pret = epoll_wait(epoll_fd, events, 1, diff / 1000);
+        if (pret < 0) {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+        if (pret > 0 && (events[0].events & (EPOLLERR | EPOLLHUP))) {
+            fprintf(stderr, "[HTTP/3] UDP socket error, exiting loop.\n");
+            break;
+        }
+        if (pret > 0 && (events[0].events & EPOLLIN)) {
+#else
+        struct pollfd pfd = { .fd = udp_fd, .events = POLLIN };
+        int pret = poll(&pfd, 1, diff / 1000);
+
+        if (pret < 0) {
+            if (errno == EINTR)
+                continue;
+            if (errno == EBADF) {
+                fprintf(stderr, "[HTTP/3] UDP socket closed, exiting loop.\n");
+                break;
+            }
+            /* Other fatal poll errors */
+            break;
+        }
+
+        if (pret > 0) {
+            if (pfd.revents & (POLLERR | POLLNVAL)) {
+                fprintf(stderr, "[HTTP/3] UDP socket error, exiting loop.\n");
+                break;
+            }
+            if (pfd.revents & POLLIN) {
+#endif
+                struct sockaddr_storage peer_addr;
+                socklen_t peer_addr_len = sizeof(peer_addr);
+                struct msghdr msg = {0};
+                struct iovec iov = { pkt_buf, 65535 };
+                msg.msg_name = &peer_addr;
+                msg.msg_namelen = sizeof(peer_addr);
+                msg.msg_iov = &iov;
+                msg.msg_iovlen = 1;
+
+                /* ECN support: allocate cmsg buffer */
+                char cmsg_buf[CMSG_SPACE(sizeof(int))];
+                msg.msg_control = cmsg_buf;
+                msg.msg_controllen = sizeof(cmsg_buf);
+
+                ssize_t nr = recvmsg(udp_fd, &msg, 0);
+                if (nr > 0) {
+                    int ecn = 0;
+                    for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+                         cmsg != NULL;
+                         cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+                        if (cmsg->cmsg_level == IPPROTO_IP &&
+                            cmsg->cmsg_type == IP_TOS) {
+                            ecn = *(int *)CMSG_DATA(cmsg) & 0x3;
+                            break;
+                        }
+#ifdef IPV6_TCLASS
+                        if (cmsg->cmsg_level == IPPROTO_IPV6 &&
+                            cmsg->cmsg_type == IPV6_TCLASS) {
+                            ecn = *(int *)CMSG_DATA(cmsg) & 0x3;
+                            break;
+                        }
+#endif
+                    }
+                    lsquic_engine_packet_in(engine, pkt_buf, (size_t)nr,
+                                            (struct sockaddr *)&local_addr,
+                                            (struct sockaddr *)&peer_addr,
+                                            &ecn, sizeof(ecn));
+                } else if (nr < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                    if (errno == ECONNREFUSED || errno == ENETUNREACH ||
+                        errno == EHOSTUNREACH) {
+                        /* Transient error, keep going */
+                    } else if (errno == EBADF) {
+                        fprintf(stderr, "[HTTP/3] UDP socket closed.\n");
+                        break;
+                    }
+                }
+#ifdef __linux__
+            }
+#else
+            }
+        }
+#endif
+
+        lsquic_engine_process_conns(engine);
+    }
+
+#ifdef __linux__
+    if (epoll_fd >= 0) close(epoll_fd);
+#endif
+
+    free(pkt_buf);
+    if (ctx && ctx->engine) {
+        lsquic_engine_destroy((lsquic_engine_t *)ctx->engine);
+        ctx->engine = NULL;
+    }
     err.error.err_i16 = 0;
     return err;
 }
 
-#else
+/* ------------------------------------------------------------------ */
+/* Serve connection (kept for API compat)                             */
+/* ------------------------------------------------------------------ */
 
-static cwist_error_t cwist_http3_quic_unavailable(void) {
-    cwist_error_t err = make_error(CWIST_ERR_INT16);
-    err.error.err_i16 = -1;
-    return err;
+/* ------------------------------------------------------------------ */
+/* Push, Priority, and 0-RTT APIs                                     */
+/* ------------------------------------------------------------------ */
+
+void cwist_http3_set_push_enabled(cwist_http3_context *ctx, int enabled) {
+    if (ctx) ctx->push_enabled = enabled;
 }
 
-cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
-                                       const char *cert_path,
-                                       const char *key_path) {
-    (void)cert_path;
-    (void)key_path;
-    if (ctx) *ctx = NULL;
-    return cwist_http3_quic_unavailable();
+int cwist_http3_push_resource(cwist_http_request *req,
+                              const char *path,
+                              const char *content_type) {
+    if (!req || !req->private_data || !path) return -1;
+    lsquic_stream_t *stream = (lsquic_stream_t *)req->private_data;
+    lsquic_conn_t *conn = lsquic_stream_conn(stream);
+    if (!conn || !lsquic_conn_is_push_enabled(conn)) return -1;
+
+    /* Build push headers */
+    struct lsxpack_header headers_arr[4];
+    char hbuf[2048];
+    size_t hbuf_off = 0;
+    size_t hdr_count = 0;
+
+    /* :method = GET */
+    const char *method = "GET";
+    size_t mlen = strlen(method);
+    if (hbuf_off + 7 + 2 + mlen <= sizeof(hbuf)) {
+        memcpy(hbuf + hbuf_off, ":method", 7);
+        memcpy(hbuf + hbuf_off + 9, method, mlen);
+        lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                   0, 7, 9, mlen);
+        hbuf_off += 9 + mlen;
+        hdr_count++;
+    }
+
+    /* :path */
+    size_t plen = strlen(path);
+    if (hbuf_off + 5 + 2 + plen <= sizeof(hbuf)) {
+        memcpy(hbuf + hbuf_off, ":path", 5);
+        memcpy(hbuf + hbuf_off + 7, path, plen);
+        lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                   0, 5, 7, plen);
+        hbuf_off += 7 + plen;
+        hdr_count++;
+    }
+
+    /* :authority (copy from original request if available) */
+    char *authority = cwist_http_header_get(req->headers, "host");
+    if (!authority) authority = "localhost";
+    size_t alen = strlen(authority);
+    if (hbuf_off + 10 + 2 + alen <= sizeof(hbuf)) {
+        memcpy(hbuf + hbuf_off, ":authority", 10);
+        memcpy(hbuf + hbuf_off + 12, authority, alen);
+        lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                   0, 10, 12, alen);
+        hbuf_off += 12 + alen;
+        hdr_count++;
+    }
+
+    /* content-type (optional) */
+    if (content_type) {
+        size_t ctlen = strlen(content_type);
+        size_t ct_name_len = strlen("content-type");
+        if (hbuf_off + ct_name_len + 2 + ctlen <= sizeof(hbuf)) {
+            memcpy(hbuf + hbuf_off, "content-type", ct_name_len);
+            memcpy(hbuf + hbuf_off + ct_name_len + 2, content_type, ctlen);
+            lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                       0, ct_name_len, ct_name_len + 2, ctlen);
+            hbuf_off += ct_name_len + 2 + ctlen;
+            hdr_count++;
+        }
+    }
+
+    lsquic_http_headers_t headers = {
+        .count = (unsigned)hdr_count,
+        .headers = headers_arr,
+    };
+
+    return lsquic_conn_push_stream(conn, NULL, stream, &headers);
 }
 
-cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
-    if (ctx) *ctx = NULL;
-    return cwist_http3_quic_unavailable();
+int cwist_http3_set_stream_priority(cwist_http_request *req, unsigned priority) {
+    if (!req || !req->private_data) return -1;
+    if (priority < 1 || priority > 256) return -1;
+    return lsquic_stream_set_priority((lsquic_stream_t *)req->private_data, priority);
 }
 
-void cwist_http3_destroy_context(cwist_http3_context *ctx) {
+/* ------------------------------------------------------------------ */
+/* WebTransport API                                                   */
+/* ------------------------------------------------------------------ */
+
+void cwist_http3_set_webtransport_handler(cwist_http3_context *ctx,
+                                          cwist_webtransport_handler_func handler) {
+    if (ctx) ctx->wt_handler = handler;
+}
+
+/* ------------------------------------------------------------------ */
+/* Datagram API                                                       */
+/* ------------------------------------------------------------------ */
+
+void cwist_http3_set_datagram_enabled(cwist_http3_context *ctx, int enabled) {
+    if (ctx) ctx->datagram_enabled = enabled;
+}
+
+void cwist_http3_set_datagram_callback(cwist_http3_context *ctx,
+                                       void (*cb)(const void *data, size_t len, void *user_ctx),
+                                       void *user_ctx) {
     if (ctx) {
-        if (ctx->ssl_ctx) SSL_CTX_free(ctx->ssl_ctx);
-        cwist_free(ctx);
+        ctx->datagram_cb = cb;
+        ctx->datagram_user_ctx = user_ctx;
     }
 }
+
+int cwist_http3_send_datagram(void *conn, const void *data, size_t len) {
+    lsquic_conn_t *c = (lsquic_conn_t *)conn;
+    if (!c || !data || len == 0) return -1;
+    if (g_h3_dgram.data) free(g_h3_dgram.data);
+    g_h3_dgram.conn = c;
+    g_h3_dgram.data = malloc(len);
+    if (!g_h3_dgram.data) return -1;
+    memcpy(g_h3_dgram.data, data, len);
+    g_h3_dgram.len = len;
+    lsquic_conn_want_datagram_write(c, 1);
+    return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Serve connection (kept for API compat)                             */
+/* ------------------------------------------------------------------ */
 
 cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
                                            void *user_ctx,
                                            cwist_http3_request_handler_func handler) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
     (void)conn;
     (void)user_ctx;
     (void)handler;
-    return cwist_http3_quic_unavailable();
+    err.error.err_i16 = -1;
+    return err;
 }
-
-cwist_error_t cwist_http3_server_loop(int udp_fd,
-                                      cwist_http3_context *ctx,
-                                      cwist_http3_request_handler_func handler,
-                                      void *user_ctx) {
-    (void)udp_fd;
-    (void)ctx;
-    (void)handler;
-    (void)user_ctx;
-    return cwist_http3_quic_unavailable();
-}
-
-#endif /* CWIST_HAVE_OPENSSL_QUIC */

@@ -1,6 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 #include <cwist/sys/app/app.h>
+#include <cwist/sys/app/config.h>
+#include <cwist/sys/app/logger.h>
 #include <cwist/net/http/http.h>
 #include <cwist/net/http/http2.h>
 #include <cwist/net/http/http3.h>
@@ -245,6 +247,7 @@ static bool cwist_mem_refresh_file(cwist_fix_server_mem *mem, cwist_file_t *entr
 
 typedef struct cwist_route_entry {
     char *path;
+    char *name;
     bool has_params;
     cwist_http_method_t method;
     cwist_handler_func handler;
@@ -281,6 +284,7 @@ static cwist_route_table *cwist_route_table_create(void);
 static void cwist_route_table_destroy(cwist_route_table *table);
 static void cwist_route_table_insert(cwist_route_table *table,
                                      const char *path,
+                                     const char *name,
                                      cwist_http_method_t method,
                                      cwist_handler_func handler,
                                      cwist_ws_handler_func ws_handler,
@@ -322,6 +326,7 @@ static size_t cwist_route_hash(cwist_http_method_t method, const char *path, siz
 }
 
 static cwist_route_entry *cwist_route_entry_create(const char *path,
+                                                   const char *name,
                                                    cwist_http_method_t method,
                                                    cwist_handler_func handler,
                                                    cwist_ws_handler_func ws_handler,
@@ -329,6 +334,7 @@ static cwist_route_entry *cwist_route_entry_create(const char *path,
     cwist_route_entry *entry = (cwist_route_entry *)cwist_alloc(sizeof(cwist_route_entry));
     if (!entry) return NULL;
     entry->path = cwist_strdup(path ? path : "/");
+    entry->name = name ? cwist_strdup(name) : NULL;
     entry->method = method;
     entry->handler = handler;
     entry->ws_handler = ws_handler;
@@ -345,6 +351,7 @@ static cwist_route_entry *cwist_route_entry_create(const char *path,
 static void cwist_route_entry_free(cwist_route_entry *entry) {
     if (!entry) return;
     cwist_free(entry->path);
+    cwist_free(entry->name);
     cwist_free(entry);
 }
 
@@ -388,12 +395,13 @@ static void cwist_route_table_destroy(cwist_route_table *table) {
 
 static void cwist_route_table_insert(cwist_route_table *table,
                                      const char *path,
+                                     const char *name,
                                      cwist_http_method_t method,
                                      cwist_handler_func handler,
                                      cwist_ws_handler_func ws_handler,
                                      cwist_endpoint_opt_t opts) {
     if (!table || !path) return;
-    cwist_route_entry *entry = cwist_route_entry_create(path, method, handler, ws_handler, opts);
+    cwist_route_entry *entry = cwist_route_entry_create(path, name, method, handler, ws_handler, opts);
     if (!entry) return;
 
     if (entry->has_params) {
@@ -911,7 +919,10 @@ cwist_app *cwist_app_create(void) {
     app->ssl_ctx = NULL;
     app->h3_ctx = NULL;
     app->error_handler = NULL;
+    app->error_handlers = NULL;
     app->static_dirs = NULL;
+    app->config = cwist_config_create();
+    app->logger = cwist_logger_create("cwist");
     app->db = NULL;
     app->db_path = NULL;
     app->nuke_enabled = false;
@@ -961,6 +972,35 @@ void cwist_app_set_error_handler(cwist_app *app, cwist_error_handler_func handle
     if (app) app->error_handler = handler;
 }
 
+void cwist_app_register_error_handler(cwist_app *app, cwist_http_status_t status, cwist_error_handler_func handler) {
+    if (!app || !handler) return;
+    cwist_error_handler_entry *curr = app->error_handlers;
+    while (curr) {
+        if (curr->status_code == status) {
+            curr->handler = handler;
+            return;
+        }
+        curr = curr->next;
+    }
+    cwist_error_handler_entry *entry = (cwist_error_handler_entry *)cwist_alloc(sizeof(cwist_error_handler_entry));
+    entry->status_code = status;
+    entry->handler = handler;
+    entry->next = app->error_handlers;
+    app->error_handlers = entry;
+}
+
+static cwist_error_handler_func cwist_app_find_error_handler(cwist_app *app, cwist_http_status_t status) {
+    if (!app) return NULL;
+    cwist_error_handler_entry *curr = app->error_handlers;
+    while (curr) {
+        if (curr->status_code == status) {
+            return curr->handler;
+        }
+        curr = curr->next;
+    }
+    return app->error_handler;
+}
+
 /**
  * @brief Configure the Big Dumb Reply cache thresholds for the application.
  * @param app Application whose BDR context should be tuned.
@@ -992,6 +1032,16 @@ void cwist_app_destroy(cwist_app *app) {
         cwist_free(curr_m);
         curr_m = next;
     }
+
+    cwist_error_handler_entry *curr_e = app->error_handlers;
+    while (curr_e) {
+        cwist_error_handler_entry *next = curr_e->next;
+        cwist_free(curr_e);
+        curr_e = next;
+    }
+
+    if (app->config) cwist_config_destroy(app->config);
+    if (app->logger) cwist_logger_destroy(app->logger);
 
     cwist_static_dir *curr_s = app->static_dirs;
     while (curr_s) {
@@ -1332,16 +1382,25 @@ cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const cha
     return err;
 }
 
+static void add_route_named(cwist_app *app,
+                            const char *path,
+                            const char *name,
+                            cwist_http_method_t method,
+                            cwist_handler_func handler,
+                            cwist_endpoint_opt_t opts) {
+    if (!app || !app->router || !path) return;
+    if (opts == 0) {
+        opts = CWIST_ENDPOINT_DEFAULT;
+    }
+    cwist_route_table_insert(app->router, path, name, method, handler, NULL, opts);
+}
+
 static void add_route(cwist_app *app,
                       const char *path,
                       cwist_http_method_t method,
                       cwist_handler_func handler,
                       cwist_endpoint_opt_t opts) {
-    if (!app || !app->router || !path) return;
-    if (opts == 0) {
-        opts = CWIST_ENDPOINT_DEFAULT;
-    }
-    cwist_route_table_insert(app->router, path, method, handler, NULL, opts);
+    add_route_named(app, path, NULL, method, handler, opts);
 }
 
 /**
@@ -1354,6 +1413,10 @@ void cwist_app_get(cwist_app *app, const char *path, cwist_handler_func handler)
     add_route(app, path, CWIST_HTTP_GET, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
+void cwist_app_get_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler) {
+    add_route_named(app, path, name, CWIST_HTTP_GET, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
 /**
  * @brief Register a POST handler with default endpoint options.
  * @param app Application being configured.
@@ -1364,6 +1427,10 @@ void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler
     add_route(app, path, CWIST_HTTP_POST, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
+void cwist_app_post_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler) {
+    add_route_named(app, path, name, CWIST_HTTP_POST, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
 /**
  * @brief Register a WebSocket upgrade endpoint with default options.
  * @param app Application being configured.
@@ -1372,7 +1439,7 @@ void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler
  */
 void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handler) {
     if (!app || !app->router || !path) return;
-    cwist_route_table_insert(app->router, path, CWIST_HTTP_GET, NULL, handler, CWIST_ENDPOINT_DEFAULT);
+    cwist_route_table_insert(app->router, path, NULL, CWIST_HTTP_GET, NULL, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
 /**
@@ -1409,7 +1476,7 @@ void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func ha
     if (opts == 0) {
         opts = CWIST_ENDPOINT_DEFAULT;
     }
-    cwist_route_table_insert(app->router, path, CWIST_HTTP_GET, NULL, handler, opts);
+    cwist_route_table_insert(app->router, path, NULL, CWIST_HTTP_GET, NULL, handler, opts);
 }
 
 static bool match_path(const char *pattern, const char *actual, cwist_query_map *params) {
@@ -1438,6 +1505,70 @@ static bool match_path(const char *pattern, const char *actual, cwist_query_map 
     }
 
     return tok_p == NULL && tok_a == NULL;
+}
+
+static cwist_route_entry *cwist_route_table_find_by_name(cwist_route_table *table, const char *name) {
+    if (!table || !name) return NULL;
+    for (size_t i = 0; i < table->bucket_count; i++) {
+        cwist_route_entry *curr = table->buckets[i];
+        while (curr) {
+            if (curr->name && strcmp(curr->name, name) == 0) return curr;
+            curr = curr->next;
+        }
+    }
+    cwist_route_entry *curr = table->param_routes;
+    while (curr) {
+        if (curr->name && strcmp(curr->name, name) == 0) return curr;
+        curr = curr->next;
+    }
+    return NULL;
+}
+
+char *cwist_url_for(cwist_app *app, const char *name, cwist_query_map *params) {
+    if (!app || !app->router || !name) return NULL;
+    cwist_route_entry *entry = cwist_route_table_find_by_name(app->router, name);
+    if (!entry) return NULL;
+    const char *path = entry->path;
+    if (!params || !entry->has_params) {
+        return cwist_strdup(path);
+    }
+    // Build URL by replacing :param segments
+    cwist_sstring *result = cwist_sstring_create();
+    if (!result) return NULL;
+    char path_copy[512];
+    strncpy(path_copy, path, sizeof(path_copy) - 1);
+    path_copy[sizeof(path_copy) - 1] = '\0';
+    char *saveptr;
+    char *tok = strtok_r(path_copy, "/", &saveptr);
+    int first = 1;
+    while (tok) {
+        if (!first) cwist_sstring_append(result, "/");
+        first = 0;
+        if (tok[0] == ':') {
+            const char *val = cwist_query_map_get(params, tok + 1);
+            if (val) {
+                cwist_sstring_append(result, val);
+            } else {
+                cwist_sstring_append(result, tok);
+            }
+        } else {
+            cwist_sstring_append(result, tok);
+        }
+        tok = strtok_r(NULL, "/", &saveptr);
+    }
+    char *out = cwist_strdup(result->data);
+    cwist_sstring_destroy(result);
+    return out;
+}
+
+// Forward declaration
+static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwist_http_response *res);
+
+void cwist_app_dispatch(cwist_app *app, cwist_http_request *req, cwist_http_response *res) {
+    if (!app || !req || !res) return;
+    req->app = app;
+    req->db = app->db;
+    internal_route_handler(app, req, res);
 }
 
 // Internal Router Logic
@@ -1485,11 +1616,12 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
         } else {
             execute_chain(app, req, res, found_route->handler, NULL);
         }
+    } else {
+        cwist_error_handler_func eh = cwist_app_find_error_handler(app, CWIST_HTTP_NOT_FOUND);
+        if (eh) {
+            eh(req, res, CWIST_HTTP_NOT_FOUND);
         } else {
-            if (app->error_handler) {
-                app->error_handler(req, res, CWIST_HTTP_NOT_FOUND);
-            } else {
-                res->status_code = CWIST_HTTP_NOT_FOUND;
+            res->status_code = CWIST_HTTP_NOT_FOUND;
             cwist_sstring_assign(res->body, "404 Not Found");
         }
     }

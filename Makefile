@@ -1,7 +1,10 @@
 # Compiler and Flags
 CC ?= gcc
 
-INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src
+CURL_CFLAGS := $(shell pkg-config --cflags libcurl 2>/dev/null)
+NGHTTP2_CFLAGS := $(shell pkg-config --cflags libnghttp2 2>/dev/null)
+
+INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src -I./lib/boringssl/include -I./lib/lsquic/include -I./lib/multipart-parser-c $(CURL_CFLAGS) $(NGHTTP2_CFLAGS)
 COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
 COMMON_WARNINGS = -std=c17 -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
@@ -41,7 +44,24 @@ URIPARSER_CMAKE_FLAGS = -DCMAKE_BUILD_TYPE=Release \
                         -DURIPARSER_BUILD_FUZZERS=OFF \
                         -DURIPARSER_BUILD_TOOLS=OFF
 
-LIBS = -pthread -ldl -lm -lstdc++ -lssl -lcrypto
+BORINGSSL_DIR = lib/boringssl
+BORINGSSL_BUILD_DIR = $(BORINGSSL_DIR)/build
+BORINGSSL_SSL_LIB = $(BORINGSSL_BUILD_DIR)/libssl.a
+BORINGSSL_CRYPTO_LIB = $(BORINGSSL_BUILD_DIR)/libcrypto.a
+
+LSQUIC_DIR = lib/lsquic
+LSQUIC_BUILD_DIR = $(LSQUIC_DIR)/build
+LSQUIC_LIB = $(LSQUIC_BUILD_DIR)/src/liblsquic/liblsquic.a
+
+CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null)
+NGHTTP2_LIBS := $(shell pkg-config --libs libnghttp2 2>/dev/null)
+
+LIBS = -pthread -ldl -lm -lstdc++ -lz \
+       $(LSQUIC_LIB) \
+       $(BORINGSSL_SSL_LIB) \
+       $(BORINGSSL_CRYPTO_LIB) \
+       $(CURL_LIBS) \
+       $(NGHTTP2_LIBS)
 
 # SQLite Automation
 SQLITE_YEAR = 2024
@@ -74,8 +94,12 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/http.c \
        src/net/http/http2.c \
        src/net/http/http3.c \
+       src/net/http/http_client.c \
+       src/net/http/http3_client.c \
        src/net/http/https.c \
        src/net/http/mux.c \
+       src/net/http/multipart.c \
+       lib/multipart-parser-c/multipart_parser.c \
        src/net/http/query.c \
        src/sys/session/session_manager.c \
        src/core/siphash/siphash.c \
@@ -89,6 +113,10 @@ SRCS = src/core/sstring/sstring.c \
        src/core/utils/json_heal.c \
        src/core/utils/zod.c \
        src/sys/app/middleware.c \
+       src/sys/app/config.c \
+       src/sys/app/logger.c \
+       src/sys/app/test_client.c \
+       src/sys/session/flash.c \
        src/core/template/template.c \
        src/core/html/builder.c \
        src/core/html/css_composer.c \
@@ -133,7 +161,7 @@ $(SQLITE_DIR)/sqlite3.c:
 	@rm $(SQLITE_DIR)/$(SQLITE_ZIP)
 	@echo "SQLite Ready."
 
-$(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(OBJS)
+$(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB) $(LSQUIC_LIB) $(OBJS)
 	@echo "Creating static library..."
 	@rm -rf .lib_merge_tmp
 	@mkdir -p .lib_merge_tmp
@@ -141,7 +169,10 @@ $(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(OBJS)
 		ar x $(abspath $(URIPARSER_LIB)) && \
 		ar x $(abspath $(CJSON_LIB)) && \
 		ar x $(abspath $(LIBTTAK_LIB)) && \
-		ar x $(abspath $(CNATS_LIB))
+		ar x $(abspath $(CNATS_LIB)) && \
+		ar x $(abspath $(LSQUIC_LIB)) && \
+		ar x $(abspath $(BORINGSSL_SSL_LIB)) && \
+		ar x $(abspath $(BORINGSSL_CRYPTO_LIB))
 	ar rcs $@ $(OBJS) .lib_merge_tmp/*.o
 	@rm -rf .lib_merge_tmp
 
@@ -160,6 +191,33 @@ $(URIPARSER_LIB):
 	cmake -S $(URIPARSER_DIR) -B $(URIPARSER_BUILD_DIR) -DCMAKE_C_COMPILER=$(CC) $(URIPARSER_CMAKE_FLAGS)
 	@echo "Building uriparser..."
 	cmake --build $(URIPARSER_BUILD_DIR) --target uriparser
+
+BORINGSSL_STAMP = $(BORINGSSL_BUILD_DIR)/.boringssl_built
+
+$(BORINGSSL_STAMP):
+	@echo "Building BoringSSL..."
+	@mkdir -p $(BORINGSSL_BUILD_DIR)
+	cmake -S $(BORINGSSL_DIR) -B $(BORINGSSL_BUILD_DIR) \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_CXX_COMPILER=$(CXX) \
+		-DCMAKE_BUILD_TYPE=Release
+	cmake --build $(BORINGSSL_BUILD_DIR) --target ssl crypto
+	@touch $@
+
+$(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB): $(BORINGSSL_STAMP)
+
+$(LSQUIC_LIB): $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB)
+	@echo "Building lsquic..."
+	@mkdir -p $(LSQUIC_BUILD_DIR)
+	cmake -S $(LSQUIC_DIR) -B $(LSQUIC_BUILD_DIR) \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBORINGSSL_DIR=$(abspath $(BORINGSSL_DIR)) \
+		-DBORINGSSL_LIB_ssl=$(abspath $(BORINGSSL_SSL_LIB)) \
+		-DBORINGSSL_LIB_crypto=$(abspath $(BORINGSSL_CRYPTO_LIB)) \
+		-DBORINGSSL_INCLUDE=$(abspath $(BORINGSSL_DIR)/include) \
+		-DBUILD_SHARED_LIBS=OFF
+	cmake --build $(LSQUIC_BUILD_DIR) --target lsquic
 
 $(CNATS_LIB):
 	@echo "Building cnats..."
@@ -285,6 +343,8 @@ clean:
 	rm -rf $(URIPARSER_BUILD_DIR)
 	rm -rf .lib_merge_tmp
 	@rm -rf $(CNATS_DIR)/build
+	@rm -rf $(BORINGSSL_BUILD_DIR)
+	@rm -rf $(LSQUIC_BUILD_DIR)
 	-@$(MAKE) -C $(LIBTTAK_DIR) clean || true
 
 rebuild: clean all

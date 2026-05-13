@@ -276,6 +276,7 @@ cwist_mux_router *cwist_mux_router_create(void) {
     memset(router->buckets, 0, router->bucket_count * sizeof(cwist_mux_route *));
     router->routes = NULL;
     router->param_routes = NULL;
+    router->wildcard_routes = NULL;
     return router;
 }
 
@@ -289,6 +290,12 @@ void cwist_mux_router_destroy(cwist_mux_router *router) {
     while (curr) {
         cwist_mux_route *next = curr->next;
         cwist_sstring_destroy(curr->path);
+        cwist_mux_middleware_node *mw = curr->middleware;
+        while (mw) {
+            cwist_mux_middleware_node *mw_next = mw->next;
+            cwist_free(mw);
+            mw = mw_next;
+        }
         cwist_free(curr);
         curr = next;
     }
@@ -315,12 +322,19 @@ void cwist_mux_handle(cwist_mux_router *router, cwist_http_method_t method, cons
     route->handler = handler;
     route->bucket_next = NULL;
     route->param_next = NULL;
+    route->middleware = NULL;
+    route->is_wildcard = false;
     route->next = router->routes;
     router->routes = route;
 
+    size_t path_len = strlen(path);
     route->is_parametric = (strchr(path, ':') != NULL);
+    route->is_wildcard = (path_len > 0 && path[path_len - 1] == '*');
 
-    if (route->is_parametric) {
+    if (route->is_wildcard) {
+        route->param_next = router->wildcard_routes;
+        router->wildcard_routes = route;
+    } else if (route->is_parametric) {
         route->param_next = router->param_routes;
         router->param_routes = route;
     } else {
@@ -379,6 +393,116 @@ static bool match_parametric_route(const char *route_tmpl, const char *req_path,
     return false;
 }
 
+static bool match_wildcard_route(const char *route_tmpl, const char *req_path) {
+    size_t len = strlen(route_tmpl);
+    if (len > 0 && route_tmpl[len - 1] == '*') {
+        size_t prefix_len = len - 1;
+        return strncmp(req_path, route_tmpl, prefix_len) == 0;
+    }
+    return false;
+}
+
+static void mux_chain_next(cwist_http_request *req, cwist_http_response *res) {
+    typedef struct {
+        cwist_mux_middleware_node *current;
+        cwist_http_handler_func handler;
+    } mux_chain_state;
+    mux_chain_state *state = (mux_chain_state *)req->route_middleware_state;
+    if (state && state->current) {
+        cwist_mux_middleware_node *mw = state->current;
+        state->current = mw->next;
+        mw->func(req, res, mux_chain_next);
+    } else {
+        state->handler(req, res);
+    }
+}
+
+static void run_middleware_chain(cwist_mux_middleware_node *mw, cwist_http_request *req, cwist_http_response *res, cwist_http_handler_func handler) {
+    typedef struct {
+        cwist_mux_middleware_node *current;
+        cwist_http_handler_func handler;
+    } mux_chain_state;
+    mux_chain_state state = { .current = mw, .handler = handler };
+    req->route_middleware_state = &state;
+    mux_chain_next(req, res);
+    req->route_middleware_state = NULL;
+}
+
+cwist_mux_route *cwist_mux_find_route(cwist_mux_router *router, cwist_http_method_t method, const char *path) {
+    if (!router || !path) return NULL;
+    cwist_mux_signature signature = cwist_mux_signature_from_path(method, path);
+    size_t idx = cwist_mux_bucket_index(router, &signature);
+    cwist_mux_route *curr = router->buckets[idx];
+    while (curr) {
+        if (curr->method == method &&
+            curr->signature_hi == signature.hi &&
+            curr->signature_lo == signature.lo &&
+            curr->path && curr->path->data &&
+            strcmp(curr->path->data, path) == 0) {
+            return curr;
+        }
+        curr = curr->bucket_next;
+    }
+    curr = router->param_routes;
+    while (curr) {
+        if (curr->method == method && curr->path && curr->path->data) {
+            cwist_query_map *dummy = NULL;
+            if (match_parametric_route(curr->path->data, path, &dummy)) {
+                if (dummy) cwist_query_map_destroy(dummy);
+                return curr;
+            }
+        }
+        curr = curr->param_next;
+    }
+    return NULL;
+}
+
+/* --- Route Groups --- */
+
+cwist_mux_group *cwist_mux_group_create(cwist_mux_router *router, const char *prefix) {
+    if (!router || !prefix) return NULL;
+    cwist_mux_group *group = (cwist_mux_group *)cwist_alloc(sizeof(cwist_mux_group));
+    if (!group) return NULL;
+    group->router = router;
+    group->prefix = (char *)cwist_alloc(strlen(prefix) + 1);
+    if (!group->prefix) {
+        cwist_free(group);
+        return NULL;
+    }
+    strcpy(group->prefix, prefix);
+    return group;
+}
+
+void cwist_mux_group_destroy(cwist_mux_group *group) {
+    if (!group) return;
+    cwist_free(group->prefix);
+    cwist_free(group);
+}
+
+void cwist_mux_group_handle(cwist_mux_group *group, cwist_http_method_t method, const char *path, cwist_http_handler_func handler) {
+    if (!group || !group->router || !path || !handler) return;
+    size_t prefix_len = strlen(group->prefix);
+    size_t path_len = strlen(path);
+    char *full_path = (char *)cwist_alloc(prefix_len + path_len + 1);
+    if (!full_path) return;
+    memcpy(full_path, group->prefix, prefix_len);
+    memcpy(full_path + prefix_len, path, path_len);
+    full_path[prefix_len + path_len] = '\0';
+    cwist_mux_handle(group->router, method, full_path, handler);
+    cwist_free(full_path);
+}
+
+/* --- Per-Route Middleware --- */
+
+void cwist_mux_route_use(cwist_mux_route *route, cwist_middleware_func mw) {
+    if (!route || !mw) return;
+    cwist_mux_middleware_node *node = (cwist_mux_middleware_node *)cwist_alloc(sizeof(cwist_mux_middleware_node));
+    if (!node) return;
+    node->func = mw;
+    node->next = route->middleware;
+    route->middleware = node;
+}
+
 /**
  * @brief Attempt to dispatch an incoming request through the mux table.
  * @param router Router containing registered exact-match handlers.
@@ -401,7 +525,11 @@ bool cwist_mux_serve(cwist_mux_router *router, cwist_http_request *req, cwist_ht
             curr->signature_lo == signature.lo &&
             curr->path && curr->path->data &&
             strcmp(curr->path->data, path) == 0) {
-            curr->handler(req, res);
+            if (curr->middleware) {
+                run_middleware_chain(curr->middleware, req, res, curr->handler);
+            } else {
+                curr->handler(req, res);
+            }
             return true;
         }
         curr = curr->bucket_next;
@@ -415,12 +543,31 @@ bool cwist_mux_serve(cwist_mux_router *router, cwist_http_request *req, cwist_ht
             if (match_parametric_route(curr->path->data, path, &extracted_params)) {
                 if (extracted_params) {
                     if (req->path_params) {
-                        // Free old params if any (should be none, but just to be safe)
                         cwist_query_map_destroy(req->path_params);
                     }
                     req->path_params = extracted_params;
                 }
-                curr->handler(req, res);
+                if (curr->middleware) {
+                    run_middleware_chain(curr->middleware, req, res, curr->handler);
+                } else {
+                    curr->handler(req, res);
+                }
+                return true;
+            }
+        }
+        curr = curr->param_next;
+    }
+
+    // 3. Try wildcard matching (linear search)
+    curr = router->wildcard_routes;
+    while (curr) {
+        if (curr->method == req->method && curr->path && curr->path->data) {
+            if (match_wildcard_route(curr->path->data, path)) {
+                if (curr->middleware) {
+                    run_middleware_chain(curr->middleware, req, res, curr->handler);
+                } else {
+                    curr->handler(req, res);
+                }
                 return true;
             }
         }

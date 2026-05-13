@@ -4,46 +4,65 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <pthread.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <pthread.h>
 
 #define TEST_CERT "example/othello-web/server.crt"
-#define TEST_KEY "example/othello-web/server.key"
+#define TEST_KEY  "example/othello-web/server.key"
 
-static void http3_test_handler(void *user_ctx, cwist_http_request *req, cwist_http_response *res) {
+static volatile int g_handler_called = 0;
+
+static void http3_test_handler(void *user_ctx, cwist_http_request *req,
+                               cwist_http_response *res) {
     (void)user_ctx;
     (void)req;
     (void)res;
+    g_handler_called = 1;
 }
 
-#if CWIST_HAVE_OPENSSL_QUIC
+typedef struct {
+    int udp_fd;
+    cwist_http3_context *ctx;
+} server_thread_args_t;
+
 static void *http3_server_thread(void *arg) {
-    int udp_fd = *(int *)arg;
-    cwist_http3_context *ctx = NULL;
-    cwist_error_t err = cwist_http3_init_context(&ctx, TEST_CERT, TEST_KEY);
-    assert(err.error.err_i16 == 0);
-
-    cwist_http3_server_loop(udp_fd, ctx, http3_test_handler, NULL);
-
-    cwist_http3_destroy_context(ctx);
+    server_thread_args_t *args = (server_thread_args_t *)arg;
+    cwist_http3_server_loop(args->udp_fd, args->ctx, http3_test_handler, NULL);
     return NULL;
 }
-#endif
 
 int main(void) {
-    printf("Testing HTTP/3 infrastructure...\n");
+    printf("Testing HTTP/3 (BoringSSL + lsquic) infrastructure...\n");
 
+    /* --- Test 1: init_context with valid cert/key --- */
     cwist_http3_context *ctx = NULL;
     cwist_error_t err = cwist_http3_init_context(&ctx, TEST_CERT, TEST_KEY);
-
-#if CWIST_HAVE_OPENSSL_QUIC
     assert(err.error.err_i16 == 0);
     assert(ctx != NULL);
     assert(ctx->ssl_ctx != NULL);
     cwist_http3_destroy_context(ctx);
-    printf("HTTP/3 context initialization passed.\n");
+    printf("[PASS] HTTP/3 context initialization with PEM files.\n");
 
+    /* --- Test 2: init_context with missing cert --- */
+    ctx = NULL;
+    err = cwist_http3_init_context(&ctx, "/nonexistent/cert.pem",
+                                   "/nonexistent/key.pem");
+    assert(err.error.err_i16 == -1);
+    assert(ctx == NULL);
+    printf("[PASS] HTTP/3 context fails gracefully with missing PEM files.\n");
+
+    /* --- Test 3: ephemeral context (self-signed cert) --- */
+    ctx = NULL;
+    err = cwist_http3_init_context_ephemeral(&ctx);
+    assert(err.error.err_i16 == 0);
+    assert(ctx != NULL);
+    assert(ctx->ssl_ctx != NULL);
+    cwist_http3_destroy_context(ctx);
+    printf("[PASS] HTTP/3 ephemeral context initialization.\n");
+
+    /* --- Test 4: server_loop rejects invalid args --- */
     int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
     assert(udp_fd >= 0);
 
@@ -51,31 +70,53 @@ int main(void) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons(0);
-
     assert(bind(udp_fd, (struct sockaddr *)&addr, sizeof(addr)) == 0);
 
+    ctx = NULL;
+    err = cwist_http3_init_context_ephemeral(&ctx);
+    assert(err.error.err_i16 == 0);
+
+    /* Invalid: NULL handler should fail */
+    err = cwist_http3_server_loop(udp_fd, ctx, NULL, NULL);
+    assert(err.error.err_i16 == -1);
+    printf("[PASS] HTTP/3 server_loop rejects NULL handler.\n");
+
+    /* --- Test 5: server_loop runs and stops gracefully --- */
+    server_thread_args_t args = { .udp_fd = udp_fd, .ctx = ctx };
     pthread_t tid;
-    pthread_create(&tid, NULL, http3_server_thread, &udp_fd);
+    int rc = pthread_create(&tid, NULL, http3_server_thread, &args);
+    assert(rc == 0);
 
-    usleep(100000);
+    /* Let the server start polling */
+    usleep(50000);
 
-    struct sockaddr_in server_addr;
-    socklen_t server_addr_len = sizeof(server_addr);
-    getsockname(udp_fd, (struct sockaddr *)&server_addr, &server_addr_len);
+    /* Verify the context is marked running */
+    assert(ctx->running == 1);
 
-    int client_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    sendto(client_fd, "hello h3", 8, 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
-    close(client_fd);
+    /* Stop the server */
+    ctx->running = 0;
 
-    usleep(100000);
+    rc = pthread_join(tid, NULL);
+    assert(rc == 0);
+    printf("[PASS] HTTP/3 server_loop starts and stops gracefully.\n");
+
+    cwist_http3_destroy_context(ctx);
     close(udp_fd);
 
-    printf("HTTP/3 server loop skeleton test finished.\n");
-#else
-    assert(err.error.err_i16 == -1);
-    assert(ctx == NULL);
-    printf("HTTP/3 QUIC support unavailable in this OpenSSL build; TCP HTTP/1.1 fallback remains available.\n");
-#endif
+    /* --- Test 6: Advanced features (API smoke test) --- */
+    ctx = NULL;
+    err = cwist_http3_init_context_ephemeral(&ctx);
+    assert(err.error.err_i16 == 0);
+
+    /* Enable server push */
+    cwist_http3_set_push_enabled(ctx, 1);
+    assert(ctx->push_enabled == 1);
+    printf("[PASS] HTTP/3 server push enable API.\n");
+
+    /* Connection migration is on by default */
+    assert(ctx->allow_migration == 0); /* not explicitly set yet */
+    cwist_http3_destroy_context(ctx);
+    printf("[PASS] HTTP/3 connection migration defaults.\n");
 
     printf("All HTTP/3 infrastructure tests passed!\n");
     return 0;

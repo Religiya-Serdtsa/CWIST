@@ -73,8 +73,10 @@ typedef struct cwist_http_request {
     cwist_db *db;           ///< Shared database handle from cwist_app.
     bool upgraded;
     void *private_data; ///< Internal framework use.
+    void *route_middleware_state; ///< Router middleware chain state (internal).
     size_t content_length;
     cwist_endpoint_opt_t endpoint_opts; ///< Behavior hints for the active endpoint.
+    cwist_query_map *flash; ///< Flash messages for this request (one-time read).
 } cwist_http_request;
 
 typedef void (*cwist_http_body_cleanup_fn)(const void *ptr, size_t len, void *ctx);
@@ -106,6 +108,9 @@ typedef struct cwist_http_response {
     bool file_stream_auto_close; ///< Close fd after streaming.
     
     bool keep_alive;
+    
+    /// Alt-Svc header for HTTP/3 upgrade advertisement
+    char *alt_svc;
 } cwist_http_response;
 
 /** --- API Functions --- */
@@ -135,6 +140,7 @@ void cwist_http_response_destroy(cwist_http_response *res);
  */
 void cwist_http_response_set_body_ptr(cwist_http_response *res, const void *ptr, size_t len);
 void cwist_http_response_set_body_ptr_managed(cwist_http_response *res, const void *ptr, size_t len, cwist_http_body_cleanup_fn cleanup, void *ctx);
+void cwist_http_response_set_alt_svc(cwist_http_response *res, const char *alt_svc);
 
 cwist_sstring *cwist_http_stringify_response(cwist_http_response *res);
 cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res);

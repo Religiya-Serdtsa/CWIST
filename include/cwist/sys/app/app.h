@@ -34,6 +34,12 @@ typedef void (*cwist_ws_handler_func)(cwist_websocket *ws);
  */
 typedef void (*cwist_error_handler_func)(cwist_http_request *req, cwist_http_response *res, cwist_http_status_t status);
 
+typedef struct cwist_error_handler_entry {
+    cwist_http_status_t status_code;
+    cwist_error_handler_func handler;
+    struct cwist_error_handler_entry *next;
+} cwist_error_handler_entry;
+
 /**
  * @brief Middleware type that receives req/res pair and the next stage in the chain.
  */
@@ -50,6 +56,8 @@ typedef struct cwist_middleware_node {
 
 typedef struct cwist_route_table cwist_route_table;
 typedef struct cwist_static_dir cwist_static_dir;
+typedef struct cwist_config cwist_config;
+typedef struct cwist_logger cwist_logger;
 
 /**
  * @brief Main Application Context.
@@ -73,7 +81,11 @@ typedef struct cwist_app {
     cwist_route_table *router; ///< Router definition.
     cwist_static_dir *static_dirs; ///< Static directory mappings.
     
-    cwist_error_handler_func error_handler; ///< Error handling callback.
+    cwist_error_handler_func error_handler; ///< Global fallback error handler.
+    cwist_error_handler_entry *error_handlers; ///< Per-status-code error handlers.
+
+    struct cwist_config *config; ///< Application configuration.
+    struct cwist_logger *logger; ///< Application logger.
 
     cwist_https_context *ssl_ctx; ///< SSL context when TLS is enabled.
     struct cwist_http3_context *h3_ctx; ///< HTTP/3 QUIC Context.
@@ -156,6 +168,7 @@ void cwist_app_use(cwist_app *app, cwist_middleware_func mw);
 /** @name Error Handling Configuration */
 /** @{ */
 void cwist_app_set_error_handler(cwist_app *app, cwist_error_handler_func handler);
+void cwist_app_register_error_handler(cwist_app *app, cwist_http_status_t status, cwist_error_handler_func handler);
 /** @} */
 
 /**
@@ -209,6 +222,10 @@ void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func hand
 void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
 void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func handler, cwist_endpoint_opt_t opts);
 
+void cwist_app_get_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
+void cwist_app_post_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
+char *cwist_url_for(cwist_app *app, const char *name, cwist_query_map *params);
+
 /**
  * @brief Serves a directory of static files at a URL prefix.
  * Files are loaded into the fixed memory pool for Zero-Copy serving.
@@ -224,5 +241,11 @@ cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const cha
 /** @{ */
 int cwist_app_listen(cwist_app *app, int port);
 /** @} */
+
+/**
+ * @brief Dispatch a request internally through the app's router and middleware.
+ * Used by the test client and advanced integrations.
+ */
+void cwist_app_dispatch(cwist_app *app, cwist_http_request *req, cwist_http_response *res);
 
 #endif

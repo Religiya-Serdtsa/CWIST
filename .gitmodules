@@ -19,3 +19,6 @@
 [submodule "lib/lsquic"]
 	path = lib/lsquic
 	url = https://github.com/litespeedtech/lsquic.git
+[submodule "lib/multipart-parser-c"]
+	path = lib/multipart-parser-c
+	url = https://github.com/iafonov/multipart-parser-c.git
