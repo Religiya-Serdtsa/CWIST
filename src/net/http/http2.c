@@ -935,6 +935,8 @@ cwist_error_t cwist_http2_serve_connection(
 
     /* 3. Main Event Loop */
     bool connected = true;
+    cwist_http_request *pending_req = NULL;
+    uint32_t pending_stream_id = 0;
     while (connected) {
         unsigned char hdr[9];
         int n = 0;
@@ -992,29 +994,65 @@ cwist_error_t cwist_http2_serve_connection(
                 h2_decode_header_block(req, payload + block_offset, block_len);
             }
 
-            cwist_http_response *res = cwist_http_response_create();
-            if (res) {
-                handler(user_ctx, req, res);
-                if (conn->http3_enabled) {
-                    struct sockaddr_storage ss;
-                    socklen_t ss_len = sizeof(ss);
-                    int port = 443;
-                    if (getsockname(conn->fd, (struct sockaddr *)&ss, &ss_len) == 0) {
-                        if (ss.ss_family == AF_INET) {
-                            port = ntohs(((struct sockaddr_in *)&ss)->sin_port);
-                        } else if (ss.ss_family == AF_INET6) {
-                            port = ntohs(((struct sockaddr_in6 *)&ss)->sin6_port);
+            if (hdr[4] & CWIST_HTTP2_FLAG_END_STREAM) {
+                cwist_http_response *res = cwist_http_response_create();
+                if (res) {
+                    handler(user_ctx, req, res);
+                    if (conn->http3_enabled) {
+                        struct sockaddr_storage ss;
+                        socklen_t ss_len = sizeof(ss);
+                        int port = 443;
+                        if (getsockname(conn->fd, (struct sockaddr *)&ss, &ss_len) == 0) {
+                            if (ss.ss_family == AF_INET) {
+                                port = ntohs(((struct sockaddr_in *)&ss)->sin_port);
+                            } else if (ss.ss_family == AF_INET6) {
+                                port = ntohs(((struct sockaddr_in6 *)&ss)->sin6_port);
+                            }
                         }
+                        char alt_svc[64];
+                        snprintf(alt_svc, sizeof(alt_svc), "h3=\":%d\"; ma=86400", port);
+                        cwist_http_header_add(&res->headers, "Alt-Svc", alt_svc);
                     }
-                    char alt_svc[64];
-                    snprintf(alt_svc, sizeof(alt_svc), "h3=\":%d\"; ma=86400", port);
-                    cwist_http_header_add(&res->headers, "Alt-Svc", alt_svc);
+                    if (h2_send_response(conn, stream_id, res) != 0) connected = false;
+                    cwist_http_response_destroy(res);
                 }
-                if (h2_send_response(conn, stream_id, res) != 0) connected = false;
-                cwist_http_response_destroy(res);
+                cwist_http_request_destroy(req);
+            } else {
+                pending_req = req;
+                pending_stream_id = stream_id;
             }
-
-            cwist_http_request_destroy(req);
+        } else if (type == CWIST_HTTP2_FRAME_DATA && stream_id != 0) {
+            if (pending_req && pending_stream_id == stream_id) {
+                if (payload && len > 0) {
+                    cwist_sstring_append_len(pending_req->body, (const char *)payload, len);
+                }
+                if (hdr[4] & CWIST_HTTP2_FLAG_END_STREAM) {
+                    cwist_http_response *res = cwist_http_response_create();
+                    if (res) {
+                        handler(user_ctx, pending_req, res);
+                        if (conn->http3_enabled) {
+                            struct sockaddr_storage ss;
+                            socklen_t ss_len = sizeof(ss);
+                            int port = 443;
+                            if (getsockname(conn->fd, (struct sockaddr *)&ss, &ss_len) == 0) {
+                                if (ss.ss_family == AF_INET) {
+                                    port = ntohs(((struct sockaddr_in *)&ss)->sin_port);
+                                } else if (ss.ss_family == AF_INET6) {
+                                    port = ntohs(((struct sockaddr_in6 *)&ss)->sin6_port);
+                                }
+                            }
+                            char alt_svc[64];
+                            snprintf(alt_svc, sizeof(alt_svc), "h3=\":%d\"; ma=86400", port);
+                            cwist_http_header_add(&res->headers, "Alt-Svc", alt_svc);
+                        }
+                        if (h2_send_response(conn, stream_id, res) != 0) connected = false;
+                        cwist_http_response_destroy(res);
+                    }
+                    cwist_http_request_destroy(pending_req);
+                    pending_req = NULL;
+                    pending_stream_id = 0;
+                }
+            }
         }
 
         free(payload);
