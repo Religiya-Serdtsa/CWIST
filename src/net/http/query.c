@@ -4,8 +4,8 @@
 #include <cwist/core/mem/alloc.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdio.h>
-#include <uriparser/Uri.h>
 
 /**
  * @file query.c
@@ -118,6 +118,38 @@ const char *cwist_query_map_get(cwist_query_map *map, const char *key) {
 }
 
 /**
+ * @brief Decode a URL-encoded component with '+' → space semantics.
+ *        '+' → 0x20, '%XY' → hex byte (strict), everything else passthrough.
+ * @param src Raw (still encoded) key or value.
+ * @return Newly allocated decoded string, or NULL on allocation failure.
+ */
+static char *url_decode(const char *src) {
+    if (!src) return NULL;
+
+    size_t len = strlen(src);
+    char *out = (char *)cwist_alloc(len + 1);
+    if (!out) return NULL;
+
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (src[i] == '%' && i + 2 < len
+            && isxdigit((unsigned char)src[i + 1])
+            && isxdigit((unsigned char)src[i + 2])) {
+            unsigned int byte;
+            sscanf(src + i + 1, "%2x", &byte);
+            out[j++] = (char)byte;
+            i += 2;
+        } else if (src[i] == '+') {
+            out[j++] = 0x20; /* SPACE (U+0020) */
+        } else {
+            out[j++] = src[i];
+        }
+    }
+    out[j] = '\0';
+    return out;
+}
+
+/**
  * @brief Parse a raw `a=1&b=2` query string into the existing map.
  * @param map Destination map that receives decoded keys and values.
  * @param raw_query Raw query substring without the leading question mark.
@@ -125,21 +157,34 @@ const char *cwist_query_map_get(cwist_query_map *map, const char *key) {
 void cwist_query_map_parse(cwist_query_map *map, const char *raw_query) {
     if (!map || !raw_query || strlen(raw_query) == 0) return;
 
-    UriQueryListA *queryList = NULL;
-    int itemCount = 0;
-    
-    // uriparser handles & and = and url decoding
-    if (uriDissectQueryMallocA(&queryList, &itemCount, raw_query, raw_query + strlen(raw_query)) != URI_SUCCESS) {
-        return;
-    }
+    char *buffer = cwist_strdup(raw_query);
+    if (!buffer) return;
 
-    UriQueryListA *curr = queryList;
-    while (curr) {
-        if (curr->key) {
-            cwist_query_map_set(map, curr->key, curr->value ? curr->value : "");
+    char *save_ptr = NULL;
+    char *token = strtok_r(buffer, "&", &save_ptr);
+
+    while (token) {
+        char *eq = strchr(token, '=');
+        if (!eq) {
+            token = strtok_r(NULL, "&", &save_ptr);
+            continue;
         }
-        curr = curr->next;
+
+        *eq = '\0';
+        const char *key_raw = token;
+        const char *value_raw = eq + 1;
+
+        char *key_dec = url_decode(key_raw);
+        char *value_dec = url_decode(value_raw);
+
+        if (key_dec && cwist_query_map_get(map, key_dec) == NULL) {
+            cwist_query_map_set(map, key_dec, value_dec ? value_dec : "");
+        }
+
+        cwist_free(key_dec);
+        cwist_free(value_dec);
+        token = strtok_r(NULL, "&", &save_ptr);
     }
 
-    uriFreeQueryListA(queryList);
+    cwist_free(buffer);
 }
