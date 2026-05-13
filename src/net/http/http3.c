@@ -996,7 +996,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                     lsquic_engine_packet_in(engine, pkt_buf, (size_t)nr,
                                             local_addr_len ? (struct sockaddr *)&local_addr : NULL,
                                             (struct sockaddr *)&peer_addr,
-                                            &ecn, sizeof(ecn));
+                                            ctx, ecn);
                 } else if (nr < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
                     if (errno == ECONNREFUSED || errno == ENETUNREACH ||
                         errno == EHOSTUNREACH) {
