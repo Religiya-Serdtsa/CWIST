@@ -11,12 +11,14 @@
 typedef enum cwist_https_protocol {
     CWIST_HTTPS_PROTOCOL_NONE = 0,
     CWIST_HTTPS_PROTOCOL_HTTP11,
-    CWIST_HTTPS_PROTOCOL_HTTP2
+    CWIST_HTTPS_PROTOCOL_HTTP2,
+    CWIST_HTTPS_PROTOCOL_HTTP3
 } cwist_https_protocol;
 
 typedef struct cwist_https_context {
     SSL_CTX *ctx;
     bool http2_enabled;
+    bool http3_enabled;
 } cwist_https_context;
 
 typedef struct cwist_https_connection {
@@ -26,6 +28,7 @@ typedef struct cwist_https_connection {
     size_t buf_len;
     bool negotiated_http2;
     cwist_https_protocol negotiated_protocol;
+    bool http3_enabled;
 } cwist_https_connection;
 
 typedef struct cwist_https_options {

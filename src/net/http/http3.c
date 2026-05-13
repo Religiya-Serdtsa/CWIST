@@ -21,12 +21,31 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <poll.h>
+#include <pthread.h>
 #include <openssl/x509.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <ctype.h>
 
 #if CWIST_HAVE_OPENSSL_QUIC
+
+static int cwist_http3_alpn_select_cb(SSL *ssl,
+                                      const unsigned char **out,
+                                      unsigned char *outlen,
+                                      const unsigned char *in,
+                                      unsigned int inlen,
+                                      void *arg) {
+    (void)ssl;
+    (void)arg;
+    static const unsigned char h3_alpn[] = "\x02h3";
+    if (SSL_select_next_proto((unsigned char **)out,
+                              outlen,
+                              h3_alpn, sizeof(h3_alpn) - 1,
+                              in, inlen) == OPENSSL_NPN_NEGOTIATED) {
+        return SSL_TLSEXT_ERR_OK;
+    }
+    return SSL_TLSEXT_ERR_NOACK;
+}
 
 static const struct {
     const char *name;
@@ -152,9 +171,10 @@ static size_t qpack_encode_response_headers(cwist_http_response *res,
     } else {
         char status_str[16];
         int status_len = snprintf(status_str, sizeof(status_str), "%d", res->status_code);
+        (void)status_len;
         if (pos + 1 > dst_cap) return 0;
         dst[pos] = 0x20; /* Literal Field Line with Literal Name, H=0 */
-        size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, 7, 4); /* ":status" len */
+        size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, 7, 5); /* ":status" len */
         if (n == 0) return 0;
         pos += n;
         if (pos + 7 > dst_cap) return 0;
@@ -174,6 +194,7 @@ static size_t qpack_encode_response_headers(cwist_http_response *res,
     if (!headers_have_content_length(res->headers)) {
         char cl_str[32];
         int cl_len = snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
+        (void)cl_len;
         int name_idx = qpack_static_table_find_name("content-length");
         if (name_idx >= 0 && name_idx < 16) {
             if (pos + 1 > dst_cap) return 0;
@@ -184,7 +205,7 @@ static size_t qpack_encode_response_headers(cwist_http_response *res,
         } else {
             if (pos + 1 > dst_cap) return 0;
             dst[pos] = 0x20; /* Literal with Literal Name */
-            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, 14, 4);
+            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, 14, 5);
             if (n == 0) return 0;
             pos += n;
             if (pos + 14 > dst_cap) return 0;
@@ -229,7 +250,7 @@ static size_t qpack_encode_response_headers(cwist_http_response *res,
         } else {
             if (pos + 1 > dst_cap) return 0;
             dst[pos] = 0x20; /* Literal with Literal Name */
-            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_len, 4);
+            size_t n = qpack_encode_integer(dst + pos, dst_cap - pos, (uint32_t)name_len, 5);
             if (n == 0) return 0;
             pos += n;
             if (pos + name_len > dst_cap) return 0;
@@ -280,9 +301,8 @@ cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
         return err;
     }
 
-    /* 3. Set ALPN for HTTP/3 */
-    static const unsigned char h3_alpn[] = "\x02h3";
-    SSL_CTX_set_alpn_protos(ssl_ctx, h3_alpn, sizeof(h3_alpn) - 1);
+    /* 3. Set ALPN for HTTP/3 (server-side callback) */
+    SSL_CTX_set_alpn_select_cb(ssl_ctx, cwist_http3_alpn_select_cb, NULL);
 
     *ctx = (cwist_http3_context *)cwist_alloc(sizeof(cwist_http3_context));
     if (!*ctx) {
@@ -349,8 +369,7 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
     X509_free(x509);
     EVP_PKEY_free(pkey);
 
-    static const unsigned char h3_alpn[] = "\x02h3";
-    SSL_CTX_set_alpn_protos(ssl_ctx, h3_alpn, sizeof(h3_alpn) - 1);
+    SSL_CTX_set_alpn_select_cb(ssl_ctx, cwist_http3_alpn_select_cb, NULL);
 
     *ctx = (cwist_http3_context *)cwist_alloc(sizeof(cwist_http3_context));
     if (!*ctx) {
@@ -379,8 +398,11 @@ void cwist_http3_destroy_context(cwist_http3_context *ctx) {
 }
 
 
-#define CWIST_HTTP3_FRAME_DATA 0x00
-#define CWIST_HTTP3_FRAME_HEADERS 0x01
+
+#define CWIST_HTTP3_FRAME_DATA     0x00
+#define CWIST_HTTP3_FRAME_HEADERS  0x01
+#define CWIST_HTTP3_FRAME_SETTINGS 0x04
+#define CWIST_HTTP3_FRAME_GOAWAY   0x07
 
 static size_t h3_encode_varint(uint64_t value, unsigned char out[8]) {
     if (value <= 0x3f) {
@@ -453,6 +475,145 @@ static int h3_write_frame(SSL *stream, uint64_t type, const unsigned char *paylo
     return 0;
 }
 
+static int h3_read_frame(SSL *stream, uint64_t *type, uint64_t *payload_len,
+                         unsigned char **payload, bool *closed) {
+    *closed = false;
+    unsigned char buf[16];
+
+    int n = SSL_read(stream, buf, 1);
+    if (n <= 0) {
+        int err = SSL_get_error(stream, n);
+        if (err == SSL_ERROR_ZERO_RETURN) {
+            *closed = true;
+        }
+        return -1;
+    }
+
+    size_t got = 1;
+    while (got < sizeof(buf)) {
+        size_t pos = 0;
+        uint64_t t;
+        if (h3_decode_varint(buf, got, &pos, &t) == 0) {
+            uint64_t l;
+            size_t pos2 = pos;
+            if (h3_decode_varint(buf, got, &pos2, &l) == 0) {
+                *type = t;
+                *payload_len = l;
+                if (l == 0) {
+                    *payload = NULL;
+                    return 0;
+                }
+                *payload = (unsigned char *)malloc((size_t)l);
+                if (!*payload) return -1;
+                size_t payload_got = 0;
+                while (payload_got < l) {
+                    n = SSL_read(stream, *payload + payload_got, (int)(l - payload_got));
+                    if (n <= 0) {
+                        int ssl_err = SSL_get_error(stream, n);
+                        if (ssl_err == SSL_ERROR_ZERO_RETURN) {
+                            *closed = true;
+                            free(*payload);
+                            return -1;
+                        }
+                        if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
+                            usleep(1000);
+                            continue;
+                        }
+                        free(*payload);
+                        return -1;
+                    }
+                    payload_got += n;
+                }
+                return 0;
+            }
+        }
+
+        n = SSL_read(stream, buf + got, 1);
+        if (n <= 0) {
+            int ssl_err = SSL_get_error(stream, n);
+            if (ssl_err == SSL_ERROR_ZERO_RETURN) {
+                *closed = true;
+            }
+            return -1;
+        }
+        got++;
+    }
+    return -1;
+}
+
+static int h3_send_settings(SSL *stream) {
+    unsigned char settings[32];
+    size_t pos = 0;
+    /* SETTINGS_MAX_FIELD_SECTION_SIZE (0x06) = 16384 */
+    pos += h3_encode_varint(0x06, settings + pos);
+    pos += h3_encode_varint(16384, settings + pos);
+    /* SETTINGS_QPACK_MAX_TABLE_CAPACITY (0x01) = 0 (no dynamic table) */
+    pos += h3_encode_varint(0x01, settings + pos);
+    pos += h3_encode_varint(0, settings + pos);
+    return h3_write_frame(stream, CWIST_HTTP3_FRAME_SETTINGS, settings, pos);
+}
+
+static int h3_setup_server_control_streams(SSL *quic_conn) {
+    /* Server control stream (unidirectional, type = 0x00) */
+    SSL *ctrl = SSL_new_stream(quic_conn, SSL_STREAM_FLAG_UNI);
+    if (!ctrl) return -1;
+
+    unsigned char stream_type = 0x00;
+    if (SSL_write(ctrl, &stream_type, 1) != 1) {
+        SSL_free(ctrl);
+        return -1;
+    }
+
+    if (h3_send_settings(ctrl) != 0) {
+        SSL_free(ctrl);
+        return -1;
+    }
+
+    SSL_stream_conclude(ctrl, 0);
+    SSL_free(ctrl);
+
+    /* Server QPACK decoder stream (unidirectional, type = 0x03) */
+    SSL *decoder = SSL_new_stream(quic_conn, SSL_STREAM_FLAG_UNI);
+    if (decoder) {
+        stream_type = 0x03;
+        SSL_write(decoder, &stream_type, 1);
+        SSL_stream_conclude(decoder, 0);
+        SSL_free(decoder);
+    }
+
+    return 0;
+}
+
+static void h3_handle_client_control_stream(SSL *stream) {
+    unsigned char stream_type;
+    int n = SSL_read(stream, &stream_type, 1);
+    if (n != 1 || stream_type != 0x00) {
+        return;
+    }
+
+    uint64_t ftype, flen;
+    unsigned char *payload = NULL;
+    bool closed = false;
+    if (h3_read_frame(stream, &ftype, &flen, &payload, &closed) == 0) {
+        if (ftype == CWIST_HTTP3_FRAME_SETTINGS) {
+            /* Accept client settings */
+        }
+        free(payload);
+    }
+}
+
+static void h3_handle_client_qpack_stream(SSL *stream) {
+    unsigned char stream_type;
+    int n = SSL_read(stream, &stream_type, 1);
+    if (n != 1 || stream_type != 0x02) {
+        return;
+    }
+    char discard[1024];
+    while ((n = SSL_read(stream, discard, sizeof(discard))) > 0) {
+        /* discard dynamic table instructions */
+    }
+}
+
 static void h3_apply_header(cwist_http_request *req, const char *name, const char *value) {
     if (!req || !name || !value) return;
 
@@ -462,6 +623,9 @@ static void h3_apply_header(cwist_http_request *req, const char *name, const cha
         cwist_sstring_assign(req->path, (char *)value);
     } else if (strcmp(name, ":authority") == 0 || strcmp(name, "host") == 0) {
         cwist_http_header_add(&req->headers, "host", value);
+    } else if (strcmp(name, "content-length") == 0) {
+        req->content_length = atol(value);
+        cwist_http_header_add(&req->headers, name, value);
     } else if (strcmp(name, ":scheme") != 0 && name[0] != ':') {
         cwist_http_header_add(&req->headers, name, value);
     }
@@ -641,91 +805,133 @@ static int h3_send_response(SSL *stream, cwist_http_response *res) {
     return 0;
 }
 
-/**
- * @brief Handle an individual QUIC stream.
- *
- * This function processes HTTP/3 frames (HEADERS, DATA) from a single QUIC stream,
- * invokes the application handler, and sends the response back over the same stream.
- *
- * @param stream SSL object representing the accepted QUIC stream.
- * @param handler Application request handler.
- * @param user_ctx Opaque pointer.
- */
-static void cwist_http3_handle_stream(SSL *stream, cwist_http3_request_handler_func handler, void *user_ctx) {
-    unsigned char buf[4096];
-    size_t buffered = 0;
+struct h3_stream_thread_ctx {
+    SSL *stream;
+    cwist_http3_request_handler_func handler;
+    void *user_ctx;
+};
 
-    while (buffered < sizeof(buf)) {
-        int n = SSL_read(stream, buf + buffered, sizeof(buf) - buffered);
-        if (n > 0) {
-            buffered += (size_t)n;
-            break;
-        }
-
-        int ssl_err = SSL_get_error(stream, n);
-        if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
-            usleep(1000);
-            continue;
-        }
-        if (ssl_err == SSL_ERROR_ZERO_RETURN) {
-            break;
-        }
-        break;
-    }
+static void *h3_stream_thread_func(void *arg) {
+    struct h3_stream_thread_ctx *ctx = (struct h3_stream_thread_ctx *)arg;
+    SSL *stream = ctx->stream;
+    cwist_http3_request_handler_func handler = ctx->handler;
+    void *user_ctx = ctx->user_ctx;
+    free(ctx);
 
     cwist_http_request *req = cwist_http_request_create();
     cwist_http_response *res = cwist_http_response_create();
     if (!req || !res) {
-        cwist_http_request_destroy(req);
-        cwist_http_response_destroy(res);
-        SSL_free(stream);
-        return;
+        goto stream_cleanup;
     }
 
     cwist_sstring_assign(req->version, "HTTP/3");
-    h3_apply_minimal_request_headers(req, buf, buffered);
 
-    if (handler) {
-        handler(user_ctx, req, res);
+    unsigned char *body_buf = NULL;
+    size_t body_len = 0;
+    size_t body_cap = 0;
+    bool headers_received = false;
+    bool stream_closed = false;
+
+    while (!stream_closed) {
+        uint64_t frame_type, frame_len;
+        unsigned char *payload = NULL;
+
+        if (h3_read_frame(stream, &frame_type, &frame_len, &payload, &stream_closed) != 0) {
+            break;
+        }
+
+        if (frame_type == CWIST_HTTP3_FRAME_HEADERS && !headers_received) {
+            h3_apply_minimal_request_headers(req, payload, (size_t)frame_len);
+            headers_received = true;
+        } else if (frame_type == CWIST_HTTP3_FRAME_DATA && headers_received) {
+            if (frame_len > 0 && payload) {
+                size_t need = body_len + (size_t)frame_len;
+                if (need > body_cap) {
+                    size_t new_cap = body_cap ? body_cap * 2 : 4096;
+                    while (new_cap < need) new_cap *= 2;
+                    unsigned char *nb = (unsigned char *)realloc(body_buf, new_cap);
+                    if (!nb) {
+                        free(payload);
+                        goto stream_cleanup;
+                    }
+                    body_buf = nb;
+                    body_cap = new_cap;
+                }
+                memcpy(body_buf + body_len, payload, (size_t)frame_len);
+                body_len += (size_t)frame_len;
+            }
+        } else if (frame_type == CWIST_HTTP3_FRAME_HEADERS && headers_received) {
+            /* Trailer headers - ignore for now */
+        }
+        /* Other frame types are ignored for request streams */
+
+        free(payload);
+
+        if (req->content_length > 0 && body_len >= (size_t)req->content_length) {
+            break;
+        }
     }
 
-    h3_send_response(stream, res);
+    if (body_len > 0) {
+        cwist_sstring_assign_len(req->body, (char *)body_buf, body_len);
+    }
+
+    if (handler && headers_received) {
+        handler(user_ctx, req, res);
+        h3_send_response(stream, res);
+    } else if (!headers_received) {
+        res->status_code = CWIST_HTTP_BAD_REQUEST;
+        h3_send_response(stream, res);
+    }
+
     SSL_stream_conclude(stream, 0);
 
+stream_cleanup:
+    if (body_buf) free(body_buf);
     cwist_http_request_destroy(req);
     cwist_http_response_destroy(res);
     SSL_free(stream);
+    return NULL;
 }
 
-/**
- * @brief Handles an HTTP/3 connection over QUIC.
- *
- * This represents the QUIC connection lifecycle. It accepts multiplexed
- * QUIC streams created by the client and dispatches them.
- *
- * @param conn Connection tracking object.
- * @param user_ctx Opaque context for user state.
- * @param handler Application callback for handling HTTP requests.
- * @return cwist_error_t Execution status.
- */
+static void cwist_http3_handle_stream(SSL *stream, cwist_http3_request_handler_func handler, void *user_ctx) {
+    struct h3_stream_thread_ctx *ctx = (struct h3_stream_thread_ctx *)malloc(sizeof(*ctx));
+    if (!ctx) {
+        SSL_free(stream);
+        return;
+    }
+    ctx->stream = stream;
+    ctx->handler = handler;
+    ctx->user_ctx = user_ctx;
+
+    pthread_t tid;
+    if (pthread_create(&tid, NULL, h3_stream_thread_func, ctx) != 0) {
+        free(ctx);
+        SSL_free(stream);
+        return;
+    }
+    pthread_detach(tid);
+}
+
 cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
                                            void *user_ctx,
                                            cwist_http3_request_handler_func handler) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
-    
+
     if (!conn || !conn->quic_ssl || !handler) {
         err.error.err_i16 = -1;
         return err;
     }
 
-    /* Wait for and accept incoming multiplexed streams from the client */
+    /* Create server control streams before accepting client streams */
+    h3_setup_server_control_streams(conn->quic_ssl);
+
+    /* Accept and dispatch all incoming streams */
     while (1) {
-        /* SSL_ACCEPT_STREAM_NO_BLOCK is standard for async, but we'll use blocking/poll here */
-        SSL *stream = SSL_accept_stream(conn->quic_ssl, 0);
+        SSL *stream = SSL_accept_stream(conn->quic_ssl, SSL_STREAM_FLAG_NO_BLOCK);
         if (!stream) {
             int ssl_err = SSL_get_error(conn->quic_ssl, 0);
             if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
-                /* Yield or poll underlying FD */
                 struct pollfd pfd = { .fd = conn->udp_fd, .events = POLLIN };
                 poll(&pfd, 1, 100);
                 continue;
@@ -736,27 +942,28 @@ cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
             break; /* Other error */
         }
 
-        /* Process the stream. In a production server, this would be dispatched to a thread pool
-         * or handled via an epoll event loop attached to the stream's readiness. */
-        cwist_http3_handle_stream(stream, handler, user_ctx);
+        int stype = SSL_get_stream_type(stream);
+        if (stype == SSL_STREAM_TYPE_BIDI) {
+            cwist_http3_handle_stream(stream, handler, user_ctx);
+        } else {
+            /* Unidirectional stream: control (0x00), push (0x01), or qpack encoder (0x02) */
+            unsigned char stream_type_byte;
+            int n = SSL_read(stream, &stream_type_byte, 1);
+            if (n == 1) {
+                if (stream_type_byte == 0x00) {
+                    h3_handle_client_control_stream(stream);
+                } else if (stream_type_byte == 0x02) {
+                    h3_handle_client_qpack_stream(stream);
+                }
+            }
+            SSL_free(stream);
+        }
     }
 
     err.error.err_i16 = 0;
     return err;
 }
 
-/**
- * @brief Simple HTTP/3 server loop (UDP-based).
- *
- * Binds OpenSSL's QUIC connection manager to a UDP socket, accepts
- * incoming QUIC connections, and processes their streams.
- *
- * @param udp_fd Active socket for UDP communications.
- * @param ctx Valid HTTP/3 context instance.
- * @param handler Route handler callback.
- * @param user_ctx Custom application state pointer.
- * @return cwist_error_t Runtime error status.
- */
 cwist_error_t cwist_http3_server_loop(int udp_fd,
                                       cwist_http3_context *ctx,
                                       cwist_http3_request_handler_func handler,
@@ -769,36 +976,32 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 
     printf("[HTTP/3] Listening on UDP socket %d\n", udp_fd);
 
-    /* For an OpenSSL QUIC Server, we accept full QUIC connections over the UDP FD.
-     * OpenSSL 3.2+ QUIC Server requires a BIO or setting the fd directly.
-     */
-    
-    SSL *quic_conn = SSL_new(ctx->ssl_ctx);
-    if (!quic_conn) {
-        err.error.err_i16 = -1;
-        return err;
-    }
+    while (1) {
+        SSL *quic_conn = SSL_new(ctx->ssl_ctx);
+        if (!quic_conn) {
+            usleep(10000);
+            continue;
+        }
 
-    SSL_set_fd(quic_conn, udp_fd);
-    
-    /* SSL_accept on a QUIC context handles the QUIC handshake and establishes the connection */
-    if (SSL_accept(quic_conn) <= 0) {
+        SSL_set_fd(quic_conn, udp_fd);
+
+        if (SSL_accept(quic_conn) <= 0) {
+            SSL_free(quic_conn);
+            usleep(10000);
+            continue;
+        }
+
+        cwist_http3_connection conn = {
+            .quic_ssl = quic_conn,
+            .udp_fd = udp_fd,
+            .peer_addr_len = sizeof(struct sockaddr_storage)
+        };
+
+        cwist_http3_serve_connection(&conn, user_ctx, handler);
+
+        SSL_shutdown(quic_conn);
         SSL_free(quic_conn);
-        err.error.err_i16 = -1;
-        return err;
     }
-
-    cwist_http3_connection conn = {
-        .quic_ssl = quic_conn,
-        .udp_fd = udp_fd,
-        .peer_addr_len = sizeof(struct sockaddr_storage)
-    };
-
-    /* Serve the connection (multiplexed streams) */
-    cwist_http3_serve_connection(&conn, user_ctx, handler);
-
-    SSL_shutdown(quic_conn);
-    SSL_free(quic_conn);
 
     err.error.err_i16 = 0;
     return err;
