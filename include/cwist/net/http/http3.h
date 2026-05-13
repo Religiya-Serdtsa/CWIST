@@ -43,7 +43,13 @@ struct cwist_http3_context {
     int datagram_enabled; /**< QUIC datagram extension enabled */
     void (*datagram_cb)(const void *data, size_t len, void *user_ctx);
     void *datagram_user_ctx;
-    cwist_webtransport_handler_func wt_handler;
+    cwist_webtransport_handler_func wt_handler; /**< WebTransport session handler */
+    void (*wt_new_stream_handler)(void *stream, void *user_ctx); /**< Callback for new WT data streams */
+    void *wt_new_stream_ctx; /**< User context for wt_new_stream_handler */
+    int idle_timeout_ms;       /**< 0 = use lsquic default (30s) */
+    int handshake_timeout_ms;  /**< 0 = use lsquic default (10s) */
+    int ping_period_ms;        /**< 0 = use lsquic default (server: none) */
+    int noprogress_timeout_ms; /**< 0 = use lsquic default (60s server) */
 };
 
 /**
@@ -76,18 +82,33 @@ typedef void (*cwist_http3_request_handler_func)(void *user_ctx,
  */
 /** --- API Functions --- */
 
+/**
+ * @brief Initialize an HTTP/3 context with a certificate.
+ */
 cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
                                        const char *cert_path,
                                        const char *key_path);
 
+/**
+ * @brief Initialize an HTTP/3 context with an ephemeral self-signed certificate.
+ */
 cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx);
 
+/**
+ * @brief Destroy an HTTP/3 context.
+ */
 void cwist_http3_destroy_context(cwist_http3_context *ctx);
 
+/**
+ * @brief Serve a single HTTP/3 connection.
+ */
 cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
                                            void *user_ctx,
                                            cwist_http3_request_handler_func handler);
 
+/**
+ * @brief Run the HTTP/3 server event loop.
+ */
 cwist_error_t cwist_http3_server_loop(int udp_fd,
                                       cwist_http3_context *ctx,
                                       cwist_http3_request_handler_func handler,
@@ -170,5 +191,132 @@ int cwist_http3_send_datagram(void *conn, const void *data, size_t len);
  */
 void cwist_http3_set_webtransport_handler(cwist_http3_context *ctx,
                                           cwist_webtransport_handler_func handler);
+
+/** @name WebTransport I/O */
+/** @{ */
+
+/**
+ * @brief Read data from a WebTransport stream.
+ *
+ * Non-blocking.  Returns number of bytes read, 0 if no data is
+ * currently available, or -1 on error.
+ *
+ * @param stream  Opaque lsquic_stream_t pointer.
+ * @param buf     Destination buffer.
+ * @param len     Buffer capacity in bytes.
+ * @return Number of bytes read, 0 if none available, or -1 on error.
+ */
+ssize_t cwist_webtransport_read(void *stream, void *buf, size_t len);
+
+/**
+ * @brief Write data to a WebTransport stream.
+ *
+ * Returns number of bytes accepted into the send buffer, or -1 on error.
+ *
+ * @param stream  Opaque lsquic_stream_t pointer.
+ * @param data    Payload to write.
+ * @param len     Payload length in bytes.
+ * @return Number of bytes buffered, or -1 on error.
+ */
+ssize_t cwist_webtransport_write(void *stream, const void *data, size_t len);
+
+/**
+ * @brief Flush any buffered data on a WebTransport stream.
+ *
+ * @param stream  Opaque lsquic_stream_t pointer.
+ * @return 0 on success, -1 on error.
+ */
+int cwist_webtransport_flush(void *stream);
+
+/**
+ * @brief Close a WebTransport stream.
+ *
+ * @param stream  Opaque lsquic_stream_t pointer.
+ * @return 0 on success, -1 on error.
+ */
+int cwist_webtransport_close_stream(void *stream);
+
+/**
+ * @brief Register a callback for newly created WebTransport data streams.
+ *
+ * Invoked for both server-initiated and client-initiated streams.
+ *
+ * @param ctx       HTTP/3 context.
+ * @param handler   Callback invoked for each new data stream.
+ * @param user_ctx  Opaque pointer forwarded to @p handler.
+ */
+void cwist_webtransport_set_new_stream_handler(cwist_http3_context *ctx,
+                                               void (*handler)(void *stream, void *user_ctx),
+                                               void *user_ctx);
+
+/**
+ * @brief Request a new server-initiated bidirectional WebTransport stream.
+ *
+ * The actual stream is delivered asynchronously via the new-stream handler.
+ *
+ * @param conn  Opaque lsquic_conn_t pointer obtained from the session.
+ * @return 0 on success, -1 on failure.
+ */
+int cwist_webtransport_open_bidi_stream(void *conn);
+
+/**
+ * @brief Request a new server-initiated unidirectional WebTransport stream.
+ *
+ * The actual stream is delivered asynchronously via the new-stream handler.
+ *
+ * @param conn  Opaque lsquic_conn_t pointer obtained from the session.
+ * @return 0 on success, -1 on failure.
+ */
+int cwist_webtransport_open_uni_stream(void *conn);
+
+/** @} */
+
+/** --- Unstable-network resilience knobs --- */
+
+/**
+ * @brief Set the idle timeout for QUIC connections.
+ *
+ * If the connection is idle for longer than this, it is closed.
+ * Default is 0 (lsquic default, typically 30s).
+ *
+ * @param ctx HTTP/3 context.
+ * @param ms  Timeout in milliseconds, or 0 for default.
+ */
+void cwist_http3_set_idle_timeout(cwist_http3_context *ctx, int ms);
+
+/**
+ * @brief Set the handshake timeout.
+ *
+ * Connections that do not complete the handshake within this time are
+ * dropped.  Increase this on high-latency mobile networks.
+ *
+ * @param ctx HTTP/3 context.
+ * @param ms  Timeout in milliseconds, or 0 for default.
+ */
+void cwist_http3_set_handshake_timeout(cwist_http3_context *ctx, int ms);
+
+/**
+ * @brief Set the keep-alive PING period.
+ *
+ * When non-zero, the server sends PING frames at this interval to keep
+ * NAT bindings alive and detect dead peers early.  Recommended 10000-15000
+ * ms for mobile clients behind aggressive NATs.
+ *
+ * @param ctx HTTP/3 context.
+ * @param ms  Interval in milliseconds, or 0 to disable.
+ */
+void cwist_http3_set_ping_period(cwist_http3_context *ctx, int ms);
+
+/**
+ * @brief Set the no-progress timeout.
+ *
+ * Connections that make no forward progress (no acks, no data) for this
+ * long are terminated.  Default is 0 (lsquic default, typically 60s on
+ * server).
+ *
+ * @param ctx HTTP/3 context.
+ * @param ms  Timeout in milliseconds, or 0 for default.
+ */
+void cwist_http3_set_noprogress_timeout(cwist_http3_context *ctx, int ms);
 
 #endif

@@ -1,11 +1,11 @@
 <map id="src/sys/err/error.c" name="src/sys/err/error.c">
-<area shape="rect" id="Node000001" title="Minimal constructors for the framework&#39;s tagged error container." alt="" coords="74,5,207,33"/>
-<area shape="rect" id="Node000002" href="$d7/d82/cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="70,81,211,126"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="143,34,143,65,138,65,138,34"/>
-<area shape="rect" id="Node000003" title=" " alt="" coords="5,174,76,201"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="116,128,70,166,67,161,113,124"/>
-<area shape="rect" id="Node000004" title=" " alt="" coords="100,174,181,201"/>
-<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="143,126,143,158,138,158,138,126"/>
-<area shape="rect" id="Node000005" title=" " alt="" coords="205,174,316,201"/>
-<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="174,124,230,162,227,167,171,128"/>
+<area shape="rect" id="Node000001" title="Minimal constructors for the framework&#39;s tagged error container." alt="" coords="75,5,209,31"/>
+<area shape="rect" id="Node000002" href="$d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="71,79,213,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="145,31,145,65,139,65,139,31"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="5,167,76,192"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="119,121,68,160,65,156,116,117"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="101,167,183,192"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="145,119,145,153,139,153,139,119"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="208,167,319,192"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="173,117,235,157,233,161,170,121"/>
 </map>

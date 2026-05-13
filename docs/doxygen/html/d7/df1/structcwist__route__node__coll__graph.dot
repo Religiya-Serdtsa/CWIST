@@ -1,0 +1,116 @@
+digraph "cwist_route_node"
+{
+ // LATEX_PDF_SIZE
+  bgcolor="transparent";
+  edge [fontname=Helvetica,fontsize=10,labelfontname=Helvetica,labelfontsize=10];
+  node [fontname=Helvetica,fontsize=10,shape=box,height=0.2,width=0.4];
+  rankdir="LR";
+  Node1 [id="Node000001",label="cwist_route_node",height=0.2,width=0.4,color="gray40", fillcolor="grey60", style="filled", fontcolor="black",tooltip=" "];
+  Node2 -> Node1 [id="edge1_Node000001_Node000002",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">handler</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node2 [id="Node000002",label="cwist_http_request",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$dd/d68/structcwist__http__request.html",tooltip=" "];
+  Node3 -> Node2 [id="edge2_Node000002_Node000003",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">body</TD></TR>
+<TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">path</TD></TR>
+<TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">query</TD></TR>
+<TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">version</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node3 [id="Node000003",label="cwist_sstring",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d5/ddc/structcwist__sstring.html",tooltip=" "];
+  Node4 -> Node3 [id="edge3_Node000003_Node000004",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">append</TD></TR>
+<TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">copy</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node4 [id="Node000004",label="cwist_error_t",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d4/d50/structcwist__error__t.html",tooltip="Integrated error structure used throughout the system."];
+  Node5 -> Node4 [id="edge4_Node000004_Node000005",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">error</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node5 [id="Node000005",label="__prim_cwist_error_t",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d8/dca/struct____prim__cwist__error__t.html",tooltip="Internal union-like structure to store the actual error value."];
+  Node3 -> Node5 [id="edge5_Node000005_Node000003",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">err_string</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node6 -> Node2 [id="edge6_Node000002_Node000006",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">flash</TD></TR>
+<TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">path_params</TD></TR>
+<TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">query_params</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node6 [id="Node000006",label="cwist_query_map",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$dd/d72/structcwist__query__map.html",tooltip=" "];
+  Node7 -> Node6 [id="edge7_Node000006_Node000007",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">buckets</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node7 [id="Node000007",label="cwist_query_bucket",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d1/d8f/structcwist__query__bucket.html",tooltip=" "];
+  Node7 -> Node7 [id="edge8_Node000007_Node000007",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">next</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node8 -> Node2 [id="edge9_Node000002_Node000008",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">headers</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node8 [id="Node000008",label="cwist_http_header_node",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d3/d72/structcwist__http__header__node.html",tooltip="Linked list for headers to handle multiple headers easily."];
+  Node3 -> Node8 [id="edge10_Node000008_Node000003",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">key</TD></TR>
+<TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">value</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node8 -> Node8 [id="edge11_Node000008_Node000008",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">next</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node9 -> Node2 [id="edge12_Node000002_Node000009",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">app</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node9 [id="Node000009",label="cwist_app",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$dc/da0/structcwist__app.html",tooltip="Main Application Context."];
+  Node10 -> Node9 [id="edge13_Node000009_Node000010",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">middlewares</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node10 [id="Node000010",label="cwist_middleware_node",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d8/d41/structcwist__middleware__node.html",tooltip="Linked list node for middleware chain."];
+  Node2 -> Node10 [id="edge14_Node000010_Node000002",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">func</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node10 -> Node10 [id="edge15_Node000010_Node000010",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">next</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node1 -> Node9 [id="edge16_Node000009_Node000001",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">routes</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node2 -> Node9 [id="edge17_Node000009_Node000002",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">error_handler</TD></TR>
+<TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">wt_handler</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node11 -> Node9 [id="edge18_Node000009_Node000011",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">ssl_ctx</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node11 [id="Node000011",label="cwist_https_context",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$dd/dcc/structcwist__https__context.html",tooltip=" "];
+  Node12 -> Node9 [id="edge19_Node000009_Node000012",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">rdbms</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node12 [id="Node000012",label="cwist_rdbms_runtime",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d1/dda/structcwist__rdbms__runtime.html",tooltip="Mounted RDBMS runtime state."];
+  Node13 -> Node9 [id="edge20_Node000009_Node000013",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">https_request_handler</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node13 [id="Node000013",label="cwist_https_connection",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$db/d95/structcwist__https__connection.html",tooltip=" "];
+  Node14 -> Node9 [id="edge21_Node000009_Node000014",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">error_handlers</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node14 [id="Node000014",label="cwist_error_handler\l_entry",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d3/d50/structcwist__error__handler__entry.html",tooltip=" "];
+  Node2 -> Node14 [id="edge22_Node000014_Node000002",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">handler</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node14 -> Node14 [id="edge23_Node000014_Node000014",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">next</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node15 -> Node9 [id="edge24_Node000009_Node000015",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">config</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node15 [id="Node000015",label="cwist_config",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$db/dcb/structcwist__config.html",tooltip=" "];
+  Node16 -> Node15 [id="edge25_Node000015_Node000016",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">buckets</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node16 [id="Node000016",label="cwist_config_bucket",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d7/db7/structcwist__config__bucket.html",tooltip=" "];
+  Node16 -> Node16 [id="edge26_Node000016_Node000016",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">next</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node17 -> Node9 [id="edge27_Node000009_Node000017",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">logger</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node17 [id="Node000017",label="cwist_logger",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d0/dd4/structcwist__logger.html",tooltip=" "];
+  Node18 -> Node9 [id="edge28_Node000009_Node000018",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">h3_ctx</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node18 [id="Node000018",label="cwist_http3_context",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d9/dae/structcwist__http3__context.html",tooltip="HTTP/3 server context encapsulating lsquic/BoringSSL settings."];
+  Node2 -> Node18 [id="edge29_Node000018_Node000002",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">wt_handler</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node19 -> Node9 [id="edge30_Node000009_Node000019",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">db</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node19 [id="Node000019",label="cwist_db",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$dd/d55/structcwist__db.html",tooltip="Wrapper for Database Operations. Currently uses SQLite3."];
+  Node20 -> Node9 [id="edge31_Node000009_Node000020",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">mem_manager</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node20 [id="Node000020",label="cwist_fix_server_mem",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d7/dba/structcwist__fix__server__mem.html",tooltip="Fixed Server Memory Manager."];
+  Node21 -> Node20 [id="edge32_Node000020_Node000021",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">files</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node21 [id="Node000021",label="cwist_file_t",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d6/de0/structcwist__file__t.html",tooltip="Represents a file loaded into the fixed memory pool."];
+  Node22 -> Node9 [id="edge33_Node000009_Node000022",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">bdr_ctx</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node22 [id="Node000022",label="cwist_bdr_t",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d9/d90/structcwist__bdr__t.html",tooltip="Big Dumb Reply Context. Manages cache buckets and learning parameters."];
+  Node23 -> Node22 [id="edge34_Node000022_Node000023",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">buckets</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node23 [id="Node000023",label="bdr_entry_t",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d5/d26/structbdr__entry__t.html",tooltip="Big Dumb Reply Entry. Stores a completely serialized HTTP response blob."];
+  Node23 -> Node23 [id="edge35_Node000023_Node000023",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">next</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node19 -> Node2 [id="edge36_Node000002_Node000019",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">db</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node24 -> Node1 [id="edge37_Node000001_Node000024",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">ws_handler</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+  Node24 [id="Node000024",label="cwist_websocket",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$d9/d2c/structcwist__websocket.html",tooltip=" "];
+  Node1 -> Node1 [id="edge38_Node000001_Node000001",dir="back",color="darkorchid3",style="dashed",tooltip=" ",label=<<TABLE CELLBORDER="0" BORDER="0"><TR><TD VALIGN="top" ALIGN="LEFT" CELLPADDING="1" CELLSPACING="0">next</TD></TR>
+</TABLE>> ,fontcolor="grey" ];
+}

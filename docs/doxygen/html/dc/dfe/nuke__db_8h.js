@@ -1,6 +1,8 @@
 var nuke__db_8h =
 [
     [ "cwist_nuke_db_t", "d4/d32/structcwist__nuke__db__t.html", "d4/d32/structcwist__nuke__db__t" ],
+    [ "CWIST_NUKE_ERR_GENERIC", "dc/dfe/nuke__db_8h.html#a60078d43b3e9f4f414b2f8508eaab2f3", null ],
+    [ "CWIST_NUKE_ERR_LOW_MEMORY", "dc/dfe/nuke__db_8h.html#a4e8861f5fdb6e2c99c0e98ebd7ed1be5", null ],
     [ "CWIST_NUKE_OK", "dc/dfe/nuke__db_8h.html#ac17144aee58fd5597d139133eafdc1e5", null ],
     [ "cwist_nuke_db_t", "dc/dfe/nuke__db_8h.html#a5d7896139d7b5e0b56e79c4370e4f27c", null ],
     [ "cwist_nuke_close", "dc/dfe/nuke__db_8h.html#a82add313e1aabb27f1cc9c64579debb4", null ],

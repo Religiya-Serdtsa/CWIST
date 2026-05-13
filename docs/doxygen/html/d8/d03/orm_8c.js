@@ -1,0 +1,26 @@
+var orm_8c =
+[
+    [ "_GNU_SOURCE", "d8/d03/orm_8c.html#a369266c24eacffb87046522897a570d5", null ],
+    [ "cwist_orm_close_socket", "d8/d03/orm_8c.html#ab8358b56c5396e61785186a6e0895f67", null ],
+    [ "cwist_orm_commit", "d8/d03/orm_8c.html#adc4a8786c8a4b530dd12c39219734c57", null ],
+    [ "cwist_orm_delete", "d8/d03/orm_8c.html#a44c4c64eae50d22d4a0da07bb17938a3", null ],
+    [ "cwist_orm_exec", "d8/d03/orm_8c.html#ab76f4beb5566412be5ade72890ae419e", null ],
+    [ "cwist_orm_immediate_commit", "d8/d03/orm_8c.html#aa4c3e797acb1a132b1ad1fda614a4130", null ],
+    [ "cwist_orm_insert", "d8/d03/orm_8c.html#ad29177b199f44f65ef4752e5e46dfd3f", null ],
+    [ "cwist_orm_insert_returning_int", "d8/d03/orm_8c.html#a4e0900e6da745a30ac05deadac40f160", null ],
+    [ "cwist_orm_insert_returning_json", "d8/d03/orm_8c.html#a43aaa5a15c9ce87e5f62f566a1bcab4d", null ],
+    [ "cwist_orm_insert_returning_llong", "d8/d03/orm_8c.html#a6da79c3b09779f44b4c818a30a3d8720", null ],
+    [ "cwist_orm_insert_returning_long", "d8/d03/orm_8c.html#af57e43a5b4970bc58f1b9b29e0ae94f8", null ],
+    [ "cwist_orm_open_socket", "d8/d03/orm_8c.html#a8b66672c157219e4fef73126c8993fdd", null ],
+    [ "cwist_orm_query", "d8/d03/orm_8c.html#a11e221d99d7e127b9402507b67965127", null ],
+    [ "cwist_orm_rollback", "d8/d03/orm_8c.html#aedac544d6c9a75e8fbf89f8208a1c104", null ],
+    [ "cwist_orm_select", "d8/d03/orm_8c.html#a3eac029f11400ab2a62198586e6048ce", null ],
+    [ "cwist_orm_select_one_double", "d8/d03/orm_8c.html#a28fae8a2bc1192e5239430e88029a6f3", null ],
+    [ "cwist_orm_select_one_int", "d8/d03/orm_8c.html#a08a522841826a633ebe414b8148ca787", null ],
+    [ "cwist_orm_select_one_json", "d8/d03/orm_8c.html#a214ea2d56811b05e47ebc3db54a556a5", null ],
+    [ "cwist_orm_select_one_llong", "d8/d03/orm_8c.html#a9d9e67d3bf48e09e8d38a9bc40196c08", null ],
+    [ "cwist_orm_select_one_long", "d8/d03/orm_8c.html#aff436457073f7391e32a22ee1ba9a947", null ],
+    [ "cwist_orm_select_one_string", "d8/d03/orm_8c.html#ab6e368f24997a3b439981f72a0261c39", null ],
+    [ "cwist_orm_update", "d8/d03/orm_8c.html#ae60802ae3dc052ebe5e495bc56a81360", null ],
+    [ "cwist_orm_use_dialect", "d8/d03/orm_8c.html#a4ad39d370435cbeccb27fda3010ae3f4", null ]
+];

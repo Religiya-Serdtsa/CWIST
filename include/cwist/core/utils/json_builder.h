@@ -1,3 +1,8 @@
+/**
+ * @file json_builder.h
+ * @brief Simple JSON string builder utility.
+ */
+
 #ifndef __CWIST_JSON_BUILDER_H__
 #define __CWIST_JSON_BUILDER_H__
 
@@ -25,20 +30,59 @@ typedef struct cwist_json_builder {
     bool needs_comma;
 } cwist_json_builder;
 
+/**
+ * @brief Create a new JSON builder.
+ */
 cwist_json_builder *cwist_json_builder_create(void);
+
+/**
+ * @brief Destroy a JSON builder.
+ */
 void cwist_json_builder_destroy(cwist_json_builder *b);
 
+/**
+ * @brief Begin a JSON object.
+ */
 void cwist_json_begin_object(cwist_json_builder *b);
+
+/**
+ * @brief End a JSON object.
+ */
 void cwist_json_end_object(cwist_json_builder *b);
+
+/**
+ * @brief Begin a JSON array.
+ */
 void cwist_json_begin_array(cwist_json_builder *b, const char *key);
+
+/**
+ * @brief End a JSON array.
+ */
 void cwist_json_end_array(cwist_json_builder *b);
 
+/**
+ * @brief Add a string value.
+ */
 void cwist_json_add_string(cwist_json_builder *b, const char *key, const char *value);
+
+/**
+ * @brief Add an integer value.
+ */
 void cwist_json_add_int(cwist_json_builder *b, const char *key, int value);
+
+/**
+ * @brief Add a boolean value.
+ */
 void cwist_json_add_bool(cwist_json_builder *b, const char *key, bool value);
+
+/**
+ * @brief Add a null value.
+ */
 void cwist_json_add_null(cwist_json_builder *b, const char *key);
 
-/** @brief Returns the raw string buffer. Invalidated on destroy. */
+/**
+ * @brief Returns the raw string buffer. Invalidated on destroy.
+ */
 const char *cwist_json_get_raw(cwist_json_builder *b);
 
 #endif

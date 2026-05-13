@@ -1,127 +1,89 @@
-#include <cwist/net/http/http.h>
-#include <cwist/core/sstring/sstring.h>
-#include <cwist/core/mem/alloc.h>
+/**
+ * @file main.c
+ * @brief CWIST simple server using the high-level app API.
+ *
+ * HTML is composed dynamically via cwist_html_builder and cwist_css_composer
+ * inside form_ui().  Handlers receive the rendered markup — no hard-coded
+ * strings, no manual socket code.
+ */
 
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include <cwist/app.h>
+#include <cwist/core/html/builder.h>
+#include <cwist/core/html/css_composer.h>
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+static cwist_sstring *form_ui(void) {
+    cwist_css_config cfg;
+    cwist_css_config_init(&cfg);
+    cwist_sstring *css = cwist_css_generate_stylesheet(&cfg);
 
-#define PORT 8080
+    cwist_html_element_t *html = cwist_html_element_create("html");
+    cwist_html_element_t *head = cwist_html_element_create("head");
+    cwist_html_element_t *style = cwist_html_element_create("style");
+    cwist_html_element_set_text(style, css->data);
+    cwist_html_element_add_child(head, style);
+    cwist_html_element_add_child(html, head);
 
-// Actual request handler logic (keep-alive capable)
-void handle_client(int client_fd, void *ctx) {
-    (void)ctx;
-    char *read_buf = cwist_alloc(CWIST_HTTP_READ_BUFFER_SIZE);
-    if (!read_buf) {
-        close(client_fd);
-        return;
-    }
-    size_t buf_len = 0;
-    read_buf[0] = '\0';
+    cwist_html_element_t *body = cwist_html_element_create("body");
 
-    while (1) {
-        cwist_http_request *req = cwist_http_receive_request(client_fd, read_buf, CWIST_HTTP_READ_BUFFER_SIZE, &buf_len);
-        if (!req) {
-            break;
-        }
+    cwist_html_element_t *h1 = cwist_html_element_create("h1");
+    cwist_html_element_set_text(h1, "Hello from CWIST!");
+    cwist_html_element_add_child(body, h1);
 
-        req->client_fd = client_fd;
-        printf("[%s] %s\n", cwist_http_method_to_string(req->method), req->path->data);
+    cwist_html_element_t *p = cwist_html_element_create("p");
+    cwist_html_element_set_text(p, "A high-performance C17 web framework.");
+    cwist_html_element_add_child(body, p);
 
-        cwist_http_response *res = cwist_http_response_create();
-        if (!res) {
-            cwist_http_request_destroy(req);
-            break;
-        }
+    cwist_html_element_t *nav = cwist_html_element_create("nav");
 
-        cwist_http_header_add(&res->headers, "Server", "Cwist-Simple/1.0");
+    cwist_html_element_t *a1 = cwist_html_element_create("a");
+    cwist_html_element_add_attr(a1, "href", "/health");
+    cwist_html_element_set_text(a1, "Health");
+    cwist_html_element_add_child(nav, a1);
 
-        bool close_after = !req->keep_alive;
-        res->keep_alive = !close_after;
+    cwist_html_element_t *span = cwist_html_element_create("span");
+    cwist_html_element_set_text(span, " | ");
+    cwist_html_element_add_child(nav, span);
 
-        if (close_after) {
-            cwist_http_header_add(&res->headers, "Connection", "close");
-        } else {
-            cwist_http_header_add(&res->headers, "Connection", "keep-alive");
-        }
+    cwist_html_element_t *a2 = cwist_html_element_create("a");
+    cwist_html_element_add_attr(a2, "href", "/json");
+    cwist_html_element_set_text(a2, "JSON");
+    cwist_html_element_add_child(nav, a2);
 
-        if (strcmp(req->path->data, "/") == 0 && req->method == CWIST_HTTP_GET) {
-            res->status_code = CWIST_HTTP_OK;
-            cwist_sstring_assign(res->status_text, "OK");
-            cwist_http_header_add(&res->headers, "Content-Type", "text/html");
+    cwist_html_element_add_child(body, nav);
+    cwist_html_element_add_child(html, body);
 
-            cwist_sstring_assign(res->body,
-                "<html>"
-                "<head><title>Cwist Server</title></head>"
-                "<body>"
-                "<h1>Hello from Cwist!</h1>"
-                "<p>This is a robust, simple example server.</p>"
-                "<a href='/health'>Check Health</a> | <a href='/json'>Get JSON</a>"
-                "</body>"
-                "</html>"
-            );
-        }
-        else if (strcmp(req->path->data, "/health") == 0 && req->method == CWIST_HTTP_GET) {
-            res->status_code = CWIST_HTTP_OK;
-            cwist_sstring_assign(res->status_text, "OK");
-            cwist_http_header_add(&res->headers, "Content-Type", "application/json");
-            cwist_sstring_assign(res->body, "{\"status\": \"ok\", \"uptime\": \"forever\"}");
-        }
-        else if (strcmp(req->path->data, "/echo") == 0 && req->method == CWIST_HTTP_POST) {
-            res->status_code = CWIST_HTTP_OK;
-            cwist_sstring_assign(res->status_text, "OK");
-
-            char *ct = cwist_http_header_get(req->headers, "Content-Type");
-            if (ct) cwist_http_header_add(&res->headers, "Content-Type", ct);
-
-            cwist_sstring_assign(res->body, req->body->data);
-        }
-        else {
-            res->status_code = CWIST_HTTP_NOT_FOUND;
-            cwist_sstring_assign(res->status_text, "Not Found");
-            cwist_http_header_add(&res->headers, "Content-Type", "text/plain");
-            cwist_sstring_assign(res->body, "404 - Not Found");
-        }
-
-        cwist_http_send_response(client_fd, res);
-
-        cwist_http_response_destroy(res);
-        cwist_http_request_destroy(req);
-
-        if (close_after) {
-            break;
-        }
-    }
-
-    cwist_free(read_buf);
-    close(client_fd);
+    cwist_sstring *out = cwist_html_render(html);
+    cwist_html_element_destroy(html);
+    cwist_sstring_destroy(css);
+    return out;
 }
 
-int main() {
-    struct sockaddr_in server_addr;
+static void index_handler(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
+    cwist_sstring *html = form_ui();
+    cwist_http_header_add(&res->headers, "Content-Type", "text/html");
+    cwist_sstring_assign(res->body, html->data);
+    cwist_sstring_destroy(html);
+}
 
-    // Create and bind socket
-    // Backlog increased to 512 to handle high concurrency
-    int server_fd = cwist_make_socket_ipv4(&server_addr, "0.0.0.0", PORT, 512);
-    if (server_fd < 0) {
-        fprintf(stderr, "Failed to start server. Error code: %d\n", server_fd);
-        return 1;
-    }
+static void health_handler(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
+    cwist_http_header_add(&res->headers, "Content-Type", "application/json");
+    cwist_sstring_assign(res->body, "{\"status\":\"ok\",\"uptime\":\"forever\"}");
+}
 
-    printf("Server listening on http://localhost:%d\n", PORT);
-    printf("Ctrl+C to stop.\n");
+static void echo_handler(cwist_http_request *req, cwist_http_response *res) {
+    char *ct = cwist_http_header_get(req->headers, "Content-Type");
+    if (ct) cwist_http_header_add(&res->headers, "Content-Type", ct);
+    cwist_sstring_assign(res->body, req->body->data);
+}
 
-    // Start server loop (threaded)
-    cwist_server_config config;
-    memset(&config, 0, sizeof(config));
-    config.use_threading = true;
-
-    cwist_http_server_loop(server_fd, &config, handle_client, NULL);
+int main(void) {
+    cwist_app *app = cwist_app_create();
+    cwist_app_get(app, "/", index_handler);
+    cwist_app_get(app, "/health", health_handler);
+    cwist_app_post(app, "/echo", echo_handler);
+    cwist_app_listen(app, 8080);
+    cwist_app_destroy(app);
     return 0;
 }

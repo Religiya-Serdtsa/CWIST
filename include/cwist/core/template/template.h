@@ -1,3 +1,8 @@
+/**
+ * @file template.h
+ * @brief Simple template engine.
+ */
+
 #ifndef CWIST_TEMPLATE_H
 #define CWIST_TEMPLATE_H
 

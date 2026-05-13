@@ -1,5 +1,8 @@
 <map id="cwist_error_t" name="cwist_error_t">
-<area shape="rect" id="Node000001" title="Integrated error structure used throughout the system." alt="" coords="31,93,137,119"/>
-<area shape="rect" id="Node000002" href="$d8/dca/struct____prim__cwist__error__t.html" title="Internal union&#45;like structure to store the actual error value." alt="" coords="5,5,163,31"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="87,45,87,93,81,93,81,45"/>
+<area shape="rect" id="Node000001" title="Integrated error structure used throughout the system." alt="" coords="69,5,176,31"/>
+<area shape="rect" id="Node000003" href="$d5/ddc/structcwist__sstring.html" title=" " alt="" coords="5,108,112,133"/>
+<area shape="poly" id="edge3_Node000003_Node000001" title=" " alt="" coords="102,42,90,56,75,84,65,109,60,107,70,81,86,53,98,39"/>
+<area shape="rect" id="Node000002" href="$d8/dca/struct____prim__cwist__error__t.html" title="Internal union&#45;like structure to store the actual error value." alt="" coords="31,196,188,221"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="131,184,139,171,148,140,150,114,139,55,128,32,133,30,144,54,156,114,154,141,144,173,135,187"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="66,145,77,171,97,194,93,198,72,173,62,147"/>
 </map>

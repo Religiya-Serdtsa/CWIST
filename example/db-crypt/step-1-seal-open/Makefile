@@ -1,7 +1,7 @@
 CC      = gcc
 CFLAGS  = -Wall -Wextra -g -I../../../include -I../../../lib -I../../../lib/libttak/include
 LDFLAGS = -L../../../ -L../../../lib/cjson -L../../../lib/libttak/lib
-LIBS    = -lcwist -lcjson -lssl -lcrypto -lttak -lpthread -ldl
+LIBS    = -lcwist -lcjson -lssl -lcrypto -lttak -lpthread -ldl -lstdc++ -lm -lz
 
 TARGET = step-1-seal-open
 

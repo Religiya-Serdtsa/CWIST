@@ -1,3 +1,8 @@
+/**
+ * @file query.h
+ * @brief Query string parser and map.
+ */
+
 #ifndef __CWIST_QUERY_H__
 #define __CWIST_QUERY_H__
 
@@ -18,21 +23,47 @@ typedef struct cwist_query_map {
 
 /** @name Lifecycle */
 /** @{ */
+
+/**
+ * @brief Create a new query map.
+ */
 cwist_query_map *cwist_query_map_create(void);
+
+/**
+ * @brief Destroy a query map.
+ */
 void cwist_query_map_destroy(cwist_query_map *map);
+
 /** @} */
 
 /** @name Parsing */
 /** @{ */
-/** @brief Parse raw query strings (e.g., "a=1&b=2") into the map. */
+
+/**
+ * @brief Parse raw query strings (e.g., "a=1&b=2") into the map.
+ */
 void cwist_query_map_parse(cwist_query_map *map, const char *raw_query);
+
+/**
+ * @brief Clear all entries.
+ */
 void cwist_query_map_clear(cwist_query_map *map);
+
 /** @} */
 
 /** @name Access */
 /** @{ */
+
+/**
+ * @brief Get a value by key.
+ */
 const char *cwist_query_map_get(cwist_query_map *map, const char *key);
+
+/**
+ * @brief Set a key-value pair.
+ */
 void cwist_query_map_set(cwist_query_map *map, const char *key, const char *value);
+
 /** @} */
 
 #endif

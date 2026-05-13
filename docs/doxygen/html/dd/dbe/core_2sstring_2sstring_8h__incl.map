@@ -1,0 +1,16 @@
+<map id="include/cwist/core/sstring/sstring.h" name="include/cwist/core/sstring/sstring.h">
+<area shape="rect" id="Node000001" title="Safe string type with helper methods." alt="" coords="102,5,241,45"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,101,76,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="144,48,72,95,69,91,141,43"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="100,101,171,126"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="166,47,148,89,143,87,161,45"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="171,181,254,207"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="179,45,209,167,204,169,173,46"/>
+<area shape="rect" id="Node000005" href="$d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="247,93,389,133"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="205,43,275,84,272,89,202,48"/>
+<area shape="poly" id="edge6_Node000005_Node000004" title=" " alt="" coords="294,136,241,175,238,171,291,131"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="280,181,351,207"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="320,134,319,167,314,167,315,133"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="375,181,485,207"/>
+<area shape="poly" id="edge7_Node000005_Node000007" title=" " alt="" coords="347,131,404,171,401,175,344,136"/>
+</map>

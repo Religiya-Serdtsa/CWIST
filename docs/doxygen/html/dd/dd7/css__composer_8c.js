@@ -1,5 +1,7 @@
 var css__composer_8c =
 [
+    [ "MAX3", "dd/dd7/css__composer_8c.html#a37c6d7fcb9c177c308ef38e1d51d35e3", null ],
+    [ "MIN3", "dd/dd7/css__composer_8c.html#a4887ceeae88266064841cbbc11ef8b53", null ],
     [ "cwist_color_hex_to_rgb", "dd/dd7/css__composer_8c.html#a9cad6a35c4f4cb0e3a475e54e69e8f15", null ],
     [ "cwist_color_hsl_to_rgb", "dd/dd7/css__composer_8c.html#ad141d4a8a639ca176c7a6f08bb77af7f", null ],
     [ "cwist_color_rgb_to_hex", "dd/dd7/css__composer_8c.html#adc63d0cf0403d9c103a3d218adff64b0", null ],

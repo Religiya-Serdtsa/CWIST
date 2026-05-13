@@ -1,0 +1,36 @@
+var core_2sstring_2sstring_8h =
+[
+    [ "cwist_sstring", "d5/ddc/structcwist__sstring.html", "d5/ddc/structcwist__sstring" ],
+    [ "cwist_sstring", "d4/dbd/core_2sstring_2sstring_8h.html#a903f7eaecc64d99c905951c1979e6dfc", null ],
+    [ "cwist_sstring_error_t", "d4/dbd/core_2sstring_2sstring_8h.html#a03c9abb424e867cd0433ad37f6bab154", [
+      [ "ERR_SSTRING_OKAY", "d4/dbd/core_2sstring_2sstring_8h.html#a03c9abb424e867cd0433ad37f6bab154af820f80782af9cc92a387bf6cc8e845a", null ],
+      [ "ERR_SSTRING_ZERO_LENGTH", "d4/dbd/core_2sstring_2sstring_8h.html#a03c9abb424e867cd0433ad37f6bab154ac1c1229a0d36c3e43a396e45f0bd335e", null ],
+      [ "ERR_SSTRING_NULL_STRING", "d4/dbd/core_2sstring_2sstring_8h.html#a03c9abb424e867cd0433ad37f6bab154a163552c9f86472fa7524dc8c46c4d34b", null ],
+      [ "ERR_SSTRING_CONSTANT", "d4/dbd/core_2sstring_2sstring_8h.html#a03c9abb424e867cd0433ad37f6bab154a907efac10ca6581150f1b3ef29f1f7bf", null ],
+      [ "ERR_SSTRING_RESIZE_TOO_SMALL", "d4/dbd/core_2sstring_2sstring_8h.html#a03c9abb424e867cd0433ad37f6bab154aec52bacebf47d456487fd47d42db17ff", null ],
+      [ "ERR_SSTRING_RESIZE_TOO_LARGE", "d4/dbd/core_2sstring_2sstring_8h.html#a03c9abb424e867cd0433ad37f6bab154abc5c455c52140f2fab127c81386af47f", null ],
+      [ "ERR_SSTRING_OUTOFBOUND", "d4/dbd/core_2sstring_2sstring_8h.html#a03c9abb424e867cd0433ad37f6bab154aa725af601ea8f397c9523e8bea9c4e90", null ]
+    ] ],
+    [ "cwist_sstring_append", "d4/dbd/core_2sstring_2sstring_8h.html#a51c2c4f709f0a58ab21544fd04117cdc", null ],
+    [ "cwist_sstring_append_escaped", "d4/dbd/core_2sstring_2sstring_8h.html#afcafb0b26d49515dada57927d802265e", null ],
+    [ "cwist_sstring_append_len", "d4/dbd/core_2sstring_2sstring_8h.html#a19ce355c545bc67898dee6f43fa93264", null ],
+    [ "cwist_sstring_append_sstring", "d4/dbd/core_2sstring_2sstring_8h.html#a8bc78edad080c5674dd925a00cca08de", null ],
+    [ "cwist_sstring_append_sstring_escaped", "d4/dbd/core_2sstring_2sstring_8h.html#a9e00cf632770d4986bf383ffaf53f89a", null ],
+    [ "cwist_sstring_assign", "d4/dbd/core_2sstring_2sstring_8h.html#a037bc837dea3a542983417892eb0644a", null ],
+    [ "cwist_sstring_assign_len", "d4/dbd/core_2sstring_2sstring_8h.html#a652db21824d157b0fb7ba3b71ef19d96", null ],
+    [ "cwist_sstring_change_size", "d4/dbd/core_2sstring_2sstring_8h.html#ab06b403202d85e60cb1a4c1ca1a5f748", null ],
+    [ "cwist_sstring_compare", "d4/dbd/core_2sstring_2sstring_8h.html#a0635443143b442d0e6ddd1d25d1d2174", null ],
+    [ "cwist_sstring_compare_sstring", "d4/dbd/core_2sstring_2sstring_8h.html#af3f8760a0a6dc6ae84f6f574ec6f71ef", null ],
+    [ "cwist_sstring_copy", "d4/dbd/core_2sstring_2sstring_8h.html#a8a778faadfac9576e76552bb79b55d9b", null ],
+    [ "cwist_sstring_copy_sstring", "d4/dbd/core_2sstring_2sstring_8h.html#aef30141d70c3a88662393018d2919ab8", null ],
+    [ "cwist_sstring_create", "d4/dbd/core_2sstring_2sstring_8h.html#a2dd44ec61439b8a7ef388330198e5fc0", null ],
+    [ "cwist_sstring_destroy", "d4/dbd/core_2sstring_2sstring_8h.html#a94c24bf2288f664859ecefedf6c1d234", null ],
+    [ "cwist_sstring_get_size", "d4/dbd/core_2sstring_2sstring_8h.html#a28bc3c268c30fe1c9f5d7f5da8bd8123", null ],
+    [ "cwist_sstring_init", "d4/dbd/core_2sstring_2sstring_8h.html#a323f5f736786dc0f7ffa999974745092", null ],
+    [ "cwist_sstring_init_escaped", "d4/dbd/core_2sstring_2sstring_8h.html#af4c49e1301b11b304fe8eb0b0b6eb53f", null ],
+    [ "cwist_sstring_ltrim", "d4/dbd/core_2sstring_2sstring_8h.html#ae8fa312af0b2de849d44e1f33eb2dd6c", null ],
+    [ "cwist_sstring_rtrim", "d4/dbd/core_2sstring_2sstring_8h.html#ac0811bcf8f4f42d716341a8ef30ae790", null ],
+    [ "cwist_sstring_seek", "d4/dbd/core_2sstring_2sstring_8h.html#af07d5aa301d5c4d4d90b3df5efe68b80", null ],
+    [ "cwist_sstring_substr", "d4/dbd/core_2sstring_2sstring_8h.html#a4b47cffef63a590d2f8c44515daddd9a", null ],
+    [ "cwist_sstring_trim", "d4/dbd/core_2sstring_2sstring_8h.html#ad9b7c3cd22db6dc53ea387a10d6f3687", null ]
+];

@@ -1,3 +1,6 @@
+/** @file query.h
+ * @brief query.h interface.
+ */
 #ifndef __CWIST_QUERY_H__
 #define __CWIST_QUERY_H__
 
@@ -16,15 +19,44 @@ typedef struct cwist_query_map {
     uint8_t seed[16];
 } cwist_query_map;
 
-// Lifecycle
+/** @name Lifecycle */
+/** @{ */
+
+/**
+ * @brief Create a new query map.
+ */
 cwist_query_map *cwist_query_map_create(void);
+
+/**
+ * @brief Destroy a query map.
+ */
 void cwist_query_map_destroy(cwist_query_map *map);
 
-// Parse raw query string (e.g., "a=1&b=2") into map
+/** @} */
+
+/** @name Parsing */
+/** @{ */
+
+/**
+ * @brief Parse raw query string (e.g., "a=1&b=2") into map.
+ */
 void cwist_query_map_parse(cwist_query_map *map, const char *raw_query);
 
-// Access
+/** @} */
+
+/** @name Access */
+/** @{ */
+
+/**
+ * @brief Get a value by key.
+ */
 const char *cwist_query_map_get(cwist_query_map *map, const char *key);
+
+/**
+ * @brief Set a key-value pair.
+ */
 void cwist_query_map_set(cwist_query_map *map, const char *key, const char *value);
+
+/** @} */
 
 #endif

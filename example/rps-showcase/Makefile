@@ -5,7 +5,7 @@ CWIST_LIB = $(CWIST_ROOT)/libcwist.a
 
 CFLAGS = -Wall -Wextra -O2 -I$(CWIST_ROOT)/include -I$(LIBTTAK_DIR)/include
 LDFLAGS = -L$(CWIST_ROOT) -L$(CWIST_ROOT)/lib -L$(LIBTTAK_DIR)/lib
-LIBS = -lcwist -lttak -lcjson -lsqlite3 -luriparser -lssl -lcrypto -lpthread
+LIBS = -lcwist -lttak -lcjson -lsqlite3 -luriparser -lssl -lcrypto -lpthread -lstdc++ -lm -lz
 
 SRCS = main.c
 TARGET = rps_showcase

@@ -1,0 +1,28 @@
+var io__uring__backend_8c =
+[
+    [ "_GNU_SOURCE", "de/d29/io__uring__backend_8c.html#a369266c24eacffb87046522897a570d5", null ],
+    [ "DECODE_GEN", "de/d29/io__uring__backend_8c.html#aee8b16210822181d152bfaab7ee15098", null ],
+    [ "DECODE_IDX", "de/d29/io__uring__backend_8c.html#a05606f11b2c003ce6c32360ceebf1fb5", null ],
+    [ "DECODE_IS_SEND", "de/d29/io__uring__backend_8c.html#a936eab2e5189bf7dbafb1e4df3565c54", null ],
+    [ "ENCODE_TICKET", "de/d29/io__uring__backend_8c.html#a5c1fd53b10f2ff5262dec69eaa4630cd", null ],
+    [ "TICKET_SEND_BIT", "de/d29/io__uring__backend_8c.html#afa6d0fef1b14b4ebce1ed4f95333801a", null ],
+    [ "cwist_uring_active_buffers", "de/d29/io__uring__backend_8c.html#af817973c19995df9f2cc3579b6ddc8f6", null ],
+    [ "cwist_uring_backend_create", "de/d29/io__uring__backend_8c.html#a8930f58df232ce0021033c85b6da2bb5", null ],
+    [ "cwist_uring_backend_destroy", "de/d29/io__uring__backend_8c.html#a8b4d89293bc4e4588f03665817613878", null ],
+    [ "cwist_uring_backend_run", "de/d29/io__uring__backend_8c.html#a2c3ae26bb439c7b9bf21b175fba4c971", null ],
+    [ "cwist_uring_backend_stop", "de/d29/io__uring__backend_8c.html#a4edc8d825f00de5906318589a646552c", null ],
+    [ "cwist_uring_buf_acquire", "de/d29/io__uring__backend_8c.html#aad7763427993e03606d62acf3498e47e", null ],
+    [ "cwist_uring_buf_release", "de/d29/io__uring__backend_8c.html#a841811fe21d582fdfdb8f936a9726305", null ],
+    [ "cwist_uring_flush_sq", "de/d29/io__uring__backend_8c.html#a191ecda91a54b20d1e1bb6c4fd82cff7", null ],
+    [ "cwist_uring_pending_sqes", "de/d29/io__uring__backend_8c.html#af70b13c4dbd11c1318cfb5b57f9d5c9b", null ],
+    [ "cwist_uring_poll_cq", "de/d29/io__uring__backend_8c.html#a84016b4ab8927ea563ffec8b3db0dab8", null ],
+    [ "cwist_uring_stream_register", "de/d29/io__uring__backend_8c.html#ab831f878a6205cfdcab66f3b74d6d422", null ],
+    [ "cwist_uring_stream_unregister", "de/d29/io__uring__backend_8c.html#a618792f21dd06acb093ebe07415cbfbf", null ],
+    [ "cwist_uring_submit_close", "de/d29/io__uring__backend_8c.html#a73ca46d562304d50fb0d60ad6a198df0", null ],
+    [ "cwist_uring_submit_nop", "de/d29/io__uring__backend_8c.html#ae8552025539a36ccba888381948b7e2b", null ],
+    [ "cwist_uring_submit_read", "de/d29/io__uring__backend_8c.html#ad4c8df9426aeceec83cd7399ef375218", null ],
+    [ "cwist_uring_submit_recvmsg", "de/d29/io__uring__backend_8c.html#a40085198d121214a53550fff72dd2fd3", null ],
+    [ "cwist_uring_submit_sendmsg", "de/d29/io__uring__backend_8c.html#ae7886edfb709ccf113a2aa074220ee42", null ],
+    [ "cwist_uring_submit_splice", "de/d29/io__uring__backend_8c.html#a21a6a738cc05cd6e92f7785cbec79007", null ],
+    [ "cwist_uring_submit_write", "de/d29/io__uring__backend_8c.html#a2de00d3a196a644007d56aadadf89733", null ]
+];

@@ -1,3 +1,6 @@
+/** @file ech.h
+ * @brief ech.h interface.
+ */
 #ifndef __CWIST_ECH_H__
 #define __CWIST_ECH_H__
 
@@ -8,6 +11,9 @@
 extern "C" {
 #endif
 
+/**
+ * @brief Enable Encrypted Client Hello (ECH) for the application.
+ */
 cwist_error_t cwist_app_use_ech(cwist_app *app, const char *ech_key, const char *ech_dir);
 
 #ifdef __cplusplus

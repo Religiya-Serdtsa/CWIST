@@ -7,41 +7,14 @@
 #include <cwist/net/http/http_client.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/sys/err/cwist_err.h>
+#include "curl_global.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 
 #include <curl/curl.h>
 #include <ctype.h>
-
-/* ------------------------------------------------------------------ */
-/* Globals                                                            */
-/* ------------------------------------------------------------------ */
-
-static pthread_mutex_t g_curl_global_mtx = PTHREAD_MUTEX_INITIALIZER;
-static int             g_curl_global_ref = 0;
-
-static void curl_global_init_ref(void) {
-    pthread_mutex_lock(&g_curl_global_mtx);
-    if (g_curl_global_ref == 0) {
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-    }
-    g_curl_global_ref++;
-    pthread_mutex_unlock(&g_curl_global_mtx);
-}
-
-static void curl_global_cleanup_ref(void) {
-    pthread_mutex_lock(&g_curl_global_mtx);
-    if (g_curl_global_ref > 0) {
-        g_curl_global_ref--;
-        if (g_curl_global_ref == 0) {
-            curl_global_cleanup();
-        }
-    }
-    pthread_mutex_unlock(&g_curl_global_mtx);
-}
 
 /* ------------------------------------------------------------------ */
 /* Response accumulator                                               */
@@ -165,18 +138,18 @@ struct cwist_http_client {
 };
 
 cwist_http_client *cwist_http_client_create(void) {
-    curl_global_init_ref();
+    cwist_curl_global_acquire();
 
     cwist_http_client *client = cwist_alloc(sizeof(*client));
     if (!client) {
-        curl_global_cleanup_ref();
+        cwist_curl_global_release();
         return NULL;
     }
 
     client->curl = curl_easy_init();
     if (!client->curl) {
         cwist_free(client);
-        curl_global_cleanup_ref();
+        cwist_curl_global_release();
         return NULL;
     }
 
@@ -204,7 +177,7 @@ void cwist_http_client_destroy(cwist_http_client *client) {
     cwist_free(client->ca_bundle);
     cwist_free(client->altsvc_db);
     cwist_free(client);
-    curl_global_cleanup_ref();
+    cwist_curl_global_release();
 }
 
 void cwist_http_client_set_follow_redirects(cwist_http_client *client, int follow) {

@@ -1,3 +1,8 @@
+/**
+ * @file sql.h
+ * @brief Database operations wrapper (SQLite3).
+ */
+
 #ifndef __CWIST_SQL_H__
 #define __CWIST_SQL_H__
 
@@ -8,7 +13,7 @@
 #include <cwist/core/utils/zod.h>
 
 /**
- * Wrapper for Database Operations.
+ * @brief Wrapper for Database Operations.
  * Currently uses SQLite3.
  */
 

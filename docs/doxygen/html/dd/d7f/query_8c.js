@@ -1,5 +1,7 @@
 var query_8c =
 [
+    [ "_POSIX_C_SOURCE", "dd/d7f/query_8c.html#a3024ccd4a9af5109d24e6c57565d74a1", null ],
+    [ "CWIST_QUERY_MAP_DEFAULT_SIZE", "dd/d7f/query_8c.html#a64bef0793560239ca4f284b40ff8a506", null ],
     [ "cwist_query_map_clear", "dd/d7f/query_8c.html#a93292394e0096daa1a997758f0346a93", null ],
     [ "cwist_query_map_create", "dd/d7f/query_8c.html#a93eddf49027cbbc8fc6a0a3270a0985a", null ],
     [ "cwist_query_map_destroy", "dd/d7f/query_8c.html#ac8607e9171334f329fa4a248ddd3bfe1", null ],

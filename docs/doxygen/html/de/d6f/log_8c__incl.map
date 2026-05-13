@@ -1,0 +1,13 @@
+<map id="src/core/log/log.c" name="src/core/log/log.c">
+<area shape="rect" id="Node000001" title="Macro&#45;based logging implementation." alt="" coords="168,5,300,31"/>
+<area shape="rect" id="Node000002" href="$d7/d7f/log_8h.html" title="Lightweight macro&#45;based internal logging for CWIST." alt="" coords="5,79,129,104"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="208,33,108,76,106,71,206,28"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="154,79,221,104"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="229,32,205,69,200,66,224,30"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="245,79,319,104"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="244,30,269,66,264,69,240,33"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="343,79,407,104"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="258,28,341,70,339,75,256,33"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="30,152,105,177"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="70,104,70,138,65,138,65,104"/>
+</map>

@@ -1,0 +1,8 @@
+<map id="__prim_cwist_error_t" name="__prim_cwist_error_t">
+<area shape="rect" id="Node000001" title="Internal union&#45;like structure to store the actual error value." alt="" coords="53,5,211,31"/>
+<area shape="rect" id="Node000003" href="$d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system." alt="" coords="5,93,112,119"/>
+<area shape="poly" id="edge3_Node000003_Node000001" title=" " alt="" coords="115,43,71,95,67,91,111,39"/>
+<area shape="rect" id="Node000002" href="$d5/ddc/structcwist__sstring.html" title=" " alt="" coords="56,196,163,221"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="131,184,139,171,147,132,146,93,133,31,138,30,151,92,152,133,144,173,135,187"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="71,130,90,171,104,194,100,197,86,173,66,133"/>
+</map>

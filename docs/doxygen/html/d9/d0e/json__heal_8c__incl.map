@@ -1,25 +1,25 @@
 <map id="src/core/utils/json_heal.c" name="src/core/utils/json_heal.c">
-<area shape="rect" id="Node000001" title="Multi&#45;stage JSON recovery pipeline with optional schema alignment." alt="" coords="438,5,574,50"/>
-<area shape="rect" id="Node000002" href="$db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="103,98,253,143"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="439,50,269,97,267,92,437,45"/>
-<area shape="rect" id="Node000005" title=" " alt="" coords="5,191,116,218"/>
-<area shape="poly" id="edge8_Node000001_Node000005" title=" " alt="" coords="438,34,347,41,245,53,153,72,117,85,93,100,80,116,71,136,63,176,58,175,66,134,75,113,89,96,115,80,151,67,244,48,347,36,438,29"/>
-<area shape="rect" id="Node000006" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="277,106,449,134"/>
-<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="473,53,398,100,395,96,470,48"/>
-<area shape="rect" id="Node000008" title=" " alt="" coords="473,106,538,134"/>
-<area shape="poly" id="edge9_Node000001_Node000008" title=" " alt="" coords="508,50,508,91,503,91,503,50"/>
-<area shape="rect" id="Node000009" title=" " alt="" coords="563,106,632,134"/>
-<area shape="poly" id="edge10_Node000001_Node000009" title=" " alt="" coords="530,48,575,93,572,97,526,52"/>
-<area shape="rect" id="Node000010" title=" " alt="" coords="656,106,726,134"/>
-<area shape="poly" id="edge11_Node000001_Node000010" title=" " alt="" coords="551,48,652,97,650,102,549,53"/>
-<area shape="rect" id="Node000011" title=" " alt="" coords="750,106,819,134"/>
-<area shape="poly" id="edge12_Node000001_Node000011" title=" " alt="" coords="575,44,654,67,739,95,744,98,742,103,737,101,652,72,573,49"/>
-<area shape="rect" id="Node000003" title=" " alt="" coords="140,191,221,218"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="181,143,182,175,177,175,176,143"/>
-<area shape="rect" id="Node000004" title=" " alt="" coords="245,191,318,218"/>
-<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="207,141,255,179,252,183,204,145"/>
-<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="149,145,93,184,90,179,145,141"/>
-<area shape="poly" id="edge6_Node000006_Node000004" title=" " alt="" coords="352,137,307,182,303,178,348,133"/>
-<area shape="rect" id="Node000007" title=" " alt="" coords="342,191,483,218"/>
-<area shape="poly" id="edge7_Node000006_Node000007" title=" " alt="" coords="373,133,399,176,395,179,369,136"/>
+<area shape="rect" id="Node000001" title="Multi&#45;stage JSON recovery pipeline with optional schema alignment." alt="" coords="442,5,578,45"/>
+<area shape="rect" id="Node000002" href="$db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="104,93,255,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="443,47,266,93,264,87,441,42"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="5,181,116,207"/>
+<area shape="poly" id="edge8_Node000001_Node000005" title=" " alt="" coords="442,32,350,38,247,49,154,68,118,80,93,95,80,111,72,129,64,168,59,167,67,128,76,108,90,91,116,76,152,63,246,44,350,32,442,26"/>
+<area shape="rect" id="Node000006" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="279,101,453,126"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="480,48,398,96,395,91,477,43"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="477,101,543,126"/>
+<area shape="poly" id="edge9_Node000001_Node000008" title=" " alt="" coords="513,46,513,87,507,87,507,46"/>
+<area shape="rect" id="Node000009" title=" " alt="" coords="568,101,639,126"/>
+<area shape="poly" id="edge10_Node000001_Node000009" title=" " alt="" coords="533,44,582,89,579,93,529,48"/>
+<area shape="rect" id="Node000010" title=" " alt="" coords="663,101,733,126"/>
+<area shape="poly" id="edge11_Node000001_Node000010" title=" " alt="" coords="552,43,662,93,660,98,550,48"/>
+<area shape="rect" id="Node000011" title=" " alt="" coords="757,101,828,126"/>
+<area shape="poly" id="edge12_Node000001_Node000011" title=" " alt="" coords="579,41,747,91,754,93,752,98,745,96,577,46"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="141,181,223,207"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="183,133,184,167,178,167,177,134"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="247,181,322,207"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="206,131,260,171,256,175,203,136"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="152,136,91,176,88,172,149,131"/>
+<area shape="poly" id="edge6_Node000006_Node000004" title=" " alt="" coords="356,128,308,174,305,170,352,124"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="346,181,487,207"/>
+<area shape="poly" id="edge7_Node000006_Node000007" title=" " alt="" coords="376,125,404,168,399,171,371,128"/>
 </map>

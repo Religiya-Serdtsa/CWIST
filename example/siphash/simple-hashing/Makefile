@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g -I../../../include
 LDFLAGS = -L../../../
-LIBS = -lcwist -lcjson
+LIBS = -lcwist -lcjson -lstdc++ -lm -lz
 
 TARGET = simple-hashing
 

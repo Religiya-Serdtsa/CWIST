@@ -30,7 +30,8 @@ void test_resize() {
     // Grow
     cwist_error_t err = cwist_sstring_change_size(s, 10, false);
     assert(err.errtype == CWIST_ERR_INT8); // Success
-    assert(s->size == 10);
+    assert(s->size == 5);
+    assert(strcmp(s->data, "12345") == 0);
     
     // Shrink safely
     err = cwist_sstring_change_size(s, 5, false); // "12345" fits in 5

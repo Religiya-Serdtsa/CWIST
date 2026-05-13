@@ -25,7 +25,7 @@ EXCLUDE                = lib lib/libttak
 #--------------------------------------------------------------------------
 # Build
 #--------------------------------------------------------------------------
-EXTRACT_ALL            = NO
+EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO
 EXTRACT_STATIC         = NO
 EXTRACT_PACKAGE        = NO
@@ -65,4 +65,4 @@ DOT_FONTPATH           =
 GRAPHICAL_HIERARCHY    = YES
 CALL_GRAPH             = NO
 CALLER_GRAPH           = NO
-DOT_TRANSPARENT        = YES
+

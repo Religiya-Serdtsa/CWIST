@@ -1,3 +1,8 @@
+/**
+ * @file gc.h
+ * @brief Epoch-based garbage collection wrapper.
+ */
+
 #ifndef __CWIST_CORE_MEM_GC_H__
 #define __CWIST_CORE_MEM_GC_H__
 

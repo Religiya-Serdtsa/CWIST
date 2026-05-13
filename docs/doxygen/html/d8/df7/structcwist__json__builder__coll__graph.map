@@ -1,0 +1,10 @@
+<map id="cwist_json_builder" name="cwist_json_builder">
+<area shape="rect" id="Node000001" title="Simple JSON string builder utility." alt="" coords="5,95,148,121"/>
+<area shape="rect" id="Node000002" href="$d5/ddc/structcwist__sstring.html" title=" " alt="" coords="198,5,305,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="218,39,101,98,98,93,215,34"/>
+<area shape="rect" id="Node000004" href="$d8/dca/struct____prim__cwist__error__t.html" title="Internal union&#45;like structure to store the actual error value." alt="" coords="173,95,330,121"/>
+<area shape="poly" id="edge4_Node000004_Node000002" title=" " alt="" coords="254,44,254,95,249,95,249,44"/>
+<area shape="rect" id="Node000003" href="$d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system." alt="" coords="262,185,369,211"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="325,172,338,135,341,114,339,94,334,73,321,57,304,43,285,33,287,28,307,39,325,53,339,71,345,93,346,115,344,136,330,174"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="270,130,309,183,305,187,266,133"/>
+</map>

@@ -1,0 +1,13 @@
+<map id="src/sys/app/shutdown.c" name="src/sys/app/shutdown.c">
+<area shape="rect" id="Node000001" title="Graceful shutdown implementation." alt="" coords="179,5,352,31"/>
+<area shape="rect" id="Node000002" href="$da/d39/shutdown_8h.html" title="Unified Graceful Shutdown support for CWIST." alt="" coords="15,79,204,104"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="241,33,148,75,146,70,239,28"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="228,79,303,104"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="268,31,268,65,263,65,263,31"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="327,79,393,104"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="282,29,335,68,332,72,279,33"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="5,152,104,177"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="102,106,74,143,70,140,98,103"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="129,152,202,177"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="121,103,150,140,146,143,116,106"/>
+</map>

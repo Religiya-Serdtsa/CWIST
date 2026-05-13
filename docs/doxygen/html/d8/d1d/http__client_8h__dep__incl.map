@@ -1,0 +1,5 @@
+<map id="include/cwist/net/http/http_client.h" name="include/cwist/net/http/http_client.h">
+<area shape="rect" id="Node000001" title="Unified HTTP/1.1 and HTTP/2 client using libcurl." alt="" coords="14,5,177,45"/>
+<area shape="rect" id="Node000002" href="$d6/d32/http__client_8c.html" title="libcurl&#45;based HTTP/1.1 and HTTP/2 client for CWIST." alt="" coords="5,93,185,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="98,59,98,93,93,93,93,59"/>
+</map>

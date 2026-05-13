@@ -1,3 +1,6 @@
+/** @file cwist_nats.c
+ * @brief cwist_nats.c interface.
+ */
 #define _GNU_SOURCE
 #include <cwist/net/nats/cwist_nats.h>
 #include <cwist/core/mem/alloc.h>

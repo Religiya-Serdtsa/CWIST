@@ -1,5 +1,7 @@
 var io__select_8c =
 [
+    [ "_POSIX_C_SOURCE", "d9/d70/io__select_8c.html#a3024ccd4a9af5109d24e6c57565d74a1", null ],
+    [ "job_node_t", "d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564", null ],
     [ "cwist_io_queue_create", "d9/d70/io__select_8c.html#ae98b56f01551c8b2a116ede7c918aa99", null ],
     [ "cwist_io_queue_destroy", "d9/d70/io__select_8c.html#a90a553923ea4f601ffb5acaf8660d9fe", null ],
     [ "cwist_io_queue_run", "d9/d70/io__select_8c.html#a817485c076ee5f5cb2a203917931e2cc", null ],

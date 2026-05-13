@@ -1,3 +1,6 @@
+/** @file ech.c
+ * @brief ech.c interface.
+ */
 #define _GNU_SOURCE
 #include <cwist/security/tls/ech.h>
 #include <cwist/sys/err/cwist_err.h>

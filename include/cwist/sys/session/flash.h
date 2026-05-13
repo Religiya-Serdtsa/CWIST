@@ -1,10 +1,10 @@
-#ifndef __CWIST_FLASH_H__
-#define __CWIST_FLASH_H__
-
 /**
  * @file flash.h
  * @brief One-time flash messages (ala Flask flash/get_flashed_messages).
  */
+
+#ifndef __CWIST_FLASH_H__
+#define __CWIST_FLASH_H__
 
 #include <cwist/net/http/http.h>
 

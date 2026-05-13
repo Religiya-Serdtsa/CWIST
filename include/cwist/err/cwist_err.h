@@ -1,3 +1,6 @@
+/** @file cwist_err.h
+ * @brief cwist_err.h interface.
+ */
 #ifndef __CWIST_ERR_H__
 #define __CWIST_ERR_H__
 
@@ -7,32 +10,32 @@
 struct cwist_sstring;
 
 typedef enum cwist_errtype_t {
-  // signed int errcodes
-  CWIST_ERR_INT8, // mostly used to check a char
-  CWIST_ERR_INT16, // used when checking common errcodes in Unix/Linux
+  /// @name signed int errcodes
+  CWIST_ERR_INT8, ///< mostly used to check a char
+  CWIST_ERR_INT16, ///< used when checking common errcodes in Unix/Linux
   CWIST_ERR_INT32,
-  // big, signed errcodes
-  // WARN: mostly unused
+  /// big, signed errcodes
+  /// WARN: mostly unused
   CWIST_ERR_INT64,
 # if defined(__clang__) || defined(__GNUC__) && defined(USE_128BIT_ERRCODE)
   CWIST_ERR_INT128,
 #endif
-  // unsigned int errcodes
-  CWIST_ERR_UINT8, // mostly used as 'byte'
+  /// @name unsigned int errcodes
+  CWIST_ERR_UINT8, ///< mostly used as 'byte'
   CWIST_ERR_UINT16,
   CWIST_ERR_UINT32,
-  // big, unsigned errcodes
-  // WARN: mostly unused
+  /// big, unsigned errcodes
+  /// WARN: mostly unused
   CWIST_ERR_UINT64,
 # if defined(__clang__) || defined(__GNUC__) && defined(USE_128BIT_ERRCODE)
   CWIST_ERR_UINT128,
 #endif
 
-  // string types
+  /// string types
   CWIST_ERR_STRING,
   CWIST_ERR_JSON,
-  // float types
-  // WARN: mostly unused
+  /// float types
+  /// WARN: mostly unused
   CWIST_ERR_FLOAT,
   CWIST_ERR_DOUBLE,
 } cwist_errtype_t;
@@ -70,6 +73,16 @@ typedef struct cwist_error_t {
 __prim_cwist_error_t error;
 } cwist_error_t;
 
-/* FUNCITONS */
+/** @name Functions
+ *  @{
+ */
+
+/**
+ * @brief Creates an error object initialized with the specified type.
+ * @param type The type of error to create.
+ * @return Initialized cwist_error_t structure.
+ */
 cwist_error_t make_error(cwist_errtype_t type);
+
+/** @} */
 #endif

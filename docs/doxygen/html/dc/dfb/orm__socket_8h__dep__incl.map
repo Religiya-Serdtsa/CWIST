@@ -1,0 +1,5 @@
+<map id="include/cwist/core/orm/orm_socket.h" name="include/cwist/core/orm/orm_socket.h">
+<area shape="rect" id="Node000001" title="SQLite&#45;to&#45;Unix&#45;Socket bridge helpers." alt="" coords="31,5,173,45"/>
+<area shape="rect" id="Node000002" href="$d5/dcf/orm__socket_8c.html" title="SQLite&#45;to&#45;socket bridge implementation." alt="" coords="5,93,199,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="105,59,105,93,99,93,99,59"/>
+</map>
