@@ -94,9 +94,9 @@ static int cwist_https_alpn_select_cb(SSL *ssl,
                                       unsigned int inlen,
                                       void *arg) {
     (void)ssl;
-    const cwist_https_options *opts = (const cwist_https_options *)arg;
-    bool enable_http3 = opts && opts->enable_http3;
-    bool enable_http2 = opts && (opts->enable_http2 || enable_http3);
+    const cwist_https_context *hctx = (const cwist_https_context *)arg;
+    bool enable_http3 = hctx && hctx->http3_enabled;
+    bool enable_http2 = hctx && (hctx->http2_enabled || enable_http3);
 
     const unsigned char *supported;
     unsigned int supported_len;
@@ -167,10 +167,6 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
         }
     }
 
-    SSL_CTX_set_alpn_select_cb(ssl_ctx,
-                               cwist_https_alpn_select_cb,
-                               (void *)options);
-
     // Load Cert and Key
     if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path, SSL_FILETYPE_PEM) <= 0) {
         SSL_CTX_free(ssl_ctx);
@@ -197,6 +193,10 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
     (*ctx)->ctx = ssl_ctx;
     (*ctx)->http2_enabled = enable_http2;
     (*ctx)->http3_enabled = enable_http3;
+
+    SSL_CTX_set_alpn_select_cb(ssl_ctx,
+                               cwist_https_alpn_select_cb,
+                               (void *)*ctx);
 
     err.error.err_i16 = 0; // Success
     return err;
