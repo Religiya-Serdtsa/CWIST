@@ -154,6 +154,17 @@ static const struct lsquic_hset_if cwist_h3_hset_if = {
 };
 
 /* ------------------------------------------------------------------ */
+/* SSL context callback                                               */
+/* ------------------------------------------------------------------ */
+
+static SSL_CTX *cwist_h3_get_ssl_ctx(void *peer_ctx,
+                                      const struct sockaddr *local) {
+    (void)local;
+    cwist_http3_context *h3_ctx = (cwist_http3_context *)peer_ctx;
+    return h3_ctx ? h3_ctx->ssl_ctx : NULL;
+}
+
+/* ------------------------------------------------------------------ */
 /* Packet-out callback                                                */
 /* ------------------------------------------------------------------ */
 
@@ -838,6 +849,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
         .ea_stream_if_ctx    = ctx,
         .ea_packets_out      = cwist_h3_packets_out,
         .ea_packets_out_ctx  = &udp_fd,
+        .ea_get_ssl_ctx      = cwist_h3_get_ssl_ctx,
         .ea_hsi_if           = &cwist_h3_hset_if,
         .ea_hsi_ctx          = NULL,
         .ea_settings         = &settings,
