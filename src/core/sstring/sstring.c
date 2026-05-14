@@ -267,15 +267,15 @@ cwist_error_t cwist_sstring_change_size(cwist_sstring *str, size_t new_size, boo
     }
 
     str->data = new_data;
-    str->size = new_size;
     
-    // Ensure null termination if growing or if it was just allocated
-    if (new_size >= current_len) {
+    if (new_size < current_len) {
+        str->size = new_size;
+        str->data[new_size] = '\0';
+    } else {
         if (current_len == 0) {
              str->data[0] = '\0';
         }
-    } else {
-        str->data[new_size] = '\0';
+        // str->size remains current_len (existing data preserved)
     }
 
    err.error.err_i8 = ERR_SSTRING_OKAY;

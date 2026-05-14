@@ -27,7 +27,7 @@
 | WebSocket Server | ✅ | Upgrade, frame parsing, ping/pong |
 | TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH support |
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
-| **io_uring Backend** | ⏳ | Linux-only; `epoll` done, io_uring needs `liburing` or raw syscalls |
+| **io_uring Backend** | 🔄 | Initial implementation added (`io_uring_backend.c`, `test_io_uring.c`) |
 | **kqueue Backend** | ⏳ | BSD/macOS; blocked on non-Linux test environment |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
 | **WebTransport** | ✅ | Basic server handler (`:protocol=webtransport` detection via HTTP/3 CONNECT) |
@@ -58,8 +58,8 @@
 | **Access Logging** | 🔄 | Macro-based internal logging added; standardized Common/Combined/JSON access format pending |
 | **Request ID / Tracing** | ⏳ | No distributed tracing or request correlation ID injection |
 | Graceful Shutdown | ✅ | Unified atomic `running` flag + SIGTERM/SIGINT handlers across HTTP/1.1, HTTP/2, HTTP/3 loops |
-| **Health Check Endpoint** | ⏳ | No built-in `/healthz` or readiness/liveness probe |
-| **Metrics / Observability** | 🔄 | Basic structured logger + macro-based `core/log` added; Prometheus endpoint missing |
+| **Health Check Endpoint** | 🔄 | Basic `/healthz` endpoint added (`healthz.c`, `healthz.h`) |
+| **Metrics / Observability** | 🔄 | Metrics module added (`metrics.c`, `metrics.h`, `test_metrics.c`); Prometheus endpoint pending |
 | **Per-Status Error Handlers** | ✅ | `cwist_app_register_error_handler` for custom 404, 500, etc. |
 | **URL Reverse Routing** | ✅ | `cwist_app_get_named` + `cwist_url_for` with param substitution |
 | **Flash Messages** | ✅ | One-time session-scoped messages via `cwist_flash_get/set` |
@@ -76,7 +76,7 @@
 | **CSRF Protection** | ⏳ | No double-submit cookie or synchronizer token |
 | **Secure Headers** | ⏳ | No automatic HSTS, CSP, X-Frame-Options injection |
 | **Request Size Limits** | 🔄 | HTTP/3 has body limit; HTTP/1.1/2 limits need audit |
-| **Input Validation** | 🔄 | `zod`-like validator exists but lacks comprehensive rule set |
+| **Input Validation** | ✅ | Bind validator added (`bind.c`, `bind.h`, `test_bind.c`) |
 | **WAF-lite / Sanitization** | ⏳ | No XSS/SQLi sanitizer middleware |
 
 ---
@@ -131,14 +131,14 @@
 2. ~~**Multipart / File Upload** parser~~ ✅
 3. ~~**Graceful Shutdown** unified across HTTP/1.1, HTTP/2, HTTP/3~~ ✅
 4. ~~**Compression** (gzip at minimum, brotli preferred)~~ ✅
-5. **Form / Request Validation** middleware
+5. ~~**Form / Request Validation** middleware~~ ✅
 
 ### P1 — Production Readiness
 6. **Access Logs** (Common/JSON format)
-7. **Metrics endpoint** (Prometheus text format)
+7. **Metrics endpoint** (Prometheus text format) 🔄
 8. **Rate Limiting** middleware
 9. **Caching** (ETag generation + in-memory cache)
-10. **Health Check** endpoints
+10. **Health Check** endpoints 🔄
 
 ### P2 — Developer Velocity
 11. **Hot Reload** for development
@@ -149,7 +149,7 @@
 ### P3 — Advanced Protocols
 15. ~~**WebTransport** server + client~~ ✅ (basic server handler)
 16. ~~**HTTP/2 Server Push**~~ ✅
-17. **io_uring** UDP packet loop for HTTP/3
+17. **io_uring** UDP packet loop for HTTP/3 🔄
 18. **kqueue** backend for macOS/BSD
 
 ### P4 — Ecosystem

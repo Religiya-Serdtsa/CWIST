@@ -133,6 +133,10 @@ SRCS = src/core/sstring/sstring.c \
        src/security/tls/ech.c \
        src/net/db_sync/db_sync.c \
        src/net/nats/cwist_nats.c \
+       src/core/validation/bind.c \
+       src/sys/io/io_uring_backend.c \
+       src/sys/metrics/metrics.c \
+       src/sys/health/healthz.c \
        $(IO_SRC)
 
 # Object Files and Target
@@ -261,7 +265,10 @@ TEST_TARGETS = test_sstring \
                test_shutdown \
                test_compress \
                test_log \
-               nuke_missing_user_test
+               nuke_missing_user_test \
+               test_bind \
+               test_metrics \
+               test_io_uring
 
 .PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild
 
@@ -338,6 +345,18 @@ test_log: $(LIB_NAME) tests/test_log.c
 nuke_missing_user_test: $(LIB_NAME) tests/nuke_missing_user_test.c
 	$(CC) $(CFLAGS) -o nuke_missing_user_test tests/nuke_missing_user_test.c $(LIB_NAME) $(LIBS)
 	./nuke_missing_user_test
+
+test_bind: $(LIB_NAME) tests/test_bind.c
+	$(CC) $(CFLAGS) -o test_bind tests/test_bind.c $(LIB_NAME) $(LIBS)
+	./test_bind
+
+test_metrics: $(LIB_NAME) tests/test_metrics.c
+	$(CC) $(CFLAGS) -o test_metrics tests/test_metrics.c $(LIB_NAME) $(LIBS)
+	./test_metrics
+
+test_io_uring: $(LIB_NAME) tests/test_io_uring.c
+	$(CC) $(CFLAGS) -o test_io_uring tests/test_io_uring.c $(LIB_NAME) $(LIBS)
+	./test_io_uring
 
 install: $(LIB_NAME)
 	@echo "Installing library to $(LIBDIR)..."
