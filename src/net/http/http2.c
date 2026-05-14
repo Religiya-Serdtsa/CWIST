@@ -587,13 +587,31 @@ static const cwist_http2_static_header *h2_static_header(uint32_t index) {
     return &cwist_http2_static_table[index];
 }
 
+static void h2_parse_path(cwist_http_request *req, const char *path) {
+    const char *q = strchr(path, '?');
+    if (q) {
+        cwist_sstring_assign_len(req->path, (char *)path, (size_t)(q - path));
+        cwist_sstring_assign(req->query, (char *)(q + 1));
+        if (req->query_params) {
+            cwist_query_map_clear(req->query_params);
+        } else {
+            req->query_params = cwist_query_map_create();
+        }
+        if (req->query_params && req->query->size > 0) {
+            cwist_query_map_parse(req->query_params, req->query->data);
+        }
+    } else {
+        cwist_sstring_assign(req->path, (char *)path);
+    }
+}
+
 static void h2_apply_header(cwist_http_request *req, const char *name, const char *value) {
     if (!req || !name || !value) return;
 
     if (strcmp(name, ":method") == 0) {
         req->method = cwist_http_string_to_method(value);
     } else if (strcmp(name, ":path") == 0) {
-        cwist_sstring_assign(req->path, (char *)value);
+        h2_parse_path(req, value);
     } else if (strcmp(name, ":authority") == 0 || strcmp(name, "host") == 0) {
         cwist_http_header_add(&req->headers, "host", value);
     } else if (strcmp(name, ":scheme") != 0 && name[0] != ':') {
