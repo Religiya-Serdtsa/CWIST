@@ -1,6 +1,14 @@
 <map id="cwist_http_response" name="cwist_http_response">
-<area shape="rect" id="Node000001" title="HTTP Response Object. Supports standard string body or Zero&#45;Copy pointer body." alt="" coords="18,93,173,119"/>
-<area shape="rect" id="Node000002" href="$d3/d72/structcwist__http__header__node.html" title="Linked list for headers to handle multiple headers easily." alt="" coords="5,5,185,31"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="98,45,98,93,93,93,93,45"/>
-<area shape="poly" id="edge2_Node000002_Node000002" title=" " alt="" coords="201,10,212,18,204,25,186,28,185,23,202,20,207,18,198,15"/>
+<area shape="rect" id="Node000001" title="HTTP Response Object. Supports standard string body or Zero&#45;Copy pointer body." alt="" coords="146,215,301,240"/>
+<area shape="rect" id="Node000002" href="$d5/ddc/structcwist__sstring.html" title=" " alt="" coords="326,5,433,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="361,43,305,110,233,216,228,213,301,106,357,40"/>
+<area shape="rect" id="Node000004" href="$d8/dca/struct____prim__cwist__error__t.html" title="Internal union&#45;like structure to store the actual error value." alt="" coords="389,117,546,143"/>
+<area shape="poly" id="edge4_Node000004_Node000002" title=" " alt="" coords="399,40,460,115,456,119,395,43"/>
+<area shape="rect" id="Node000005" href="$d3/d72/structcwist__http__header__node.html" title="Linked list for headers to handle multiple headers easily." alt="" coords="5,117,185,143"/>
+<area shape="poly" id="edge6_Node000005_Node000002" title=" " alt="" coords="313,35,236,57,168,89,115,119,112,115,166,84,234,52,312,30"/>
+<area shape="rect" id="Node000003" href="$d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system." alt="" coords="509,215,615,240"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="564,201,567,156,564,132,556,109,533,79,502,57,467,41,432,31,434,26,469,36,504,52,537,75,560,107,569,131,572,156,570,201"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="490,151,552,212,548,216,487,154"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="124,149,209,212,206,217,120,153"/>
+<area shape="poly" id="edge7_Node000005_Node000005" title=" " alt="" coords="200,121,212,130,204,138,186,142,185,137,202,133,207,130,197,125"/>
 </map>

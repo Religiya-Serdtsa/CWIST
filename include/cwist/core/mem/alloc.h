@@ -1,3 +1,8 @@
+/**
+ * @file alloc.h
+ * @brief Memory allocation wrappers backed by libttak.
+ */
+
 #ifndef __CWIST_CORE_MEM_ALLOC_H__
 #define __CWIST_CORE_MEM_ALLOC_H__
 

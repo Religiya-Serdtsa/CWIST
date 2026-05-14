@@ -15,6 +15,7 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <stdatomic.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -126,16 +127,25 @@ static const cwist_http2_static_header cwist_http2_static_table[] = {
     { "www-authenticate", "" },
 };
 
+/**
+ * @brief Read bytes from the underlying connection.
+ */
 static int h2_read(cwist_https_connection *conn, void *buf, int len) {
     if (conn->ssl) return SSL_read(conn->ssl, buf, len);
     return read(conn->fd, buf, len);
 }
 
+/**
+ * @brief Write bytes to the underlying connection.
+ */
 static int h2_write(cwist_https_connection *conn, const void *buf, int len) {
     if (conn->ssl) return SSL_write(conn->ssl, buf, len);
     return write(conn->fd, buf, len);
 }
 
+/**
+ * @brief Write the entire buffer, looping until completion.
+ */
 static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t len) {
     const unsigned char *p = (const unsigned char *)buf;
     while (len > 0) {
@@ -147,6 +157,9 @@ static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t le
     return 0;
 }
 
+/**
+ * @brief Encode an HTTP/2 frame header.
+ */
 static void h2_make_frame_header(unsigned char out[CWIST_HTTP2_FRAME_HEADER_SIZE],
                                  uint32_t len,
                                  uint8_t type,
@@ -163,6 +176,9 @@ static void h2_make_frame_header(unsigned char out[CWIST_HTTP2_FRAME_HEADER_SIZE
     out[8] = (unsigned char)(stream_id & 0xff);
 }
 
+/**
+ * @brief Send a complete HTTP/2 frame.
+ */
 static int h2_write_frame(cwist_https_connection *conn,
                           uint8_t type,
                           uint8_t flags,
@@ -581,12 +597,18 @@ char *h2_decode_string(const unsigned char *buf, size_t len, size_t *pos) {
     return out;
 }
 
+/**
+ * @brief Look up a static table entry by index.
+ */
 static const cwist_http2_static_header *h2_static_header(uint32_t index) {
     size_t count = sizeof(cwist_http2_static_table) / sizeof(cwist_http2_static_table[0]);
     if (index == 0 || index >= count) return NULL;
     return &cwist_http2_static_table[index];
 }
 
+/**
+ * @brief Parse the :path pseudo-header into path and query components.
+ */
 static void h2_parse_path(cwist_http_request *req, const char *path) {
     const char *q = strchr(path, '?');
     if (q) {
@@ -605,6 +627,9 @@ static void h2_parse_path(cwist_http_request *req, const char *path) {
     }
 }
 
+/**
+ * @brief Apply a decoded header to the request object.
+ */
 static void h2_apply_header(cwist_http_request *req, const char *name, const char *value) {
     if (!req || !name || !value) return;
 
@@ -619,6 +644,9 @@ static void h2_apply_header(cwist_http_request *req, const char *name, const cha
     }
 }
 
+/**
+ * @brief Decode an HPACK header block into request fields.
+ */
 static void h2_decode_header_block(cwist_http_request *req, const unsigned char *payload, size_t len) {
     size_t pos = 0;
 
@@ -678,6 +706,9 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
 
 /* --- HPACK Response Encoder --- */
 
+/**
+ * @brief Encode an integer in HPACK format.
+ */
 static size_t h2_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t value, uint8_t prefix_bits) {
     uint8_t mask = (uint8_t)((1u << prefix_bits) - 1u);
     unsigned char first = dst[0] & ~mask;
@@ -698,6 +729,9 @@ static size_t h2_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t val
     return i;
 }
 
+/**
+ * @brief Encode a literal string in HPACK format (no Huffman).
+ */
 static size_t h2_encode_string(unsigned char *dst, size_t dst_cap, const char *str) {
     size_t len = strlen(str);
     dst[0] = 0x00; /* literal, no huffman */
@@ -707,6 +741,9 @@ static size_t h2_encode_string(unsigned char *dst, size_t dst_cap, const char *s
     return n + len;
 }
 
+/**
+ * @brief Find the static table index for a header name.
+ */
 static int h2_static_table_find_name(const char *name) {
     size_t count = sizeof(cwist_http2_static_table) / sizeof(cwist_http2_static_table[0]);
     for (size_t i = 1; i < count; ++i) {
@@ -716,6 +753,9 @@ static int h2_static_table_find_name(const char *name) {
     return 0;
 }
 
+/**
+ * @brief Encode response headers into an HPACK header block.
+ */
 static size_t h2_encode_response_headers(cwist_http_response *res,
                                           unsigned char *dst, size_t dst_cap) {
     size_t pos = 0;
@@ -829,6 +869,9 @@ static size_t h2_encode_response_headers(cwist_http_response *res,
     return pos;
 }
 
+/**
+ * @brief Send a complete response (HEADERS + DATA) on the given stream.
+ */
 static int h2_send_response(cwist_https_connection *conn, uint32_t stream_id, cwist_http_response *res) {
     unsigned char header_block[8192];
     size_t block_len = h2_encode_response_headers(res, header_block, sizeof(header_block));
@@ -997,6 +1040,8 @@ cwist_error_t cwist_http2_serve_connection(
             cwist_http_request *req = cwist_http_request_create();
             if (!req) { free(payload); break; }
             cwist_sstring_assign(req->version, "HTTP/2");
+            req->stream_id = stream_id;
+            req->private_data = conn;
 
             size_t block_offset = 0;
             size_t block_len = len;
@@ -1080,4 +1125,118 @@ cwist_error_t cwist_http2_serve_connection(
     result = make_error(CWIST_ERR_INT16);
     result.error.err_i16 = 0;
     return result;
+}
+
+/* ------------------------------------------------------------------ */
+/* HTTP/2 Server Push                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief Push a resource to the client over HTTP/2 Server Push.
+ *
+ * Sends a PUSH_PROMISE frame on the original request stream, then delivers
+ * the pushed response headers and body on a newly allocated server-initiated
+ * stream.  The caller should ensure HTTP/2 Server Push is enabled on the
+ * connection (via SETTINGS_ENABLE_PUSH).
+ *
+ * @param req            The current HTTP/2 request (must have stream_id and
+ *                       private_data populated by the HTTP/2 layer).
+ * @param path           The resource path to push (e.g., "/style.css").
+ * @param content_type   Optional Content-Type header value (may be NULL).
+ * @param data           Response body bytes (may be NULL).
+ * @param data_len       Length of @p data.
+ * @return 0 on success, -1 on failure.
+ */
+int cwist_http2_push_resource(cwist_http_request *req,
+                              const char *path,
+                              const char *content_type,
+                              const unsigned char *data,
+                              size_t data_len) {
+    if (!req || !req->private_data || !path) return -1;
+
+    cwist_https_connection *conn = (cwist_https_connection *)req->private_data;
+    uint32_t original_stream_id = req->stream_id;
+
+    /* Find :authority from the original request headers */
+    const char *authority = NULL;
+    cwist_http_header_node *h = req->headers;
+    while (h) {
+        if (h->key && h->key->data && strcasecmp(h->key->data, "host") == 0) {
+            authority = h->value ? h->value->data : NULL;
+            break;
+        }
+        h = h->next;
+    }
+    if (!authority) return -1;
+
+    /* Allocate a new server-initiated stream ID (even number) */
+    static _Atomic uint32_t next_server_stream = 2;
+    uint32_t promised_stream_id = atomic_fetch_add(&next_server_stream, 2);
+
+    /* Encode PUSH_PROMISE pseudo-headers (:method, :scheme, :authority, :path) */
+    unsigned char header_block[4096];
+    size_t pos = 0;
+
+    /* :method = GET → static table index 2 (0x82) */
+    if (pos >= sizeof(header_block)) return -1;
+    header_block[pos++] = 0x82;
+
+    /* :scheme = https → static table index 7 (0x87) */
+    if (pos >= sizeof(header_block)) return -1;
+    header_block[pos++] = 0x87;
+
+    /* :authority = host (literal without indexing) */
+    if (pos + 1 > sizeof(header_block)) return -1;
+    header_block[pos] = 0x00;
+    size_t n = h2_encode_integer(header_block + pos, sizeof(header_block) - pos, 0, 4);
+    if (n == 0) return -1;
+    pos += n;
+    n = h2_encode_string(header_block + pos, sizeof(header_block) - pos, ":authority");
+    if (n == 0) return -1;
+    pos += n;
+    n = h2_encode_string(header_block + pos, sizeof(header_block) - pos, authority);
+    if (n == 0) return -1;
+    pos += n;
+
+    /* :path = path (literal without indexing) */
+    if (pos + 1 > sizeof(header_block)) return -1;
+    header_block[pos] = 0x00;
+    n = h2_encode_integer(header_block + pos, sizeof(header_block) - pos, 0, 4);
+    if (n == 0) return -1;
+    pos += n;
+    n = h2_encode_string(header_block + pos, sizeof(header_block) - pos, ":path");
+    if (n == 0) return -1;
+    pos += n;
+    n = h2_encode_string(header_block + pos, sizeof(header_block) - pos, path);
+    if (n == 0) return -1;
+    pos += n;
+
+    /* Build PUSH_PROMISE frame payload: promised_stream_id (4 bytes) + header_block */
+    unsigned char pp_payload[4096 + 4];
+    pp_payload[0] = (unsigned char)((promised_stream_id >> 24) & 0x7f);
+    pp_payload[1] = (unsigned char)((promised_stream_id >> 16) & 0xff);
+    pp_payload[2] = (unsigned char)((promised_stream_id >> 8) & 0xff);
+    pp_payload[3] = (unsigned char)(promised_stream_id & 0xff);
+    memcpy(pp_payload + 4, header_block, pos);
+
+    /* Send PUSH_PROMISE frame */
+    if (h2_write_frame(conn, 0x05, CWIST_HTTP2_FLAG_END_HEADERS,
+                       original_stream_id, pp_payload, (uint32_t)(pos + 4)) != 0) {
+        return -1;
+    }
+
+    /* Build and send the pushed response on the promised stream */
+    cwist_http_response *res = cwist_http_response_create();
+    if (!res) return -1;
+    res->status_code = CWIST_HTTP_OK;
+    if (content_type) {
+        cwist_http_header_add(&res->headers, "content-type", content_type);
+    }
+    if (data && data_len > 0) {
+        cwist_sstring_assign_len(res->body, (const char *)data, data_len);
+    }
+
+    int ret = h2_send_response(conn, promised_stream_id, res);
+    cwist_http_response_destroy(res);
+    return ret;
 }

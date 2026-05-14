@@ -1,6 +1,6 @@
 <map id="include/cwist/core/html/css_composer.h" name="include/cwist/core/html/css_composer.h">
 <area shape="rect" id="Node000001" title="Dynamic CSS Synthesis and Color Mathematics." alt="" coords="5,5,168,45"/>
-<area shape="rect" id="Node000002" href="$d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="103,93,239,133"/>
+<area shape="rect" id="Node000002" href="$d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="103,93,239,133"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="107,44,145,82,141,85,103,47"/>
 <area shape="rect" id="Node000005" title=" " alt="" coords="203,269,285,295"/>
 <area shape="poly" id="edge9_Node000001_Node000005" title=" " alt="" coords="73,47,48,83,25,128,18,152,16,176,19,199,30,220,55,237,95,251,190,271,189,276,94,256,52,241,26,223,14,201,10,176,13,151,20,126,44,80,69,44"/>

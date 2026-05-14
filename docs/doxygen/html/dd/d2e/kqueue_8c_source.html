@@ -82,9 +82,9 @@ $(document).ready(function() { init_codefold(1); });
   <div class="headertitle"><div class="title">kqueue.c</div></div>
 </div><!--header-->
 <div class="contents">
-<a href="../../dd/d2e/kqueue_8c.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#define _POSIX_C_SOURCE 200809L</span></div>
+<a href="../../dd/d2e/kqueue_8c.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno"><a class="line" href="../../dd/d2e/kqueue_8c.html#a3024ccd4a9af5109d24e6c57565d74a1">    1</a></span><span class="preprocessor">#define _POSIX_C_SOURCE 200809L</span></div>
 <div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span><span class="preprocessor">#include &lt;<a class="code" href="../../d1/df5/cwist__io_8h.html">cwist/sys/io/cwist_io.h</a>&gt;</span></div>
-<div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="preprocessor">#include &lt;cwist/core/mem/alloc.h&gt;</span></div>
+<div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="preprocessor">#include &lt;<a class="code" href="../../d2/dfe/alloc_8h.html">cwist/core/mem/alloc.h</a>&gt;</span></div>
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;sys/types.h&gt;</span></div>
 <div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;sys/event.h&gt;</span></div>
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="preprocessor">#include &lt;sys/time.h&gt;</span></div>
@@ -100,13 +100,13 @@ $(document).ready(function() { init_codefold(1); });
 <div class="foldopen" id="foldopen00026" data-start="{" data-end="}">
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno"><a class="line" href="../../dd/d2e/kqueue_8c.html#ae98b56f01551c8b2a116ede7c918aa99">   26</a></span><a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a> *<a class="code hl_function" href="../../dd/d2e/kqueue_8c.html#ae98b56f01551c8b2a116ede7c918aa99">cwist_io_queue_create</a>(<span class="keywordtype">size_t</span> capacity) {</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    (void)capacity;</div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    <a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a> *q = cwist_alloc(<span class="keyword">sizeof</span>(<a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a>));</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    <a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a> *q = <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#aeba69949fe17751318e6b5fc84a74096">cwist_alloc</a>(<span class="keyword">sizeof</span>(<a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a>));</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    <span class="keywordflow">if</span> (!q) <span class="keywordflow">return</span> NULL;</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>    q-&gt;kq_fd = kqueue();</div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>    <span class="keywordflow">if</span> (q-&gt;kq_fd &lt; 0) {</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>        perror(<span class="stringliteral">&quot;kqueue&quot;</span>);</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>        cwist_free(q);</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>        <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(q);</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>        <span class="keywordflow">return</span> NULL;</div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    }</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <span class="keywordflow">return</span> q;</div>
@@ -120,7 +120,7 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span> </div>
 <div class="foldopen" id="foldopen00055" data-start="{" data-end="}">
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno"><a class="line" href="../../dd/d2e/kqueue_8c.html#af8273eb32d71938b4faca82ed325b9aa">   55</a></span><span class="keywordtype">bool</span> <a class="code hl_function" href="../../dd/d2e/kqueue_8c.html#af8273eb32d71938b4faca82ed325b9aa">cwist_io_queue_submit</a>(cwist_io_queue *q, <a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a0447e35daf4a82549bf7d207d5ce8a28">cwist_job_func</a> func, <span class="keywordtype">void</span> *arg) {</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <span class="keyword">struct </span>job_wrapper *job = cwist_alloc(<span class="keyword">sizeof</span>(<span class="keyword">struct</span> job_wrapper));</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <span class="keyword">struct </span>job_wrapper *job = <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#aeba69949fe17751318e6b5fc84a74096">cwist_alloc</a>(<span class="keyword">sizeof</span>(<span class="keyword">struct</span> job_wrapper));</div>
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    job-&gt;func = func;</div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    job-&gt;arg = arg;</div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span> </div>
@@ -131,7 +131,7 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    </div>
 <div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    <span class="keywordflow">if</span> (kevent(q-&gt;kq_fd, &amp;kev, 1, NULL, 0, NULL) &lt; 0) {</div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>        perror(<span class="stringliteral">&quot;kevent submit&quot;</span>);</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>        cwist_free(job);</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>        <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(job);</div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>        <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    }</div>
 <div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
@@ -154,7 +154,7 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>                <span class="keyword">struct </span>job_wrapper *job = (<span class="keyword">struct </span>job_wrapper *)events[i].udata;</div>
 <div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>                <span class="keywordflow">if</span> (job) {</div>
 <div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>                    job-&gt;func(job-&gt;arg);</div>
-<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>                    cwist_free(job);</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>                    <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(job);</div>
 <div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>                }</div>
 <div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>            }</div>
 <div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>        }</div>
@@ -166,10 +166,13 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00103" name="l00103"></a><span class="lineno"><a class="line" href="../../dd/d2e/kqueue_8c.html#a90a553923ea4f601ffb5acaf8660d9fe">  103</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="../../dd/d2e/kqueue_8c.html#a90a553923ea4f601ffb5acaf8660d9fe">cwist_io_queue_destroy</a>(cwist_io_queue *q) {</div>
 <div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    <span class="keywordflow">if</span> (q) {</div>
 <div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>        close(q-&gt;kq_fd);</div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>        cwist_free(q);</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>        <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(q);</div>
 <div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    }</div>
 <div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>}</div>
 </div>
+<div class="ttc" id="aalloc_8h_html"><div class="ttname"><a href="../../d2/dfe/alloc_8h.html">alloc.h</a></div><div class="ttdoc">Memory allocation wrappers backed by libttak.</div></div>
+<div class="ttc" id="aalloc_8h_html_a220abeebe2823e72511d1690fc561306"><div class="ttname"><a href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a></div><div class="ttdeci">void cwist_free(void *ptr)</div><div class="ttdoc">Free memory obtained via cwist_alloc/cwist_strdup/etc.</div><div class="ttdef"><b>Definition</b> <a href="../../d9/d39/alloc_8c_source.html#l00315">alloc.c:315</a></div></div>
+<div class="ttc" id="aalloc_8h_html_aeba69949fe17751318e6b5fc84a74096"><div class="ttname"><a href="../../d2/dfe/alloc_8h.html#aeba69949fe17751318e6b5fc84a74096">cwist_alloc</a></div><div class="ttdeci">void * cwist_alloc(size_t size)</div><div class="ttdoc">Allocate zeroed memory tracked by libttak.</div><div class="ttdef"><b>Definition</b> <a href="../../d9/d39/alloc_8c_source.html#l00221">alloc.c:221</a></div></div>
 <div class="ttc" id="acwist__io_8h_html"><div class="ttname"><a href="../../d1/df5/cwist__io_8h.html">cwist_io.h</a></div><div class="ttdoc">Platform Agnostic Async Job Queue Interface.</div></div>
 <div class="ttc" id="acwist__io_8h_html_a0447e35daf4a82549bf7d207d5ce8a28"><div class="ttname"><a href="../../d1/df5/cwist__io_8h.html#a0447e35daf4a82549bf7d207d5ce8a28">cwist_job_func</a></div><div class="ttdeci">void(* cwist_job_func)(void *arg)</div><div class="ttdoc">Job function signature.</div><div class="ttdef"><b>Definition</b> <a href="../../d1/df5/cwist__io_8h_source.html#l00022">cwist_io.h:22</a></div></div>
 <div class="ttc" id="acwist__io_8h_html_a3fc0472d3c48cdb9925cce08d02593dc"><div class="ttname"><a href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a></div><div class="ttdeci">struct cwist_io_queue cwist_io_queue</div><div class="ttdoc">Opaque handle for the IO Queue. Backend implementation depends on OS (io_uring, kqueue,...</div><div class="ttdef"><b>Definition</b> <a href="../../d1/df5/cwist__io_8h_source.html#l00016">cwist_io.h:16</a></div></div>

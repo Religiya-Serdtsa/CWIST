@@ -1,6 +1,6 @@
 <map id="include/cwist/sys/app/big_dumb_reply.h" name="include/cwist/sys/app/big_dumb_reply.h">
 <area shape="rect" id="Node000001" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="254,5,415,45"/>
-<area shape="rect" id="Node000002" href="$d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="147,93,283,133"/>
+<area shape="rect" id="Node000002" href="$d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="147,93,283,133"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="310,48,254,87,251,83,306,43"/>
 <area shape="rect" id="Node000005" title=" " alt="" coords="5,269,88,295"/>
 <area shape="poly" id="edge10_Node000001_Node000005" title=" " alt="" coords="255,47,195,67,136,96,84,131,66,152,51,182,43,220,45,256,39,256,38,220,45,180,62,149,80,127,133,91,193,62,253,42"/>

@@ -75,6 +75,7 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#define-members">Macros</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">https.c File Reference</div></div>
 </div><!--header-->
@@ -82,10 +83,10 @@ $(function() {
 
 <p>OpenSSL-backed HTTPS accept, receive, send, and server-loop helpers.  
 <a href="#details">More...</a></p>
-<div class="textblock"><code>#include &lt;cwist/net/http/https.h&gt;</code><br />
-<code>#include &lt;cwist/core/sstring/sstring.h&gt;</code><br />
+<div class="textblock"><code>#include &lt;<a class="el" href="../../d7/d67/net_2http_2https_8h_source.html">cwist/net/http/https.h</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html">cwist/core/sstring/sstring.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="../../d7/da1/sys_2err_2cwist__err_8h_source.html">cwist/sys/err/cwist_err.h</a>&gt;</code><br />
-<code>#include &lt;cwist/core/mem/alloc.h&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d2/dfe/alloc_8h_source.html">cwist/core/mem/alloc.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="../../da/d39/shutdown_8h_source.html">cwist/sys/app/shutdown.h</a>&gt;</code><br />
 <code>#include &lt;openssl/ssl.h&gt;</code><br />
 <code>#include &lt;openssl/err.h&gt;</code><br />
@@ -103,123 +104,141 @@ Include dependency graph for https.c:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../d2/de4/https_8c__incl.png" border="0" usemap="#asrc_2net_2http_2https_8c" alt=""/></div>
 <map name="asrc_2net_2http_2https_8c" id="asrc_2net_2http_2https_8c">
-<area shape="rect" title="OpenSSL&#45;backed HTTPS accept, receive, send, and server&#45;loop helpers." alt="" coords="965,5,1109,31"/>
-<area shape="rect" href="../../d7/d67/net_2http_2https_8h_source.html" title=" " alt="" coords="710,79,870,104"/>
-<area shape="poly" title=" " alt="" coords="998,33,844,77,842,72,996,28"/>
-<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="123,225,259,265"/>
-<area shape="poly" title=" " alt="" coords="964,24,790,29,576,40,384,57,317,68,279,81,249,109,227,144,211,180,201,213,196,211,206,178,222,141,245,105,277,76,316,63,384,52,575,35,790,24,964,18"/>
+<area shape="rect" title="OpenSSL&#45;backed HTTPS accept, receive, send, and server&#45;loop helpers." alt="" coords="1009,5,1153,31"/>
+<area shape="rect" href="../../d7/d67/net_2http_2https_8h.html" title="HTTPS/TLS wrapper interface." alt="" coords="754,79,914,104"/>
+<area shape="poly" title=" " alt="" coords="1042,33,888,77,886,72,1040,28"/>
+<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="170,225,306,265"/>
+<area shape="poly" title=" " alt="" coords="1009,24,835,30,621,40,431,57,364,68,326,81,296,109,273,144,258,180,247,213,242,211,253,178,269,141,292,105,323,76,362,63,430,52,621,35,835,24,1009,18"/>
 <area shape="rect" title=" " alt="" coords="5,321,76,346"/>
-<area shape="poly" title=" " alt="" coords="965,24,535,43,319,59,242,70,198,81,166,101,138,127,114,158,94,190,65,256,49,308,44,306,60,254,90,188,110,155,134,124,162,97,196,76,241,64,318,54,535,37,965,19"/>
-<area shape="rect" title=" " alt="" coords="108,321,179,346"/>
-<area shape="poly" title=" " alt="" coords="964,24,561,44,361,60,289,70,248,81,198,108,163,137,137,174,114,226,110,247,113,269,130,308,125,310,108,270,105,247,109,225,133,172,160,134,195,104,246,76,288,65,360,55,561,39,964,19"/>
-<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="259,313,401,353"/>
-<area shape="poly" title=" " alt="" coords="965,26,858,38,723,60,651,77,578,98,506,124,438,154,384,183,365,200,347,227,334,263,331,300,326,300,329,262,342,224,361,196,381,178,435,150,504,119,576,93,649,72,722,55,857,32,964,21"/>
-<area shape="rect" title=" " alt="" coords="905,409,976,434"/>
-<area shape="poly" title=" " alt="" coords="1043,30,1055,70,1068,129,1072,197,1070,232,1062,266,1044,307,1018,345,966,401,963,398,1014,341,1039,305,1057,264,1064,231,1067,197,1062,129,1050,71,1038,32"/>
-<area shape="rect" title=" " alt="" coords="945,233,1048,258"/>
-<area shape="poly" title=" " alt="" coords="1037,31,1004,219,999,218,1032,30"/>
-<area shape="rect" title=" " alt="" coords="737,152,843,177"/>
-<area shape="poly" title=" " alt="" coords="1018,33,823,147,820,143,1016,29"/>
-<area shape="rect" title=" " alt="" coords="868,152,973,177"/>
-<area shape="poly" title=" " alt="" coords="1029,33,941,143,936,140,1025,29"/>
-<area shape="rect" href="../../d2/dfe/alloc_8h_source.html" title=" " alt="" coords="1099,79,1273,104"/>
-<area shape="poly" title=" " alt="" coords="1062,28,1150,70,1148,75,1060,33"/>
-<area shape="rect" href="../../da/d39/shutdown_8h.html" title="Unified Graceful Shutdown support for CWIST." alt="" coords="1297,79,1486,104"/>
-<area shape="poly" title=" " alt="" coords="1094,28,1321,73,1320,79,1093,33"/>
-<area shape="rect" title=" " alt="" coords="1510,79,1577,104"/>
-<area shape="poly" title=" " alt="" coords="1109,23,1282,43,1497,76,1496,81,1281,48,1109,29"/>
-<area shape="rect" title=" " alt="" coords="1601,79,1675,104"/>
-<area shape="poly" title=" " alt="" coords="1109,22,1320,41,1452,56,1587,76,1587,81,1451,61,1319,46,1109,27"/>
-<area shape="rect" title=" " alt="" coords="1700,79,1768,104"/>
-<area shape="poly" title=" " alt="" coords="1109,20,1360,37,1521,53,1687,76,1686,82,1521,59,1360,42,1109,25"/>
-<area shape="rect" title=" " alt="" coords="1793,79,1851,104"/>
-<area shape="poly" title=" " alt="" coords="1109,18,1234,22,1399,32,1587,49,1779,76,1778,81,1586,55,1398,37,1234,28,1109,23"/>
-<area shape="rect" title=" " alt="" coords="1876,79,1968,104"/>
-<area shape="poly" title=" " alt="" coords="1109,19,1431,36,1644,52,1863,76,1862,81,1643,58,1431,41,1109,24"/>
-<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="559,152,712,177"/>
-<area shape="poly" title=" " alt="" coords="766,106,674,149,672,144,764,102"/>
-<area shape="poly" title=" " alt="" coords="710,100,631,111,542,133,497,150,454,171,413,196,377,227,364,244,353,262,339,301,334,299,349,260,359,241,373,223,410,192,451,166,495,145,541,128,630,106,709,94"/>
-<area shape="poly" title=" " alt="" coords="793,104,793,138,787,138,787,104"/>
-<area shape="poly" title=" " alt="" coords="812,102,889,143,886,148,810,106"/>
-<area shape="poly" title=" " alt="" coords="571,180,273,232,273,227,570,175"/>
-<area shape="poly" title=" " alt="" coords="559,179,491,197,457,210,425,228,403,244,383,263,351,303,347,300,379,260,399,240,422,223,455,206,489,192,558,174"/>
-<area shape="rect" href="../../d1/d7a/net_2http_2query_8h_source.html" title=" " alt="" coords="1090,321,1253,346"/>
-<area shape="poly" title=" " alt="" coords="703,175,784,194,870,223,902,243,934,263,1019,294,1100,315,1099,320,1017,299,931,268,899,247,868,228,783,199,702,180"/>
-<area shape="rect" href="../../d0/dae/core_2db_2sql_8h_source.html" title=" " alt="" coords="436,233,579,258"/>
-<area shape="poly" title=" " alt="" coords="618,180,539,228,536,223,615,175"/>
-<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="815,313,986,353"/>
-<area shape="poly" title=" " alt="" coords="713,174,774,192,805,206,833,223,851,240,867,260,890,300,885,302,863,263,848,244,830,227,802,210,772,197,711,179"/>
-<area shape="rect" title=" " alt="" coords="603,233,699,258"/>
-<area shape="poly" title=" " alt="" coords="640,177,649,219,644,220,635,178"/>
-<area shape="poly" title=" " alt="" coords="697,175,927,223,943,227,941,232,925,228,696,180"/>
-<area shape="rect" title=" " alt="" coords="723,233,819,258"/>
-<area shape="poly" title=" " alt="" coords="657,175,741,223,738,228,654,180"/>
-<area shape="poly" title=" " alt="" coords="160,268,74,316,71,312,157,263"/>
-<area shape="poly" title=" " alt="" coords="183,267,159,310,154,307,178,264"/>
-<area shape="rect" title=" " alt="" coords="531,489,614,515"/>
-<area shape="poly" title=" " alt="" coords="199,265,217,308,231,331,248,351,279,378,313,401,386,439,458,467,519,486,517,491,456,472,384,444,310,406,276,382,244,355,226,334,212,310,194,267"/>
-<area shape="poly" title=" " alt="" coords="223,263,290,304,287,309,220,268"/>
-<area shape="poly" title=" " alt="" coords="395,351,444,371,492,399,531,437,561,476,556,479,527,441,488,403,442,376,393,356"/>
-<area shape="poly" title=" " alt="" coords="402,342,892,410,891,416,401,347"/>
-<area shape="rect" title=" " alt="" coords="340,489,451,515"/>
-<area shape="poly" title=" " alt="" coords="334,353,340,394,354,440,378,477,373,480,349,442,335,395,329,354"/>
-<area shape="poly" title=" " alt="" coords="1141,349,985,406,983,401,1139,344"/>
-<area shape="rect" title=" " alt="" coords="1134,489,1209,515"/>
-<area shape="poly" title=" " alt="" coords="1174,346,1174,476,1169,476,1169,346"/>
-<area shape="poly" title=" " alt="" coords="485,261,383,310,380,305,482,256"/>
-<area shape="poly" title=" " alt="" coords="501,259,467,315,430,403,405,477,400,475,425,401,462,312,497,257"/>
-<area shape="rect" title=" " alt="" coords="712,321,791,346"/>
-<area shape="poly" title=" " alt="" coords="541,256,707,314,705,319,539,261"/>
-<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="611,401,761,441"/>
-<area shape="poly" title=" " alt="" coords="553,256,603,277,628,292,649,312,662,329,672,349,684,387,679,389,667,351,658,332,645,315,624,296,600,281,551,261"/>
-<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="477,321,636,346"/>
-<area shape="poly" title=" " alt="" coords="516,257,545,307,541,310,512,260"/>
-<area shape="poly" title=" " alt="" coords="660,444,602,483,599,479,657,439"/>
-<area shape="poly" title=" " alt="" coords="617,444,452,488,450,483,616,439"/>
-<area shape="poly" title=" " alt="" coords="762,432,1120,490,1120,495,761,437"/>
-<area shape="poly" title=" " alt="" coords="560,346,573,475,568,476,555,346"/>
-<area shape="poly" title=" " alt="" coords="547,348,418,481,414,477,544,344"/>
-<area shape="poly" title=" " alt="" coords="576,344,648,391,645,396,573,348"/>
-<area shape="poly" title=" " alt="" coords="885,356,837,400,807,423,774,444,699,474,628,493,627,488,698,469,771,439,804,419,834,395,881,352"/>
-<area shape="poly" title=" " alt="" coords="912,352,932,395,927,397,907,355"/>
-<area shape="poly" title=" " alt="" coords="1210,102,1239,122,1267,150,1281,174,1289,195,1293,244,1293,335,1290,358,1283,381,1260,422,1230,456,1201,482,1197,478,1226,453,1255,419,1278,379,1285,357,1287,335,1287,244,1284,196,1276,176,1263,154,1236,126,1207,106"/>
-<area shape="rect" title=" " alt="" coords="1111,152,1253,177"/>
-<area shape="poly" title=" " alt="" coords="1188,104,1186,139,1181,138,1183,104"/>
-<area shape="rect" title=" " alt="" coords="1335,152,1434,177"/>
-<area shape="poly" title=" " alt="" coords="1393,105,1390,139,1384,138,1388,104"/>
-<area shape="rect" title=" " alt="" coords="1459,152,1532,177"/>
-<area shape="poly" title=" " alt="" coords="1410,102,1468,142,1465,146,1407,106"/>
+<area shape="poly" title=" " alt="" coords="1009,24,819,31,581,42,366,59,290,69,246,81,210,103,177,130,148,161,121,194,80,259,53,309,49,307,75,256,117,191,143,158,173,126,207,99,244,76,289,64,365,54,580,37,818,25,1009,19"/>
+<area shape="rect" title=" " alt="" coords="100,321,171,346"/>
+<area shape="poly" title=" " alt="" coords="1008,24,607,44,407,60,336,70,295,81,246,109,213,139,188,176,160,226,146,268,140,307,134,306,141,266,156,224,183,173,209,135,243,105,293,76,335,65,406,55,606,39,1008,19"/>
+<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="247,313,389,353"/>
+<area shape="poly" title=" " alt="" coords="1009,30,907,46,778,70,638,106,569,129,502,154,429,182,400,199,369,227,345,263,329,301,324,299,340,261,365,224,397,195,427,178,500,150,567,124,637,101,777,65,906,40,1008,25"/>
+<area shape="rect" title=" " alt="" coords="975,409,1045,434"/>
+<area shape="poly" title=" " alt="" coords="1084,30,1096,97,1111,138,1133,176,1153,191,1174,198,1195,205,1215,224,1234,258,1244,290,1242,321,1224,355,1208,373,1189,387,1146,407,1101,418,1059,423,1059,417,1100,413,1145,402,1187,382,1205,369,1220,352,1237,320,1239,290,1229,260,1211,227,1193,210,1172,203,1151,196,1129,179,1106,140,1091,98,1079,31"/>
+<area shape="rect" title=" " alt="" coords="1099,233,1201,258"/>
+<area shape="poly" title=" " alt="" coords="1081,31,1076,95,1079,136,1090,176,1105,201,1125,222,1122,226,1101,205,1085,178,1074,137,1071,95,1076,31"/>
+<area shape="rect" title=" " alt="" coords="781,152,887,177"/>
+<area shape="poly" title=" " alt="" coords="1062,33,867,147,864,143,1060,29"/>
+<area shape="rect" title=" " alt="" coords="912,152,1017,177"/>
+<area shape="poly" title=" " alt="" coords="1073,33,985,143,980,140,1069,29"/>
+<area shape="rect" href="../../d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="1143,79,1317,104"/>
+<area shape="poly" title=" " alt="" coords="1106,28,1194,70,1192,75,1104,33"/>
+<area shape="rect" href="../../da/d39/shutdown_8h.html" title="Unified Graceful Shutdown support for CWIST." alt="" coords="1341,79,1530,104"/>
+<area shape="poly" title=" " alt="" coords="1138,28,1365,73,1364,79,1137,33"/>
+<area shape="rect" title=" " alt="" coords="1554,79,1621,104"/>
+<area shape="poly" title=" " alt="" coords="1153,23,1326,43,1541,76,1540,81,1325,48,1153,29"/>
+<area shape="rect" title=" " alt="" coords="1645,79,1719,104"/>
+<area shape="poly" title=" " alt="" coords="1153,22,1364,41,1496,56,1631,76,1631,81,1495,61,1363,46,1153,27"/>
+<area shape="rect" title=" " alt="" coords="1744,79,1812,104"/>
+<area shape="poly" title=" " alt="" coords="1153,20,1404,37,1565,53,1731,76,1730,82,1565,59,1404,42,1153,25"/>
+<area shape="rect" title=" " alt="" coords="1837,79,1895,104"/>
+<area shape="poly" title=" " alt="" coords="1153,18,1278,22,1443,32,1631,49,1823,76,1822,81,1630,55,1442,37,1278,28,1153,23"/>
+<area shape="rect" title=" " alt="" coords="1920,79,2012,104"/>
+<area shape="poly" title=" " alt="" coords="1153,19,1475,36,1688,52,1907,76,1906,81,1687,58,1475,41,1153,24"/>
+<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="603,152,756,177"/>
+<area shape="poly" title=" " alt="" coords="810,106,718,149,716,144,808,102"/>
+<area shape="poly" title=" " alt="" coords="754,106,679,121,591,145,501,180,458,202,418,227,375,265,342,304,338,301,372,261,415,223,456,198,499,175,590,140,677,116,753,101"/>
+<area shape="poly" title=" " alt="" coords="837,104,837,138,831,138,831,104"/>
+<area shape="poly" title=" " alt="" coords="856,102,933,143,930,148,854,106"/>
+<area shape="poly" title=" " alt="" coords="616,180,320,232,319,227,615,175"/>
+<area shape="poly" title=" " alt="" coords="637,180,571,200,499,228,423,268,358,308,356,303,420,263,497,223,569,195,635,175"/>
+<area shape="poly" title=" " alt="" coords="757,174,856,194,900,208,929,223,948,242,963,263,987,310,1001,356,1009,394,1004,395,996,358,982,312,959,266,943,245,926,227,898,212,855,199,756,179"/>
+<area shape="rect" href="../../d1/d7a/net_2http_2query_8h.html" title="Query string parser and map." alt="" coords="1047,321,1210,346"/>
+<area shape="poly" title=" " alt="" coords="757,174,920,198,990,212,1030,223,1057,241,1081,264,1116,307,1112,311,1077,267,1054,245,1028,228,989,217,919,204,756,179"/>
+<area shape="rect" href="../../d0/dae/core_2db_2sql_8h.html" title="Database operations wrapper (SQLite3)." alt="" coords="773,233,916,258"/>
+<area shape="poly" title=" " alt="" coords="705,175,809,224,807,229,702,180"/>
+<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="414,313,585,353"/>
+<area shape="poly" title=" " alt="" coords="606,180,561,197,540,211,523,227,512,243,506,262,501,299,495,299,501,261,508,241,519,224,537,206,558,193,605,175"/>
+<area shape="rect" title=" " alt="" coords="533,233,629,258"/>
+<area shape="poly" title=" " alt="" coords="666,180,608,226,604,222,663,175"/>
+<area shape="poly" title=" " alt="" coords="756,174,932,199,1080,223,1098,227,1097,232,1079,228,932,204,756,179"/>
+<area shape="rect" title=" " alt="" coords="653,233,749,258"/>
+<area shape="poly" title=" " alt="" coords="685,177,696,219,691,220,680,178"/>
+<area shape="poly" title=" " alt="" coords="196,268,80,318,78,313,194,263"/>
+<area shape="poly" title=" " alt="" coords="217,268,162,313,158,309,214,264"/>
+<area shape="rect" title=" " alt="" coords="458,489,541,515"/>
+<area shape="poly" title=" " alt="" coords="234,266,228,308,229,331,236,352,255,379,278,403,304,424,332,442,391,469,445,486,444,491,389,474,330,447,301,429,274,407,251,383,232,355,224,332,222,307,229,265"/>
+<area shape="poly" title=" " alt="" coords="258,264,293,301,289,305,254,267"/>
+<area shape="poly" title=" " alt="" coords="334,352,367,394,412,439,469,480,466,484,408,443,363,397,330,355"/>
+<area shape="poly" title=" " alt="" coords="390,349,402,351,550,368,666,374,781,381,929,399,962,405,961,410,928,404,781,386,665,380,549,374,402,356,389,354"/>
+<area shape="rect" title=" " alt="" coords="620,489,731,515"/>
+<area shape="poly" title=" " alt="" coords="359,351,639,481,637,486,357,356"/>
+<area shape="poly" title=" " alt="" coords="1114,348,1039,403,1036,398,1111,344"/>
+<area shape="rect" title=" " alt="" coords="1091,489,1166,515"/>
+<area shape="poly" title=" " alt="" coords="1131,346,1131,476,1126,476,1126,346"/>
+<area shape="poly" title=" " alt="" coords="797,261,761,268,663,283,584,292,505,301,403,316,402,311,504,295,584,287,662,278,760,263,796,255"/>
+<area shape="poly" title=" " alt="" coords="803,261,709,289,669,304,649,315,639,334,635,355,637,399,649,442,665,476,660,479,644,444,631,400,629,354,634,332,645,311,667,299,707,284,802,256"/>
+<area shape="rect" title=" " alt="" coords="660,321,739,346"/>
+<area shape="poly" title=" " alt="" coords="826,260,732,316,730,311,824,256"/>
+<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="767,401,917,441"/>
+<area shape="poly" title=" " alt="" coords="872,256,906,278,923,294,935,312,941,333,935,355,918,378,896,396,893,392,914,374,930,352,936,333,930,314,918,297,903,282,869,260"/>
+<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="763,321,921,346"/>
+<area shape="poly" title=" " alt="" coords="847,258,845,306,840,306,842,258"/>
+<area shape="poly" title=" " alt="" coords="767,442,555,491,553,486,766,437"/>
+<area shape="poly" title=" " alt="" coords="803,444,713,486,711,481,801,439"/>
+<area shape="poly" title=" " alt="" coords="911,439,1079,484,1077,490,910,444"/>
+<area shape="poly" title=" " alt="" coords="820,348,536,486,534,481,817,344"/>
+<area shape="poly" title=" " alt="" coords="826,348,792,372,756,403,721,442,693,479,689,476,717,439,752,399,789,368,823,344"/>
+<area shape="poly" title=" " alt="" coords="845,346,845,387,839,387,839,346"/>
+<area shape="poly" title=" " alt="" coords="502,354,502,476,497,476,497,354"/>
+<area shape="poly" title=" " alt="" coords="585,343,745,367,929,399,962,406,961,411,928,404,744,372,584,349"/>
+<area shape="poly" title=" " alt="" coords="1250,102,1275,123,1299,151,1320,195,1325,244,1325,335,1321,363,1309,389,1293,411,1272,432,1224,464,1177,487,1174,482,1221,459,1269,427,1289,408,1305,386,1315,361,1319,334,1319,244,1315,196,1294,153,1271,126,1246,106"/>
+<area shape="rect" title=" " alt="" coords="1143,152,1285,177"/>
+<area shape="poly" title=" " alt="" coords="1230,105,1222,139,1217,138,1225,104"/>
+<area shape="rect" title=" " alt="" coords="1373,152,1471,177"/>
+<area shape="poly" title=" " alt="" coords="1436,105,1429,139,1424,138,1431,104"/>
+<area shape="rect" title=" " alt="" coords="1496,152,1569,177"/>
+<area shape="poly" title=" " alt="" coords="1453,102,1507,141,1504,146,1449,106"/>
 </map>
 </div>
 </div>
 <p><a href="../../d2/db2/https_8c_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:a3024ccd4a9af5109d24e6c57565d74a1" id="r_a3024ccd4a9af5109d24e6c57565d74a1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a3024ccd4a9af5109d24e6c57565d74a1">_POSIX_C_SOURCE</a>&#160;&#160;&#160;200809L</td></tr>
+<tr class="separator:a3024ccd4a9af5109d24e6c57565d74a1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac907bb51a8f07f416f589e88b8d5d748" id="r_ac907bb51a8f07f416f589e88b8d5d748"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#ac907bb51a8f07f416f589e88b8d5d748">CWIST_ALPN_HTTP11</a>&#160;&#160;&#160;((const unsigned char *)&quot;\x08http/1.1&quot;)</td></tr>
+<tr class="separator:ac907bb51a8f07f416f589e88b8d5d748"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0c3614e59cbad59c681385c12e9169c9" id="r_a0c3614e59cbad59c681385c12e9169c9"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a0c3614e59cbad59c681385c12e9169c9">CWIST_ALPN_H2_HTTP11</a>&#160;&#160;&#160;((const unsigned char *)&quot;\x02h2\x08http/1.1&quot;)</td></tr>
+<tr class="separator:a0c3614e59cbad59c681385c12e9169c9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae1a607cc121b06863bad72554a793e0a" id="r_ae1a607cc121b06863bad72554a793e0a"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#ae1a607cc121b06863bad72554a793e0a">CWIST_ALPN_H3_H2_HTTP11</a>&#160;&#160;&#160;((const unsigned char *)&quot;\x02h3\x02h2\x08http/1.1&quot;)</td></tr>
+<tr class="separator:ae1a607cc121b06863bad72554a793e0a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a027c2b23babf6b4eb959ff576658be55" id="r_a027c2b23babf6b4eb959ff576658be55"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a027c2b23babf6b4eb959ff576658be55">CWIST_ALPN_HTTP11_LEN</a>&#160;&#160;&#160;9</td></tr>
+<tr class="separator:a027c2b23babf6b4eb959ff576658be55"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3f670b4d91bd4c15a4fa4b327c02e358" id="r_a3f670b4d91bd4c15a4fa4b327c02e358"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a3f670b4d91bd4c15a4fa4b327c02e358">CWIST_ALPN_H2_HTTP11_LEN</a>&#160;&#160;&#160;12</td></tr>
+<tr class="separator:a3f670b4d91bd4c15a4fa4b327c02e358"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae8666293785285feae4439a75f8091f9" id="r_ae8666293785285feae4439a75f8091f9"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#ae8666293785285feae4439a75f8091f9">CWIST_ALPN_H3_H2_HTTP11_LEN</a>&#160;&#160;&#160;15</td></tr>
+<tr class="separator:ae8666293785285feae4439a75f8091f9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a530998c08356b749a885011d96a89496" id="r_a530998c08356b749a885011d96a89496"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a530998c08356b749a885011d96a89496">cwist_https_init_context</a> (cwist_https_context **ctx, const char *cert_path, const char *key_path)</td></tr>
+<tr class="memitem:a530998c08356b749a885011d96a89496" id="r_a530998c08356b749a885011d96a89496"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a530998c08356b749a885011d96a89496">cwist_https_init_context</a> (<a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> **ctx, const char *cert_path, const char *key_path)</td></tr>
 <tr class="separator:a530998c08356b749a885011d96a89496"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a642fd1ff9843730c9d0b7c12ae5e947b" id="r_a642fd1ff9843730c9d0b7c12ae5e947b"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a642fd1ff9843730c9d0b7c12ae5e947b">cwist_https_init_context_with_options</a> (cwist_https_context **ctx, const char *cert_path, const char *key_path, const cwist_https_options *options)</td></tr>
+<tr class="memitem:a642fd1ff9843730c9d0b7c12ae5e947b" id="r_a642fd1ff9843730c9d0b7c12ae5e947b"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a642fd1ff9843730c9d0b7c12ae5e947b">cwist_https_init_context_with_options</a> (<a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> **ctx, const char *cert_path, const char *key_path, const <a class="el" href="../../d9/d1f/structcwist__https__options.html">cwist_https_options</a> *options)</td></tr>
 <tr class="separator:a642fd1ff9843730c9d0b7c12ae5e947b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:acbe47c933c7464136b05dbbd42864b80" id="r_acbe47c933c7464136b05dbbd42864b80"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#acbe47c933c7464136b05dbbd42864b80">cwist_https_destroy_context</a> (cwist_https_context *ctx)</td></tr>
+<tr class="memitem:acbe47c933c7464136b05dbbd42864b80" id="r_acbe47c933c7464136b05dbbd42864b80"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#acbe47c933c7464136b05dbbd42864b80">cwist_https_destroy_context</a> (<a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> *ctx)</td></tr>
 <tr class="memdesc:acbe47c933c7464136b05dbbd42864b80"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free an HTTPS context and release its OpenSSL resources.  <br /></td></tr>
 <tr class="separator:acbe47c933c7464136b05dbbd42864b80"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a323a4ec2f5001e354c8b443b676ee3d0" id="r_a323a4ec2f5001e354c8b443b676ee3d0"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a323a4ec2f5001e354c8b443b676ee3d0">cwist_https_accept</a> (cwist_https_context *ctx, int client_fd, cwist_https_connection **conn)</td></tr>
+<tr class="memitem:a323a4ec2f5001e354c8b443b676ee3d0" id="r_a323a4ec2f5001e354c8b443b676ee3d0"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a323a4ec2f5001e354c8b443b676ee3d0">cwist_https_accept</a> (<a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> *ctx, int client_fd, <a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> **<a class="el" href="../../de/daf/http3_8c.html#afb6ee3e803640571d374623bbd936e7b">conn</a>)</td></tr>
 <tr class="memdesc:a323a4ec2f5001e354c8b443b676ee3d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wrap an accepted TCP client socket in an OpenSSL connection object.  <br /></td></tr>
 <tr class="separator:a323a4ec2f5001e354c8b443b676ee3d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac4e7afa8d66d1822285d2a6aace56df0" id="r_ac4e7afa8d66d1822285d2a6aace56df0"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#ac4e7afa8d66d1822285d2a6aace56df0">cwist_https_connection_uses_http2</a> (const cwist_https_connection *conn)</td></tr>
+<tr class="memitem:ac4e7afa8d66d1822285d2a6aace56df0" id="r_ac4e7afa8d66d1822285d2a6aace56df0"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#ac4e7afa8d66d1822285d2a6aace56df0">cwist_https_connection_uses_http2</a> (const <a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *<a class="el" href="../../de/daf/http3_8c.html#afb6ee3e803640571d374623bbd936e7b">conn</a>)</td></tr>
 <tr class="memdesc:ac4e7afa8d66d1822285d2a6aace56df0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Gracefully close an HTTPS connection and free its buffers.  <br /></td></tr>
 <tr class="separator:ac4e7afa8d66d1822285d2a6aace56df0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6b5b76e3908df5fceb1da3a4860d547b" id="r_a6b5b76e3908df5fceb1da3a4860d547b"><td class="memItemLeft" align="right" valign="top">cwist_https_protocol&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a6b5b76e3908df5fceb1da3a4860d547b">cwist_https_connection_protocol</a> (const cwist_https_connection *conn)</td></tr>
+<tr class="memitem:a6b5b76e3908df5fceb1da3a4860d547b" id="r_a6b5b76e3908df5fceb1da3a4860d547b"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d7/d67/net_2http_2https_8h.html#a4b319725b7db7206ea04a8350285c314">cwist_https_protocol</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a6b5b76e3908df5fceb1da3a4860d547b">cwist_https_connection_protocol</a> (const <a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *<a class="el" href="../../de/daf/http3_8c.html#afb6ee3e803640571d374623bbd936e7b">conn</a>)</td></tr>
 <tr class="separator:a6b5b76e3908df5fceb1da3a4860d547b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6360fe1aca001bb34f9aff6c5a012428" id="r_a6360fe1aca001bb34f9aff6c5a012428"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a6360fe1aca001bb34f9aff6c5a012428">cwist_https_close_connection</a> (cwist_https_connection *conn)</td></tr>
+<tr class="memitem:a6360fe1aca001bb34f9aff6c5a012428" id="r_a6360fe1aca001bb34f9aff6c5a012428"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a6360fe1aca001bb34f9aff6c5a012428">cwist_https_close_connection</a> (<a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *<a class="el" href="../../de/daf/http3_8c.html#afb6ee3e803640571d374623bbd936e7b">conn</a>)</td></tr>
 <tr class="separator:a6360fe1aca001bb34f9aff6c5a012428"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a251baaa81315b64e15308af9287d9a10" id="r_a251baaa81315b64e15308af9287d9a10"><td class="memItemLeft" align="right" valign="top">cwist_http_request *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a251baaa81315b64e15308af9287d9a10">cwist_https_receive_request</a> (cwist_https_connection *conn)</td></tr>
+<tr class="memitem:a251baaa81315b64e15308af9287d9a10" id="r_a251baaa81315b64e15308af9287d9a10"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a251baaa81315b64e15308af9287d9a10">cwist_https_receive_request</a> (<a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *<a class="el" href="../../de/daf/http3_8c.html#afb6ee3e803640571d374623bbd936e7b">conn</a>)</td></tr>
 <tr class="memdesc:a251baaa81315b64e15308af9287d9a10"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read from the TLS stream until a full HTTP request has been assembled.  <br /></td></tr>
 <tr class="separator:a251baaa81315b64e15308af9287d9a10"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a52d82fd02567a54801fafd539f5e70bd" id="r_a52d82fd02567a54801fafd539f5e70bd"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a52d82fd02567a54801fafd539f5e70bd">cwist_https_send_response</a> (cwist_https_connection *conn, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td></tr>
+<tr class="memitem:a52d82fd02567a54801fafd539f5e70bd" id="r_a52d82fd02567a54801fafd539f5e70bd"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#a52d82fd02567a54801fafd539f5e70bd">cwist_https_send_response</a> (<a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *<a class="el" href="../../de/daf/http3_8c.html#afb6ee3e803640571d374623bbd936e7b">conn</a>, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td></tr>
 <tr class="memdesc:a52d82fd02567a54801fafd539f5e70bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Serialize an HTTP response and send it over an active TLS connection.  <br /></td></tr>
 <tr class="separator:a52d82fd02567a54801fafd539f5e70bd"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab53d02b0f79e037af291d00ea334c69d" id="r_ab53d02b0f79e037af291d00ea334c69d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#ab53d02b0f79e037af291d00ea334c69d">cwist_https_server_loop</a> (int server_fd, cwist_https_context *ctx, void(*handler)(cwist_https_connection *, void *), void *user_ctx)</td></tr>
+<tr class="memitem:ab53d02b0f79e037af291d00ea334c69d" id="r_ab53d02b0f79e037af291d00ea334c69d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db2/https_8c.html#ab53d02b0f79e037af291d00ea334c69d">cwist_https_server_loop</a> (int server_fd, <a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> *ctx, void(*handler)(<a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *, void *), void *user_ctx)</td></tr>
 <tr class="memdesc:ab53d02b0f79e037af291d00ea334c69d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Accept HTTPS clients in a loop and dispatch each one to the supplied handler.  <br /></td></tr>
 <tr class="separator:ab53d02b0f79e037af291d00ea334c69d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
@@ -227,7 +246,120 @@ Functions</h2></td></tr>
 <div class="textblock"><p>OpenSSL-backed HTTPS accept, receive, send, and server-loop helpers. </p>
 
 <p class="definition">Definition in file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
-</div><h2 class="groupheader">Function Documentation</h2>
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a3024ccd4a9af5109d24e6c57565d74a1" name="a3024ccd4a9af5109d24e6c57565d74a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3024ccd4a9af5109d24e6c57565d74a1">&#9670;&#160;</a></span>_POSIX_C_SOURCE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define _POSIX_C_SOURCE&#160;&#160;&#160;200809L</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00001">1</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+</div>
+</div>
+<a id="a0c3614e59cbad59c681385c12e9169c9" name="a0c3614e59cbad59c681385c12e9169c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c3614e59cbad59c681385c12e9169c9">&#9670;&#160;</a></span>CWIST_ALPN_H2_HTTP11</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_ALPN_H2_HTTP11&#160;&#160;&#160;((const unsigned char *)&quot;\x02h2\x08http/1.1&quot;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00021">21</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+</div>
+</div>
+<a id="a3f670b4d91bd4c15a4fa4b327c02e358" name="a3f670b4d91bd4c15a4fa4b327c02e358"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3f670b4d91bd4c15a4fa4b327c02e358">&#9670;&#160;</a></span>CWIST_ALPN_H2_HTTP11_LEN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_ALPN_H2_HTTP11_LEN&#160;&#160;&#160;12</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00024">24</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+</div>
+</div>
+<a id="ae1a607cc121b06863bad72554a793e0a" name="ae1a607cc121b06863bad72554a793e0a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae1a607cc121b06863bad72554a793e0a">&#9670;&#160;</a></span>CWIST_ALPN_H3_H2_HTTP11</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_ALPN_H3_H2_HTTP11&#160;&#160;&#160;((const unsigned char *)&quot;\x02h3\x02h2\x08http/1.1&quot;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00022">22</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+</div>
+</div>
+<a id="ae8666293785285feae4439a75f8091f9" name="ae8666293785285feae4439a75f8091f9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae8666293785285feae4439a75f8091f9">&#9670;&#160;</a></span>CWIST_ALPN_H3_H2_HTTP11_LEN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_ALPN_H3_H2_HTTP11_LEN&#160;&#160;&#160;15</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00025">25</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+</div>
+</div>
+<a id="ac907bb51a8f07f416f589e88b8d5d748" name="ac907bb51a8f07f416f589e88b8d5d748"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac907bb51a8f07f416f589e88b8d5d748">&#9670;&#160;</a></span>CWIST_ALPN_HTTP11</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_ALPN_HTTP11&#160;&#160;&#160;((const unsigned char *)&quot;\x08http/1.1&quot;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00020">20</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+</div>
+</div>
+<a id="a027c2b23babf6b4eb959ff576658be55" name="a027c2b23babf6b4eb959ff576658be55"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a027c2b23babf6b4eb959ff576658be55">&#9670;&#160;</a></span>CWIST_ALPN_HTTP11_LEN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_ALPN_HTTP11_LEN&#160;&#160;&#160;9</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00023">23</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Function Documentation</h2>
 <a id="a323a4ec2f5001e354c8b443b676ee3d0" name="a323a4ec2f5001e354c8b443b676ee3d0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a323a4ec2f5001e354c8b443b676ee3d0">&#9670;&#160;</a></span>cwist_https_accept()</h2>
 
@@ -237,7 +369,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_https_accept </td>
           <td>(</td>
-          <td class="paramtype">cwist_https_context *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> *&#160;</td>
           <td class="paramname"><em>ctx</em>, </td>
         </tr>
         <tr>
@@ -249,7 +381,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_https_connection **&#160;</td>
+          <td class="paramtype"><a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> **&#160;</td>
           <td class="paramname"><em>conn</em>&#160;</td>
         </tr>
         <tr>
@@ -273,7 +405,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00223">223</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
+<p class="reference">References <a class="el" href="../../de/daf/http3_8c_source.html#l00609">conn</a>, <a class="el" href="../../d7/d95/https_8h_source.html#l00017">cwist_https_context::ctx</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00042">CWIST_HTTP_READ_BUFFER_SIZE</a>, <a class="el" href="../../d7/d67/net_2http_2https_8h_source.html#l00018">CWIST_HTTPS_PROTOCOL_HTTP11</a>, <a class="el" href="../../d7/d67/net_2http_2https_8h_source.html#l00019">CWIST_HTTPS_PROTOCOL_HTTP2</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../d7/d67/net_2http_2https_8h_source.html#l00026">cwist_https_context::http3_enabled</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
 
 </div>
 </div>
@@ -286,7 +418,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void cwist_https_close_connection </td>
           <td>(</td>
-          <td class="paramtype">cwist_https_connection *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *&#160;</td>
           <td class="paramname"><em>conn</em></td><td>)</td>
           <td></td>
         </tr>
@@ -295,6 +427,8 @@ Functions</h2></td></tr>
 <p>Close and free the HTTPS connection. </p>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00295">295</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../de/daf/http3_8c_source.html#l00609">conn</a>, and <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
 
 </div>
 </div>
@@ -305,9 +439,9 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_https_protocol cwist_https_connection_protocol </td>
+          <td class="memname"><a class="el" href="../../d7/d67/net_2http_2https_8h.html#a4b319725b7db7206ea04a8350285c314">cwist_https_protocol</a> cwist_https_connection_protocol </td>
           <td>(</td>
-          <td class="paramtype">const cwist_https_connection *&#160;</td>
+          <td class="paramtype">const <a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *&#160;</td>
           <td class="paramname"><em>conn</em></td><td>)</td>
           <td></td>
         </tr>
@@ -316,6 +450,8 @@ Functions</h2></td></tr>
 <p>Returns the protocol selected by ALPN, or HTTP/1.1 when no higher protocol matched. </p>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00290">290</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../de/daf/http3_8c_source.html#l00609">conn</a>, and <a class="el" href="../../d7/d67/net_2http_2https_8h_source.html#l00017">CWIST_HTTPS_PROTOCOL_NONE</a>.</p>
 
 </div>
 </div>
@@ -328,7 +464,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">bool cwist_https_connection_uses_http2 </td>
           <td>(</td>
-          <td class="paramtype">const cwist_https_connection *&#160;</td>
+          <td class="paramtype">const <a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *&#160;</td>
           <td class="paramname"><em>conn</em></td><td>)</td>
           <td></td>
         </tr>
@@ -345,6 +481,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00286">286</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../de/daf/http3_8c_source.html#l00609">conn</a>, and <a class="el" href="../../d7/d67/net_2http_2https_8h_source.html#l00019">CWIST_HTTPS_PROTOCOL_HTTP2</a>.</p>
+
 </div>
 </div>
 <a id="acbe47c933c7464136b05dbbd42864b80" name="acbe47c933c7464136b05dbbd42864b80"></a>
@@ -356,7 +494,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void cwist_https_destroy_context </td>
           <td>(</td>
-          <td class="paramtype">cwist_https_context *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> *&#160;</td>
           <td class="paramname"><em>ctx</em></td><td>)</td>
           <td></td>
         </tr>
@@ -373,6 +511,10 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00206">206</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../d7/d95/https_8h_source.html#l00017">cwist_https_context::ctx</a>, and <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01021">cwist_app_destroy()</a>.</p>
+
 </div>
 </div>
 <a id="a530998c08356b749a885011d96a89496" name="a530998c08356b749a885011d96a89496"></a>
@@ -384,7 +526,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_https_init_context </td>
           <td>(</td>
-          <td class="paramtype">cwist_https_context **&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> **&#160;</td>
           <td class="paramname"><em>ctx</em>, </td>
         </tr>
         <tr>
@@ -423,7 +565,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_https_init_context_with_options </td>
           <td>(</td>
-          <td class="paramtype">cwist_https_context **&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> **&#160;</td>
           <td class="paramname"><em>ctx</em>, </td>
         </tr>
         <tr>
@@ -441,7 +583,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const cwist_https_options *&#160;</td>
+          <td class="paramtype">const <a class="el" href="../../d9/d1f/structcwist__https__options.html">cwist_https_options</a> *&#160;</td>
           <td class="paramname"><em>options</em>&#160;</td>
         </tr>
         <tr>
@@ -455,7 +597,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00130">130</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00072">cwist_error_t::errtype</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d7/d67/net_2http_2https_8h_source.html#l00040">cwist_https_options::enable_http2</a>, <a class="el" href="../../d7/d67/net_2http_2https_8h_source.html#l00041">cwist_https_options::enable_http3</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00072">cwist_error_t::errtype</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d2/db2/https_8c_source.html#l00126">cwist_https_init_context()</a>.</p>
 
@@ -468,9 +610,9 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_http_request * cwist_https_receive_request </td>
+          <td class="memname"><a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> * cwist_https_receive_request </td>
           <td>(</td>
-          <td class="paramtype">cwist_https_connection *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *&#160;</td>
           <td class="paramname"><em>conn</em></td><td>)</td>
           <td></td>
         </tr>
@@ -488,7 +630,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00314">314</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00646">cwist_http_parse_request()</a>, and <a class="el" href="../../dd/d43/http_8c_source.html#l00272">cwist_http_request_destroy()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/d56/http_8h_source.html#l00062">cwist_http_request::body</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00064">cwist_http_request::client_fd</a>, <a class="el" href="../../de/daf/http3_8c_source.html#l00609">conn</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00068">cwist_http_request::content_length</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00041">CWIST_HTTP_MAX_BODY_SIZE</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00647">cwist_http_parse_request()</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00042">CWIST_HTTP_READ_BUFFER_SIZE</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00273">cwist_http_request_destroy()</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00043">CWIST_HTTP_TIMEOUT_MS</a>, and <a class="el" href="../../dd/d79/sstring_8c_source.html#l00032">cwist_sstring_assign_len()</a>.</p>
 
 </div>
 </div>
@@ -501,7 +643,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_https_send_response </td>
           <td>(</td>
-          <td class="paramtype">cwist_https_connection *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *&#160;</td>
           <td class="paramname"><em>conn</em>, </td>
         </tr>
         <tr>
@@ -530,7 +672,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00419">419</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00626">cwist_http_stringify_response()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
+<p class="reference">References <a class="el" href="../../de/daf/http3_8c_source.html#l00609">conn</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00627">cwist_http_stringify_response()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00597">cwist_sstring_destroy()</a>, <a class="el" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html#l00015">cwist_sstring::data</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00075">cwist_http_response::headers</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html#l00018">cwist_sstring::size</a>.</p>
 
 </div>
 </div>
@@ -549,13 +691,13 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_https_context *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/dcc/structcwist__https__context.html">cwist_https_context</a> *&#160;</td>
           <td class="paramname"><em>ctx</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">void(*)(cwist_https_connection *, void *)&#160;</td>
+          <td class="paramtype">void(*)(<a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *, void *)&#160;</td>
           <td class="paramname"><em>handler</em>, </td>
         </tr>
         <tr>
@@ -586,7 +728,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/db2/https_8c_source.html#l00516">516</a> of file <a class="el" href="../../d2/db2/https_8c_source.html">https.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../d3/db2/shutdown_8c_source.html#l00011">g_cwist_running</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
+<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../d3/db2/shutdown_8c_source.html#l00011">g_cwist_running</a>, <a class="el" href="../../de/daf/http3_8c_source.html#l00611">len</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
 
 </div>
 </div>

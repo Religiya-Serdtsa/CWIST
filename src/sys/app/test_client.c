@@ -1,3 +1,6 @@
+/** @file test_client.c
+ * @brief test_client.c interface.
+ */
 #include <cwist/sys/app/test_client.h>
 #include <cwist/core/mem/alloc.h>
 #include <string.h>

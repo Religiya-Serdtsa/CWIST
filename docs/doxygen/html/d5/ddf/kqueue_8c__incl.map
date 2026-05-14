@@ -1,28 +1,28 @@
 <map id="src/sys/io/kqueue.c" name="src/sys/io/kqueue.c">
-<area shape="rect" id="Node000001" title="BSD kqueue backend for the generic CWIST job queue interface." alt="" coords="604,5,749,33"/>
-<area shape="rect" id="Node000002" href="$d1/df5/cwist__io_8h.html" title="Platform Agnostic Async Job Queue Interface." alt="" coords="5,81,172,109"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="604,32,188,83,187,78,603,27"/>
-<area shape="rect" id="Node000005" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="196,81,368,109"/>
-<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="606,36,368,80,367,75,605,31"/>
-<area shape="rect" id="Node000007" title=" " alt="" coords="392,81,487,109"/>
-<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="635,36,497,79,495,73,633,31"/>
-<area shape="rect" id="Node000008" title=" " alt="" coords="511,81,607,109"/>
-<area shape="poly" id="edge8_Node000001_Node000008" title=" " alt="" coords="657,36,594,75,591,71,654,31"/>
-<area shape="rect" id="Node000009" title=" " alt="" coords="632,81,721,109"/>
-<area shape="poly" id="edge9_Node000001_Node000009" title=" " alt="" coords="679,34,679,65,674,65,674,34"/>
-<area shape="rect" id="Node000010" title=" " alt="" coords="746,81,815,109"/>
-<area shape="poly" id="edge10_Node000001_Node000010" title=" " alt="" coords="697,31,752,70,748,74,694,36"/>
-<area shape="rect" id="Node000011" title=" " alt="" coords="840,81,905,109"/>
-<area shape="poly" id="edge11_Node000001_Node000011" title=" " alt="" coords="712,31,826,74,825,78,711,36"/>
-<area shape="rect" id="Node000012" title=" " alt="" coords="929,81,1002,109"/>
-<area shape="poly" id="edge12_Node000001_Node000012" title=" " alt="" coords="730,31,915,77,913,83,729,36"/>
-<area shape="rect" id="Node000013" title=" " alt="" coords="1027,81,1094,109"/>
-<area shape="poly" id="edge13_Node000001_Node000013" title=" " alt="" coords="750,29,869,49,1013,78,1012,83,868,54,749,34"/>
-<area shape="rect" id="Node000003" title=" " alt="" coords="134,157,208,184"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="105,107,147,144,143,148,102,111"/>
-<area shape="rect" id="Node000004" title=" " alt="" coords="29,157,110,184"/>
-<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="88,110,80,142,74,141,83,109"/>
-<area shape="poly" id="edge5_Node000005_Node000003" title=" " alt="" coords="264,111,205,150,202,146,261,107"/>
-<area shape="rect" id="Node000006" title=" " alt="" coords="232,157,372,184"/>
-<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="288,109,297,141,292,142,283,110"/>
+<area shape="rect" id="Node000001" title="BSD kqueue backend for the generic CWIST job queue interface." alt="" coords="609,5,755,31"/>
+<area shape="rect" id="Node000002" href="$d1/df5/cwist__io_8h.html" title="Platform Agnostic Async Job Queue Interface." alt="" coords="5,79,172,104"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="609,31,186,81,185,76,608,25"/>
+<area shape="rect" id="Node000005" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="197,79,370,104"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="618,33,362,79,361,74,617,28"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="394,79,490,104"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="644,33,495,77,493,72,643,28"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="515,79,612,104"/>
+<area shape="poly" id="edge8_Node000001_Node000008" title=" " alt="" coords="664,33,596,74,593,69,662,28"/>
+<area shape="rect" id="Node000009" title=" " alt="" coords="637,79,727,104"/>
+<area shape="poly" id="edge9_Node000001_Node000009" title=" " alt="" coords="685,31,685,65,679,65,679,31"/>
+<area shape="rect" id="Node000010" title=" " alt="" coords="752,79,823,104"/>
+<area shape="poly" id="edge10_Node000001_Node000010" title=" " alt="" coords="700,28,760,69,758,73,697,33"/>
+<area shape="rect" id="Node000011" title=" " alt="" coords="847,79,914,104"/>
+<area shape="poly" id="edge11_Node000001_Node000011" title=" " alt="" coords="715,28,836,71,834,76,713,33"/>
+<area shape="rect" id="Node000012" title=" " alt="" coords="938,79,1013,104"/>
+<area shape="poly" id="edge12_Node000001_Node000012" title=" " alt="" coords="730,28,925,75,924,80,729,33"/>
+<area shape="rect" id="Node000013" title=" " alt="" coords="1037,79,1105,104"/>
+<area shape="poly" id="edge13_Node000001_Node000013" title=" " alt="" coords="756,28,1024,76,1023,81,755,33"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="134,152,209,177"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="104,102,149,141,146,145,100,106"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="27,152,110,177"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="88,105,78,140,73,138,83,104"/>
+<area shape="poly" id="edge5_Node000005_Node000003" title=" " alt="" coords="267,106,203,147,200,142,264,102"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="233,152,374,177"/>
+<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="289,104,299,138,294,140,284,105"/>
 </map>

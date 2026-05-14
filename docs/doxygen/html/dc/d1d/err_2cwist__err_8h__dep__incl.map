@@ -4,9 +4,9 @@
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="128,56,80,100,56,127,34,157,18,187,9,219,10,249,23,279,37,295,55,308,97,325,94,330,53,313,34,299,19,281,5,250,4,218,13,185,30,154,52,124,76,96,125,52"/>
 <area shape="rect" id="Node000004" href="$dd/d56/http_8h.html" title="http.h interface." alt="" coords="207,174,357,199"/>
 <area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="169,58,177,88,191,117,206,134,224,149,259,172,256,176,220,154,202,138,187,120,172,90,163,59"/>
-<area shape="rect" id="Node000005" href="$d7/d95/https_8h_source.html" title=" " alt="" coords="33,255,189,280"/>
+<area shape="rect" id="Node000005" href="$d7/d95/https_8h.html" title="HTTPS/TLS wrapper interface." alt="" coords="33,255,189,280"/>
 <area shape="poly" id="edge10_Node000001_Node000005" title=" " alt="" coords="158,59,116,255,111,254,153,58"/>
-<area shape="rect" id="Node000008" href="$d4/d59/sql_8h_source.html" title=" " alt="" coords="200,93,343,119"/>
+<area shape="rect" id="Node000008" href="$d4/d59/sql_8h.html" title="Database operations wrapper (SQLite3)." alt="" coords="200,93,343,119"/>
 <area shape="poly" id="edge11_Node000001_Node000008" title=" " alt="" coords="201,51,257,91,254,95,198,56"/>
 <area shape="rect" id="Node000009" href="$d1/d34/sstring_8h.html" title="sstring.h interface." alt="" coords="367,93,533,119"/>
 <area shape="poly" id="edge12_Node000001_Node000009" title=" " alt="" coords="245,46,409,91,407,96,243,51"/>

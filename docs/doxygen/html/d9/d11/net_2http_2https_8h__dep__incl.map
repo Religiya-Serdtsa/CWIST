@@ -1,0 +1,37 @@
+<map id="include/cwist/net/http/https.h" name="include/cwist/net/http/https.h">
+<area shape="rect" id="Node000001" title="HTTPS/TLS wrapper interface." alt="" coords="443,5,606,45"/>
+<area shape="rect" id="Node000002" href="$de/d65/http2_8h.html" title="HTTP/2 Protocol Definitions for CWIST." alt="" coords="215,93,378,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="463,53,348,96,346,91,461,48"/>
+<area shape="rect" id="Node000005" href="$df/d7f/app_8c.html" title=" " alt="" coords="344,189,479,214"/>
+<area shape="poly" id="edge18_Node000001_Node000005" title=" " alt="" coords="507,59,421,190,417,187,502,56"/>
+<area shape="rect" id="Node000006" href="$d0/d77/sys_2app_2app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="597,93,759,133"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="572,50,646,91,643,96,569,54"/>
+<area shape="rect" id="Node000017" href="$d2/db2/https_8c.html" title="OpenSSL&#45;backed HTTPS accept, receive, send, and server&#45;loop helpers." alt="" coords="783,101,927,126"/>
+<area shape="poly" id="edge17_Node000001_Node000017" title=" " alt="" coords="611,46,812,98,811,103,610,51"/>
+<area shape="rect" id="Node000003" href="$d2/db0/http2_8c.html" title="Implementation of HTTP/2 protocol handler for CWIST." alt="" coords="5,189,151,214"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="237,141,108,191,106,186,235,136"/>
+<area shape="rect" id="Node000004" href="$de/daf/http3_8c.html" title="lsquic/BoringSSL&#45;based HTTP/3 server for CWIST." alt="" coords="175,189,320,214"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="281,147,256,190,252,187,277,144"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="335,140,397,186,394,190,332,144"/>
+<area shape="poly" id="edge16_Node000006_Node000005" title=" " alt="" coords="608,140,448,191,446,186,606,135"/>
+<area shape="rect" id="Node000007" href="$d5/da9/net_2http_2mux_8h.html" title="HTTP request multiplexer (router)." alt="" coords="503,181,666,221"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="649,145,607,183,604,179,645,141"/>
+<area shape="rect" id="Node000009" href="$dc/d81/ech_8h.html" title="ech.h interface." alt="" coords="690,181,853,221"/>
+<area shape="poly" id="edge8_Node000006_Node000009" title=" " alt="" coords="711,141,752,179,749,183,707,145"/>
+<area shape="rect" id="Node000011" href="$df/d4c/compress_8h.html" title="Compression middleware with swappable backend interface." alt="" coords="877,181,1039,221"/>
+<area shape="poly" id="edge10_Node000006_Node000011" title=" " alt="" coords="753,135,897,179,896,184,752,140"/>
+<area shape="rect" id="Node000013" href="$d3/d30/sys_2app_2middleware_8h.html" title="Built&#45;in middleware factories." alt="" coords="1069,181,1231,221"/>
+<area shape="poly" id="edge12_Node000006_Node000013" title=" " alt="" coords="773,131,1050,179,1070,182,1069,187,1050,184,772,136"/>
+<area shape="rect" id="Node000015" href="$db/de3/test__client_8h.html" title="In&#45;process HTTP test client (ala Flask test_client)." alt="" coords="1271,181,1432,221"/>
+<area shape="poly" id="edge14_Node000006_Node000015" title=" " alt="" coords="773,131,906,147,1010,156,1113,164,1244,179,1271,183,1270,188,1243,184,1113,169,1010,161,905,153,772,136"/>
+<area shape="rect" id="Node000008" href="$dd/d49/mux_8c.html" title="Fixed&#45;bucket HTTP route dispatch using a lightweight path signature." alt="" coords="515,269,655,295"/>
+<area shape="poly" id="edge7_Node000007_Node000008" title=" " alt="" coords="587,235,587,269,582,269,582,235"/>
+<area shape="rect" id="Node000010" href="$d6/db1/ech_8c.html" title="ech.c interface." alt="" coords="686,269,841,295"/>
+<area shape="poly" id="edge9_Node000009_Node000010" title=" " alt="" coords="771,235,767,269,762,269,765,235"/>
+<area shape="rect" id="Node000012" href="$d0/d6b/compress_8c.html" title="Compression middleware and built&#45;in zlib backends." alt="" coords="865,269,1038,295"/>
+<area shape="poly" id="edge11_Node000011_Node000012" title=" " alt="" coords="958,235,955,269,950,269,953,235"/>
+<area shape="rect" id="Node000014" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="1062,269,1249,295"/>
+<area shape="poly" id="edge13_Node000013_Node000014" title=" " alt="" coords="1155,235,1157,269,1152,269,1150,235"/>
+<area shape="rect" id="Node000016" href="$dc/df0/test__client_8c.html" title="test_client.c interface." alt="" coords="1273,269,1451,295"/>
+<area shape="poly" id="edge15_Node000015_Node000016" title=" " alt="" coords="1358,235,1363,269,1358,269,1353,235"/>
+</map>

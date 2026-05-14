@@ -104,11 +104,11 @@ This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../d7/d73/nuke__db_8h__dep__incl.png" border="0" usemap="#ainclude_2cwist_2core_2db_2nuke__db_8hdep" alt=""/></div>
 <map name="ainclude_2cwist_2core_2db_2nuke__db_8hdep" id="ainclude_2cwist_2core_2db_2nuke__db_8hdep">
-<area shape="rect" title="High&#45;Performance Read&#45;Optimal Persistent Store using SQLite." alt="" coords="102,5,240,50"/>
-<area shape="rect" href="../../d0/d14/nuke__db_8c.html" title="In&#45;memory SQLite mirroring layer that can fall back to disk under memory pressure." alt="" coords="5,98,167,126"/>
-<area shape="poly" title=" " alt="" coords="140,63,102,99,98,95,136,59"/>
-<area shape="rect" href="../../df/d7f/app_8c_source.html" title=" " alt="" coords="191,98,325,126"/>
-<area shape="poly" title=" " alt="" coords="207,59,246,95,242,99,203,63"/>
+<area shape="rect" title="High&#45;Performance Read&#45;Optimal Persistent Store using SQLite." alt="" coords="104,5,243,45"/>
+<area shape="rect" href="../../d0/d14/nuke__db_8c.html" title="In&#45;memory SQLite mirroring layer that can fall back to disk under memory pressure." alt="" coords="5,93,168,119"/>
+<area shape="poly" title=" " alt="" coords="144,57,101,95,98,91,140,53"/>
+<area shape="rect" href="../../df/d7f/app_8c.html" title=" " alt="" coords="193,93,327,119"/>
+<area shape="poly" title=" " alt="" coords="206,53,249,91,245,95,203,57"/>
 </map>
 </div>
 </div>
@@ -122,10 +122,13 @@ Classes</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
-<tr class="memitem:ac17144aee58fd5597d139133eafdc1e5" id="r_ac17144aee58fd5597d139133eafdc1e5"><td class="memItemLeft" align="right" valign="top"><a id="ac17144aee58fd5597d139133eafdc1e5" name="ac17144aee58fd5597d139133eafdc1e5"></a>
-#define&#160;</td><td class="memItemRight" valign="bottom"><b>CWIST_NUKE_OK</b>&#160;&#160;&#160;0</td></tr>
-<tr class="memdesc:ac17144aee58fd5597d139133eafdc1e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return codes for cwist_nuke_init. <br /></td></tr>
+<tr class="memitem:ac17144aee58fd5597d139133eafdc1e5" id="r_ac17144aee58fd5597d139133eafdc1e5"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/dfe/nuke__db_8h.html#ac17144aee58fd5597d139133eafdc1e5">CWIST_NUKE_OK</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memdesc:ac17144aee58fd5597d139133eafdc1e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return codes for cwist_nuke_init.  <br /></td></tr>
 <tr class="separator:ac17144aee58fd5597d139133eafdc1e5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a60078d43b3e9f4f414b2f8508eaab2f3" id="r_a60078d43b3e9f4f414b2f8508eaab2f3"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/dfe/nuke__db_8h.html#a60078d43b3e9f4f414b2f8508eaab2f3">CWIST_NUKE_ERR_GENERIC</a>&#160;&#160;&#160;(-1)</td></tr>
+<tr class="separator:a60078d43b3e9f4f414b2f8508eaab2f3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4e8861f5fdb6e2c99c0e98ebd7ed1be5" id="r_a4e8861f5fdb6e2c99c0e98ebd7ed1be5"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/dfe/nuke__db_8h.html#a4e8861f5fdb6e2c99c0e98ebd7ed1be5">CWIST_NUKE_ERR_LOW_MEMORY</a>&#160;&#160;&#160;(-2)</td></tr>
+<tr class="separator:a4e8861f5fdb6e2c99c0e98ebd7ed1be5"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -147,14 +150,13 @@ Functions</h2></td></tr>
 <tr class="memitem:a81bc1cdef22667aa031f8e070a8e013c" id="r_a81bc1cdef22667aa031f8e070a8e013c"><td class="memItemLeft" align="right" valign="top">sqlite3 *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/dfe/nuke__db_8h.html#a81bc1cdef22667aa031f8e070a8e013c">cwist_nuke_get_db</a> (void)</td></tr>
 <tr class="memdesc:a81bc1cdef22667aa031f8e070a8e013c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the raw SQLite3 handle for the In-Memory DB.  <br /></td></tr>
 <tr class="separator:a81bc1cdef22667aa031f8e070a8e013c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab0eb0dba287b8a1f66ca04f2c497c526" id="r_ab0eb0dba287b8a1f66ca04f2c497c526"><td class="memItemLeft" align="right" valign="top"><a id="ab0eb0dba287b8a1f66ca04f2c497c526" name="ab0eb0dba287b8a1f66ca04f2c497c526"></a>
-void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_nuke_signal_handler</b> (int signum)</td></tr>
-<tr class="memdesc:ab0eb0dba287b8a1f66ca04f2c497c526"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal signal handler. Typically set up by cwist_nuke_init. <br /></td></tr>
+<tr class="memitem:ab0eb0dba287b8a1f66ca04f2c497c526" id="r_ab0eb0dba287b8a1f66ca04f2c497c526"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/dfe/nuke__db_8h.html#ab0eb0dba287b8a1f66ca04f2c497c526">cwist_nuke_signal_handler</a> (int signum)</td></tr>
+<tr class="memdesc:ab0eb0dba287b8a1f66ca04f2c497c526"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal signal handler. Typically set up by cwist_nuke_init.  <br /></td></tr>
 <tr class="separator:ab0eb0dba287b8a1f66ca04f2c497c526"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aed0d347c76753b520373e20ad3905ac1" id="r_aed0d347c76753b520373e20ad3905ac1"><td class="memItemLeft" align="right" valign="top">unsigned char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/dfe/nuke__db_8h.html#aed0d347c76753b520373e20ad3905ac1">cwist_nuke_serialize</a> (sqlite3_int64 *out_size)</td></tr>
 <tr class="memdesc:aed0d347c76753b520373e20ad3905ac1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Serialize the in-memory database to a raw byte buffer.  <br /></td></tr>
 <tr class="separator:aed0d347c76753b520373e20ad3905ac1"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0d51fe7c2f1edae3b320ba9fd8601602" id="r_a0d51fe7c2f1edae3b320ba9fd8601602"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/dfe/nuke__db_8h.html#a0d51fe7c2f1edae3b320ba9fd8601602">cwist_nuke_deserialize</a> (unsigned char *data, sqlite3_int64 data_len)</td></tr>
+<tr class="memitem:a0d51fe7c2f1edae3b320ba9fd8601602" id="r_a0d51fe7c2f1edae3b320ba9fd8601602"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/dfe/nuke__db_8h.html#a0d51fe7c2f1edae3b320ba9fd8601602">cwist_nuke_deserialize</a> (unsigned char *<a class="el" href="../../de/daf/http3_8c.html#a91a70b77df95bd8b0830b49a094c2acb">data</a>, sqlite3_int64 data_len)</td></tr>
 <tr class="memdesc:a0d51fe7c2f1edae3b320ba9fd8601602"><td class="mdescLeft">&#160;</td><td class="mdescRight">Load a raw SQLite byte buffer into the in-memory database.  <br /></td></tr>
 <tr class="separator:a0d51fe7c2f1edae3b320ba9fd8601602"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
@@ -167,7 +169,58 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_nuke_signal_han
 </ul>
 
 <p class="definition">Definition in file <a class="el" href="../../dc/dfe/nuke__db_8h_source.html">nuke_db.h</a>.</p>
-</div><h2 class="groupheader">Typedef Documentation</h2>
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a60078d43b3e9f4f414b2f8508eaab2f3" name="a60078d43b3e9f4f414b2f8508eaab2f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a60078d43b3e9f4f414b2f8508eaab2f3">&#9670;&#160;</a></span>CWIST_NUKE_ERR_GENERIC</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_NUKE_ERR_GENERIC&#160;&#160;&#160;(-1)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00022">22</a> of file <a class="el" href="../../dc/dfe/nuke__db_8h_source.html">nuke_db.h</a>.</p>
+
+</div>
+</div>
+<a id="a4e8861f5fdb6e2c99c0e98ebd7ed1be5" name="a4e8861f5fdb6e2c99c0e98ebd7ed1be5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4e8861f5fdb6e2c99c0e98ebd7ed1be5">&#9670;&#160;</a></span>CWIST_NUKE_ERR_LOW_MEMORY</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_NUKE_ERR_LOW_MEMORY&#160;&#160;&#160;(-2)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00023">23</a> of file <a class="el" href="../../dc/dfe/nuke__db_8h_source.html">nuke_db.h</a>.</p>
+
+</div>
+</div>
+<a id="ac17144aee58fd5597d139133eafdc1e5" name="ac17144aee58fd5597d139133eafdc1e5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac17144aee58fd5597d139133eafdc1e5">&#9670;&#160;</a></span>CWIST_NUKE_OK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_NUKE_OK&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Return codes for cwist_nuke_init. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00021">21</a> of file <a class="el" href="../../dc/dfe/nuke__db_8h_source.html">nuke_db.h</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Typedef Documentation</h2>
 <a id="a5d7896139d7b5e0b56e79c4370e4f27c" name="a5d7896139d7b5e0b56e79c4370e4f27c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a5d7896139d7b5e0b56e79c4370e4f27c">&#9670;&#160;</a></span>cwist_nuke_db_t</h2>
 
@@ -261,7 +314,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_nuke_signal_han
 
 <p class="definition">Definition at line <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00418">418</a> of file <a class="el" href="../../d0/d14/nuke__db_8c_source.html">nuke_db.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00043">cwist_nuke_db_t::is_disk_mode</a>, and <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00037">cwist_nuke_db_t::mem_db</a>.</p>
+<p class="reference">References <a class="el" href="../../de/daf/http3_8c_source.html#l00610">data</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00043">cwist_nuke_db_t::is_disk_mode</a>, and <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00037">cwist_nuke_db_t::mem_db</a>.</p>
 
 </div>
 </div>
@@ -340,7 +393,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_nuke_signal_han
 
 <p class="definition">Definition at line <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00298">298</a> of file <a class="el" href="../../d0/d14/nuke__db_8c_source.html">nuke_db.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00040">cwist_nuke_db_t::auto_sync</a>, <a class="el" href="../../d8/d99/sys__info_8c_source.html#l00090">cwist_get_available_ram()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00218">cwist_nuke_close()</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00021">CWIST_NUKE_OK</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00038">cwist_nuke_db_t::disk_db</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00039">cwist_nuke_db_t::disk_path</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00043">cwist_nuke_db_t::is_disk_mode</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00044">cwist_nuke_db_t::load_successful</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00037">cwist_nuke_db_t::mem_db</a>, and <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00041">cwist_nuke_db_t::sync_interval_ms</a>.</p>
+<p class="reference">References <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00040">cwist_nuke_db_t::auto_sync</a>, <a class="el" href="../../d8/d99/sys__info_8c_source.html#l00090">cwist_get_available_ram()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00218">cwist_nuke_close()</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00022">CWIST_NUKE_ERR_GENERIC</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00023">CWIST_NUKE_ERR_LOW_MEMORY</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00021">CWIST_NUKE_OK</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00272">cwist_strdup()</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00038">cwist_nuke_db_t::disk_db</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00039">cwist_nuke_db_t::disk_path</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00043">cwist_nuke_db_t::is_disk_mode</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00044">cwist_nuke_db_t::load_successful</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00037">cwist_nuke_db_t::mem_db</a>, and <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00041">cwist_nuke_db_t::sync_interval_ms</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01283">cwist_app_use_nuke_db()</a>.</p>
 
@@ -376,6 +429,30 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_nuke_signal_han
 <p class="definition">Definition at line <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00402">402</a> of file <a class="el" href="../../d0/d14/nuke__db_8c_source.html">nuke_db.c</a>.</p>
 
 <p class="reference">References <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00038">cwist_nuke_db_t::disk_db</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00043">cwist_nuke_db_t::is_disk_mode</a>, and <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00037">cwist_nuke_db_t::mem_db</a>.</p>
+
+</div>
+</div>
+<a id="ab0eb0dba287b8a1f66ca04f2c497c526" name="ab0eb0dba287b8a1f66ca04f2c497c526"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab0eb0dba287b8a1f66ca04f2c497c526">&#9670;&#160;</a></span>cwist_nuke_signal_handler()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_nuke_signal_handler </td>
+          <td>(</td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>signum</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Internal signal handler. Typically set up by cwist_nuke_init. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00398">398</a> of file <a class="el" href="../../d0/d14/nuke__db_8c_source.html">nuke_db.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../da/dec/core_2macros_8h_source.html#l00023">CWIST_UNUSED</a>.</p>
 
 </div>
 </div>

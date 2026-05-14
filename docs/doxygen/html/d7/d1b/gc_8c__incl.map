@@ -1,6 +1,6 @@
 <map id="src/core/mem/gc.c" name="src/core/mem/gc.c">
 <area shape="rect" id="Node000001" title="Thin implementation wrapper around libttak epoch&#45;based reclamation." alt="" coords="79,5,220,31"/>
-<area shape="rect" id="Node000002" href="$d0/daa/gc_8h_source.html" title=" " alt="" coords="71,79,228,104"/>
+<area shape="rect" id="Node000002" href="$d0/daa/gc_8h.html" title="Epoch&#45;based garbage collection wrapper." alt="" coords="71,79,228,104"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="152,31,152,65,147,65,147,31"/>
 <area shape="rect" id="Node000003" title=" " alt="" coords="5,152,88,177"/>
 <area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="134,106,76,146,73,142,131,102"/>

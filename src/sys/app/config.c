@@ -1,3 +1,6 @@
+/** @file config.c
+ * @brief config.c interface.
+ */
 #define _POSIX_C_SOURCE 200809L
 #include <cwist/sys/app/config.h>
 #include <cwist/core/mem/alloc.h>

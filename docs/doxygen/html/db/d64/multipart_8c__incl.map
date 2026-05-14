@@ -2,7 +2,7 @@
 <area shape="rect" id="Node000001" title="RFC 7578 multipart/form&#45;data parser — wrapper around multipart&#45;parser&#45;c." alt="" coords="411,5,581,31"/>
 <area shape="rect" id="Node000002" href="$d0/dd6/multipart_8h.html" title="RFC 7578 multipart/form&#45;data parser." alt="" coords="5,79,192,104"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="433,33,177,79,176,74,432,28"/>
-<area shape="rect" id="Node000004" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="216,79,389,104"/>
+<area shape="rect" id="Node000004" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="216,79,389,104"/>
 <area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="466,33,348,76,346,71,464,28"/>
 <area shape="rect" id="Node000006" title=" " alt="" coords="414,79,485,104"/>
 <area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="491,32,467,69,462,66,486,30"/>

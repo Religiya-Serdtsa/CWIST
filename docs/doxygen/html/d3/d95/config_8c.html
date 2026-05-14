@@ -74,6 +74,9 @@ $(function() {
 </div>
 </div><!-- top -->
 <div class="header">
+  <div class="summary">
+<a href="#define-members">Macros</a> &#124;
+<a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">config.c File Reference</div></div>
 </div><!--header-->
 <div class="contents">
@@ -81,7 +84,7 @@ $(function() {
 <p><a class="el" href="../../d3/d95/config_8c.html" title="config.c interface.">config.c</a> interface.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="../../db/d16/config_8h_source.html">cwist/sys/app/config.h</a>&gt;</code><br />
-<code>#include &lt;cwist/core/mem/alloc.h&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d2/dfe/alloc_8h_source.html">cwist/core/mem/alloc.h</a>&gt;</code><br />
 <code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;stdio.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
@@ -94,7 +97,7 @@ Include dependency graph for config.c:</div>
 <area shape="rect" title="config.c interface." alt="" coords="400,5,549,31"/>
 <area shape="rect" href="../../db/d16/config_8h.html" title="Application configuration management (.env, environment variables)." alt="" coords="5,79,171,104"/>
 <area shape="poly" title=" " alt="" coords="413,33,164,79,163,74,412,28"/>
-<area shape="rect" href="../../d2/dfe/alloc_8h_source.html" title=" " alt="" coords="195,79,368,104"/>
+<area shape="rect" href="../../d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="195,79,368,104"/>
 <area shape="poly" title=" " alt="" coords="445,33,326,76,325,71,443,28"/>
 <area shape="rect" title=" " alt="" coords="393,79,463,104"/>
 <area shape="poly" title=" " alt="" coords="469,32,445,69,441,66,465,30"/>
@@ -115,11 +118,358 @@ Include dependency graph for config.c:</div>
 </div>
 </div>
 <p><a href="../../d3/d95/config_8c_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:a3024ccd4a9af5109d24e6c57565d74a1" id="r_a3024ccd4a9af5109d24e6c57565d74a1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#a3024ccd4a9af5109d24e6c57565d74a1">_POSIX_C_SOURCE</a>&#160;&#160;&#160;200809L</td></tr>
+<tr class="separator:a3024ccd4a9af5109d24e6c57565d74a1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3c1c7494c511447fa8d753db7dd04515" id="r_a3c1c7494c511447fa8d753db7dd04515"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#a3c1c7494c511447fa8d753db7dd04515">CWIST_CONFIG_BUCKETS</a>&#160;&#160;&#160;64</td></tr>
+<tr class="separator:a3c1c7494c511447fa8d753db7dd04515"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a697a68cef7e438402320a481f0a2f59b" id="r_a697a68cef7e438402320a481f0a2f59b"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#a697a68cef7e438402320a481f0a2f59b">cwist_config_create</a> (void)</td></tr>
+<tr class="memdesc:a697a68cef7e438402320a481f0a2f59b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new configuration object.  <br /></td></tr>
+<tr class="separator:a697a68cef7e438402320a481f0a2f59b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a73b9f467f61c4339ae1ddbfd05883506" id="r_a73b9f467f61c4339ae1ddbfd05883506"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#a73b9f467f61c4339ae1ddbfd05883506">cwist_config_destroy</a> (<a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *cfg)</td></tr>
+<tr class="memdesc:a73b9f467f61c4339ae1ddbfd05883506"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destroy a configuration object.  <br /></td></tr>
+<tr class="separator:a73b9f467f61c4339ae1ddbfd05883506"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af4552dc20003534467f967eff6529c05" id="r_af4552dc20003534467f967eff6529c05"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#af4552dc20003534467f967eff6529c05">cwist_config_set</a> (<a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *cfg, const char *key, const char *value)</td></tr>
+<tr class="memdesc:af4552dc20003534467f967eff6529c05"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a string value.  <br /></td></tr>
+<tr class="separator:af4552dc20003534467f967eff6529c05"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af8e3d0f53c8bd0c22544691e4aff2b5b" id="r_af8e3d0f53c8bd0c22544691e4aff2b5b"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#af8e3d0f53c8bd0c22544691e4aff2b5b">cwist_config_get</a> (<a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *cfg, const char *key)</td></tr>
+<tr class="memdesc:af8e3d0f53c8bd0c22544691e4aff2b5b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a string value by key.  <br /></td></tr>
+<tr class="separator:af8e3d0f53c8bd0c22544691e4aff2b5b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a30b090377dfd1a1cf5628d625d4b4c97" id="r_a30b090377dfd1a1cf5628d625d4b4c97"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#a30b090377dfd1a1cf5628d625d4b4c97">cwist_config_get_int</a> (<a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *cfg, const char *key, int default_val)</td></tr>
+<tr class="memdesc:a30b090377dfd1a1cf5628d625d4b4c97"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get an integer value by key.  <br /></td></tr>
+<tr class="separator:a30b090377dfd1a1cf5628d625d4b4c97"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa8f4565f716404e26b2f5f7d9fb5257f" id="r_aa8f4565f716404e26b2f5f7d9fb5257f"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#aa8f4565f716404e26b2f5f7d9fb5257f">cwist_config_get_bool</a> (<a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *cfg, const char *key, bool default_val)</td></tr>
+<tr class="memdesc:aa8f4565f716404e26b2f5f7d9fb5257f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a boolean value by key.  <br /></td></tr>
+<tr class="separator:aa8f4565f716404e26b2f5f7d9fb5257f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a65cb03dd1203b4c1a33bf4aed3a6eb1b" id="r_a65cb03dd1203b4c1a33bf4aed3a6eb1b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#a65cb03dd1203b4c1a33bf4aed3a6eb1b">cwist_config_load_env</a> (<a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *cfg, const char *prefix)</td></tr>
+<tr class="memdesc:a65cb03dd1203b4c1a33bf4aed3a6eb1b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Load environment variables with a prefix.  <br /></td></tr>
+<tr class="separator:a65cb03dd1203b4c1a33bf4aed3a6eb1b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a438170d182ee20247735b3869c7905bf" id="r_a438170d182ee20247735b3869c7905bf"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d95/config_8c.html#a438170d182ee20247735b3869c7905bf">cwist_config_load_file</a> (<a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *cfg, const char *path)</td></tr>
+<tr class="memdesc:a438170d182ee20247735b3869c7905bf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Load a configuration file.  <br /></td></tr>
+<tr class="separator:a438170d182ee20247735b3869c7905bf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p><a class="el" href="../../d3/d95/config_8c.html" title="config.c interface.">config.c</a> interface. </p>
 
 <p class="definition">Definition in file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
-</div></div><!-- contents -->
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a3024ccd4a9af5109d24e6c57565d74a1" name="a3024ccd4a9af5109d24e6c57565d74a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3024ccd4a9af5109d24e6c57565d74a1">&#9670;&#160;</a></span>_POSIX_C_SOURCE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define _POSIX_C_SOURCE&#160;&#160;&#160;200809L</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00004">4</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+</div>
+</div>
+<a id="a3c1c7494c511447fa8d753db7dd04515" name="a3c1c7494c511447fa8d753db7dd04515"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3c1c7494c511447fa8d753db7dd04515">&#9670;&#160;</a></span>CWIST_CONFIG_BUCKETS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_CONFIG_BUCKETS&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00012">12</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Function Documentation</h2>
+<a id="a697a68cef7e438402320a481f0a2f59b" name="a697a68cef7e438402320a481f0a2f59b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a697a68cef7e438402320a481f0a2f59b">&#9670;&#160;</a></span>cwist_config_create()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> * cwist_config_create </td>
+          <td>(</td>
+          <td class="paramtype">void&#160;</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Create a new configuration object. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00022">22</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../db/d16/config_8h_source.html#l00020">cwist_config::bucket_count</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00019">cwist_config::buckets</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00231">cwist_alloc_array()</a>, <a class="el" href="../../d3/d95/config_8c_source.html#l00012">CWIST_CONFIG_BUCKETS</a>, and <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l00901">cwist_app_create()</a>.</p>
+
+</div>
+</div>
+<a id="a73b9f467f61c4339ae1ddbfd05883506" name="a73b9f467f61c4339ae1ddbfd05883506"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73b9f467f61c4339ae1ddbfd05883506">&#9670;&#160;</a></span>cwist_config_destroy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_config_destroy </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *&#160;</td>
+          <td class="paramname"><em>cfg</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Destroy a configuration object. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00034">34</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../db/d16/config_8h_source.html#l00020">cwist_config::bucket_count</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00019">cwist_config::buckets</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00013">cwist_config_bucket::key</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00015">cwist_config_bucket::next</a>, and <a class="el" href="../../db/d16/config_8h_source.html#l00014">cwist_config_bucket::value</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01021">cwist_app_destroy()</a>.</p>
+
+</div>
+</div>
+<a id="af8e3d0f53c8bd0c22544691e4aff2b5b" name="af8e3d0f53c8bd0c22544691e4aff2b5b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af8e3d0f53c8bd0c22544691e4aff2b5b">&#9670;&#160;</a></span>cwist_config_get()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * cwist_config_get </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *&#160;</td>
+          <td class="paramname"><em>cfg</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>key</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get a string value by key. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00069">69</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../db/d16/config_8h_source.html#l00020">cwist_config::bucket_count</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00019">cwist_config::buckets</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00013">cwist_config_bucket::key</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00015">cwist_config_bucket::next</a>, and <a class="el" href="../../db/d16/config_8h_source.html#l00014">cwist_config_bucket::value</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d3/d95/config_8c_source.html#l00091">cwist_config_get_bool()</a>, and <a class="el" href="../../d3/d95/config_8c_source.html#l00082">cwist_config_get_int()</a>.</p>
+
+</div>
+</div>
+<a id="aa8f4565f716404e26b2f5f7d9fb5257f" name="aa8f4565f716404e26b2f5f7d9fb5257f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa8f4565f716404e26b2f5f7d9fb5257f">&#9670;&#160;</a></span>cwist_config_get_bool()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool cwist_config_get_bool </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *&#160;</td>
+          <td class="paramname"><em>cfg</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>default_val</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get a boolean value by key. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00091">91</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d3/d95/config_8c_source.html#l00069">cwist_config_get()</a>.</p>
+
+</div>
+</div>
+<a id="a30b090377dfd1a1cf5628d625d4b4c97" name="a30b090377dfd1a1cf5628d625d4b4c97"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a30b090377dfd1a1cf5628d625d4b4c97">&#9670;&#160;</a></span>cwist_config_get_int()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int cwist_config_get_int </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *&#160;</td>
+          <td class="paramname"><em>cfg</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>default_val</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get an integer value by key. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00082">82</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d3/d95/config_8c_source.html#l00069">cwist_config_get()</a>.</p>
+
+</div>
+</div>
+<a id="a65cb03dd1203b4c1a33bf4aed3a6eb1b" name="a65cb03dd1203b4c1a33bf4aed3a6eb1b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a65cb03dd1203b4c1a33bf4aed3a6eb1b">&#9670;&#160;</a></span>cwist_config_load_env()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_config_load_env </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *&#160;</td>
+          <td class="paramname"><em>cfg</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>prefix</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Load environment variables with a prefix. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00101">101</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d3/d95/config_8c_source.html#l00050">cwist_config_set()</a>, and <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
+
+</div>
+</div>
+<a id="a438170d182ee20247735b3869c7905bf" name="a438170d182ee20247735b3869c7905bf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a438170d182ee20247735b3869c7905bf">&#9670;&#160;</a></span>cwist_config_load_file()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_config_load_file </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *&#160;</td>
+          <td class="paramname"><em>cfg</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Load a configuration file. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00121">121</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d3/d95/config_8c_source.html#l00050">cwist_config_set()</a>.</p>
+
+</div>
+</div>
+<a id="af4552dc20003534467f967eff6529c05" name="af4552dc20003534467f967eff6529c05"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af4552dc20003534467f967eff6529c05">&#9670;&#160;</a></span>cwist_config_set()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_config_set </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> *&#160;</td>
+          <td class="paramname"><em>cfg</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Set a string value. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d3/d95/config_8c_source.html#l00050">50</a> of file <a class="el" href="../../d3/d95/config_8c_source.html">config.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../db/d16/config_8h_source.html#l00020">cwist_config::bucket_count</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00019">cwist_config::buckets</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00272">cwist_strdup()</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00013">cwist_config_bucket::key</a>, <a class="el" href="../../db/d16/config_8h_source.html#l00015">cwist_config_bucket::next</a>, and <a class="el" href="../../db/d16/config_8h_source.html#l00014">cwist_config_bucket::value</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d3/d95/config_8c_source.html#l00101">cwist_config_load_env()</a>, and <a class="el" href="../../d3/d95/config_8c_source.html#l00121">cwist_config_load_file()</a>.</p>
+
+</div>
+</div>
+</div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
 Generated by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="../../doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.8

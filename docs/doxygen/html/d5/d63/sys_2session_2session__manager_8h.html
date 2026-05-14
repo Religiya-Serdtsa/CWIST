@@ -193,6 +193,7 @@ Functions</h2></td></tr>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to the reserved range, or NULL when capacity is exhausted.</dd></dl>
 <p>Allocate aligned storage from the request arena.</p>
+<p>Allocate from a session arena.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">arena</td><td>Arena that owns the backing storage. </td></tr>
@@ -248,6 +249,7 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <p>Bind a caller-owned buffer to a session arena and reset its cursor.</p>
+<p>Initialize a session arena.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">arena</td><td>Arena to initialize. </td></tr>
@@ -287,6 +289,7 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <p>Reset the request arena so future allocations reuse the full buffer.</p>
+<p>Reset a session arena.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">arena</td><td>Arena to reset. </td></tr>
@@ -342,6 +345,7 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <p>Initialize a session manager around a caller-supplied arena buffer.</p>
+<p>Initialize session manager.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">manager</td><td>Manager to initialize. </td></tr>
@@ -375,6 +379,12 @@ Functions</h2></td></tr>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">manager</td><td>Session manager to reset.</td></tr>
+  </table>
+  </dd>
+</dl>
+<p>Reset session manager.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
     <tr><td class="paramname">manager</td><td>Manager whose arena should be rewound. </td></tr>
   </table>
   </dd>
@@ -419,6 +429,7 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <p>Initialize the metadata that tracks a shared session allocation.</p>
+<p>Initialize reference-counted header.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">header</td><td>Header that precedes the payload. </td></tr>
@@ -469,6 +480,7 @@ Functions</h2></td></tr>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to the payload region, or NULL when allocation fails.</dd></dl>
 <p>Allocate a zeroed payload preceded by a reference-count header.</p>
+<p>Allocate shared session memory.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">payload_size</td><td>Number of bytes visible to callers. </td></tr>
@@ -501,14 +513,15 @@ Functions</h2></td></tr>
 <p>Decrement the reference count and free the payload when it reaches zero. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate a shared payload with an in-band reference-count header.">session_shared_alloc()</a>.</td></tr>
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate shared session memory.">session_shared_alloc()</a>.</td></tr>
   </table>
   </dd>
 </dl>
 <p>Decrement the reference count and free the payload when it reaches zero.</p>
+<p>Decrement reference count and free if zero.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate a shared payload with an in-band reference-count header.">session_shared_alloc()</a>. </td></tr>
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate shared session memory.">session_shared_alloc()</a>. </td></tr>
   </table>
   </dd>
 </dl>
@@ -536,7 +549,14 @@ Functions</h2></td></tr>
 <p>Increment the reference count for a shared payload. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate a shared payload with an in-band reference-count header.">session_shared_alloc()</a>. </td></tr>
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate shared session memory.">session_shared_alloc()</a>.</td></tr>
+  </table>
+  </dd>
+</dl>
+<p>Increment reference count.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate shared session memory.">session_shared_alloc()</a>. </td></tr>
   </table>
   </dd>
 </dl>

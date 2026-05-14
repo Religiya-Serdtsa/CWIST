@@ -11,6 +11,7 @@
 #include <cwist/net/http/query.h>
 #include <cwist/core/db/sql.h>
 #include <cwist/sys/app/endpoint_opts.h>
+#include <stdint.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -72,7 +73,8 @@ typedef struct cwist_http_request {
     struct cwist_app *app;  ///< Owning app context (if any).
     cwist_db *db;           ///< Shared database handle from cwist_app.
     bool upgraded;
-    void *private_data; ///< Internal framework use.
+    uint32_t stream_id;     ///< HTTP/2 or HTTP/3 stream ID (0 for HTTP/1.1).
+    void *private_data;     ///< Internal framework use (protocol-specific context).
     void *route_middleware_state; ///< Router middleware chain state (internal).
     size_t content_length;
     cwist_endpoint_opt_t endpoint_opts; ///< Behavior hints for the active endpoint.
@@ -181,10 +183,10 @@ typedef struct cwist_server_config {
 cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config, void (*handler)(int, void *), void *ctx);
 int headers_have_content_length(cwist_http_header_node *headers);
 
-#endif
-
 extern const int CWIST_CREATE_SOCKET_FAILED;
 extern const int CWIST_HTTP_UNAVAILABLE_ADDRESS;
 extern const int CWIST_HTTP_BIND_FAILED;
 extern const int CWIST_HTTP_SETSOCKOPT_FAILED;
 extern const int CWIST_HTTP_LISTEN_FAILED;
+
+#endif

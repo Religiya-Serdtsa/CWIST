@@ -82,22 +82,25 @@ $(document).ready(function() { init_codefold(1); });
   <div class="headertitle"><div class="title">siphash.h</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#ifndef __CWIST_SIPHASH_H__</span></div>
+<a href="../../df/dac/siphash_8h.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#ifndef __CWIST_SIPHASH_H__</span></div>
 <div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span><span class="preprocessor">#define __CWIST_SIPHASH_H__</span></div>
 <div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span> </div>
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;stdint.h&gt;</span></div>
 <div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;stddef.h&gt;</span></div>
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span> </div>
-<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>uint64_t siphash24(<span class="keyword">const</span> <span class="keywordtype">void</span> *src, <span class="keywordtype">size_t</span> len, <span class="keyword">const</span> uint8_t key[16]);</div>
+<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>uint64_t <a class="code hl_function" href="../../d0/db0/core_2siphash_2siphash_8h.html#ac197ccec3b022b078a62dc878ce336e0">siphash24</a>(<span class="keyword">const</span> <span class="keywordtype">void</span> *src, <span class="keywordtype">size_t</span> <a class="code hl_variable" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">len</a>, <span class="keyword">const</span> uint8_t key[16]);</div>
 <div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="comment">// Generates random hash</span></div>
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="comment">// e.g.,</span></div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="comment">// (...)</span></div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="comment">// uint8_t key[16];</span></div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment">// cwist_generate_hash_seed(key);</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span><span class="comment">// uint64_t hash = siphash24(src, len, key);</span></div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="keywordtype">void</span> cwist_generate_hash_seed(uint8_t key[16]);</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="keywordtype">void</span> <a class="code hl_function" href="../../d0/db0/core_2siphash_2siphash_8h.html#afc6a74b5cc4fd3de6eebb0e7d83604c0">cwist_generate_hash_seed</a>(uint8_t key[16]);</div>
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
+<div class="ttc" id="acore_2siphash_2siphash_8h_html_ac197ccec3b022b078a62dc878ce336e0"><div class="ttname"><a href="../../d0/db0/core_2siphash_2siphash_8h.html#ac197ccec3b022b078a62dc878ce336e0">siphash24</a></div><div class="ttdeci">uint64_t siphash24(const void *src, size_t len, const uint8_t key[16])</div><div class="ttdoc">Compute SipHash-2-4 over a byte range using a 16-byte secret key.</div><div class="ttdef"><b>Definition</b> <a href="../../dd/d2d/siphash_8c_source.html#l00036">siphash.c:36</a></div></div>
+<div class="ttc" id="acore_2siphash_2siphash_8h_html_afc6a74b5cc4fd3de6eebb0e7d83604c0"><div class="ttname"><a href="../../d0/db0/core_2siphash_2siphash_8h.html#afc6a74b5cc4fd3de6eebb0e7d83604c0">cwist_generate_hash_seed</a></div><div class="ttdeci">void cwist_generate_hash_seed(uint8_t key[16])</div><div class="ttdoc">Generates a random SipHash seed.</div><div class="ttdef"><b>Definition</b> <a href="../../dd/d2d/siphash_8c_source.html#l00201">siphash.c:201</a></div></div>
+<div class="ttc" id="ahttp3_8c_html_a7360b55975153b822efc5217b7734e6a"><div class="ttname"><a href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">len</a></div><div class="ttdeci">size_t len</div><div class="ttdef"><b>Definition</b> <a href="../../de/daf/http3_8c_source.html#l00611">http3.c:611</a></div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

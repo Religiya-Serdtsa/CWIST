@@ -29,7 +29,7 @@
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
 | **io_uring Backend** | ⏳ | Linux-only; `epoll` done, io_uring needs `liburing` or raw syscalls |
 | **kqueue Backend** | ⏳ | BSD/macOS; blocked on non-Linux test environment |
-| HTTP/2 Server Push | ⏳ | Only HTTP/3 push is implemented |
+| HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
 | **WebTransport** | ✅ | Basic server handler (`:protocol=webtransport` detection via HTTP/3 CONNECT) |
 | HTTP/3 Datagram Extension | ✅ | `send_datagram`, callbacks, `es_datagrams` enabled |
 | ECN (Explicit Congestion Notification) | ✅ | UDP socket with `IP_RECVTOS` / `IPV6_RECVTCLASS` |
@@ -148,7 +148,7 @@
 
 ### P3 — Advanced Protocols
 15. ~~**WebTransport** server + client~~ ✅ (basic server handler)
-16. **HTTP/2 Server Push**
+16. ~~**HTTP/2 Server Push**~~ ✅
 17. **io_uring** UDP packet loop for HTTP/3
 18. **kqueue** backend for macOS/BSD
 

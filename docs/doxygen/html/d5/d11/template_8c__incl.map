@@ -1,16 +1,16 @@
 <map id="src/core/template/template.c" name="src/core/template/template.c">
 <area shape="rect" id="Node000001" title="Minimal template renderer supporting variable substitution and simple control flow." alt="" coords="161,5,371,31"/>
-<area shape="rect" id="Node000002" href="$de/db8/template_8h_source.html" title=" " alt="" coords="191,79,341,119"/>
+<area shape="rect" id="Node000002" href="$de/db8/template_8h.html" title="Simple template engine." alt="" coords="191,79,341,119"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="269,31,269,65,263,65,263,31"/>
 <area shape="rect" id="Node000004" title=" " alt="" coords="5,262,76,287"/>
 <area shape="poly" id="edge16_Node000001_Node000004" title=" " alt="" coords="235,33,195,53,156,81,120,123,90,169,52,250,47,248,86,167,116,119,152,77,192,48,232,28"/>
 <area shape="rect" id="Node000005" title=" " alt="" coords="100,262,171,287"/>
 <area shape="poly" id="edge15_Node000001_Node000005" title=" " alt="" coords="240,33,208,52,180,80,159,123,146,169,140,213,138,248,132,248,134,212,141,168,154,121,176,77,205,48,237,29"/>
-<area shape="rect" id="Node000010" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="399,86,573,111"/>
+<area shape="rect" id="Node000010" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="399,86,573,111"/>
 <area shape="poly" id="edge11_Node000001_Node000010" title=" " alt="" coords="299,28,442,79,440,84,297,33"/>
 <area shape="rect" id="Node000013" title=" " alt="" coords="597,86,663,111"/>
 <area shape="poly" id="edge14_Node000001_Node000013" title=" " alt="" coords="354,28,465,47,585,76,593,79,591,84,584,81,464,52,353,33"/>
-<area shape="rect" id="Node000003" href="$d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="173,167,309,207"/>
+<area shape="rect" id="Node000003" href="$d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="173,167,309,207"/>
 <area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="263,120,253,154,248,153,258,118"/>
 <area shape="rect" id="Node000009" title=" " alt="" coords="372,343,483,368"/>
 <area shape="poly" id="edge10_Node000002_Node000009" title=" " alt="" coords="289,117,346,174,377,212,403,253,418,292,426,328,421,330,413,294,398,256,372,215,342,178,286,121"/>

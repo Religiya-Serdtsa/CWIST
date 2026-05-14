@@ -1,3 +1,6 @@
+/** @file flash.c
+ * @brief flash.c interface.
+ */
 #include <cwist/sys/session/flash.h>
 #include <cwist/core/mem/alloc.h>
 #include <string.h>

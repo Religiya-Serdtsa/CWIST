@@ -1,3 +1,8 @@
+/**
+ * @file middleware.h
+ * @brief Built-in middleware factories.
+ */
+
 #ifndef __CWIST_MIDDLEWARE_H__
 #define __CWIST_MIDDLEWARE_H__
 

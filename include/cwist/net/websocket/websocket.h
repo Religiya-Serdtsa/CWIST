@@ -1,3 +1,8 @@
+/**
+ * @file websocket.h
+ * @brief WebSocket upgrade and frame handling.
+ */
+
 #ifndef __CWIST_WEBSOCKET_H__
 #define __CWIST_WEBSOCKET_H__
 
@@ -38,11 +43,24 @@ cwist_websocket *cwist_websocket_upgrade(cwist_http_request *req, int client_fd)
  */
 cwist_ws_frame *cwist_websocket_receive(cwist_websocket *ws);
 
-/** @brief Send a frame with the specified opcode and payload. */
+/**
+ * @brief Send a frame with the specified opcode and payload.
+ */
 int cwist_websocket_send(cwist_websocket *ws, cwist_ws_opcode_t opcode, const uint8_t *data, size_t len);
 
+/**
+ * @brief Destroy a frame.
+ */
 void cwist_websocket_frame_destroy(cwist_ws_frame *frame);
+
+/**
+ * @brief Close the WebSocket connection.
+ */
 void cwist_websocket_close(cwist_websocket *ws);
+
+/**
+ * @brief Destroy the WebSocket context.
+ */
 void cwist_websocket_destroy(cwist_websocket *ws);
 
 #endif

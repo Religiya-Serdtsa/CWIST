@@ -1,14 +1,20 @@
 var searchData=
 [
-  ['r_0',['r',['../d1/db9/structcwist__color__rgb.html#a77e55875cb2c66f77e2169b83416711f',1,'cwist_color_rgb']]],
-  ['request_5fhash_1',['request_hash',['../d5/d26/structbdr__entry__t.html#a332ed267c4995a8081e776d67c8b3553',1,'bdr_entry_t']]],
-  ['required_2',['required',['../d6/d03/structcwist__schema__field.html#a20e3f167068fedcc8fdd1895c97e14b0',1,'cwist_schema_field']]],
-  ['response_5fblob_3',['response_blob',['../d5/d26/structbdr__entry__t.html#a54d99b1285a8d41ac622ecdcc33d19a3',1,'bdr_entry_t']]],
-  ['response_5fhash_4',['response_hash',['../d5/d26/structbdr__entry__t.html#abaf41a985ec47bcc450c0a6100521b95',1,'bdr_entry_t']]],
-  ['retire_5fgrace_5fns_5',['retire_grace_ns',['../d7/dba/structcwist__fix__server__mem.html#aba7e3dc876a2b69838843a3312904e4a',1,'cwist_fix_server_mem']]],
-  ['revalidate_5fhits_6',['revalidate_hits',['../d9/d90/structcwist__bdr__t.html#a4b5c09b0422d6bc9067c64d573e9e2b6',1,'cwist_bdr_t']]],
-  ['roundness_5fpx_7',['roundness_px',['../d3/dd1/structcwist__css__config.html#a4d7246670821ad7221ed6fe2d1328d3c',1,'cwist_css_config']]],
-  ['router_8',['router',['../dc/da0/structcwist__app.html#a8c33672187918ac728fda9040779ac8f',1,'cwist_app']]],
-  ['routes_9',['routes',['../dc/da0/structcwist__app.html#a23c88c19100ec9e379afe3b0434a9115',1,'cwist_app']]],
-  ['running_10',['running',['../d9/dae/structcwist__http3__context.html#a77a5c8708c91ab6fd4cd14ab13f6d047',1,'cwist_http3_context']]]
+  ['param_5fnext_0',['param_next',['../dc/d91/structcwist__mux__route.html#a83db4b8951a5773ede349730e2bace66',1,'cwist_mux_route']]],
+  ['param_5froutes_1',['param_routes',['../d0/d0c/structcwist__mux__router.html#a2305ef6228d9ad9b1673378ddb1aef09',1,'cwist_mux_router']]],
+  ['path_2',['path',['../dd/da0/structcwist__route__node.html#a8c0740aa032aa15383f2e06abb4b35bd',1,'cwist_route_node::path'],['../dd/d68/structcwist__http__request.html#a391864f084971e16903d40942c186c18',1,'cwist_http_request::path'],['../dc/d91/structcwist__mux__route.html#a3add9ff9767ecfe98261338f0b1d2e36',1,'cwist_mux_route::path'],['../d6/de0/structcwist__file__t.html#aa3ac45f2b9ac20d97ee20cb0e71537e7',1,'cwist_file_t::path']]],
+  ['path_5fparams_3',['path_params',['../dd/d68/structcwist__http__request.html#a9ea74e77fc5419d5c4b83ad0ee4f84a5',1,'cwist_http_request']]],
+  ['payload_4',['payload',['../db/d40/structcwist__ws__frame.html#aca2af0762cf197b9de8e6ef0feb516fd',1,'cwist_ws_frame']]],
+  ['payload_5flen_5',['payload_len',['../db/d40/structcwist__ws__frame.html#aace480186adf0c05a3e446d9a1aab679',1,'cwist_ws_frame']]],
+  ['peer_5faddr_6',['peer_addr',['../dd/d42/structcwist__http3__connection.html#a81ee0ae835a9b3320372cab3da2cd666',1,'cwist_http3_connection']]],
+  ['peer_5faddr_5flen_7',['peer_addr_len',['../dd/d42/structcwist__http3__connection.html#a5774d0e7a76b86d30f7a5481dc463715',1,'cwist_http3_connection']]],
+  ['port_8',['port',['../dc/da0/structcwist__app.html#acc1a9d43d51c3404f1b2dad333cadcd2',1,'cwist_app']]],
+  ['prefix_9',['prefix',['../d0/d9a/structcwist__mux__group.html#a18bd1add4604004eb13c10cd0db79c49',1,'cwist_mux_group']]],
+  ['primary_5fcolor_10',['primary_color',['../d3/dd1/structcwist__css__config.html#ae0116284ab70b3ede5b155e641ebc784',1,'cwist_css_config']]],
+  ['private_5fdata_11',['private_data',['../dd/d68/structcwist__http__request.html#a9d8f44e3e022dbeb0fcea418d916b41f',1,'cwist_http_request']]],
+  ['ptr_5fbody_12',['ptr_body',['../dd/d22/structcwist__http__response.html#a4d1207137724ed8a3ce273e19e228ebe',1,'cwist_http_response']]],
+  ['ptr_5fbody_5fcleanup_13',['ptr_body_cleanup',['../dd/d22/structcwist__http__response.html#a7795a5eefb5b3cd1b99c02bd77157b93',1,'cwist_http_response']]],
+  ['ptr_5fbody_5fcleanup_5fctx_14',['ptr_body_cleanup_ctx',['../dd/d22/structcwist__http__response.html#a1946d4b2ad4858dc3d8e323857fb26c2',1,'cwist_http_response']]],
+  ['ptr_5fbody_5flen_15',['ptr_body_len',['../dd/d22/structcwist__http__response.html#ac6c3558639fc917b5f2ba31bcd418278',1,'cwist_http_response']]],
+  ['push_5fenabled_16',['push_enabled',['../d9/dae/structcwist__http3__context.html#a6ba22c6e2f52196c20ac55484f1ab0c6',1,'cwist_http3_context']]]
 ];

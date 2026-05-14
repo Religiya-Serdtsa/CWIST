@@ -2,7 +2,7 @@
 <area shape="rect" id="Node000001" title="http.h interface." alt="" coords="120,5,269,31"/>
 <area shape="rect" id="Node000002" href="$d2/d39/app_8h.html" title="app.h interface." alt="" coords="32,152,179,177"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="108,29,57,47,35,61,17,80,12,90,13,100,26,119,50,136,77,150,75,154,48,141,22,123,8,102,7,89,12,77,31,57,55,42,106,24"/>
-<area shape="rect" id="Node000004" href="$d7/d95/https_8h_source.html" title=" " alt="" coords="27,79,183,104"/>
+<area shape="rect" id="Node000004" href="$d7/d95/https_8h.html" title="HTTPS/TLS wrapper interface." alt="" coords="27,79,183,104"/>
 <area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="171,41,122,81,118,76,168,37"/>
 <area shape="rect" id="Node000005" href="$d5/d57/mux_8h.html" title="mux.h interface." alt="" coords="208,79,360,104"/>
 <area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="221,37,271,76,268,81,218,41"/>

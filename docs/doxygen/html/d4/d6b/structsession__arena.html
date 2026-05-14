@@ -71,6 +71,7 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#pub-attribs">Public Attributes</a> &#124;
 <a href="../../de/d7d/structsession__arena-members.html">List of all members</a>  </div>
   <div class="headertitle"><div class="title">session_arena Struct Reference</div></div>
 </div><!--header-->
@@ -79,12 +80,77 @@ $(function() {
 <p>Linear arena used for fast request-lifetime allocations.  
  <a href="../../d4/d6b/structsession__arena.html#details">More...</a></p>
 
-<p><code>#include &lt;<a class="el" href="../../d5/d63/sys_2session_2session__manager_8h_source.html">session_manager.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="../../d7/d95/session__manager_8h_source.html">session_manager.h</a>&gt;</code></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a96936de672d7549d4c9ce5f9dd850b5b" id="r_a96936de672d7549d4c9ce5f9dd850b5b"><td class="memItemLeft" align="right" valign="top">uint8_t *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d6b/structsession__arena.html#a96936de672d7549d4c9ce5f9dd850b5b">buffer</a></td></tr>
+<tr class="separator:a96936de672d7549d4c9ce5f9dd850b5b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a46db7b2ec1995c8b3284e9fa497fb62a" id="r_a46db7b2ec1995c8b3284e9fa497fb62a"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d6b/structsession__arena.html#a46db7b2ec1995c8b3284e9fa497fb62a">capacity</a></td></tr>
+<tr class="separator:a46db7b2ec1995c8b3284e9fa497fb62a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4cd5f89d68a2eaf4fba5e733fd112be3" id="r_a4cd5f89d68a2eaf4fba5e733fd112be3"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d6b/structsession__arena.html#a4cd5f89d68a2eaf4fba5e733fd112be3">offset</a></td></tr>
+<tr class="separator:a4cd5f89d68a2eaf4fba5e733fd112be3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Linear arena used for fast request-lifetime allocations. </p>
 
 <p class="definition">Definition at line <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00015">15</a> of file <a class="el" href="../../d7/d95/session__manager_8h_source.html">session_manager.h</a>.</p>
-</div><hr/>The documentation for this struct was generated from the following files:<ul>
+</div><h2 class="groupheader">Member Data Documentation</h2>
+<a id="a96936de672d7549d4c9ce5f9dd850b5b" name="a96936de672d7549d4c9ce5f9dd850b5b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a96936de672d7549d4c9ce5f9dd850b5b">&#9670;&#160;</a></span>buffer</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t * session_arena::buffer</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00016">16</a> of file <a class="el" href="../../d7/d95/session__manager_8h_source.html">session_manager.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00030">session_arena_alloc()</a>, and <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00017">session_arena_init()</a>.</p>
+
+</div>
+</div>
+<a id="a46db7b2ec1995c8b3284e9fa497fb62a" name="a46db7b2ec1995c8b3284e9fa497fb62a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a46db7b2ec1995c8b3284e9fa497fb62a">&#9670;&#160;</a></span>capacity</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">size_t session_arena::capacity</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00017">17</a> of file <a class="el" href="../../d7/d95/session__manager_8h_source.html">session_manager.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00030">session_arena_alloc()</a>, and <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00017">session_arena_init()</a>.</p>
+
+</div>
+</div>
+<a id="a4cd5f89d68a2eaf4fba5e733fd112be3" name="a4cd5f89d68a2eaf4fba5e733fd112be3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4cd5f89d68a2eaf4fba5e733fd112be3">&#9670;&#160;</a></span>offset</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">size_t session_arena::offset</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00018">18</a> of file <a class="el" href="../../d7/d95/session__manager_8h_source.html">session_manager.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00030">session_arena_alloc()</a>, <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00017">session_arena_init()</a>, and <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00045">session_arena_reset()</a>.</p>
+
+</div>
+</div>
+<hr/>The documentation for this struct was generated from the following files:<ul>
 <li>include/cwist/<a class="el" href="../../d7/d95/session__manager_8h_source.html">session_manager.h</a></li>
 <li>include/cwist/sys/session/<a class="el" href="../../d5/d63/sys_2session_2session__manager_8h_source.html">session_manager.h</a></li>
 </ul>

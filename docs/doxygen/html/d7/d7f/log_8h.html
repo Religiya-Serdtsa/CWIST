@@ -76,6 +76,7 @@ $(function() {
 <div class="header">
   <div class="summary">
 <a href="#define-members">Macros</a> &#124;
+<a href="#enum-members">Enumerations</a> &#124;
 <a href="#func-members">Functions</a> &#124;
 <a href="#var-members">Variables</a>  </div>
   <div class="headertitle"><div class="title">log.h File Reference</div></div>
@@ -113,18 +114,32 @@ Macros</h2></td></tr>
 <tr class="memitem:a66bc16040818fad1c018405eec164ffa" id="r_a66bc16040818fad1c018405eec164ffa"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d7/d7f/log_8h.html#a66bc16040818fad1c018405eec164ffa">CWIST_LOG</a>(level,  fmt, ...)</td></tr>
 <tr class="memdesc:a66bc16040818fad1c018405eec164ffa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main logging macro.  <br /></td></tr>
 <tr class="separator:a66bc16040818fad1c018405eec164ffa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a62192d46b09546974ffe5f393e7f3fa7" id="r_a62192d46b09546974ffe5f393e7f3fa7"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d7/d7f/log_8h.html#a62192d46b09546974ffe5f393e7f3fa7">CWIST_LOG_INFO</a>(fmt, ...)&#160;&#160;&#160;<a class="el" href="../../d7/d7f/log_8h.html#a66bc16040818fad1c018405eec164ffa">CWIST_LOG</a>(<a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a317a62dd950f7d13d630d7719a6db5c1">CWIST_LOG_LEVEL_INFO</a>,  fmt, ##__VA_ARGS__)</td></tr>
+<tr class="separator:a62192d46b09546974ffe5f393e7f3fa7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8ed5f5e90e3811ba6ae8ce8d607da8d1" id="r_a8ed5f5e90e3811ba6ae8ce8d607da8d1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d7/d7f/log_8h.html#a8ed5f5e90e3811ba6ae8ce8d607da8d1">CWIST_LOG_WARN</a>(fmt, ...)&#160;&#160;&#160;<a class="el" href="../../d7/d7f/log_8h.html#a66bc16040818fad1c018405eec164ffa">CWIST_LOG</a>(<a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a7525fdbb73f2d88460d177f1c162aa38">CWIST_LOG_LEVEL_WARN</a>,  fmt, ##__VA_ARGS__)</td></tr>
+<tr class="separator:a8ed5f5e90e3811ba6ae8ce8d607da8d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab3ddbd4f4218951fead7be63682c1830" id="r_ab3ddbd4f4218951fead7be63682c1830"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d7/d7f/log_8h.html#ab3ddbd4f4218951fead7be63682c1830">CWIST_LOG_DEBUG</a>(fmt, ...)&#160;&#160;&#160;<a class="el" href="../../d7/d7f/log_8h.html#a66bc16040818fad1c018405eec164ffa">CWIST_LOG</a>(<a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a266d498f15d810518d87b626a2297b09">CWIST_LOG_LEVEL_DEBUG</a>, fmt, ##__VA_ARGS__)</td></tr>
+<tr class="separator:ab3ddbd4f4218951fead7be63682c1830"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a68b665b06cf4ef236c1f63de7b1109e4" id="r_a68b665b06cf4ef236c1f63de7b1109e4"><td class="memItemLeft" align="right" valign="top">enum &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4">cwist_macro_log_level_t</a> { <a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4ae9bb7ff42b8507d880c047065923c36e">CWIST_LOG_LEVEL_NONE</a> = 0
+, <a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a266d498f15d810518d87b626a2297b09">CWIST_LOG_LEVEL_DEBUG</a> = 1
+, <a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a317a62dd950f7d13d630d7719a6db5c1">CWIST_LOG_LEVEL_INFO</a> = 2
+, <a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a7525fdbb73f2d88460d177f1c162aa38">CWIST_LOG_LEVEL_WARN</a> = 3
+ }</td></tr>
+<tr class="separator:a68b665b06cf4ef236c1f63de7b1109e4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a6a8a73975b3972d6c35329d5a4e32ff7" id="r_a6a8a73975b3972d6c35329d5a4e32ff7"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d7/d7f/log_8h.html#a6a8a73975b3972d6c35329d5a4e32ff7">cwist_log_write</a> (cwist_macro_log_level_t level, const char *fmt,...)</td></tr>
+<tr class="memitem:a6a8a73975b3972d6c35329d5a4e32ff7" id="r_a6a8a73975b3972d6c35329d5a4e32ff7"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d7/d7f/log_8h.html#a6a8a73975b3972d6c35329d5a4e32ff7">cwist_log_write</a> (<a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4">cwist_macro_log_level_t</a> level, const char *fmt,...)</td></tr>
 <tr class="memdesc:a6a8a73975b3972d6c35329d5a4e32ff7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a log message to stderr.  <br /></td></tr>
 <tr class="separator:a6a8a73975b3972d6c35329d5a4e32ff7"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:a19f676a79542cdbfd92630689bc3dda2" id="r_a19f676a79542cdbfd92630689bc3dda2"><td class="memItemLeft" align="right" valign="top"><a id="a19f676a79542cdbfd92630689bc3dda2" name="a19f676a79542cdbfd92630689bc3dda2"></a>
-cwist_macro_log_level_t&#160;</td><td class="memItemRight" valign="bottom"><b>g_cwist_log_level</b></td></tr>
-<tr class="memdesc:a19f676a79542cdbfd92630689bc3dda2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Global active log level. Set this to control output verbosity. <br /></td></tr>
+<tr class="memitem:a19f676a79542cdbfd92630689bc3dda2" id="r_a19f676a79542cdbfd92630689bc3dda2"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4">cwist_macro_log_level_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d7/d7f/log_8h.html#a19f676a79542cdbfd92630689bc3dda2">g_cwist_log_level</a></td></tr>
+<tr class="memdesc:a19f676a79542cdbfd92630689bc3dda2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Global active log level. Set this to control output verbosity.  <br /></td></tr>
 <tr class="separator:a19f676a79542cdbfd92630689bc3dda2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
@@ -165,16 +180,130 @@ cwist_macro_log_level_t&#160;</td><td class="memItemRight" valign="bottom"><b>g_
       </table>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line">    <span class="keywordflow">do</span> { \</div>
-<div class="line">        if ((level) &gt;= <a class="code hl_variable" href="../../d7/d7f/log_8h.html#a19f676a79542cdbfd92630689bc3dda2">g_cwist_log_level</a> &amp;&amp; <a class="code hl_variable" href="../../d7/d7f/log_8h.html#a19f676a79542cdbfd92630689bc3dda2">g_cwist_log_level</a> &gt; CWIST_LOG_LEVEL_NONE) { \</div>
+<div class="line">        if ((level) &gt;= <a class="code hl_variable" href="../../d7/d7f/log_8h.html#a19f676a79542cdbfd92630689bc3dda2">g_cwist_log_level</a> &amp;&amp; <a class="code hl_variable" href="../../d7/d7f/log_8h.html#a19f676a79542cdbfd92630689bc3dda2">g_cwist_log_level</a> &gt; <a class="code hl_enumvalue" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4ae9bb7ff42b8507d880c047065923c36e">CWIST_LOG_LEVEL_NONE</a>) { \</div>
 <div class="line">            cwist_log_write((level), fmt, ##__VA_ARGS__); \</div>
 <div class="line">        } \</div>
 <div class="line">    } <span class="keywordflow">while</span> (0)</div>
 <div class="ttc" id="alog_8h_html_a19f676a79542cdbfd92630689bc3dda2"><div class="ttname"><a href="../../d7/d7f/log_8h.html#a19f676a79542cdbfd92630689bc3dda2">g_cwist_log_level</a></div><div class="ttdeci">cwist_macro_log_level_t g_cwist_log_level</div><div class="ttdoc">Global active log level. Set this to control output verbosity.</div><div class="ttdef"><b>Definition</b> <a href="../../d7/df8/log_8c_source.html#l00012">log.c:12</a></div></div>
+<div class="ttc" id="alog_8h_html_a68b665b06cf4ef236c1f63de7b1109e4ae9bb7ff42b8507d880c047065923c36e"><div class="ttname"><a href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4ae9bb7ff42b8507d880c047065923c36e">CWIST_LOG_LEVEL_NONE</a></div><div class="ttdeci">@ CWIST_LOG_LEVEL_NONE</div><div class="ttdef"><b>Definition</b> <a href="../../d7/d7f/log_8h_source.html#l00019">log.h:19</a></div></div>
 </div><!-- fragment -->
 <p>Main logging macro. </p>
 <p>Expands to a level check followed by a function call only when the global level is at or above the requested level. Arguments are NOT evaluated when the level is below threshold. </p>
 
 <p class="definition">Definition at line <a class="el" href="../../d7/d7f/log_8h_source.html#l00042">42</a> of file <a class="el" href="../../d7/d7f/log_8h_source.html">log.h</a>.</p>
+
+</div>
+</div>
+<a id="ab3ddbd4f4218951fead7be63682c1830" name="ab3ddbd4f4218951fead7be63682c1830"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3ddbd4f4218951fead7be63682c1830">&#9670;&#160;</a></span>CWIST_LOG_DEBUG</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_LOG_DEBUG</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">fmt, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td>&#160;&#160;&#160;<a class="el" href="../../d7/d7f/log_8h.html#a66bc16040818fad1c018405eec164ffa">CWIST_LOG</a>(<a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a266d498f15d810518d87b626a2297b09">CWIST_LOG_LEVEL_DEBUG</a>, fmt, ##__VA_ARGS__)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d7/d7f/log_8h_source.html#l00051">51</a> of file <a class="el" href="../../d7/d7f/log_8h_source.html">log.h</a>.</p>
+
+</div>
+</div>
+<a id="a62192d46b09546974ffe5f393e7f3fa7" name="a62192d46b09546974ffe5f393e7f3fa7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a62192d46b09546974ffe5f393e7f3fa7">&#9670;&#160;</a></span>CWIST_LOG_INFO</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_LOG_INFO</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">fmt, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td>&#160;&#160;&#160;<a class="el" href="../../d7/d7f/log_8h.html#a66bc16040818fad1c018405eec164ffa">CWIST_LOG</a>(<a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a317a62dd950f7d13d630d7719a6db5c1">CWIST_LOG_LEVEL_INFO</a>,  fmt, ##__VA_ARGS__)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d7/d7f/log_8h_source.html#l00049">49</a> of file <a class="el" href="../../d7/d7f/log_8h_source.html">log.h</a>.</p>
+
+</div>
+</div>
+<a id="a8ed5f5e90e3811ba6ae8ce8d607da8d1" name="a8ed5f5e90e3811ba6ae8ce8d607da8d1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8ed5f5e90e3811ba6ae8ce8d607da8d1">&#9670;&#160;</a></span>CWIST_LOG_WARN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_LOG_WARN</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">fmt, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td>&#160;&#160;&#160;<a class="el" href="../../d7/d7f/log_8h.html#a66bc16040818fad1c018405eec164ffa">CWIST_LOG</a>(<a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4a7525fdbb73f2d88460d177f1c162aa38">CWIST_LOG_LEVEL_WARN</a>,  fmt, ##__VA_ARGS__)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d7/d7f/log_8h_source.html#l00050">50</a> of file <a class="el" href="../../d7/d7f/log_8h_source.html">log.h</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Enumeration Type Documentation</h2>
+<a id="a68b665b06cf4ef236c1f63de7b1109e4" name="a68b665b06cf4ef236c1f63de7b1109e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a68b665b06cf4ef236c1f63de7b1109e4">&#9670;&#160;</a></span>cwist_macro_log_level_t</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4">cwist_macro_log_level_t</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a68b665b06cf4ef236c1f63de7b1109e4ae9bb7ff42b8507d880c047065923c36e" name="a68b665b06cf4ef236c1f63de7b1109e4ae9bb7ff42b8507d880c047065923c36e"></a>CWIST_LOG_LEVEL_NONE&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a68b665b06cf4ef236c1f63de7b1109e4a266d498f15d810518d87b626a2297b09" name="a68b665b06cf4ef236c1f63de7b1109e4a266d498f15d810518d87b626a2297b09"></a>CWIST_LOG_LEVEL_DEBUG&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a68b665b06cf4ef236c1f63de7b1109e4a317a62dd950f7d13d630d7719a6db5c1" name="a68b665b06cf4ef236c1f63de7b1109e4a317a62dd950f7d13d630d7719a6db5c1"></a>CWIST_LOG_LEVEL_INFO&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a68b665b06cf4ef236c1f63de7b1109e4a7525fdbb73f2d88460d177f1c162aa38" name="a68b665b06cf4ef236c1f63de7b1109e4a7525fdbb73f2d88460d177f1c162aa38"></a>CWIST_LOG_LEVEL_WARN&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+<p class="definition">Definition at line <a class="el" href="../../d7/d7f/log_8h_source.html#l00018">18</a> of file <a class="el" href="../../d7/d7f/log_8h_source.html">log.h</a>.</p>
 
 </div>
 </div>
@@ -188,7 +317,7 @@ cwist_macro_log_level_t&#160;</td><td class="memItemRight" valign="bottom"><b>g_
         <tr>
           <td class="memname">void cwist_log_write </td>
           <td>(</td>
-          <td class="paramtype">cwist_macro_log_level_t&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4">cwist_macro_log_level_t</a>&#160;</td>
           <td class="paramname"><em>level</em>, </td>
         </tr>
         <tr>
@@ -221,6 +350,35 @@ cwist_macro_log_level_t&#160;</td><td class="memItemRight" valign="bottom"><b>g_
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d7/df8/log_8c_source.html#l00014">14</a> of file <a class="el" href="../../d7/df8/log_8c_source.html">log.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d7f/log_8h_source.html#l00020">CWIST_LOG_LEVEL_DEBUG</a>, <a class="el" href="../../d7/d7f/log_8h_source.html#l00021">CWIST_LOG_LEVEL_INFO</a>, and <a class="el" href="../../d7/d7f/log_8h_source.html#l00022">CWIST_LOG_LEVEL_WARN</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Variable Documentation</h2>
+<a id="a19f676a79542cdbfd92630689bc3dda2" name="a19f676a79542cdbfd92630689bc3dda2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19f676a79542cdbfd92630689bc3dda2">&#9670;&#160;</a></span>g_cwist_log_level</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d7/d7f/log_8h.html#a68b665b06cf4ef236c1f63de7b1109e4">cwist_macro_log_level_t</a> g_cwist_log_level</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Global active log level. Set this to control output verbosity. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d7/df8/log_8c_source.html#l00012">12</a> of file <a class="el" href="../../d7/df8/log_8c_source.html">log.c</a>.</p>
 
 </div>
 </div>

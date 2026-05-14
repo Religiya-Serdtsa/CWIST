@@ -76,6 +76,7 @@ $(function() {
 <div class="header">
   <div class="summary">
 <a href="#nested-classes">Classes</a> &#124;
+<a href="#define-members">Macros</a> &#124;
 <a href="#typedef-members">Typedefs</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">app.h File Reference</div></div>
@@ -85,94 +86,95 @@ $(function() {
 <p>Core Application Structure and Lifecycle Management.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="../../d9/dab/net_2http_2http_8h_source.html">cwist/net/http/http.h</a>&gt;</code><br />
-<code>#include &lt;cwist/net/http/https.h&gt;</code><br />
-<code>#include &lt;cwist/core/db/sql.h&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d7/d67/net_2http_2https_8h_source.html">cwist/net/http/https.h</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d0/dae/core_2db_2sql_8h_source.html">cwist/core/db/sql.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="../../d7/da1/sys_2err_2cwist__err_8h_source.html">cwist/sys/err/cwist_err.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="../../da/dec/core_2macros_8h_source.html">cwist/core/macros.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="../../da/d2c/big__dumb__reply_8h_source.html">cwist/sys/app/big_dumb_reply.h</a>&gt;</code><br />
 <code>#include &lt;ttak/mem_tree/mem_tree.h&gt;</code><br />
-<code>#include &lt;cwist/net/websocket/websocket.h&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../dd/dec/net_2websocket_2websocket_8h_source.html">cwist/net/websocket/websocket.h</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for app.h:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../d9/d4a/sys_2app_2app_8h__incl.png" border="0" usemap="#ainclude_2cwist_2sys_2app_2app_8h" alt=""/></div>
 <map name="ainclude_2cwist_2sys_2app_2app_8h" id="ainclude_2cwist_2sys_2app_2app_8h">
-<area shape="rect" title="Core Application Structure and Lifecycle Management." alt="" coords="575,5,736,45"/>
-<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="536,189,689,214"/>
-<area shape="poly" title=" " alt="" coords="647,47,627,94,619,136,616,175,611,174,614,136,622,93,642,45"/>
-<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="323,357,465,397"/>
-<area shape="poly" title=" " alt="" coords="575,29,484,39,434,48,383,63,333,83,287,109,246,142,214,183,204,207,206,232,217,255,235,277,286,318,340,349,338,353,283,322,232,281,213,258,201,233,199,207,209,180,242,138,284,104,331,78,381,58,432,43,483,33,574,24"/>
-<area shape="rect" href="../../d0/dae/core_2db_2sql_8h_source.html" title=" " alt="" coords="5,277,148,302"/>
-<area shape="poly" title=" " alt="" coords="574,31,468,37,349,48,241,67,199,80,169,96,150,113,133,133,108,179,92,225,83,263,78,262,87,224,103,177,129,130,146,109,166,91,197,75,240,62,348,42,468,31,574,26"/>
-<area shape="rect" href="../../d7/d67/net_2http_2https_8h_source.html" title=" " alt="" coords="402,101,562,126"/>
-<area shape="poly" title=" " alt="" coords="618,48,518,97,516,92,616,43"/>
-<area shape="rect" href="../../da/dec/core_2macros_8h.html" title="Convenience size&#45;conversion and utility macros shared across CWIST." alt="" coords="637,101,789,126"/>
-<area shape="poly" title=" " alt="" coords="670,44,699,87,695,90,666,47"/>
-<area shape="rect" href="../../da/d2c/big__dumb__reply_8h.html" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="1158,181,1337,221"/>
-<area shape="poly" title=" " alt="" coords="736,24,857,27,995,37,1062,45,1122,57,1172,72,1208,91,1223,107,1234,127,1246,167,1241,169,1229,129,1219,111,1204,95,1170,77,1121,62,1061,51,995,42,856,32,736,29"/>
-<area shape="rect" title=" " alt="" coords="991,101,1194,126"/>
-<area shape="poly" title=" " alt="" coords="737,40,1022,95,1020,101,736,45"/>
-<area shape="rect" href="../../dd/dec/net_2websocket_2websocket_8h_source.html" title=" " alt="" coords="813,93,967,133"/>
-<area shape="poly" title=" " alt="" coords="708,43,827,86,825,91,706,48"/>
-<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="935,269,1071,309"/>
-<area shape="poly" title=" " alt="" coords="666,211,923,268,922,273,664,217"/>
-<area shape="poly" title=" " alt="" coords="606,216,570,260,517,311,484,334,450,353,447,349,481,330,514,307,566,257,602,212"/>
-<area shape="rect" href="../../d1/d7a/net_2http_2query_8h_source.html" title=" " alt="" coords="490,365,653,390"/>
-<area shape="poly" title=" " alt="" coords="566,217,462,245,419,259,397,271,390,286,391,300,399,313,413,324,454,344,501,359,500,364,452,349,410,329,395,316,386,302,385,285,393,268,417,254,461,240,565,211"/>
-<area shape="poly" title=" " alt="" coords="541,217,162,277,161,272,541,211"/>
-<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="677,357,847,397"/>
-<area shape="poly" title=" " alt="" coords="690,204,724,211,759,224,790,242,816,268,823,288,820,310,809,330,795,349,791,345,805,327,815,308,818,289,812,271,787,246,757,228,723,217,689,209"/>
-<area shape="rect" title=" " alt="" coords="407,277,503,302"/>
-<area shape="poly" title=" " alt="" coords="593,217,490,272,487,268,590,212"/>
-<area shape="rect" title=" " alt="" coords="579,277,681,302"/>
-<area shape="poly" title=" " alt="" coords="618,214,627,262,622,263,612,215"/>
-<area shape="rect" title=" " alt="" coords="706,277,802,302"/>
-<area shape="poly" title=" " alt="" coords="633,212,725,267,722,272,630,216"/>
-<area shape="rect" title=" " alt="" coords="1017,365,1088,390"/>
-<area shape="poly" title=" " alt="" coords="1017,308,1041,351,1037,354,1012,311"/>
-<area shape="rect" title=" " alt="" coords="923,365,993,390"/>
-<area shape="poly" title=" " alt="" coords="996,311,973,353,968,351,991,308"/>
-<area shape="rect" title=" " alt="" coords="757,533,839,559"/>
-<area shape="poly" title=" " alt="" coords="1050,307,1080,328,1103,356,1110,378,1103,399,1079,429,1051,456,1018,478,984,496,915,523,853,539,852,533,913,518,982,491,1016,473,1047,452,1075,426,1098,396,1105,378,1098,359,1076,332,1047,312"/>
-<area shape="poly" title=" " alt="" coords="935,300,735,323,479,360,478,355,734,317,935,295"/>
-<area shape="poly" title=" " alt="" coords="441,395,758,526,756,530,439,400"/>
-<area shape="rect" title=" " alt="" coords="689,453,760,478"/>
-<area shape="poly" title=" " alt="" coords="466,394,677,449,675,454,465,400"/>
-<area shape="rect" title=" " alt="" coords="189,533,300,559"/>
-<area shape="poly" title=" " alt="" coords="359,400,327,420,297,447,272,484,256,521,251,519,268,482,293,444,324,416,356,395"/>
-<area shape="poly" title=" " alt="" coords="593,388,693,443,690,448,591,393"/>
-<area shape="rect" title=" " alt="" coords="437,533,511,559"/>
-<area shape="poly" title=" " alt="" coords="567,391,490,523,485,520,562,389"/>
-<area shape="poly" title=" " alt="" coords="120,300,312,351,310,356,119,305"/>
-<area shape="poly" title=" " alt="" coords="63,304,42,322,23,345,11,371,11,383,15,396,31,421,51,442,98,479,148,507,195,526,193,531,146,512,95,484,47,446,27,424,10,399,6,384,6,370,18,342,38,318,59,300"/>
-<area shape="rect" title=" " alt="" coords="37,365,116,390"/>
-<area shape="poly" title=" " alt="" coords="79,302,79,350,74,350,74,302"/>
-<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="308,445,459,485"/>
-<area shape="poly" title=" " alt="" coords="65,304,46,323,28,348,20,373,21,385,27,396,43,409,69,421,137,439,217,451,294,457,294,463,216,456,136,444,67,426,41,414,23,399,16,386,14,372,24,345,42,320,61,300"/>
-<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="140,365,299,390"/>
-<area shape="poly" title=" " alt="" coords="97,300,190,355,187,360,95,304"/>
-<area shape="poly" title=" " alt="" coords="459,478,744,532,743,537,458,484"/>
-<area shape="poly" title=" " alt="" coords="351,488,278,529,276,524,349,483"/>
-<area shape="poly" title=" " alt="" coords="407,484,452,522,448,526,404,488"/>
-<area shape="poly" title=" " alt="" coords="275,387,368,410,472,443,514,463,555,483,654,512,744,532,743,537,653,517,553,488,511,468,470,448,367,415,274,393"/>
-<area shape="poly" title=" " alt="" coords="224,390,243,519,238,520,218,390"/>
-<area shape="poly" title=" " alt="" coords="243,388,337,437,334,441,240,393"/>
-<area shape="poly" title=" " alt="" coords="769,397,795,519,790,520,764,398"/>
-<area shape="poly" title=" " alt="" coords="756,399,738,441,733,439,751,397"/>
-<area shape="poly" title=" " alt="" coords="501,124,585,179,582,183,498,128"/>
-<area shape="poly" title=" " alt="" coords="487,126,490,171,486,198,475,223,464,235,452,242,427,248,403,253,392,260,383,271,376,288,375,307,383,344,377,345,370,307,371,287,378,268,389,256,401,248,425,242,450,237,461,231,470,220,481,196,485,170,482,126"/>
-<area shape="rect" title=" " alt="" coords="354,189,461,214"/>
-<area shape="poly" title=" " alt="" coords="474,128,429,179,425,176,470,124"/>
-<area shape="rect" title=" " alt="" coords="224,189,329,214"/>
-<area shape="poly" title=" " alt="" coords="455,129,318,186,316,181,453,124"/>
-<area shape="poly" title=" " alt="" coords="1195,224,1070,267,1069,262,1193,219"/>
-<area shape="poly" title=" " alt="" coords="1266,220,1281,242,1293,269,1298,298,1299,329,1291,394,1272,450,1260,472,1248,487,1218,505,1176,519,1125,529,1069,536,952,545,853,548,853,542,952,540,1068,531,1124,524,1175,513,1216,500,1244,483,1256,469,1267,448,1286,393,1294,329,1293,298,1287,270,1276,245,1261,223"/>
-<area shape="poly" title=" " alt="" coords="1237,223,1164,324,1127,373,1102,399,1076,412,1040,423,951,441,774,462,773,457,950,435,1039,417,1074,407,1099,395,1123,370,1160,321,1232,220"/>
-<area shape="rect" title=" " alt="" coords="1214,277,1278,302"/>
-<area shape="poly" title=" " alt="" coords="1250,222,1249,263,1244,263,1244,222"/>
-<area shape="poly" title=" " alt="" coords="830,136,663,187,662,182,828,131"/>
-<area shape="poly" title=" " alt="" coords="928,131,997,173,1035,202,1071,235,1102,271,1123,311,1132,354,1130,376,1125,398,1111,429,1096,451,1077,469,1049,488,1000,511,948,528,898,538,853,544,853,539,897,533,947,523,998,506,1046,483,1073,465,1092,448,1107,426,1119,396,1125,375,1127,354,1118,313,1097,274,1067,238,1032,206,994,178,926,136"/>
-<area shape="poly" title=" " alt="" coords="896,133,903,184,904,253,901,291,893,329,880,365,861,399,843,419,821,434,774,455,772,450,819,430,840,415,857,396,875,363,888,327,895,290,899,252,897,184,891,134"/>
+<area shape="rect" title="Core Application Structure and Lifecycle Management." alt="" coords="528,5,689,45"/>
+<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="613,189,766,214"/>
+<area shape="poly" title=" " alt="" coords="597,47,586,66,577,88,574,111,580,132,592,148,606,161,640,181,638,186,603,165,588,151,575,134,569,111,572,86,581,63,592,44"/>
+<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="324,357,466,397"/>
+<area shape="poly" title=" " alt="" coords="528,40,420,62,374,77,345,95,324,121,310,145,303,170,301,194,304,220,311,247,335,308,347,328,362,346,358,350,342,332,330,311,306,249,299,221,296,195,298,169,305,143,320,118,341,91,372,72,418,57,527,35"/>
+<area shape="rect" href="../../d0/dae/core_2db_2sql_8h.html" title="Database operations wrapper (SQLite3)." alt="" coords="84,277,226,302"/>
+<area shape="poly" title=" " alt="" coords="528,36,451,44,368,57,295,74,267,84,247,95,228,113,212,133,187,180,171,226,162,264,156,262,166,224,182,177,208,131,224,109,244,91,265,79,294,69,367,51,450,39,527,30"/>
+<area shape="rect" href="../../d7/d67/net_2http_2https_8h.html" title="HTTPS/TLS wrapper interface." alt="" coords="355,101,515,126"/>
+<area shape="poly" title=" " alt="" coords="571,48,471,97,469,92,569,43"/>
+<area shape="rect" href="../../da/dec/core_2macros_8h.html" title="Convenience size&#45;conversion and utility macros shared across CWIST." alt="" coords="590,101,742,126"/>
+<area shape="poly" title=" " alt="" coords="623,44,652,87,648,90,619,47"/>
+<area shape="rect" href="../../da/d2c/big__dumb__reply_8h.html" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="1095,181,1274,221"/>
+<area shape="poly" title=" " alt="" coords="689,23,811,25,950,34,1017,43,1077,55,1126,71,1161,91,1174,108,1182,128,1188,167,1183,168,1177,129,1169,111,1157,95,1124,76,1075,60,1016,48,950,39,810,30,689,28"/>
+<area shape="rect" title=" " alt="" coords="944,101,1147,126"/>
+<area shape="poly" title=" " alt="" coords="689,40,974,95,973,101,688,45"/>
+<area shape="rect" href="../../dd/dec/net_2websocket_2websocket_8h.html" title="WebSocket upgrade and frame handling." alt="" coords="766,93,920,133"/>
+<area shape="poly" title=" " alt="" coords="661,43,780,86,778,91,659,48"/>
+<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="978,269,1114,309"/>
+<area shape="poly" title=" " alt="" coords="738,211,965,266,964,271,737,217"/>
+<area shape="poly" title=" " alt="" coords="637,217,541,242,497,257,467,272,449,288,434,307,411,346,406,344,429,304,445,284,464,267,495,252,539,236,636,211"/>
+<area shape="rect" title=" " alt="" coords="826,453,897,478"/>
+<area shape="poly" title=" " alt="" coords="767,210,820,231,843,247,862,268,874,289,881,312,885,359,880,404,872,440,867,439,875,403,880,359,876,313,869,291,858,271,840,251,817,235,765,215"/>
+<area shape="rect" href="../../d1/d7a/net_2http_2query_8h.html" title="Query string parser and map." alt="" coords="491,365,654,390"/>
+<area shape="poly" title=" " alt="" coords="645,217,544,245,502,259,481,271,476,282,475,294,487,317,511,338,538,356,535,360,507,342,483,320,470,295,470,281,477,268,500,255,542,240,643,211"/>
+<area shape="poly" title=" " alt="" coords="639,217,602,224,408,256,240,280,239,274,407,250,601,219,638,211"/>
+<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="678,357,848,397"/>
+<area shape="poly" title=" " alt="" coords="634,217,550,240,515,255,494,271,487,289,494,307,553,326,665,352,663,357,551,331,490,311,482,290,490,268,513,250,549,235,633,211"/>
+<area shape="rect" title=" " alt="" coords="504,277,600,302"/>
+<area shape="poly" title=" " alt="" coords="672,216,584,272,581,267,670,212"/>
+<area shape="rect" title=" " alt="" coords="625,277,728,302"/>
+<area shape="poly" title=" " alt="" coords="690,215,683,263,678,262,685,214"/>
+<area shape="rect" title=" " alt="" coords="752,277,848,302"/>
+<area shape="poly" title=" " alt="" coords="706,212,776,266,773,270,703,216"/>
+<area shape="rect" title=" " alt="" coords="974,365,1045,390"/>
+<area shape="poly" title=" " alt="" coords="1040,311,1022,353,1017,351,1035,309"/>
+<area shape="rect" title=" " alt="" coords="1069,365,1140,390"/>
+<area shape="poly" title=" " alt="" coords="1061,308,1091,351,1086,354,1056,311"/>
+<area shape="rect" title=" " alt="" coords="722,533,804,559"/>
+<area shape="poly" title=" " alt="" coords="1098,307,1130,327,1155,356,1162,378,1155,399,1121,437,1082,468,1037,492,990,511,943,525,897,535,818,545,817,540,896,530,942,520,989,506,1035,487,1079,463,1118,433,1150,396,1157,378,1150,359,1126,331,1095,312"/>
+<area shape="poly" title=" " alt="" coords="977,300,725,328,480,360,479,355,725,323,977,295"/>
+<area shape="poly" title=" " alt="" coords="438,395,726,525,724,530,435,400"/>
+<area shape="poly" title=" " alt="" coords="467,392,479,395,813,454,812,459,478,400,466,397"/>
+<area shape="rect" title=" " alt="" coords="190,533,301,559"/>
+<area shape="poly" title=" " alt="" coords="360,400,328,420,298,447,273,484,257,521,252,519,269,482,294,444,325,416,357,395"/>
+<area shape="poly" title=" " alt="" coords="612,388,814,447,812,452,611,393"/>
+<area shape="rect" title=" " alt="" coords="440,533,515,559"/>
+<area shape="poly" title=" " alt="" coords="568,391,493,523,488,520,563,389"/>
+<area shape="poly" title=" " alt="" coords="188,300,330,350,328,355,186,305"/>
+<area shape="poly" title=" " alt="" coords="98,305,51,325,31,340,15,359,8,377,15,396,31,421,51,442,98,479,148,507,195,526,193,531,146,512,95,484,47,446,27,424,10,399,3,377,10,356,27,336,49,320,96,300"/>
+<area shape="rect" title=" " alt="" coords="38,365,117,390"/>
+<area shape="poly" title=" " alt="" coords="146,304,99,356,95,352,143,300"/>
+<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="309,445,460,485"/>
+<area shape="poly" title=" " alt="" coords="121,305,81,321,43,343,30,356,22,369,21,382,28,396,44,409,69,421,138,439,218,451,295,457,295,463,217,456,137,444,68,426,42,414,24,399,15,383,17,367,26,352,40,339,79,316,119,300"/>
+<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="141,365,300,390"/>
+<area shape="poly" title=" " alt="" coords="166,301,205,352,201,355,162,304"/>
+<area shape="poly" title=" " alt="" coords="461,480,709,531,708,536,459,485"/>
+<area shape="poly" title=" " alt="" coords="352,488,279,529,277,524,350,483"/>
+<area shape="poly" title=" " alt="" coords="409,484,455,522,451,526,405,488"/>
+<area shape="poly" title=" " alt="" coords="270,387,381,415,473,443,508,463,541,483,628,512,708,532,707,537,627,517,539,488,505,468,471,448,380,420,269,393"/>
+<area shape="poly" title=" " alt="" coords="225,390,244,519,239,520,219,390"/>
+<area shape="poly" title=" " alt="" coords="244,388,337,437,335,441,241,393"/>
+<area shape="poly" title=" " alt="" coords="766,398,766,520,760,520,760,398"/>
+<area shape="poly" title=" " alt="" coords="787,396,839,441,836,445,783,400"/>
+<area shape="poly" title=" " alt="" coords="470,124,643,182,642,187,468,129"/>
+<area shape="poly" title=" " alt="" coords="407,128,371,150,355,165,343,183,335,203,333,224,339,268,356,310,375,344,371,347,351,312,334,270,327,224,330,202,338,180,351,161,368,146,405,124"/>
+<area shape="rect" title=" " alt="" coords="352,189,459,214"/>
+<area shape="poly" title=" " alt="" coords="433,127,417,176,412,174,428,125"/>
+<area shape="rect" title=" " alt="" coords="484,189,589,214"/>
+<area shape="poly" title=" " alt="" coords="450,124,513,177,510,181,447,128"/>
+<area shape="poly" title=" " alt="" coords="1155,224,1089,265,1086,260,1152,219"/>
+<area shape="poly" title=" " alt="" coords="1221,219,1247,240,1268,268,1274,289,1268,310,1237,374,1203,418,1158,453,1096,488,1025,517,949,535,878,544,818,548,818,542,877,539,948,530,1023,512,1094,483,1155,448,1199,414,1233,371,1263,308,1268,289,1263,270,1244,244,1218,224"/>
+<area shape="poly" title=" " alt="" coords="1185,222,1173,322,1164,372,1154,399,1137,412,1112,423,1048,441,976,454,911,462,911,457,975,448,1047,436,1110,418,1134,407,1150,396,1159,370,1167,322,1180,221"/>
+<area shape="rect" title=" " alt="" coords="1190,277,1254,302"/>
+<area shape="poly" title=" " alt="" coords="1195,221,1213,263,1208,265,1190,223"/>
+<area shape="poly" title=" " alt="" coords="811,136,723,184,720,180,808,131"/>
+<area shape="poly" title=" " alt="" coords="921,129,933,131,1011,137,1114,143,1214,154,1256,164,1287,179,1315,202,1332,225,1342,253,1344,288,1344,379,1340,399,1327,418,1307,435,1281,450,1215,477,1135,498,1048,515,961,528,818,543,818,538,961,523,1047,510,1134,493,1213,472,1279,446,1304,431,1323,414,1335,397,1339,378,1339,288,1336,254,1328,227,1311,205,1284,184,1254,169,1214,159,1114,148,1011,143,932,136,920,134"/>
+<area shape="poly" title=" " alt="" coords="855,132,875,179,896,245,908,321,908,360,901,398,892,422,880,443,876,440,888,420,896,397,903,359,903,321,891,246,870,181,850,134"/>
 </map>
 </div>
 </div><div class="textblock"><div class="dynheader">
@@ -181,17 +183,17 @@ This graph shows which files directly or indirectly include this file:</div>
 <div class="center"><img src="../../da/d35/sys_2app_2app_8h__dep__incl.png" border="0" usemap="#ainclude_2cwist_2sys_2app_2app_8hdep" alt=""/></div>
 <map name="ainclude_2cwist_2sys_2app_2app_8hdep" id="ainclude_2cwist_2sys_2app_2app_8hdep">
 <area shape="rect" title="Core Application Structure and Lifecycle Management." alt="" coords="471,5,633,45"/>
-<area shape="rect" href="../../d5/da9/net_2http_2mux_8h_source.html" title=" " alt="" coords="5,93,168,133"/>
+<area shape="rect" href="../../d5/da9/net_2http_2mux_8h.html" title="HTTP request multiplexer (router)." alt="" coords="5,93,168,133"/>
 <area shape="poly" title=" " alt="" coords="458,46,180,96,169,98,168,93,180,91,457,40"/>
 <area shape="rect" href="../../dc/d81/ech_8h.html" title="ech.h interface." alt="" coords="192,93,355,133"/>
 <area shape="poly" title=" " alt="" coords="479,52,335,96,334,91,477,47"/>
 <area shape="rect" href="../../df/d4c/compress_8h.html" title="Compression middleware with swappable backend interface." alt="" coords="379,93,541,133"/>
 <area shape="poly" title=" " alt="" coords="524,57,482,95,479,91,520,53"/>
-<area shape="rect" href="../../d3/d30/sys_2app_2middleware_8h_source.html" title=" " alt="" coords="565,93,726,133"/>
+<area shape="rect" href="../../d3/d30/sys_2app_2middleware_8h.html" title="Built&#45;in middleware factories." alt="" coords="565,93,726,133"/>
 <area shape="poly" title=" " alt="" coords="585,53,626,91,623,95,581,57"/>
 <area shape="rect" href="../../db/de3/test__client_8h.html" title="In&#45;process HTTP test client (ala Flask test_client)." alt="" coords="750,93,911,133"/>
 <area shape="poly" title=" " alt="" coords="627,47,770,91,769,96,625,52"/>
-<area shape="rect" href="../../df/d7f/app_8c_source.html" title=" " alt="" coords="935,101,1070,126"/>
+<area shape="rect" href="../../df/d7f/app_8c.html" title=" " alt="" coords="935,101,1070,126"/>
 <area shape="poly" title=" " alt="" coords="646,39,925,91,957,98,956,103,923,96,646,45"/>
 <area shape="rect" href="../../dd/d49/mux_8c.html" title="Fixed&#45;bucket HTTP route dispatch using a lightweight path signature." alt="" coords="17,181,157,207"/>
 <area shape="poly" title=" " alt="" coords="89,147,89,181,84,181,84,147"/>
@@ -210,6 +212,8 @@ This graph shows which files directly or indirectly include this file:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/d50/structcwist__error__handler__entry.html">cwist_error_handler_entry</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d8/d41/structcwist__middleware__node.html">cwist_middleware_node</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Linked list node for middleware chain.  <a href="../../d8/d41/structcwist__middleware__node.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -223,26 +227,46 @@ Classes</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fixed Server Memory Manager.  <a href="../../d7/dba/structcwist__fix__server__mem.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:ae4fbda08ca2d1faad5cb98592d396b83" id="r_ae4fbda08ca2d1faad5cb98592d396b83"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ae4fbda08ca2d1faad5cb98592d396b83">cwist_use_https2</a>(enabled)&#160;&#160;&#160;<a class="el" href="../../d0/d77/sys_2app_2app_8h.html#aad2e21f9e5d7a675696bcd15456e299c">cwist_app_use_https2</a>((app), (enabled))</td></tr>
+<tr class="separator:ae4fbda08ca2d1faad5cb98592d396b83"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a952eb3563a617cb445ecbd354e40e85d" id="r_a952eb3563a617cb445ecbd354e40e85d"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a952eb3563a617cb445ecbd354e40e85d">cwist_use_https3</a>(enabled)&#160;&#160;&#160;<a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ae25776f28fe20124440a2aabba50f2d1">cwist_app_use_https3</a>((app), (enabled))</td></tr>
+<tr class="separator:a952eb3563a617cb445ecbd354e40e85d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a489a2b1d588c417fb1925f12ea89facb" id="r_a489a2b1d588c417fb1925f12ea89facb"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a489a2b1d588c417fb1925f12ea89facb">cwist_use_http2</a>(enabled)&#160;&#160;&#160;<a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a98600c9c267a433596a5658fe533070a">cwist_app_use_http2</a>((app), (enabled))</td></tr>
+<tr class="separator:a489a2b1d588c417fb1925f12ea89facb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a73c2532c98a7b0a78113fc1b8e2a37aa" id="r_a73c2532c98a7b0a78113fc1b8e2a37aa"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a73c2532c98a7b0a78113fc1b8e2a37aa">cwist_use_http3</a>(enabled)&#160;&#160;&#160;<a class="el" href="../../d0/d77/sys_2app_2app_8h.html#aa68a9c9cf46732d9a03efe9b4e308223">cwist_app_use_http3</a>((app), (enabled))</td></tr>
+<tr class="separator:a73c2532c98a7b0a78113fc1b8e2a37aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
-<tr class="memitem:a2a3910c6b268a4a04e17075671a4c28c" id="r_a2a3910c6b268a4a04e17075671a4c28c"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>) (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td></tr>
+<tr class="memitem:a2a3910c6b268a4a04e17075671a4c28c" id="r_a2a3910c6b268a4a04e17075671a4c28c"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>) (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td></tr>
 <tr class="memdesc:a2a3910c6b268a4a04e17075671a4c28c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Function pointer type for HTTP route handlers.  <br /></td></tr>
 <tr class="separator:a2a3910c6b268a4a04e17075671a4c28c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a508eb4f8e21cff382280b9f85fb0e50f" id="r_a508eb4f8e21cff382280b9f85fb0e50f"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a508eb4f8e21cff382280b9f85fb0e50f">cwist_ws_handler_func</a>) (cwist_websocket *ws)</td></tr>
+<tr class="memitem:a508eb4f8e21cff382280b9f85fb0e50f" id="r_a508eb4f8e21cff382280b9f85fb0e50f"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a508eb4f8e21cff382280b9f85fb0e50f">cwist_ws_handler_func</a>) (<a class="el" href="../../d9/d2c/structcwist__websocket.html">cwist_websocket</a> *ws)</td></tr>
 <tr class="memdesc:a508eb4f8e21cff382280b9f85fb0e50f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Function pointer type for WebSocket handlers.  <br /></td></tr>
 <tr class="separator:a508eb4f8e21cff382280b9f85fb0e50f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4a959ba2ce5cc90417d86a61040d830e" id="r_a4a959ba2ce5cc90417d86a61040d830e"><td class="memItemLeft" align="right" valign="top"><a id="a4a959ba2ce5cc90417d86a61040d830e" name="a4a959ba2ce5cc90417d86a61040d830e"></a>
-typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_error_handler_func</b>) (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_http_status_t status)</td></tr>
-<tr class="memdesc:a4a959ba2ce5cc90417d86a61040d830e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Function pointer type for error handlers. <br /></td></tr>
+<tr class="memitem:a4a959ba2ce5cc90417d86a61040d830e" id="r_a4a959ba2ce5cc90417d86a61040d830e"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a4a959ba2ce5cc90417d86a61040d830e">cwist_error_handler_func</a>) (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../dd/d56/http_8h.html#a99b5ad0e71431205a397a336983f4f4d">cwist_http_status_t</a> status)</td></tr>
+<tr class="memdesc:a4a959ba2ce5cc90417d86a61040d830e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Function pointer type for error handlers.  <br /></td></tr>
 <tr class="separator:a4a959ba2ce5cc90417d86a61040d830e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab61e763134014868b93ec963af056f91" id="r_ab61e763134014868b93ec963af056f91"><td class="memItemLeft" align="right" valign="top"><a id="ab61e763134014868b93ec963af056f91" name="ab61e763134014868b93ec963af056f91"></a>
-typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_middleware_func</b>) (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
-<tr class="memdesc:ab61e763134014868b93ec963af056f91"><td class="mdescLeft">&#160;</td><td class="mdescRight">Middleware type that receives req/res pair and the next stage in the chain. <br /></td></tr>
+<tr class="memitem:a85aa22d00105586a47d729dbabd1cc27" id="r_a85aa22d00105586a47d729dbabd1cc27"><td class="memItemLeft" align="right" valign="top">typedef struct <a class="el" href="../../d3/d50/structcwist__error__handler__entry.html">cwist_error_handler_entry</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a85aa22d00105586a47d729dbabd1cc27">cwist_error_handler_entry</a></td></tr>
+<tr class="separator:a85aa22d00105586a47d729dbabd1cc27"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab61e763134014868b93ec963af056f91" id="r_ab61e763134014868b93ec963af056f91"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>) (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> next)</td></tr>
+<tr class="memdesc:ab61e763134014868b93ec963af056f91"><td class="mdescLeft">&#160;</td><td class="mdescRight">Middleware type that receives req/res pair and the next stage in the chain.  <br /></td></tr>
 <tr class="separator:ab61e763134014868b93ec963af056f91"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab806dc915d7cbf3944c5f82898954d67" id="r_ab806dc915d7cbf3944c5f82898954d67"><td class="memItemLeft" align="right" valign="top"><a id="ab806dc915d7cbf3944c5f82898954d67" name="ab806dc915d7cbf3944c5f82898954d67"></a>
-typedef struct <a class="el" href="../../d8/d41/structcwist__middleware__node.html">cwist_middleware_node</a>&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_middleware_node</b></td></tr>
-<tr class="memdesc:ab806dc915d7cbf3944c5f82898954d67"><td class="mdescLeft">&#160;</td><td class="mdescRight">Linked list node for middleware chain. <br /></td></tr>
+<tr class="memitem:ad07a9cee6f8d036cb1d01ff604f22716" id="r_ad07a9cee6f8d036cb1d01ff604f22716"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ad07a9cee6f8d036cb1d01ff604f22716">cwist_https_request_handler_func</a>) (<a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *<a class="el" href="../../de/daf/http3_8c.html#afb6ee3e803640571d374623bbd936e7b">conn</a>, void *ctx)</td></tr>
+<tr class="separator:ad07a9cee6f8d036cb1d01ff604f22716"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab806dc915d7cbf3944c5f82898954d67" id="r_ab806dc915d7cbf3944c5f82898954d67"><td class="memItemLeft" align="right" valign="top">typedef struct <a class="el" href="../../d8/d41/structcwist__middleware__node.html">cwist_middleware_node</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ab806dc915d7cbf3944c5f82898954d67">cwist_middleware_node</a></td></tr>
+<tr class="memdesc:ab806dc915d7cbf3944c5f82898954d67"><td class="mdescLeft">&#160;</td><td class="mdescRight">Linked list node for middleware chain.  <br /></td></tr>
 <tr class="separator:ab806dc915d7cbf3944c5f82898954d67"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9c476b4b678429cd9ecd188fdbb7600e" id="r_a9c476b4b678429cd9ecd188fdbb7600e"><td class="memItemLeft" align="right" valign="top">typedef struct cwist_route_table&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a9c476b4b678429cd9ecd188fdbb7600e">cwist_route_table</a></td></tr>
+<tr class="separator:a9c476b4b678429cd9ecd188fdbb7600e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afe3526e737ac5cee98bd862fb23e6702" id="r_afe3526e737ac5cee98bd862fb23e6702"><td class="memItemLeft" align="right" valign="top">typedef struct cwist_static_dir&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#afe3526e737ac5cee98bd862fb23e6702">cwist_static_dir</a></td></tr>
+<tr class="separator:afe3526e737ac5cee98bd862fb23e6702"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4ea984510af4527950e237b29b604d0f" id="r_a4ea984510af4527950e237b29b604d0f"><td class="memItemLeft" align="right" valign="top">typedef struct <a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a4ea984510af4527950e237b29b604d0f">cwist_config</a></td></tr>
+<tr class="separator:a4ea984510af4527950e237b29b604d0f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a24c2c48ea3d2df790594088c2f47f695" id="r_a24c2c48ea3d2df790594088c2f47f695"><td class="memItemLeft" align="right" valign="top">typedef struct <a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a24c2c48ea3d2df790594088c2f47f695">cwist_logger</a></td></tr>
+<tr class="separator:a24c2c48ea3d2df790594088c2f47f695"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a73f89cc6dd1b2df889d0e1987c179c83" id="r_a73f89cc6dd1b2df889d0e1987c179c83"><td class="memItemLeft" align="right" valign="top">typedef struct <a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a73f89cc6dd1b2df889d0e1987c179c83">cwist_app</a></td></tr>
 <tr class="memdesc:a73f89cc6dd1b2df889d0e1987c179c83"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main Application Context.  <br /></td></tr>
 <tr class="separator:a73f89cc6dd1b2df889d0e1987c179c83"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -270,6 +294,10 @@ Functions</h2></td></tr>
 <tr class="memitem:af780881525511196767c3e61e69c652c" id="r_af780881525511196767c3e61e69c652c"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#af780881525511196767c3e61e69c652c">cwist_app_use_https</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *cert_path, const char *key_path)</td></tr>
 <tr class="memdesc:af780881525511196767c3e61e69c652c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable TLS for the application using the supplied certificate pair.  <br /></td></tr>
 <tr class="separator:af780881525511196767c3e61e69c652c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aad2e21f9e5d7a675696bcd15456e299c" id="r_aad2e21f9e5d7a675696bcd15456e299c"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#aad2e21f9e5d7a675696bcd15456e299c">cwist_app_use_https2</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, bool enabled)</td></tr>
+<tr class="separator:aad2e21f9e5d7a675696bcd15456e299c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae25776f28fe20124440a2aabba50f2d1" id="r_ae25776f28fe20124440a2aabba50f2d1"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ae25776f28fe20124440a2aabba50f2d1">cwist_app_use_https3</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, bool enabled)</td></tr>
+<tr class="separator:ae25776f28fe20124440a2aabba50f2d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a98600c9c267a433596a5658fe533070a" id="r_a98600c9c267a433596a5658fe533070a"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a98600c9c267a433596a5658fe533070a">cwist_app_use_http2</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, bool enabled)</td></tr>
 <tr class="memdesc:a98600c9c267a433596a5658fe533070a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable HTTP/2 cleartext (h2c) over standard TCP.  <br /></td></tr>
 <tr class="separator:a98600c9c267a433596a5658fe533070a"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -285,37 +313,44 @@ Functions</h2></td></tr>
 <tr class="memitem:af87347ebdea5e8226c86ae8965fa23e1" id="r_af87347ebdea5e8226c86ae8965fa23e1"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#af87347ebdea5e8226c86ae8965fa23e1">cwist_app_get_db</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app)</td></tr>
 <tr class="memdesc:af87347ebdea5e8226c86ae8965fa23e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the active shared database wrapper for the application.  <br /></td></tr>
 <tr class="separator:af87347ebdea5e8226c86ae8965fa23e1"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab3ca8957a5373a7a4fb845e6546b861e" id="r_ab3ca8957a5373a7a4fb845e6546b861e"><td class="memItemLeft" align="right" valign="top"><a id="ab3ca8957a5373a7a4fb845e6546b861e" name="ab3ca8957a5373a7a4fb845e6546b861e"></a>
-void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td></tr>
-<tr class="memdesc:ab3ca8957a5373a7a4fb845e6546b861e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch a request internally through the app's router and middleware. Used by the test client and advanced integrations. <br /></td></tr>
+<tr class="memitem:ab3ca8957a5373a7a4fb845e6546b861e" id="r_ab3ca8957a5373a7a4fb845e6546b861e"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ab3ca8957a5373a7a4fb845e6546b861e">cwist_app_dispatch</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, <a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td></tr>
+<tr class="memdesc:ab3ca8957a5373a7a4fb845e6546b861e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch a request internally through the app's router and middleware. Used by the test client and advanced integrations.  <br /></td></tr>
 <tr class="separator:ab3ca8957a5373a7a4fb845e6546b861e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr><td colspan="2"><div class="groupHeader">Middleware</div></td></tr>
 <tr class="memitem:a88046a9e7f5c0f069c94aefd233dd815" id="r_a88046a9e7f5c0f069c94aefd233dd815"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a88046a9e7f5c0f069c94aefd233dd815">cwist_app_use</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, <a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a> mw)</td></tr>
 <tr class="memdesc:a88046a9e7f5c0f069c94aefd233dd815"><td class="mdescLeft">&#160;</td><td class="mdescRight">Append a middleware callback to the application's execution chain.  <br /></td></tr>
 <tr class="separator:a88046a9e7f5c0f069c94aefd233dd815"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr><td colspan="2"><div class="groupHeader">Error Handling Configuration</div></td></tr>
-<tr class="memitem:a68f4bc844fdc341542d87618820f557b" id="r_a68f4bc844fdc341542d87618820f557b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a68f4bc844fdc341542d87618820f557b">cwist_app_set_error_handler</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, cwist_error_handler_func handler)</td></tr>
+<tr class="memitem:a68f4bc844fdc341542d87618820f557b" id="r_a68f4bc844fdc341542d87618820f557b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a68f4bc844fdc341542d87618820f557b">cwist_app_set_error_handler</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, <a class="el" href="../../d2/d39/app_8h.html#a4a959ba2ce5cc90417d86a61040d830e">cwist_error_handler_func</a> handler)</td></tr>
 <tr class="memdesc:a68f4bc844fdc341542d87618820f557b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install a custom HTTP error callback.  <br /></td></tr>
 <tr class="separator:a68f4bc844fdc341542d87618820f557b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad2573d05d5993c37abecdda9cfe0ae1c" id="r_ad2573d05d5993c37abecdda9cfe0ae1c"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ad2573d05d5993c37abecdda9cfe0ae1c">cwist_app_register_error_handler</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, <a class="el" href="../../dd/d56/http_8h.html#a99b5ad0e71431205a397a336983f4f4d">cwist_http_status_t</a> status, <a class="el" href="../../d2/d39/app_8h.html#a4a959ba2ce5cc90417d86a61040d830e">cwist_error_handler_func</a> handler)</td></tr>
+<tr class="separator:ad2573d05d5993c37abecdda9cfe0ae1c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr><td colspan="2"><div class="groupHeader">Routing</div></td></tr>
-<tr class="memitem:a2e05d7cf1fd66d956d6928d465c3aa72" id="r_a2e05d7cf1fd66d956d6928d465c3aa72"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a2e05d7cf1fd66d956d6928d465c3aa72">cwist_app_get</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, cwist_handler_func handler)</td></tr>
+<tr class="memitem:a2e05d7cf1fd66d956d6928d465c3aa72" id="r_a2e05d7cf1fd66d956d6928d465c3aa72"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a2e05d7cf1fd66d956d6928d465c3aa72">cwist_app_get</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> handler)</td></tr>
 <tr class="memdesc:a2e05d7cf1fd66d956d6928d465c3aa72"><td class="mdescLeft">&#160;</td><td class="mdescRight">Registers a GET route handler.  <br /></td></tr>
 <tr class="separator:a2e05d7cf1fd66d956d6928d465c3aa72"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a556c24cde3276a70fb9772a727f7e66e" id="r_a556c24cde3276a70fb9772a727f7e66e"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a556c24cde3276a70fb9772a727f7e66e">cwist_app_post</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, cwist_handler_func handler)</td></tr>
+<tr class="memitem:a556c24cde3276a70fb9772a727f7e66e" id="r_a556c24cde3276a70fb9772a727f7e66e"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a556c24cde3276a70fb9772a727f7e66e">cwist_app_post</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> handler)</td></tr>
 <tr class="memdesc:a556c24cde3276a70fb9772a727f7e66e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a POST handler with default endpoint options.  <br /></td></tr>
 <tr class="separator:a556c24cde3276a70fb9772a727f7e66e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae4d097319d239ddd750eebffd027ccef" id="r_ae4d097319d239ddd750eebffd027ccef"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ae4d097319d239ddd750eebffd027ccef">cwist_app_ws</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, cwist_ws_handler_func handler)</td></tr>
+<tr class="memitem:ae4d097319d239ddd750eebffd027ccef" id="r_ae4d097319d239ddd750eebffd027ccef"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ae4d097319d239ddd750eebffd027ccef">cwist_app_ws</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, <a class="el" href="../../d2/d39/app_8h.html#a508eb4f8e21cff382280b9f85fb0e50f">cwist_ws_handler_func</a> handler)</td></tr>
 <tr class="memdesc:ae4d097319d239ddd750eebffd027ccef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a WebSocket upgrade endpoint with default options.  <br /></td></tr>
 <tr class="separator:ae4d097319d239ddd750eebffd027ccef"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6138ea6fbd0a6c5dac3c3c331bb3e2c3" id="r_a6138ea6fbd0a6c5dac3c3c331bb3e2c3"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a6138ea6fbd0a6c5dac3c3c331bb3e2c3">cwist_app_get_opt</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, cwist_handler_func handler, <a class="el" href="../../de/d66/endpoint__opts_8h.html#a00dc64c06f8d5300f53642d690592f78">cwist_endpoint_opt_t</a> opts)</td></tr>
+<tr class="memitem:a6138ea6fbd0a6c5dac3c3c331bb3e2c3" id="r_a6138ea6fbd0a6c5dac3c3c331bb3e2c3"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a6138ea6fbd0a6c5dac3c3c331bb3e2c3">cwist_app_get_opt</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> handler, <a class="el" href="../../de/d66/endpoint__opts_8h.html#a00dc64c06f8d5300f53642d690592f78">cwist_endpoint_opt_t</a> opts)</td></tr>
 <tr class="memdesc:a6138ea6fbd0a6c5dac3c3c331bb3e2c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a GET handler with explicit endpoint options.  <br /></td></tr>
 <tr class="separator:a6138ea6fbd0a6c5dac3c3c331bb3e2c3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a70fe558f52eccb087e50cecd4892eea3" id="r_a70fe558f52eccb087e50cecd4892eea3"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a70fe558f52eccb087e50cecd4892eea3">cwist_app_post_opt</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, cwist_handler_func handler, <a class="el" href="../../de/d66/endpoint__opts_8h.html#a00dc64c06f8d5300f53642d690592f78">cwist_endpoint_opt_t</a> opts)</td></tr>
+<tr class="memitem:a70fe558f52eccb087e50cecd4892eea3" id="r_a70fe558f52eccb087e50cecd4892eea3"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a70fe558f52eccb087e50cecd4892eea3">cwist_app_post_opt</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> handler, <a class="el" href="../../de/d66/endpoint__opts_8h.html#a00dc64c06f8d5300f53642d690592f78">cwist_endpoint_opt_t</a> opts)</td></tr>
 <tr class="memdesc:a70fe558f52eccb087e50cecd4892eea3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a POST handler with explicit endpoint options.  <br /></td></tr>
 <tr class="separator:a70fe558f52eccb087e50cecd4892eea3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1da92dc3fdc2d84d892409a710572cc6" id="r_a1da92dc3fdc2d84d892409a710572cc6"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a1da92dc3fdc2d84d892409a710572cc6">cwist_app_ws_opt</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, cwist_ws_handler_func handler, <a class="el" href="../../de/d66/endpoint__opts_8h.html#a00dc64c06f8d5300f53642d690592f78">cwist_endpoint_opt_t</a> opts)</td></tr>
+<tr class="memitem:a1da92dc3fdc2d84d892409a710572cc6" id="r_a1da92dc3fdc2d84d892409a710572cc6"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a1da92dc3fdc2d84d892409a710572cc6">cwist_app_ws_opt</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, <a class="el" href="../../d2/d39/app_8h.html#a508eb4f8e21cff382280b9f85fb0e50f">cwist_ws_handler_func</a> handler, <a class="el" href="../../de/d66/endpoint__opts_8h.html#a00dc64c06f8d5300f53642d690592f78">cwist_endpoint_opt_t</a> opts)</td></tr>
 <tr class="memdesc:a1da92dc3fdc2d84d892409a710572cc6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a WebSocket route with explicit endpoint options.  <br /></td></tr>
 <tr class="separator:a1da92dc3fdc2d84d892409a710572cc6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8c20ea5506a10ba110b5509e48392844" id="r_a8c20ea5506a10ba110b5509e48392844"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a8c20ea5506a10ba110b5509e48392844">cwist_app_get_named</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, const char *name, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> handler)</td></tr>
+<tr class="separator:a8c20ea5506a10ba110b5509e48392844"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a280d0c2387ed9489534a2c28b63350a7" id="r_a280d0c2387ed9489534a2c28b63350a7"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a280d0c2387ed9489534a2c28b63350a7">cwist_app_post_named</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *path, const char *name, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> handler)</td></tr>
+<tr class="separator:a280d0c2387ed9489534a2c28b63350a7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a32c8cd6a55ac3a91e4a04cba6d556072" id="r_a32c8cd6a55ac3a91e4a04cba6d556072"><td class="memItemLeft" align="right" valign="top">char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a32c8cd6a55ac3a91e4a04cba6d556072">cwist_url_for</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *name, <a class="el" href="../../dd/d72/structcwist__query__map.html">cwist_query_map</a> *params)</td></tr>
+<tr class="separator:a32c8cd6a55ac3a91e4a04cba6d556072"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a20e28e85252e5fb13c3fff2c07639f21" id="r_a20e28e85252e5fb13c3fff2c07639f21"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a20e28e85252e5fb13c3fff2c07639f21">cwist_app_static</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, const char *url_prefix, const char *directory)</td></tr>
 <tr class="memdesc:a20e28e85252e5fb13c3fff2c07639f21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Serves a directory of static files at a URL prefix. Files are loaded into the fixed memory pool for Zero-Copy serving.  <br /></td></tr>
 <tr class="separator:a20e28e85252e5fb13c3fff2c07639f21"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -328,7 +363,88 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 <div class="textblock"><p>Core Application Structure and Lifecycle Management. </p>
 
 <p class="definition">Definition in file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
-</div><h2 class="groupheader">Typedef Documentation</h2>
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a489a2b1d588c417fb1925f12ea89facb" name="a489a2b1d588c417fb1925f12ea89facb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a489a2b1d588c417fb1925f12ea89facb">&#9670;&#160;</a></span>cwist_use_http2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define cwist_use_http2</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">enabled</td><td>)</td>
+          <td>&#160;&#160;&#160;<a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a98600c9c267a433596a5658fe533070a">cwist_app_use_http2</a>((app), (enabled))</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00210">210</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<a id="a73c2532c98a7b0a78113fc1b8e2a37aa" name="a73c2532c98a7b0a78113fc1b8e2a37aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73c2532c98a7b0a78113fc1b8e2a37aa">&#9670;&#160;</a></span>cwist_use_http3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define cwist_use_http3</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">enabled</td><td>)</td>
+          <td>&#160;&#160;&#160;<a class="el" href="../../d0/d77/sys_2app_2app_8h.html#aa68a9c9cf46732d9a03efe9b4e308223">cwist_app_use_http3</a>((app), (enabled))</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00211">211</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<a id="ae4fbda08ca2d1faad5cb98592d396b83" name="ae4fbda08ca2d1faad5cb98592d396b83"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4fbda08ca2d1faad5cb98592d396b83">&#9670;&#160;</a></span>cwist_use_https2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define cwist_use_https2</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">enabled</td><td>)</td>
+          <td>&#160;&#160;&#160;<a class="el" href="../../d0/d77/sys_2app_2app_8h.html#aad2e21f9e5d7a675696bcd15456e299c">cwist_app_use_https2</a>((app), (enabled))</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00208">208</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<a id="a952eb3563a617cb445ecbd354e40e85d" name="a952eb3563a617cb445ecbd354e40e85d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a952eb3563a617cb445ecbd354e40e85d">&#9670;&#160;</a></span>cwist_use_https3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define cwist_use_https3</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">enabled</td><td>)</td>
+          <td>&#160;&#160;&#160;<a class="el" href="../../d0/d77/sys_2app_2app_8h.html#ae25776f28fe20124440a2aabba50f2d1">cwist_app_use_https3</a>((app), (enabled))</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00209">209</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Typedef Documentation</h2>
 <a id="a73f89cc6dd1b2df889d0e1987c179c83" name="a73f89cc6dd1b2df889d0e1987c179c83"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a73f89cc6dd1b2df889d0e1987c179c83">&#9670;&#160;</a></span>cwist_app</h2>
 
@@ -343,6 +459,54 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p>Main Application Context. </p>
 <p>Manages routing, middleware, database connections, memory pools, and caching strategies (BDR). </p>
+
+</div>
+</div>
+<a id="a4ea984510af4527950e237b29b604d0f" name="a4ea984510af4527950e237b29b604d0f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4ea984510af4527950e237b29b604d0f">&#9670;&#160;</a></span>cwist_config</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef struct <a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a> <a class="el" href="../../db/dcb/structcwist__config.html">cwist_config</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00059">59</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<a id="a85aa22d00105586a47d729dbabd1cc27" name="a85aa22d00105586a47d729dbabd1cc27"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a85aa22d00105586a47d729dbabd1cc27">&#9670;&#160;</a></span>cwist_error_handler_entry</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef struct <a class="el" href="../../d3/d50/structcwist__error__handler__entry.html">cwist_error_handler_entry</a> <a class="el" href="../../d3/d50/structcwist__error__handler__entry.html">cwist_error_handler_entry</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4a959ba2ce5cc90417d86a61040d830e" name="a4a959ba2ce5cc90417d86a61040d830e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4a959ba2ce5cc90417d86a61040d830e">&#9670;&#160;</a></span>cwist_error_handler_func</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef void(* cwist_error_handler_func) (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../dd/d56/http_8h.html#a99b5ad0e71431205a397a336983f4f4d">cwist_http_status_t</a> status)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Function pointer type for error handlers. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00035">35</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
 
 </div>
 </div>
@@ -387,7 +551,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">typedef void(* cwist_handler_func) (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td>
+          <td class="memname">typedef void(* cwist_handler_func) (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -405,6 +569,104 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 </div>
 </div>
+<a id="ad07a9cee6f8d036cb1d01ff604f22716" name="ad07a9cee6f8d036cb1d01ff604f22716"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad07a9cee6f8d036cb1d01ff604f22716">&#9670;&#160;</a></span>cwist_https_request_handler_func</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef void(* cwist_https_request_handler_func) (<a class="el" href="../../db/d95/structcwist__https__connection.html">cwist_https_connection</a> *<a class="el" href="../../de/daf/http3_8c.html#afb6ee3e803640571d374623bbd936e7b">conn</a>, void *ctx)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00047">47</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<a id="a24c2c48ea3d2df790594088c2f47f695" name="a24c2c48ea3d2df790594088c2f47f695"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a24c2c48ea3d2df790594088c2f47f695">&#9670;&#160;</a></span>cwist_logger</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef struct <a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> <a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00060">60</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<a id="ab61e763134014868b93ec963af056f91" name="ab61e763134014868b93ec963af056f91"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab61e763134014868b93ec963af056f91">&#9670;&#160;</a></span>cwist_middleware_func</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef void(* cwist_middleware_func) (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> next)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Middleware type that receives req/res pair and the next stage in the chain. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00046">46</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<a id="ab806dc915d7cbf3944c5f82898954d67" name="ab806dc915d7cbf3944c5f82898954d67"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab806dc915d7cbf3944c5f82898954d67">&#9670;&#160;</a></span>cwist_middleware_node</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef struct <a class="el" href="../../d8/d41/structcwist__middleware__node.html">cwist_middleware_node</a> <a class="el" href="../../d8/d41/structcwist__middleware__node.html">cwist_middleware_node</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Linked list node for middleware chain. </p>
+
+</div>
+</div>
+<a id="a9c476b4b678429cd9ecd188fdbb7600e" name="a9c476b4b678429cd9ecd188fdbb7600e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9c476b4b678429cd9ecd188fdbb7600e">&#9670;&#160;</a></span>cwist_route_table</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef struct cwist_route_table cwist_route_table</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00057">57</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
+<a id="afe3526e737ac5cee98bd862fb23e6702" name="afe3526e737ac5cee98bd862fb23e6702"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe3526e737ac5cee98bd862fb23e6702">&#9670;&#160;</a></span>cwist_static_dir</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef struct cwist_static_dir cwist_static_dir</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00058">58</a> of file <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html">app.h</a>.</p>
+
+</div>
+</div>
 <a id="a508eb4f8e21cff382280b9f85fb0e50f" name="a508eb4f8e21cff382280b9f85fb0e50f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a508eb4f8e21cff382280b9f85fb0e50f">&#9670;&#160;</a></span>cwist_ws_handler_func</h2>
 
@@ -412,7 +674,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">typedef void(* cwist_ws_handler_func) (cwist_websocket *ws)</td>
+          <td class="memname">typedef void(* cwist_ws_handler_func) (<a class="el" href="../../d9/d2c/structcwist__websocket.html">cwist_websocket</a> *ws)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -543,6 +805,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 <p>Destroys the application and frees all resources.</p>
+<p>Destroy the application.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application instance to destroy. </td></tr>
@@ -551,6 +814,48 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01021">1021</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+</div>
+</div>
+<a id="ab3ca8957a5373a7a4fb845e6546b861e" name="ab3ca8957a5373a7a4fb845e6546b861e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3ca8957a5373a7a4fb845e6546b861e">&#9670;&#160;</a></span>cwist_app_dispatch()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_app_dispatch </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *&#160;</td>
+          <td class="paramname"><em>app</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *&#160;</td>
+          <td class="paramname"><em>req</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *&#160;</td>
+          <td class="paramname"><em>res</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Dispatch a request internally through the app's router and middleware. Used by the test client and advanced integrations. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01568">1568</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/dab/net_2http_2http_8h_source.html#l00073">cwist_http_request::app</a>, <a class="el" href="../../d9/dab/net_2http_2http_8h_source.html#l00074">cwist_http_request::db</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../dc/df0/test__client_8c_source.html#l00020">cwist_test_client_get()</a>, <a class="el" href="../../dc/df0/test__client_8c_source.html#l00036">cwist_test_client_post()</a>, and <a class="el" href="../../dc/df0/test__client_8c_source.html#l00055">cwist_test_client_post_json()</a>.</p>
 
 </div>
 </div>
@@ -575,7 +880,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>handler</em>&#160;</td>
         </tr>
         <tr>
@@ -588,7 +893,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p>Registers a GET route handler. </p>
 <p>Registers a GET route handler.</p>
-<p>Routing.</p>
+<p>Register a GET route.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -629,7 +934,51 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01334">1334</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00393">cwist_nuke_get_db()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
+<p class="reference">References <a class="el" href="../../d0/dae/core_2db_2sql_8h_source.html#l00021">cwist_db::conn</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00393">cwist_nuke_get_db()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
+
+</div>
+</div>
+<a id="a8c20ea5506a10ba110b5509e48392844" name="a8c20ea5506a10ba110b5509e48392844"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8c20ea5506a10ba110b5509e48392844">&#9670;&#160;</a></span>cwist_app_get_named()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_app_get_named </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *&#160;</td>
+          <td class="paramname"><em>app</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>path</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
+          <td class="paramname"><em>handler</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01417">1417</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../de/d66/endpoint__opts_8h_source.html#l00028">CWIST_ENDPOINT_DEFAULT</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00017">CWIST_HTTP_GET</a>.</p>
 
 </div>
 </div>
@@ -654,7 +1003,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>handler</em>, </td>
         </tr>
         <tr>
@@ -683,6 +1032,8 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01453">1453</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../dd/d56/http_8h_source.html#l00017">CWIST_HTTP_GET</a>.</p>
 
 </div>
 </div>
@@ -713,7 +1064,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Initialize runtime services and enter the HTTP or HTTPS server loop. </p>
-<p>Add other methods as needed.</p>
+<p>Start listening on a port.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application instance to run. </td></tr>
@@ -748,7 +1099,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>handler</em>&#160;</td>
         </tr>
         <tr>
@@ -760,6 +1111,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Register a POST handler with default endpoint options. </p>
+<p>Register a POST route.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -770,6 +1122,50 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01427">1427</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+</div>
+</div>
+<a id="a280d0c2387ed9489534a2c28b63350a7" name="a280d0c2387ed9489534a2c28b63350a7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a280d0c2387ed9489534a2c28b63350a7">&#9670;&#160;</a></span>cwist_app_post_named()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_app_post_named </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *&#160;</td>
+          <td class="paramname"><em>app</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>path</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
+          <td class="paramname"><em>handler</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01431">1431</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../de/d66/endpoint__opts_8h_source.html#l00028">CWIST_ENDPOINT_DEFAULT</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00018">CWIST_HTTP_POST</a>.</p>
 
 </div>
 </div>
@@ -794,7 +1190,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>handler</em>, </td>
         </tr>
         <tr>
@@ -824,6 +1220,46 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01464">1464</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../dd/d56/http_8h_source.html#l00018">CWIST_HTTP_POST</a>.</p>
+
+</div>
+</div>
+<a id="ad2573d05d5993c37abecdda9cfe0ae1c" name="ad2573d05d5993c37abecdda9cfe0ae1c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2573d05d5993c37abecdda9cfe0ae1c">&#9670;&#160;</a></span>cwist_app_register_error_handler()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_app_register_error_handler </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *&#160;</td>
+          <td class="paramname"><em>app</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../dd/d56/http_8h.html#a99b5ad0e71431205a397a336983f4f4d">cwist_http_status_t</a>&#160;</td>
+          <td class="paramname"><em>status</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a4a959ba2ce5cc90417d86a61040d830e">cwist_error_handler_func</a>&#160;</td>
+          <td class="paramname"><em>handler</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00976">976</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00085">cwist_app::error_handlers</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00039">cwist_error_handler_entry::handler</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00040">cwist_error_handler_entry::next</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00038">cwist_error_handler_entry::status_code</a>.</p>
+
 </div>
 </div>
 <a id="a68f4bc844fdc341542d87618820f557b" name="a68f4bc844fdc341542d87618820f557b"></a>
@@ -841,7 +1277,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_error_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a4a959ba2ce5cc90417d86a61040d830e">cwist_error_handler_func</a>&#160;</td>
           <td class="paramname"><em>handler</em>&#160;</td>
         </tr>
         <tr>
@@ -853,7 +1289,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Install a custom HTTP error callback. </p>
-<p>Error Handling Configuration.</p>
+<p>Set the global error handler.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -970,7 +1406,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01349">1349</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00082">cwist_app::static_dirs</a>.</p>
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00082">cwist_app::static_dirs</a>.</p>
 
 </div>
 </div>
@@ -1001,7 +1437,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Append a middleware callback to the application's execution chain. </p>
-<p>Middleware.</p>
+<p>Register global middleware.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -1052,7 +1488,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01250">1250</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
+<p class="reference">References <a class="el" href="../../d2/db5/db_8c_source.html#l00185">cwist_db_close()</a>, <a class="el" href="../../d2/db5/db_8c_source.html#l00152">cwist_db_open()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00272">cwist_strdup()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01283">cwist_app_use_nuke_db()</a>.</p>
 
@@ -1175,6 +1611,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Enable TLS for the application using the supplied certificate pair. </p>
+<p>Enable HTTPS with a certificate.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -1186,6 +1623,70 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 <dl class="section return"><dt>Returns</dt><dd>Tagged CWIST error describing success or failure. </dd></dl>
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01152">1152</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+</div>
+</div>
+<a id="aad2e21f9e5d7a675696bcd15456e299c" name="aad2e21f9e5d7a675696bcd15456e299c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aad2e21f9e5d7a675696bcd15456e299c">&#9670;&#160;</a></span>cwist_app_use_https2()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_app_use_https2 </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *&#160;</td>
+          <td class="paramname"><em>app</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>enabled</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01184">1184</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d2/d39/app_8h_source.html#l00037">cwist_app::cert_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../d2/d39/app_8h_source.html#l00038">cwist_app::key_path</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00073">cwist_app::use_https2</a>, and <a class="el" href="../../d2/d39/app_8h_source.html#l00036">cwist_app::use_ssl</a>.</p>
+
+</div>
+</div>
+<a id="ae25776f28fe20124440a2aabba50f2d1" name="ae25776f28fe20124440a2aabba50f2d1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae25776f28fe20124440a2aabba50f2d1">&#9670;&#160;</a></span>cwist_app_use_https3()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_app_use_https3 </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *&#160;</td>
+          <td class="paramname"><em>app</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>enabled</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01202">1202</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d2/d39/app_8h_source.html#l00037">cwist_app::cert_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../d2/d39/app_8h_source.html#l00038">cwist_app::key_path</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00074">cwist_app::use_https3</a>, and <a class="el" href="../../d2/d39/app_8h_source.html#l00036">cwist_app::use_ssl</a>.</p>
 
 </div>
 </div>
@@ -1234,7 +1735,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01283">1283</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../df/d7f/app_8c_source.html#l01250">cwist_app_use_db()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00218">cwist_nuke_close()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00393">cwist_nuke_get_db()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00298">cwist_nuke_init()</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00021">CWIST_NUKE_OK</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
+<p class="reference">References <a class="el" href="../../d0/dae/core_2db_2sql_8h_source.html#l00021">cwist_db::conn</a>, <a class="el" href="../../df/d7f/app_8c_source.html#l01250">cwist_app_use_db()</a>, <a class="el" href="../../d2/db5/db_8c_source.html#l00185">cwist_db_close()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00218">cwist_nuke_close()</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00023">CWIST_NUKE_ERR_LOW_MEMORY</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00393">cwist_nuke_get_db()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00298">cwist_nuke_init()</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00021">CWIST_NUKE_OK</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00272">cwist_strdup()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
 
 </div>
 </div>
@@ -1259,7 +1760,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_ws_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a508eb4f8e21cff382280b9f85fb0e50f">cwist_ws_handler_func</a>&#160;</td>
           <td class="paramname"><em>handler</em>&#160;</td>
         </tr>
         <tr>
@@ -1271,6 +1772,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Register a WebSocket upgrade endpoint with default options. </p>
+<p>Register a WebSocket route.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -1305,7 +1807,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_ws_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a508eb4f8e21cff382280b9f85fb0e50f">cwist_ws_handler_func</a>&#160;</td>
           <td class="paramname"><em>handler</em>, </td>
         </tr>
         <tr>
@@ -1335,7 +1837,45 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01475">1475</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../de/d66/endpoint__opts_8h_source.html#l00028">CWIST_ENDPOINT_DEFAULT</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00081">cwist_app::router</a>.</p>
+<p class="reference">References <a class="el" href="../../de/d66/endpoint__opts_8h_source.html#l00028">CWIST_ENDPOINT_DEFAULT</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00017">CWIST_HTTP_GET</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00081">cwist_app::router</a>.</p>
+
+</div>
+</div>
+<a id="a32c8cd6a55ac3a91e4a04cba6d556072" name="a32c8cd6a55ac3a91e4a04cba6d556072"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a32c8cd6a55ac3a91e4a04cba6d556072">&#9670;&#160;</a></span>cwist_url_for()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">char * cwist_url_for </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *&#160;</td>
+          <td class="paramname"><em>app</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../dd/d72/structcwist__query__map.html">cwist_query_map</a> *&#160;</td>
+          <td class="paramname"><em>params</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01528">1528</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../dd/d7f/query_8c_source.html#l00104">cwist_query_map_get()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00341">cwist_sstring_append()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00576">cwist_sstring_create()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00597">cwist_sstring_destroy()</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00272">cwist_strdup()</a>, <a class="el" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html#l00015">cwist_sstring::data</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00081">cwist_app::router</a>.</p>
 
 </div>
 </div>

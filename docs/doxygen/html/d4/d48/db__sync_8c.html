@@ -75,6 +75,7 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#define-members">Macros</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">db_sync.c File Reference</div></div>
 </div><!--header-->
@@ -138,6 +139,11 @@ Include dependency graph for db_sync.c:</div>
 </div>
 <p><a href="../../d4/d48/db__sync_8c_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:a3024ccd4a9af5109d24e6c57565d74a1" id="r_a3024ccd4a9af5109d24e6c57565d74a1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d48/db__sync_8c.html#a3024ccd4a9af5109d24e6c57565d74a1">_POSIX_C_SOURCE</a>&#160;&#160;&#160;200809L</td></tr>
+<tr class="separator:a3024ccd4a9af5109d24e6c57565d74a1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a640ce410feda9084992a94c2c8e36614" id="r_a640ce410feda9084992a94c2c8e36614"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d48/db__sync_8c.html#a640ce410feda9084992a94c2c8e36614">cwist_db_sync_serve</a> (sqlite3 *db, const <a class="el" href="../../dc/d2b/structcwist__db__crypt__ctx__t.html">cwist_db_crypt_ctx_t</a> *ctx, int port)</td></tr>
@@ -151,7 +157,24 @@ Functions</h2></td></tr>
 <div class="textblock"><p>Minimal TCP protocol for shipping encrypted SQLite snapshots between peers. </p>
 
 <p class="definition">Definition in file <a class="el" href="../../d4/d48/db__sync_8c_source.html">db_sync.c</a>.</p>
-</div><h2 class="groupheader">Function Documentation</h2>
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a3024ccd4a9af5109d24e6c57565d74a1" name="a3024ccd4a9af5109d24e6c57565d74a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3024ccd4a9af5109d24e6c57565d74a1">&#9670;&#160;</a></span>_POSIX_C_SOURCE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define _POSIX_C_SOURCE&#160;&#160;&#160;200809L</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d4/d48/db__sync_8c_source.html#l00001">1</a> of file <a class="el" href="../../d4/d48/db__sync_8c_source.html">db_sync.c</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Function Documentation</h2>
 <a id="a5dc0e7ed8d56fbfba226b34bd3e25e6a" name="a5dc0e7ed8d56fbfba226b34bd3e25e6a"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a5dc0e7ed8d56fbfba226b34bd3e25e6a">&#9670;&#160;</a></span>cwist_db_sync_pull()</h2>
 
@@ -212,7 +235,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/d48/db__sync_8c_source.html#l00169">169</a> of file <a class="el" href="../../d4/d48/db__sync_8c_source.html">db_sync.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dc/d64/db__crypt_8c_source.html#l00150">cwist_db_crypt_open()</a>, and <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00029">CWIST_DB_SYNC_OK</a>.</p>
+<p class="reference">References <a class="el" href="../../dc/d64/db__crypt_8c_source.html#l00150">cwist_db_crypt_open()</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00026">CWIST_DB_SYNC_DEFAULT_PORT</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00030">CWIST_DB_SYNC_ERR_ARGS</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00032">CWIST_DB_SYNC_ERR_CRYPTO</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00033">CWIST_DB_SYNC_ERR_MEM</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00031">CWIST_DB_SYNC_ERR_NET</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00034">CWIST_DB_SYNC_ERR_PROTO</a>, and <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00029">CWIST_DB_SYNC_OK</a>.</p>
 
 </div>
 </div>
@@ -262,7 +285,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/d48/db__sync_8c_source.html#l00068">68</a> of file <a class="el" href="../../d4/d48/db__sync_8c_source.html">db_sync.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dc/d64/db__crypt_8c_source.html#l00069">cwist_db_crypt_seal()</a>, and <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00029">CWIST_DB_SYNC_OK</a>.</p>
+<p class="reference">References <a class="el" href="../../dc/d64/db__crypt_8c_source.html#l00069">cwist_db_crypt_seal()</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00026">CWIST_DB_SYNC_DEFAULT_PORT</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00030">CWIST_DB_SYNC_ERR_ARGS</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00032">CWIST_DB_SYNC_ERR_CRYPTO</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00033">CWIST_DB_SYNC_ERR_MEM</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00031">CWIST_DB_SYNC_ERR_NET</a>, <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00034">CWIST_DB_SYNC_ERR_PROTO</a>, and <a class="el" href="../../d6/dd4/db__sync_8h_source.html#l00029">CWIST_DB_SYNC_OK</a>.</p>
 
 </div>
 </div>

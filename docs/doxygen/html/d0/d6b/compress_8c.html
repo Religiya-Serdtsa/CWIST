@@ -75,6 +75,7 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#define-members">Macros</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">compress.c File Reference</div></div>
 </div><!--header-->
@@ -83,7 +84,7 @@ $(function() {
 <p>Compression middleware and built-in zlib backends.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="../../df/d4c/compress_8h_source.html">cwist/sys/app/compress.h</a>&gt;</code><br />
-<code>#include &lt;cwist/core/mem/alloc.h&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d2/dfe/alloc_8h_source.html">cwist/core/mem/alloc.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="../../d9/dab/net_2http_2http_8h_source.html">cwist/net/http/http.h</a>&gt;</code><br />
 <code>#include &lt;zlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
@@ -94,120 +95,125 @@ Include dependency graph for compress.c:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../dc/d3b/compress_8c__incl.png" border="0" usemap="#asrc_2sys_2app_2compress_8c" alt=""/></div>
 <map name="asrc_2sys_2app_2compress_8c" id="asrc_2sys_2app_2compress_8c">
-<area shape="rect" title="Compression middleware and built&#45;in zlib backends." alt="" coords="948,5,1121,31"/>
-<area shape="rect" href="../../df/d4c/compress_8h.html" title="Compression middleware with swappable backend interface." alt="" coords="940,79,1129,104"/>
-<area shape="poly" title=" " alt="" coords="1037,31,1037,65,1032,65,1032,31"/>
-<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="638,321,791,346"/>
-<area shape="poly" title=" " alt="" coords="981,33,904,56,815,94,770,120,728,150,691,186,661,226,656,248,662,270,676,291,692,309,688,313,672,294,657,272,651,248,656,224,687,182,725,146,767,115,812,89,903,51,979,28"/>
-<area shape="rect" title=" " alt="" coords="97,497,167,522"/>
-<area shape="poly" title=" " alt="" coords="948,25,566,44,364,60,281,70,218,81,180,87,143,90,75,94,47,100,26,112,13,132,8,164,8,335,11,359,18,382,43,424,75,459,106,486,102,490,71,463,39,427,13,384,5,360,3,335,3,163,8,131,23,109,45,95,74,89,142,85,180,82,217,76,280,65,364,55,566,38,948,20"/>
-<area shape="rect" title=" " alt="" coords="209,497,279,522"/>
-<area shape="poly" title=" " alt="" coords="948,26,719,42,441,69,312,88,206,110,165,123,135,136,116,150,109,164,109,335,111,391,118,414,134,440,164,469,200,489,197,493,161,473,130,443,113,416,106,392,104,335,104,163,112,146,132,131,164,118,205,105,312,83,440,64,719,36,948,21"/>
-<area shape="rect" href="../../d2/dfe/alloc_8h_source.html" title=" " alt="" coords="1153,79,1327,104"/>
-<area shape="poly" title=" " alt="" coords="1069,28,1195,72,1193,77,1067,33"/>
-<area shape="rect" title=" " alt="" coords="1351,79,1409,104"/>
-<area shape="poly" title=" " alt="" coords="1101,28,1338,76,1337,81,1100,33"/>
-<area shape="rect" title=" " alt="" coords="1433,79,1500,104"/>
-<area shape="poly" title=" " alt="" coords="1122,28,1258,47,1420,76,1419,81,1257,53,1121,33"/>
-<area shape="rect" href="../../d0/d77/sys_2app_2app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="959,152,1110,177"/>
-<area shape="poly" title=" " alt="" coords="1037,104,1037,138,1032,138,1032,104"/>
-<area shape="rect" title=" " alt="" coords="1523,665,1597,691"/>
-<area shape="poly" title=" " alt="" coords="1105,101,1246,127,1410,162,1484,182,1545,202,1586,222,1598,233,1603,243,1603,511,1600,551,1592,590,1572,653,1567,652,1587,588,1594,550,1597,511,1597,245,1594,236,1583,227,1543,207,1482,187,1408,167,1245,132,1104,107"/>
-<area shape="poly" title=" " alt="" coords="959,170,880,175,794,184,721,201,693,213,675,227,668,246,671,268,682,289,697,309,692,312,678,292,666,269,662,246,671,224,691,209,719,196,794,179,879,169,959,165"/>
-<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="1033,489,1175,529"/>
-<area shape="poly" title=" " alt="" coords="1048,176,1066,197,1081,224,1100,293,1109,362,1111,426,1109,476,1104,476,1106,426,1103,363,1095,294,1076,226,1062,200,1044,179"/>
-<area shape="rect" href="../../d0/dae/core_2db_2sql_8h_source.html" title=" " alt="" coords="1310,409,1453,434"/>
-<area shape="poly" title=" " alt="" coords="1110,168,1337,188,1438,203,1472,213,1491,223,1504,247,1506,271,1499,296,1486,321,1448,367,1409,402,1406,398,1445,363,1482,318,1495,294,1501,271,1499,248,1487,227,1470,218,1436,209,1336,193,1110,173"/>
-<area shape="rect" href="../../d7/d67/net_2http_2https_8h_source.html" title=" " alt="" coords="1141,233,1301,258"/>
-<area shape="poly" title=" " alt="" coords="1063,175,1183,225,1181,230,1061,180"/>
-<area shape="rect" href="../../da/dec/core_2macros_8h.html" title="Convenience size&#45;conversion and utility macros shared across CWIST." alt="" coords="1325,233,1477,258"/>
-<area shape="poly" title=" " alt="" coords="1089,175,1335,227,1334,232,1087,180"/>
-<area shape="rect" href="../../da/d2c/big__dumb__reply_8h.html" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="211,313,389,353"/>
-<area shape="poly" title=" " alt="" coords="960,178,819,198,659,228,502,270,368,312,367,306,501,264,658,223,819,192,959,172"/>
-<area shape="rect" title=" " alt="" coords="864,233,1067,258"/>
-<area shape="poly" title=" " alt="" coords="1026,179,987,224,983,221,1022,176"/>
-<area shape="rect" href="../../dd/dec/net_2websocket_2websocket_8h_source.html" title=" " alt="" coords="685,225,840,265"/>
-<area shape="poly" title=" " alt="" coords="996,180,842,224,841,219,994,175"/>
-<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="232,401,368,441"/>
-<area shape="poly" title=" " alt="" coords="660,349,382,406,381,401,659,343"/>
-<area shape="poly" title=" " alt="" coords="743,344,872,399,1052,481,1050,486,870,404,741,348"/>
-<area shape="rect" href="../../d1/d7a/net_2http_2query_8h_source.html" title=" " alt="" coords="744,497,907,522"/>
-<area shape="poly" title=" " alt="" coords="768,344,814,364,835,380,852,400,859,422,858,445,842,486,837,484,853,443,854,422,847,403,831,384,811,369,766,348"/>
-<area shape="poly" title=" " alt="" coords="792,342,1297,407,1296,412,791,347"/>
-<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="368,489,539,529"/>
-<area shape="poly" title=" " alt="" coords="638,340,598,347,557,359,517,377,483,403,472,419,464,438,456,476,451,475,459,436,467,417,479,399,514,372,555,354,597,342,637,335"/>
-<area shape="rect" title=" " alt="" coords="493,409,589,434"/>
-<area shape="poly" title=" " alt="" coords="692,349,578,405,576,400,690,344"/>
-<area shape="rect" title=" " alt="" coords="614,409,717,434"/>
-<area shape="poly" title=" " alt="" coords="710,348,681,398,677,395,706,345"/>
-<area shape="rect" title=" " alt="" coords="741,409,837,434"/>
-<area shape="poly" title=" " alt="" coords="727,344,772,396,768,399,723,348"/>
-<area shape="poly" title=" " alt="" coords="264,444,168,493,165,488,262,439"/>
-<area shape="poly" title=" " alt="" coords="290,443,261,486,257,483,285,440"/>
-<area shape="rect" title=" " alt="" coords="953,665,1036,691"/>
-<area shape="poly" title=" " alt="" coords="307,440,325,484,339,508,358,527,402,554,467,578,545,600,631,619,804,649,940,668,939,673,803,654,629,624,543,605,465,583,400,558,354,531,335,511,320,487,302,442"/>
-<area shape="poly" title=" " alt="" coords="368,427,1019,496,1018,502,368,433"/>
-<area shape="poly" title=" " alt="" coords="1094,531,1012,656,1007,653,1089,528"/>
-<area shape="rect" title=" " alt="" coords="790,585,861,610"/>
-<area shape="poly" title=" " alt="" coords="1044,532,875,584,873,579,1042,527"/>
-<area shape="rect" title=" " alt="" coords="1307,665,1418,691"/>
-<area shape="poly" title=" " alt="" coords="1135,527,1335,656,1332,660,1132,532"/>
-<area shape="poly" title=" " alt="" coords="828,522,828,570,823,570,823,522"/>
-<area shape="poly" title=" " alt="" coords="876,519,1510,663,1509,668,875,525"/>
-<area shape="poly" title=" " alt="" coords="1345,437,1179,488,1177,483,1343,432"/>
-<area shape="poly" title=" " alt="" coords="1414,432,1456,454,1477,469,1495,488,1521,520,1538,551,1541,567,1541,584,1536,601,1526,619,1507,639,1484,654,1432,672,1430,667,1481,650,1504,635,1522,616,1531,599,1536,583,1536,568,1533,553,1516,523,1491,491,1474,473,1453,458,1411,437"/>
-<area shape="rect" title=" " alt="" coords="1199,497,1278,522"/>
-<area shape="poly" title=" " alt="" coords="1363,436,1271,492,1268,487,1361,432"/>
-<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="1361,577,1511,617"/>
-<area shape="poly" title=" " alt="" coords="1411,432,1446,454,1463,469,1476,488,1481,508,1479,529,1462,567,1457,565,1474,528,1476,509,1471,490,1459,473,1443,458,1408,436"/>
-<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="1302,497,1461,522"/>
-<area shape="poly" title=" " alt="" coords="1384,434,1384,482,1379,482,1379,434"/>
-<area shape="poly" title=" " alt="" coords="1361,615,1050,670,1049,664,1360,609"/>
-<area shape="poly" title=" " alt="" coords="1420,619,1385,657,1381,653,1416,616"/>
-<area shape="poly" title=" " alt="" coords="1467,615,1531,656,1529,660,1465,620"/>
-<area shape="poly" title=" " alt="" coords="1356,525,1035,662,1033,657,1354,520"/>
-<area shape="poly" title=" " alt="" coords="1376,524,1363,548,1352,578,1350,616,1357,651,1352,652,1345,617,1347,577,1358,546,1371,521"/>
-<area shape="poly" title=" " alt="" coords="1391,521,1419,564,1414,567,1386,524"/>
-<area shape="poly" title=" " alt="" coords="509,527,779,615,941,660,939,665,778,620,507,532"/>
-<area shape="poly" title=" " alt="" coords="536,527,777,582,776,587,534,532"/>
-<area shape="poly" title=" " alt="" coords="1154,261,796,321,795,316,1153,255"/>
-<area shape="poly" title=" " alt="" coords="1216,259,1182,315,1144,402,1117,477,1112,475,1139,400,1178,312,1211,257"/>
-<area shape="rect" title=" " alt="" coords="1192,321,1299,346"/>
-<area shape="poly" title=" " alt="" coords="1227,257,1241,306,1236,308,1222,259"/>
-<area shape="rect" title=" " alt="" coords="1323,321,1429,346"/>
-<area shape="poly" title=" " alt="" coords="1243,256,1345,312,1342,316,1241,261"/>
-<area shape="poly" title=" " alt="" coords="303,354,303,387,297,387,297,354"/>
-<area shape="poly" title=" " alt="" coords="223,356,176,375,134,403,102,433,79,464,73,479,72,495,76,511,86,528,111,551,145,572,188,590,238,607,355,632,484,651,618,663,745,670,940,674,939,680,745,675,617,668,484,656,354,638,237,612,186,595,143,577,108,555,82,531,71,513,67,495,68,478,74,461,98,430,130,399,173,370,220,351"/>
-<area shape="poly" title=" " alt="" coords="331,351,400,393,483,439,650,519,786,577,784,582,648,524,480,444,397,397,328,356"/>
-<area shape="rect" title=" " alt="" coords="144,409,208,434"/>
-<area shape="poly" title=" " alt="" coords="274,356,205,403,202,399,271,351"/>
-<area shape="poly" title=" " alt="" coords="754,267,730,310,726,307,750,264"/>
-<area shape="poly" title=" " alt="" coords="796,263,827,285,857,311,890,353,917,399,940,447,958,496,982,585,994,651,989,652,977,587,953,497,935,449,913,401,885,356,853,315,823,289,793,268"/>
-<area shape="poly" title=" " alt="" coords="783,264,817,302,857,355,895,419,910,453,921,489,926,510,921,531,897,560,867,581,864,576,893,556,916,528,921,510,916,490,905,455,890,421,852,358,813,305,779,268"/>
-<area shape="poly" title=" " alt="" coords="1327,101,1510,127,1584,140,1620,150,1640,170,1650,191,1653,215,1653,244,1653,511,1652,543,1647,567,1621,619,1605,640,1587,658,1583,654,1601,637,1616,616,1642,566,1647,542,1648,511,1648,244,1648,215,1645,193,1635,173,1617,154,1583,145,1509,133,1326,107"/>
-<area shape="rect" title=" " alt="" coords="1688,152,1829,177"/>
-<area shape="poly" title=" " alt="" coords="1324,101,1675,149,1674,154,1323,107"/>
+<area shape="rect" title="Compression middleware and built&#45;in zlib backends." alt="" coords="853,5,1027,31"/>
+<area shape="rect" href="../../df/d4c/compress_8h.html" title="Compression middleware with swappable backend interface." alt="" coords="845,79,1035,104"/>
+<area shape="poly" title=" " alt="" coords="943,31,943,65,937,65,937,31"/>
+<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="854,321,1007,346"/>
+<area shape="poly" title=" " alt="" coords="910,33,872,52,835,81,804,115,785,146,772,181,760,226,755,247,755,255,760,264,776,282,796,297,842,316,840,321,793,301,772,286,755,267,750,256,749,246,755,225,767,179,780,144,800,112,832,77,869,48,908,28"/>
+<area shape="rect" title=" " alt="" coords="195,497,266,522"/>
+<area shape="poly" title=" " alt="" coords="853,25,499,43,314,59,238,69,180,81,118,92,62,100,40,107,23,119,12,137,8,164,8,334,13,365,26,392,46,416,70,437,128,470,183,492,181,497,125,475,67,442,42,420,21,395,8,367,3,335,3,163,7,135,19,115,37,102,61,95,117,87,180,76,237,64,313,54,499,37,853,19"/>
+<area shape="rect" title=" " alt="" coords="290,497,361,522"/>
+<area shape="poly" title=" " alt="" coords="853,27,635,44,371,72,250,90,150,112,111,124,82,137,65,150,59,164,59,334,65,354,83,375,110,397,143,419,217,458,285,489,283,494,215,463,140,423,107,401,79,379,60,357,53,335,53,163,60,147,80,133,110,119,149,107,249,85,371,66,634,38,853,22"/>
+<area shape="rect" href="../../d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="1059,79,1232,104"/>
+<area shape="poly" title=" " alt="" coords="974,28,1100,72,1098,77,972,33"/>
+<area shape="rect" title=" " alt="" coords="1257,79,1314,104"/>
+<area shape="poly" title=" " alt="" coords="1007,28,1244,76,1243,81,1006,33"/>
+<area shape="rect" title=" " alt="" coords="1339,79,1405,104"/>
+<area shape="poly" title=" " alt="" coords="1027,28,1163,47,1325,76,1325,81,1163,53,1026,33"/>
+<area shape="rect" href="../../d0/d77/sys_2app_2app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="865,152,1015,177"/>
+<area shape="poly" title=" " alt="" coords="943,104,943,138,937,138,937,104"/>
+<area shape="rect" title=" " alt="" coords="1461,665,1536,691"/>
+<area shape="poly" title=" " alt="" coords="1017,101,1167,126,1339,161,1417,180,1481,201,1524,222,1537,232,1541,243,1541,511,1538,551,1531,590,1511,653,1506,652,1525,588,1533,550,1536,511,1536,245,1532,235,1521,226,1479,206,1416,186,1338,166,1166,132,1017,107"/>
+<area shape="poly" title=" " alt="" coords="954,176,972,197,987,224,991,245,987,266,973,292,956,313,952,309,969,289,981,264,986,245,981,226,967,200,950,179"/>
+<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="783,489,926,529"/>
+<area shape="poly" title=" " alt="" coords="866,180,810,198,783,211,759,227,718,266,692,303,675,346,660,402,654,423,655,431,660,440,682,463,709,480,739,491,770,499,769,504,737,496,706,484,678,467,655,443,650,432,649,422,655,401,670,344,687,301,714,263,756,223,781,206,808,193,864,175"/>
+<area shape="rect" href="../../d0/dae/core_2db_2sql_8h.html" title="Database operations wrapper (SQLite3)." alt="" coords="1249,409,1391,434"/>
+<area shape="poly" title=" " alt="" coords="1015,163,1116,166,1228,175,1330,193,1369,206,1396,223,1421,253,1432,284,1430,318,1416,355,1392,384,1362,405,1359,400,1388,380,1411,352,1425,317,1427,285,1417,256,1393,227,1367,211,1328,198,1228,180,1115,171,1015,168"/>
+<area shape="rect" href="../../d7/d67/net_2http_2https_8h.html" title="HTTPS/TLS wrapper interface." alt="" coords="1047,233,1207,258"/>
+<area shape="poly" title=" " alt="" coords="968,175,1088,225,1086,230,966,180"/>
+<area shape="rect" href="../../da/dec/core_2macros_8h.html" title="Convenience size&#45;conversion and utility macros shared across CWIST." alt="" coords="1231,233,1383,258"/>
+<area shape="poly" title=" " alt="" coords="994,175,1241,227,1240,232,993,180"/>
+<area shape="rect" href="../../da/d2c/big__dumb__reply_8h.html" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="285,313,464,353"/>
+<area shape="poly" title=" " alt="" coords="864,169,753,172,625,181,508,199,462,212,430,228,413,243,401,261,384,301,379,299,396,259,409,239,426,223,460,207,507,193,625,176,753,167,864,163"/>
+<area shape="rect" title=" " alt="" coords="769,233,972,258"/>
+<area shape="poly" title=" " alt="" coords="932,179,892,224,888,221,928,176"/>
+<area shape="rect" href="../../dd/dec/net_2websocket_2websocket_8h.html" title="WebSocket upgrade and frame handling." alt="" coords="440,225,595,265"/>
+<area shape="poly" title=" " alt="" coords="877,180,614,228,609,229,608,224,613,223,876,175"/>
+<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="307,401,443,441"/>
+<area shape="poly" title=" " alt="" coords="857,349,457,410,456,405,856,343"/>
+<area shape="poly" title=" " alt="" coords="932,347,925,390,908,442,883,480,879,477,903,440,920,389,927,346"/>
+<area shape="rect" title=" " alt="" coords="685,585,755,610"/>
+<area shape="poly" title=" " alt="" coords="973,344,1017,360,1060,382,1075,395,1085,410,1087,426,1078,443,1061,460,1043,472,1007,484,969,483,931,476,893,468,853,465,814,471,794,479,774,491,756,509,743,530,728,572,723,570,739,527,752,505,770,487,791,474,812,466,853,459,893,463,932,471,970,478,1006,479,1041,468,1057,456,1074,440,1082,425,1080,412,1071,399,1057,386,1015,365,971,349"/>
+<area shape="rect" href="../../d1/d7a/net_2http_2query_8h.html" title="Query string parser and map." alt="" coords="951,497,1113,522"/>
+<area shape="poly" title=" " alt="" coords="1008,338,1039,346,1071,358,1099,376,1122,400,1128,413,1129,426,1116,451,1093,474,1067,492,1064,487,1090,470,1112,448,1123,425,1123,414,1118,403,1096,380,1068,363,1038,351,1007,344"/>
+<area shape="poly" title=" " alt="" coords="983,343,1256,403,1254,408,982,349"/>
+<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="436,489,607,529"/>
+<area shape="poly" title=" " alt="" coords="854,347,758,368,707,383,659,404,599,441,551,482,548,478,596,437,656,399,705,378,757,362,853,342"/>
+<area shape="rect" title=" " alt="" coords="968,409,1064,434"/>
+<area shape="poly" title=" " alt="" coords="944,344,997,397,993,401,940,348"/>
+<area shape="rect" title=" " alt="" coords="670,409,773,434"/>
+<area shape="poly" title=" " alt="" coords="903,349,763,406,761,401,901,344"/>
+<area shape="rect" title=" " alt="" coords="797,409,893,434"/>
+<area shape="poly" title=" " alt="" coords="921,348,869,401,865,397,917,344"/>
+<area shape="poly" title=" " alt="" coords="344,444,263,492,260,487,342,439"/>
+<area shape="poly" title=" " alt="" coords="366,443,341,486,337,483,361,440"/>
+<area shape="rect" title=" " alt="" coords="480,665,563,691"/>
+<area shape="poly" title=" " alt="" coords="385,440,426,528,469,597,507,653,503,656,464,600,422,531,380,443"/>
+<area shape="poly" title=" " alt="" coords="443,432,770,490,769,496,442,437"/>
+<area shape="poly" title=" " alt="" coords="846,531,815,576,794,600,768,620,721,643,670,660,620,670,577,676,576,671,620,665,669,654,719,638,765,615,790,596,811,573,842,528"/>
+<area shape="poly" title=" " alt="" coords="826,532,751,579,748,575,823,527"/>
+<area shape="rect" title=" " alt="" coords="1246,665,1357,691"/>
+<area shape="poly" title=" " alt="" coords="906,527,1258,658,1257,663,904,532"/>
+<area shape="poly" title=" " alt="" coords="991,525,769,585,768,580,989,520"/>
+<area shape="poly" title=" " alt="" coords="1058,520,1158,564,1289,615,1373,641,1448,662,1447,667,1371,646,1287,620,1156,569,1056,525"/>
+<area shape="poly" title=" " alt="" coords="1262,437,1222,444,1083,467,940,492,939,487,1082,462,1221,439,1261,431"/>
+<area shape="poly" title=" " alt="" coords="1352,432,1394,454,1416,469,1434,488,1459,520,1476,551,1480,567,1480,584,1475,601,1465,619,1446,639,1422,654,1371,672,1369,667,1420,650,1442,635,1461,616,1470,599,1475,583,1475,568,1471,553,1455,523,1430,491,1412,473,1392,458,1350,437"/>
+<area shape="rect" title=" " alt="" coords="1138,497,1217,522"/>
+<area shape="poly" title=" " alt="" coords="1302,436,1210,492,1207,487,1299,432"/>
+<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="1299,577,1450,617"/>
+<area shape="poly" title=" " alt="" coords="1349,432,1385,454,1401,469,1414,488,1420,508,1417,529,1400,567,1395,565,1412,528,1414,509,1410,490,1397,473,1381,458,1346,436"/>
+<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="1241,497,1399,522"/>
+<area shape="poly" title=" " alt="" coords="1323,434,1323,482,1317,482,1317,434"/>
+<area shape="poly" title=" " alt="" coords="1300,608,576,674,576,669,1299,603"/>
+<area shape="poly" title=" " alt="" coords="1359,619,1324,657,1320,653,1355,616"/>
+<area shape="poly" title=" " alt="" coords="1406,615,1470,656,1467,660,1403,620"/>
+<area shape="poly" title=" " alt="" coords="1266,525,577,668,576,663,1265,519"/>
+<area shape="poly" title=" " alt="" coords="1315,524,1301,548,1291,578,1289,616,1296,651,1291,652,1284,617,1285,577,1297,546,1310,521"/>
+<area shape="poly" title=" " alt="" coords="1330,521,1357,564,1353,567,1325,524"/>
+<area shape="poly" title=" " alt="" coords="524,530,524,652,519,652,519,530"/>
+<area shape="poly" title=" " alt="" coords="566,527,682,577,680,582,564,532"/>
+<area shape="poly" title=" " alt="" coords="1101,261,971,317,969,313,1099,256"/>
+<area shape="poly" title=" " alt="" coords="1132,258,1136,293,1136,342,1127,395,1116,421,1100,443,1043,463,940,490,938,485,1042,458,1097,439,1111,418,1122,394,1131,342,1131,293,1126,258"/>
+<area shape="rect" title=" " alt="" coords="1164,321,1271,346"/>
+<area shape="poly" title=" " alt="" coords="1141,256,1196,309,1193,313,1137,260"/>
+<area shape="rect" title=" " alt="" coords="1295,321,1401,346"/>
+<area shape="poly" title=" " alt="" coords="1157,256,1306,313,1305,318,1156,261"/>
+<area shape="poly" title=" " alt="" coords="377,354,377,387,372,387,372,354"/>
+<area shape="poly" title=" " alt="" coords="286,356,244,375,209,403,184,434,171,464,170,494,185,528,212,561,244,588,281,611,320,630,399,655,467,668,466,674,397,660,318,635,278,616,241,593,208,565,180,531,165,495,166,463,180,431,205,399,241,370,284,351"/>
+<area shape="poly" title=" " alt="" coords="411,351,508,408,566,446,620,487,667,531,704,572,700,576,663,535,617,491,562,450,506,413,409,356"/>
+<area shape="rect" title=" " alt="" coords="219,409,283,434"/>
+<area shape="poly" title=" " alt="" coords="349,356,280,403,277,399,346,351"/>
+<area shape="poly" title=" " alt="" coords="596,260,863,315,862,321,595,265"/>
+<area shape="poly" title=" " alt="" coords="440,249,338,258,283,268,229,283,182,305,144,335,129,353,119,373,112,395,109,420,109,511,112,533,118,551,129,565,142,576,178,595,222,615,285,640,350,657,413,667,467,672,466,677,412,672,349,662,283,645,220,620,176,599,139,580,125,568,114,554,106,535,104,511,104,420,106,394,114,371,125,350,140,331,179,301,228,278,281,263,337,252,439,244"/>
+<area shape="poly" title=" " alt="" coords="531,264,661,488,709,571,704,574,656,491,526,267"/>
+<area shape="poly" title=" " alt="" coords="1233,100,1434,126,1518,139,1559,150,1579,170,1588,191,1592,215,1592,244,1592,511,1591,543,1585,567,1560,619,1544,640,1526,658,1522,654,1540,637,1555,616,1580,566,1585,542,1587,511,1587,244,1586,215,1583,193,1574,173,1556,154,1517,145,1434,132,1232,106"/>
+<area shape="rect" title=" " alt="" coords="1627,152,1768,177"/>
+<area shape="poly" title=" " alt="" coords="1233,101,1613,150,1613,155,1232,106"/>
 </map>
 </div>
 </div>
 <p><a href="../../d0/d6b/compress_8c_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:a3024ccd4a9af5109d24e6c57565d74a1" id="r_a3024ccd4a9af5109d24e6c57565d74a1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d6b/compress_8c.html#a3024ccd4a9af5109d24e6c57565d74a1">_POSIX_C_SOURCE</a>&#160;&#160;&#160;200809L</td></tr>
+<tr class="separator:a3024ccd4a9af5109d24e6c57565d74a1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac8e91b35d87f4dddf6d937cd2390ed16" id="r_ac8e91b35d87f4dddf6d937cd2390ed16"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d6b/compress_8c.html#ac8e91b35d87f4dddf6d937cd2390ed16">CWIST_MAX_BACKENDS</a>&#160;&#160;&#160;4</td></tr>
+<tr class="separator:ac8e91b35d87f4dddf6d937cd2390ed16"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a57c833698905b401cc5e4914870c4c4c" id="r_a57c833698905b401cc5e4914870c4c4c"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d6b/compress_8c.html#a57c833698905b401cc5e4914870c4c4c">cwist_compress_register_backend</a> (const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwist_compress_backend</a> *backend)</td></tr>
 <tr class="memdesc:a57c833698905b401cc5e4914870c4c4c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a compression backend.  <br /></td></tr>
 <tr class="separator:a57c833698905b401cc5e4914870c4c4c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac4d46953471ce216fe2ab53d6ad2fb3a" id="r_ac4d46953471ce216fe2ab53d6ad2fb3a"><td class="memItemLeft" align="right" valign="top"><a id="ac4d46953471ce216fe2ab53d6ad2fb3a" name="ac4d46953471ce216fe2ab53d6ad2fb3a"></a>
-void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_compress_unregister_all</b> (void)</td></tr>
-<tr class="memdesc:ac4d46953471ce216fe2ab53d6ad2fb3a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unregister all compression backends. <br /></td></tr>
+<tr class="memitem:ac4d46953471ce216fe2ab53d6ad2fb3a" id="r_ac4d46953471ce216fe2ab53d6ad2fb3a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d6b/compress_8c.html#ac4d46953471ce216fe2ab53d6ad2fb3a">cwist_compress_unregister_all</a> (void)</td></tr>
+<tr class="memdesc:ac4d46953471ce216fe2ab53d6ad2fb3a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unregister all compression backends.  <br /></td></tr>
 <tr class="separator:ac4d46953471ce216fe2ab53d6ad2fb3a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af0fe70fc60745ce6e5a640b044a53f5d" id="r_af0fe70fc60745ce6e5a640b044a53f5d"><td class="memItemLeft" align="right" valign="top"><a id="af0fe70fc60745ce6e5a640b044a53f5d" name="af0fe70fc60745ce6e5a640b044a53f5d"></a>
-const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwist_compress_backend</a> *&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_compress_backend_gzip</b> (void)</td></tr>
-<tr class="memdesc:af0fe70fc60745ce6e5a640b044a53f5d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the built-in zlib/gzip backend. <br /></td></tr>
+<tr class="memitem:af0fe70fc60745ce6e5a640b044a53f5d" id="r_af0fe70fc60745ce6e5a640b044a53f5d"><td class="memItemLeft" align="right" valign="top">const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwist_compress_backend</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d6b/compress_8c.html#af0fe70fc60745ce6e5a640b044a53f5d">cwist_compress_backend_gzip</a> (void)</td></tr>
+<tr class="memdesc:af0fe70fc60745ce6e5a640b044a53f5d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the built-in zlib/gzip backend.  <br /></td></tr>
 <tr class="separator:af0fe70fc60745ce6e5a640b044a53f5d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0c3f9fa4779047ccee5dee85989a7153" id="r_a0c3f9fa4779047ccee5dee85989a7153"><td class="memItemLeft" align="right" valign="top"><a id="a0c3f9fa4779047ccee5dee85989a7153" name="a0c3f9fa4779047ccee5dee85989a7153"></a>
-const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwist_compress_backend</a> *&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_compress_backend_deflate</b> (void)</td></tr>
-<tr class="memdesc:a0c3f9fa4779047ccee5dee85989a7153"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the built-in zlib/deflate backend. <br /></td></tr>
+<tr class="memitem:a0c3f9fa4779047ccee5dee85989a7153" id="r_a0c3f9fa4779047ccee5dee85989a7153"><td class="memItemLeft" align="right" valign="top">const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwist_compress_backend</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d6b/compress_8c.html#a0c3f9fa4779047ccee5dee85989a7153">cwist_compress_backend_deflate</a> (void)</td></tr>
+<tr class="memdesc:a0c3f9fa4779047ccee5dee85989a7153"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the built-in zlib/deflate backend.  <br /></td></tr>
 <tr class="separator:a0c3f9fa4779047ccee5dee85989a7153"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:abf34e6f515162b89d169d928fd34327c" id="r_abf34e6f515162b89d169d928fd34327c"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d6b/compress_8c.html#abf34e6f515162b89d169d928fd34327c">cwist_mw_compress</a> (size_t min_body_size)</td></tr>
 <tr class="memdesc:abf34e6f515162b89d169d928fd34327c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compression middleware factory.  <br /></td></tr>
@@ -217,7 +223,84 @@ const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwis
 <div class="textblock"><p>Compression middleware and built-in zlib backends. </p>
 
 <p class="definition">Definition in file <a class="el" href="../../d0/d6b/compress_8c_source.html">compress.c</a>.</p>
-</div><h2 class="groupheader">Function Documentation</h2>
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a3024ccd4a9af5109d24e6c57565d74a1" name="a3024ccd4a9af5109d24e6c57565d74a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3024ccd4a9af5109d24e6c57565d74a1">&#9670;&#160;</a></span>_POSIX_C_SOURCE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define _POSIX_C_SOURCE&#160;&#160;&#160;200809L</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d6b/compress_8c_source.html#l00006">6</a> of file <a class="el" href="../../d0/d6b/compress_8c_source.html">compress.c</a>.</p>
+
+</div>
+</div>
+<a id="ac8e91b35d87f4dddf6d937cd2390ed16" name="ac8e91b35d87f4dddf6d937cd2390ed16"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac8e91b35d87f4dddf6d937cd2390ed16">&#9670;&#160;</a></span>CWIST_MAX_BACKENDS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_MAX_BACKENDS&#160;&#160;&#160;4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d6b/compress_8c_source.html#l00015">15</a> of file <a class="el" href="../../d0/d6b/compress_8c_source.html">compress.c</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Function Documentation</h2>
+<a id="a0c3f9fa4779047ccee5dee85989a7153" name="a0c3f9fa4779047ccee5dee85989a7153"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c3f9fa4779047ccee5dee85989a7153">&#9670;&#160;</a></span>cwist_compress_backend_deflate()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwist_compress_backend</a> * cwist_compress_backend_deflate </td>
+          <td>(</td>
+          <td class="paramtype">void&#160;</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Returns the built-in zlib/deflate backend. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d6b/compress_8c_source.html#l00107">107</a> of file <a class="el" href="../../d0/d6b/compress_8c_source.html">compress.c</a>.</p>
+
+</div>
+</div>
+<a id="af0fe70fc60745ce6e5a640b044a53f5d" name="af0fe70fc60745ce6e5a640b044a53f5d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af0fe70fc60745ce6e5a640b044a53f5d">&#9670;&#160;</a></span>cwist_compress_backend_gzip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwist_compress_backend</a> * cwist_compress_backend_gzip </td>
+          <td>(</td>
+          <td class="paramtype">void&#160;</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Returns the built-in zlib/gzip backend. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d6b/compress_8c_source.html#l00103">103</a> of file <a class="el" href="../../d0/d6b/compress_8c_source.html">compress.c</a>.</p>
+
+</div>
+</div>
 <a id="a57c833698905b401cc5e4914870c4c4c" name="a57c833698905b401cc5e4914870c4c4c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a57c833698905b401cc5e4914870c4c4c">&#9670;&#160;</a></span>cwist_compress_register_backend()</h2>
 
@@ -243,6 +326,30 @@ const <a class="el" href="../../d6/deb/structcwist__compress__backend.html">cwis
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d0/d6b/compress_8c_source.html#l00021">21</a> of file <a class="el" href="../../d0/d6b/compress_8c_source.html">compress.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d0/d6b/compress_8c_source.html#l00015">CWIST_MAX_BACKENDS</a>.</p>
+
+</div>
+</div>
+<a id="ac4d46953471ce216fe2ab53d6ad2fb3a" name="ac4d46953471ce216fe2ab53d6ad2fb3a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac4d46953471ce216fe2ab53d6ad2fb3a">&#9670;&#160;</a></span>cwist_compress_unregister_all()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_compress_unregister_all </td>
+          <td>(</td>
+          <td class="paramtype">void&#160;</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Unregister all compression backends. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d0/d6b/compress_8c_source.html#l00026">26</a> of file <a class="el" href="../../d0/d6b/compress_8c_source.html">compress.c</a>.</p>
 
 </div>
 </div>

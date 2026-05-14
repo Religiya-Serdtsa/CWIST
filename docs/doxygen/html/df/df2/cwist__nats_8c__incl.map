@@ -1,8 +1,8 @@
 <map id="src/net/nats/cwist_nats.c" name="src/net/nats/cwist_nats.c">
 <area shape="rect" id="Node000001" title="cwist_nats.c interface." alt="" coords="442,5,578,45"/>
-<area shape="rect" id="Node000002" href="$d1/de1/cwist__nats_8h.html" title="cwist_nats.h interface." alt="" coords="105,93,256,133"/>
+<area shape="rect" id="Node000002" href="$d1/de1/cwist__nats_8h.html" title="NATS client interface." alt="" coords="105,93,256,133"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="442,47,267,92,265,87,441,42"/>
-<area shape="rect" id="Node000008" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="281,101,454,126"/>
+<area shape="rect" id="Node000008" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="281,101,454,126"/>
 <area shape="poly" id="edge7_Node000001_Node000008" title=" " alt="" coords="480,48,399,96,396,91,477,43"/>
 <area shape="rect" id="Node000010" title=" " alt="" coords="479,101,541,126"/>
 <area shape="poly" id="edge10_Node000001_Node000010" title=" " alt="" coords="513,46,513,87,507,87,507,46"/>

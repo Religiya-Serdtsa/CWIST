@@ -1,3 +1,8 @@
+/**
+ * @file https.h
+ * @brief HTTPS/TLS wrapper interface.
+ */
+
 #ifndef __CWIST_HTTPS_H__
 #define __CWIST_HTTPS_H__
 

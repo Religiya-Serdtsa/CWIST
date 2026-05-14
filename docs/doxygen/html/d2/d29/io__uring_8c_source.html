@@ -83,7 +83,7 @@ $(document).ready(function() { init_codefold(1); });
 </div><!--header-->
 <div class="contents">
 <a href="../../d2/d29/io__uring_8c.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#include &lt;<a class="code" href="../../d1/df5/cwist__io_8h.html">cwist/sys/io/cwist_io.h</a>&gt;</span></div>
-<div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span><span class="preprocessor">#include &lt;cwist/core/mem/alloc.h&gt;</span></div>
+<div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span><span class="preprocessor">#include &lt;<a class="code" href="../../d2/dfe/alloc_8h.html">cwist/core/mem/alloc.h</a>&gt;</span></div>
 <div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="preprocessor">#include &lt;pthread.h&gt;</span></div>
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;stdatomic.h&gt;</span></div>
 <div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;stdbool.h&gt;</span></div>
@@ -95,16 +95,16 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00021" name="l00021"></a><span class="lineno"><a class="line" href="../../d2/d29/io__uring_8c.html#a33eb97006e5539c94cc623bb804d7564">   21</a></span>} <a class="code hl_typedef" href="../../d2/d29/io__uring_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a>;</div>
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span> </div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span><span class="keyword">struct </span><a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a> {</div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    _Atomic(job_node_t *) head;</div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    _Atomic(job_node_t *) tail;</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    _Atomic(<a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *) head;</div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    _Atomic(<a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *) tail;</div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    atomic_size_t pending_jobs;</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    atomic_bool running;</div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    pthread_mutex_t sleep_lock;</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    pthread_cond_t sleep_cond;</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>};</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">static</span> job_node_t *cwist_job_node_create(<a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a0447e35daf4a82549bf7d207d5ce8a28">cwist_job_func</a> func, <span class="keywordtype">void</span> *arg) {</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    job_node_t *node = cwist_alloc(<span class="keyword">sizeof</span>(*node));</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">static</span> <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *cwist_job_node_create(<a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a0447e35daf4a82549bf7d207d5ce8a28">cwist_job_func</a> func, <span class="keywordtype">void</span> *arg) {</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *node = <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#aeba69949fe17751318e6b5fc84a74096">cwist_alloc</a>(<span class="keyword">sizeof</span>(*node));</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    <span class="keywordflow">if</span> (!node) <span class="keywordflow">return</span> NULL;</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    node-&gt;func = func;</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    node-&gt;arg = arg;</div>
@@ -112,16 +112,16 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keywordflow">return</span> node;</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>}</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span> </div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keyword">static</span> <span class="keywordtype">void</span> cwist_job_node_destroy(job_node_t *node) {</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keyword">static</span> <span class="keywordtype">void</span> cwist_job_node_destroy(<a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *node) {</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <span class="keywordflow">if</span> (!node) <span class="keywordflow">return</span>;</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    cwist_free(node);</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(node);</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>}</div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span> </div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="keyword">static</span> <span class="keywordtype">void</span> cwist_queue_push(cwist_io_queue *q, job_node_t *node) {</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="keyword">static</span> <span class="keywordtype">void</span> cwist_queue_push(cwist_io_queue *q, <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *node) {</div>
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    atomic_store_explicit(&amp;node-&gt;next, NULL, memory_order_relaxed);</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <span class="keywordflow">while</span> (1) {</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>        job_node_t *tail = atomic_load_explicit(&amp;q-&gt;tail, memory_order_acquire);</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        job_node_t *next = atomic_load_explicit(&amp;tail-&gt;next, memory_order_acquire);</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>        <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *tail = atomic_load_explicit(&amp;q-&gt;tail, memory_order_acquire);</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *next = atomic_load_explicit(&amp;tail-&gt;next, memory_order_acquire);</div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>        <span class="keywordflow">if</span> (tail == atomic_load_explicit(&amp;q-&gt;tail, memory_order_acquire)) {</div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>            <span class="keywordflow">if</span> (!next) {</div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>                <span class="keywordflow">if</span> (atomic_compare_exchange_weak_explicit(&amp;tail-&gt;next, &amp;next, node,</div>
@@ -148,11 +148,11 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    }</div>
 <div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>}</div>
 <div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span> </div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span><span class="keyword">static</span> job_node_t *cwist_queue_pop(cwist_io_queue *q) {</div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span><span class="keyword">static</span> <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *cwist_queue_pop(cwist_io_queue *q) {</div>
 <div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="keywordflow">while</span> (1) {</div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>        job_node_t *head = atomic_load_explicit(&amp;q-&gt;head, memory_order_acquire);</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>        job_node_t *tail = atomic_load_explicit(&amp;q-&gt;tail, memory_order_acquire);</div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>        job_node_t *next = atomic_load_explicit(&amp;head-&gt;next, memory_order_acquire);</div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>        <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *head = atomic_load_explicit(&amp;q-&gt;head, memory_order_acquire);</div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>        <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *tail = atomic_load_explicit(&amp;q-&gt;tail, memory_order_acquire);</div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>        <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *next = atomic_load_explicit(&amp;head-&gt;next, memory_order_acquire);</div>
 <div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>        <span class="keywordflow">if</span> (!next) {</div>
 <div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>            <span class="keywordflow">return</span> NULL;</div>
 <div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>        }</div>
@@ -187,12 +187,12 @@ $(document).ready(function() { init_codefold(1); });
 <div class="foldopen" id="foldopen00143" data-start="{" data-end="}">
 <div class="line"><a id="l00143" name="l00143"></a><span class="lineno"><a class="line" href="../../d2/d29/io__uring_8c.html#ae98b56f01551c8b2a116ede7c918aa99">  143</a></span><a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a> *<a class="code hl_function" href="../../d2/d29/io__uring_8c.html#ae98b56f01551c8b2a116ede7c918aa99">cwist_io_queue_create</a>(<span class="keywordtype">size_t</span> capacity) {</div>
 <div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>    (void)capacity;</div>
-<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a> *q = cwist_alloc(<span class="keyword">sizeof</span>(*q));</div>
+<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <a class="code hl_typedef" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a> *q = <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#aeba69949fe17751318e6b5fc84a74096">cwist_alloc</a>(<span class="keyword">sizeof</span>(*q));</div>
 <div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>    <span class="keywordflow">if</span> (!q) <span class="keywordflow">return</span> NULL;</div>
 <div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span> </div>
-<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    job_node_t *stub = cwist_job_node_create(NULL, NULL);</div>
+<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *stub = cwist_job_node_create(NULL, NULL);</div>
 <div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <span class="keywordflow">if</span> (!stub) {</div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>        cwist_free(q);</div>
+<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>        <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(q);</div>
 <div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>        <span class="keywordflow">return</span> NULL;</div>
 <div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    }</div>
 <div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span> </div>
@@ -203,13 +203,13 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span> </div>
 <div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    <span class="keywordflow">if</span> (pthread_mutex_init(&amp;q-&gt;sleep_lock, NULL) != 0) {</div>
 <div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>        cwist_job_node_destroy(stub);</div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>        cwist_free(q);</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>        <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(q);</div>
 <div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>        <span class="keywordflow">return</span> NULL;</div>
 <div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    }</div>
 <div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <span class="keywordflow">if</span> (pthread_cond_init(&amp;q-&gt;sleep_cond, NULL) != 0) {</div>
 <div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>        pthread_mutex_destroy(&amp;q-&gt;sleep_lock);</div>
 <div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>        cwist_job_node_destroy(stub);</div>
-<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>        cwist_free(q);</div>
+<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>        <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(q);</div>
 <div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>        <span class="keywordflow">return</span> NULL;</div>
 <div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    }</div>
 <div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>    <span class="keywordflow">return</span> q;</div>
@@ -223,7 +223,7 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>        <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>    }</div>
 <div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span> </div>
-<div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span>    job_node_t *node = cwist_job_node_create(func, arg);</div>
+<div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span>    <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *node = cwist_job_node_create(func, arg);</div>
 <div class="line"><a id="l00187" name="l00187"></a><span class="lineno">  187</span>    <span class="keywordflow">if</span> (!node) <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span>    cwist_queue_push(q, node);</div>
 <div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
@@ -235,7 +235,7 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <span class="keywordflow">if</span> (!q) <span class="keywordflow">return</span>;</div>
 <div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span>    <span class="keywordflow">while</span> (atomic_load_explicit(&amp;q-&gt;running, memory_order_acquire) ||</div>
 <div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span>           atomic_load_explicit(&amp;q-&gt;pending_jobs, memory_order_acquire) &gt; 0) {</div>
-<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>        job_node_t *node = cwist_queue_pop(q);</div>
+<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>        <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *node = cwist_queue_pop(q);</div>
 <div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span>        <span class="keywordflow">if</span> (!node) {</div>
 <div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>            <span class="keywordflow">if</span> (!cwist_queue_wait(q)) {</div>
 <div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>                <span class="keywordflow">break</span>;</div>
@@ -263,21 +263,25 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00227" name="l00227"></a><span class="lineno">  227</span>    pthread_cond_broadcast(&amp;q-&gt;sleep_cond);</div>
 <div class="line"><a id="l00228" name="l00228"></a><span class="lineno">  228</span>    pthread_mutex_unlock(&amp;q-&gt;sleep_lock);</div>
 <div class="line"><a id="l00229" name="l00229"></a><span class="lineno">  229</span> </div>
-<div class="line"><a id="l00230" name="l00230"></a><span class="lineno">  230</span>    job_node_t *node = atomic_load_explicit(&amp;q-&gt;head, memory_order_acquire);</div>
+<div class="line"><a id="l00230" name="l00230"></a><span class="lineno">  230</span>    <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *node = atomic_load_explicit(&amp;q-&gt;head, memory_order_acquire);</div>
 <div class="line"><a id="l00231" name="l00231"></a><span class="lineno">  231</span>    <span class="keywordflow">while</span> (node) {</div>
-<div class="line"><a id="l00232" name="l00232"></a><span class="lineno">  232</span>        job_node_t *next = atomic_load_explicit(&amp;node-&gt;next, memory_order_acquire);</div>
+<div class="line"><a id="l00232" name="l00232"></a><span class="lineno">  232</span>        <a class="code hl_typedef" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a> *next = atomic_load_explicit(&amp;node-&gt;next, memory_order_acquire);</div>
 <div class="line"><a id="l00233" name="l00233"></a><span class="lineno">  233</span>        cwist_job_node_destroy(node);</div>
 <div class="line"><a id="l00234" name="l00234"></a><span class="lineno">  234</span>        node = next;</div>
 <div class="line"><a id="l00235" name="l00235"></a><span class="lineno">  235</span>    }</div>
 <div class="line"><a id="l00236" name="l00236"></a><span class="lineno">  236</span> </div>
 <div class="line"><a id="l00237" name="l00237"></a><span class="lineno">  237</span>    pthread_cond_destroy(&amp;q-&gt;sleep_cond);</div>
 <div class="line"><a id="l00238" name="l00238"></a><span class="lineno">  238</span>    pthread_mutex_destroy(&amp;q-&gt;sleep_lock);</div>
-<div class="line"><a id="l00239" name="l00239"></a><span class="lineno">  239</span>    cwist_free(q);</div>
+<div class="line"><a id="l00239" name="l00239"></a><span class="lineno">  239</span>    <a class="code hl_function" href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a>(q);</div>
 <div class="line"><a id="l00240" name="l00240"></a><span class="lineno">  240</span>}</div>
 </div>
+<div class="ttc" id="aalloc_8h_html"><div class="ttname"><a href="../../d2/dfe/alloc_8h.html">alloc.h</a></div><div class="ttdoc">Memory allocation wrappers backed by libttak.</div></div>
+<div class="ttc" id="aalloc_8h_html_a220abeebe2823e72511d1690fc561306"><div class="ttname"><a href="../../d2/dfe/alloc_8h.html#a220abeebe2823e72511d1690fc561306">cwist_free</a></div><div class="ttdeci">void cwist_free(void *ptr)</div><div class="ttdoc">Free memory obtained via cwist_alloc/cwist_strdup/etc.</div><div class="ttdef"><b>Definition</b> <a href="../../d9/d39/alloc_8c_source.html#l00315">alloc.c:315</a></div></div>
+<div class="ttc" id="aalloc_8h_html_aeba69949fe17751318e6b5fc84a74096"><div class="ttname"><a href="../../d2/dfe/alloc_8h.html#aeba69949fe17751318e6b5fc84a74096">cwist_alloc</a></div><div class="ttdeci">void * cwist_alloc(size_t size)</div><div class="ttdoc">Allocate zeroed memory tracked by libttak.</div><div class="ttdef"><b>Definition</b> <a href="../../d9/d39/alloc_8c_source.html#l00221">alloc.c:221</a></div></div>
 <div class="ttc" id="acwist__io_8h_html"><div class="ttname"><a href="../../d1/df5/cwist__io_8h.html">cwist_io.h</a></div><div class="ttdoc">Platform Agnostic Async Job Queue Interface.</div></div>
 <div class="ttc" id="acwist__io_8h_html_a0447e35daf4a82549bf7d207d5ce8a28"><div class="ttname"><a href="../../d1/df5/cwist__io_8h.html#a0447e35daf4a82549bf7d207d5ce8a28">cwist_job_func</a></div><div class="ttdeci">void(* cwist_job_func)(void *arg)</div><div class="ttdoc">Job function signature.</div><div class="ttdef"><b>Definition</b> <a href="../../d1/df5/cwist__io_8h_source.html#l00022">cwist_io.h:22</a></div></div>
 <div class="ttc" id="acwist__io_8h_html_a3fc0472d3c48cdb9925cce08d02593dc"><div class="ttname"><a href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a></div><div class="ttdeci">struct cwist_io_queue cwist_io_queue</div><div class="ttdoc">Opaque handle for the IO Queue. Backend implementation depends on OS (io_uring, kqueue,...</div><div class="ttdef"><b>Definition</b> <a href="../../d1/df5/cwist__io_8h_source.html#l00016">cwist_io.h:16</a></div></div>
+<div class="ttc" id="aio__select_8c_html_a33eb97006e5539c94cc623bb804d7564"><div class="ttname"><a href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a></div><div class="ttdeci">struct job_node job_node_t</div></div>
 <div class="ttc" id="aio__uring_8c_html_a33eb97006e5539c94cc623bb804d7564"><div class="ttname"><a href="../../d2/d29/io__uring_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a></div><div class="ttdeci">struct job_node job_node_t</div></div>
 <div class="ttc" id="aio__uring_8c_html_a817485c076ee5f5cb2a203917931e2cc"><div class="ttname"><a href="../../d2/d29/io__uring_8c.html#a817485c076ee5f5cb2a203917931e2cc">cwist_io_queue_run</a></div><div class="ttdeci">void cwist_io_queue_run(cwist_io_queue *q)</div><div class="ttdoc">Process queued jobs until shutdown is requested and no work remains.</div><div class="ttdef"><b>Definition</b> <a href="../../d2/d29/io__uring_8c_source.html#l00196">io_uring.c:196</a></div></div>
 <div class="ttc" id="aio__uring_8c_html_a90a553923ea4f601ffb5acaf8660d9fe"><div class="ttname"><a href="../../d2/d29/io__uring_8c.html#a90a553923ea4f601ffb5acaf8660d9fe">cwist_io_queue_destroy</a></div><div class="ttdeci">void cwist_io_queue_destroy(cwist_io_queue *q)</div><div class="ttdoc">Stop the queue, wake sleepers, and free all remaining nodes.</div><div class="ttdef"><b>Definition</b> <a href="../../d2/d29/io__uring_8c_source.html#l00223">io_uring.c:223</a></div></div>

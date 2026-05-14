@@ -4,17 +4,17 @@
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="616,57,574,95,571,91,613,53"/>
 <area shape="rect" id="Node000014" href="$dc/da3/big__dumb__reply_8c.html" title="Opportunistic response cache that stores stable GET replies in memory or on disk." alt="" coords="657,93,820,133"/>
 <area shape="poly" id="edge13_Node000001_Node000014" title=" " alt="" coords="678,53,720,91,716,95,674,57"/>
-<area shape="rect" id="Node000003" href="$d5/da9/net_2http_2mux_8h_source.html" title=" " alt="" coords="5,181,168,221"/>
+<area shape="rect" id="Node000003" href="$d5/da9/net_2http_2mux_8h.html" title="HTTP request multiplexer (router)." alt="" coords="5,181,168,221"/>
 <area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="458,134,180,184,169,186,168,181,180,179,457,128"/>
 <area shape="rect" id="Node000005" href="$dc/d81/ech_8h.html" title="ech.h interface." alt="" coords="192,181,355,221"/>
 <area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="479,140,335,184,334,179,477,135"/>
 <area shape="rect" id="Node000007" href="$df/d4c/compress_8h.html" title="Compression middleware with swappable backend interface." alt="" coords="379,181,541,221"/>
 <area shape="poly" id="edge6_Node000002_Node000007" title=" " alt="" coords="524,145,482,183,479,179,520,141"/>
-<area shape="rect" id="Node000009" href="$d3/d30/sys_2app_2middleware_8h_source.html" title=" " alt="" coords="565,181,726,221"/>
+<area shape="rect" id="Node000009" href="$d3/d30/sys_2app_2middleware_8h.html" title="Built&#45;in middleware factories." alt="" coords="565,181,726,221"/>
 <area shape="poly" id="edge8_Node000002_Node000009" title=" " alt="" coords="585,141,626,179,623,183,581,145"/>
 <area shape="rect" id="Node000011" href="$db/de3/test__client_8h.html" title="In&#45;process HTTP test client (ala Flask test_client)." alt="" coords="750,181,911,221"/>
 <area shape="poly" id="edge10_Node000002_Node000011" title=" " alt="" coords="627,135,770,179,769,184,625,140"/>
-<area shape="rect" id="Node000013" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="935,189,1070,214"/>
+<area shape="rect" id="Node000013" href="$df/d7f/app_8c.html" title=" " alt="" coords="935,189,1070,214"/>
 <area shape="poly" id="edge12_Node000002_Node000013" title=" " alt="" coords="647,131,788,154,925,179,958,186,956,191,923,184,787,159,646,136"/>
 <area shape="rect" id="Node000004" href="$dd/d49/mux_8c.html" title="Fixed&#45;bucket HTTP route dispatch using a lightweight path signature." alt="" coords="17,269,157,295"/>
 <area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="89,235,89,269,84,269,84,235"/>

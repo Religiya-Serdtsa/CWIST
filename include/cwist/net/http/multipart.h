@@ -1,12 +1,12 @@
-#ifndef __CWIST_MULTIPART_H__
-#define __CWIST_MULTIPART_H__
-
-#include <stddef.h>
-
 /**
  * @file multipart.h
  * @brief RFC 7578 multipart/form-data parser.
  */
+
+#ifndef __CWIST_MULTIPART_H__
+#define __CWIST_MULTIPART_H__
+
+#include <stddef.h>
 
 typedef struct cwist_multipart_field {
     char *name;           ///< Form field name.

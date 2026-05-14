@@ -1,8 +1,8 @@
 <map id="src/core/html/builder.c" name="src/core/html/builder.c">
 <area shape="rect" id="Node000001" title="Minimal HTML tree construction and rendering helpers." alt="" coords="265,5,432,31"/>
-<area shape="rect" id="Node000002" href="$d5/d78/builder_8h_source.html" title=" " alt="" coords="257,79,440,104"/>
+<area shape="rect" id="Node000002" href="$d5/d78/builder_8h.html" title="HTML element builder and renderer." alt="" coords="257,79,440,104"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="351,31,351,65,346,65,346,31"/>
-<area shape="rect" id="Node000003" href="$d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="162,152,298,192"/>
+<area shape="rect" id="Node000003" href="$d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="162,152,298,192"/>
 <area shape="poly" id="edge11_Node000001_Node000003" title=" " alt="" coords="314,33,277,52,261,65,247,80,235,109,231,139,226,138,230,107,242,77,257,61,275,47,311,28"/>
 <area shape="rect" id="Node000004" title=" " alt="" coords="5,247,76,273"/>
 <area shape="poly" id="edge17_Node000001_Node000004" title=" " alt="" coords="296,33,241,52,186,81,144,118,107,161,56,237,51,234,103,157,140,114,183,76,239,47,294,28"/>
@@ -10,7 +10,7 @@
 <area shape="poly" id="edge16_Node000001_Node000005" title=" " alt="" coords="315,33,274,50,228,76,185,110,167,130,152,153,140,194,137,233,131,233,135,193,148,151,163,127,181,106,225,71,272,45,313,28"/>
 <area shape="rect" id="Node000009" title=" " alt="" coords="375,328,485,353"/>
 <area shape="poly" id="edge15_Node000001_Node000009" title=" " alt="" coords="389,28,424,47,441,61,454,77,467,108,474,141,475,175,472,208,459,270,443,316,438,315,454,268,467,207,470,175,468,142,462,110,449,80,437,64,421,51,386,33"/>
-<area shape="rect" id="Node000010" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="515,79,689,104"/>
+<area shape="rect" id="Node000010" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="515,79,689,104"/>
 <area shape="poly" id="edge12_Node000001_Node000010" title=" " alt="" coords="390,28,548,72,547,77,389,33"/>
 <area shape="rect" id="Node000013" title=" " alt="" coords="713,79,779,104"/>
 <area shape="poly" id="edge18_Node000001_Node000013" title=" " alt="" coords="427,28,551,48,699,76,698,81,550,53,426,33"/>

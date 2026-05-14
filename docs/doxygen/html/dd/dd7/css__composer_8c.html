@@ -75,6 +75,7 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#define-members">Macros</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">css_composer.c File Reference</div></div>
 </div><!--header-->
@@ -103,7 +104,7 @@ Include dependency graph for css_composer.c:</div>
 <area shape="poly" title=" " alt="" coords="412,29,453,74,449,77,408,33"/>
 <area shape="rect" title=" " alt="" coords="529,86,597,111"/>
 <area shape="poly" title=" " alt="" coords="425,28,528,78,526,83,423,33"/>
-<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="227,167,363,207"/>
+<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="227,167,363,207"/>
 <area shape="poly" title=" " alt="" coords="127,116,236,159,234,164,125,121"/>
 <area shape="rect" title=" " alt="" coords="172,343,255,368"/>
 <area shape="poly" title=" " alt="" coords="78,119,76,155,77,200,86,249,94,272,106,293,131,318,162,335,159,340,128,322,102,296,89,274,81,250,72,201,70,155,73,119"/>
@@ -122,6 +123,13 @@ Include dependency graph for css_composer.c:</div>
 </div>
 <p><a href="../../dd/dd7/css__composer_8c_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:a4887ceeae88266064841cbbc11ef8b53" id="r_a4887ceeae88266064841cbbc11ef8b53"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#a4887ceeae88266064841cbbc11ef8b53">MIN3</a>(a,  b,  c)&#160;&#160;&#160;((a) &lt; (b) ? ((a) &lt; (c) ? (a) : (c)) : ((b) &lt; (c) ? (b) : (c)))</td></tr>
+<tr class="separator:a4887ceeae88266064841cbbc11ef8b53"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a37c6d7fcb9c177c308ef38e1d51d35e3" id="r_a37c6d7fcb9c177c308ef38e1d51d35e3"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#a37c6d7fcb9c177c308ef38e1d51d35e3">MAX3</a>(a,  b,  c)&#160;&#160;&#160;((a) &gt; (b) ? ((a) &gt; (c) ? (a) : (c)) : ((b) &gt; (c) ? (b) : (c)))</td></tr>
+<tr class="separator:a37c6d7fcb9c177c308ef38e1d51d35e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:af1d6b42d55ec612d65e9672a16732066" id="r_af1d6b42d55ec612d65e9672a16732066"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d7/da3/structcwist__color__hsl.html">cwist_color_hsl</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#af1d6b42d55ec612d65e9672a16732066">cwist_color_rgb_to_hsl</a> (<a class="el" href="../../d1/db9/structcwist__color__rgb.html">cwist_color_rgb</a> rgb)</td></tr>
@@ -139,13 +147,13 @@ Functions</h2></td></tr>
 <tr class="memitem:a951abb29e77f91b62c54ab9d07f724a2" id="r_a951abb29e77f91b62c54ab9d07f724a2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#a951abb29e77f91b62c54ab9d07f724a2">cwist_css_config_init</a> (<a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *cfg)</td></tr>
 <tr class="memdesc:a951abb29e77f91b62c54ab9d07f724a2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initializes a CSS configuration with sensible defaults.  <br /></td></tr>
 <tr class="separator:a951abb29e77f91b62c54ab9d07f724a2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a884932455fa36524d08bb4f42b745852" id="r_a884932455fa36524d08bb4f42b745852"><td class="memItemLeft" align="right" valign="top">cwist_sstring *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#a884932455fa36524d08bb4f42b745852">cwist_css_generate_variables</a> (const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *cfg)</td></tr>
+<tr class="memitem:a884932455fa36524d08bb4f42b745852" id="r_a884932455fa36524d08bb4f42b745852"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d5/ddc/structcwist__sstring.html">cwist_sstring</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#a884932455fa36524d08bb4f42b745852">cwist_css_generate_variables</a> (const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *cfg)</td></tr>
 <tr class="memdesc:a884932455fa36524d08bb4f42b745852"><td class="mdescLeft">&#160;</td><td class="mdescRight">Generates a CSS string containing CSS Custom Properties (:root variables). Extrapolates hover states, active states, and surface colors mathematically.  <br /></td></tr>
 <tr class="separator:a884932455fa36524d08bb4f42b745852"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aea3b03fdcde20651bdb2766dee0ddce5" id="r_aea3b03fdcde20651bdb2766dee0ddce5"><td class="memItemLeft" align="right" valign="top">cwist_sstring *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#aea3b03fdcde20651bdb2766dee0ddce5">cwist_css_generate_utility_classes</a> (const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *cfg)</td></tr>
+<tr class="memitem:aea3b03fdcde20651bdb2766dee0ddce5" id="r_aea3b03fdcde20651bdb2766dee0ddce5"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d5/ddc/structcwist__sstring.html">cwist_sstring</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#aea3b03fdcde20651bdb2766dee0ddce5">cwist_css_generate_utility_classes</a> (const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *cfg)</td></tr>
 <tr class="memdesc:aea3b03fdcde20651bdb2766dee0ddce5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Generates a set of utility classes based on the design system configuration.  <br /></td></tr>
 <tr class="separator:aea3b03fdcde20651bdb2766dee0ddce5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4b035df6ad72782fe3ada62f32dd848e" id="r_a4b035df6ad72782fe3ada62f32dd848e"><td class="memItemLeft" align="right" valign="top">cwist_sstring *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#a4b035df6ad72782fe3ada62f32dd848e">cwist_css_generate_stylesheet</a> (const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *cfg)</td></tr>
+<tr class="memitem:a4b035df6ad72782fe3ada62f32dd848e" id="r_a4b035df6ad72782fe3ada62f32dd848e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d5/ddc/structcwist__sstring.html">cwist_sstring</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dd7/css__composer_8c.html#a4b035df6ad72782fe3ada62f32dd848e">cwist_css_generate_stylesheet</a> (const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *cfg)</td></tr>
 <tr class="memdesc:a4b035df6ad72782fe3ada62f32dd848e"><td class="mdescLeft">&#160;</td><td class="mdescRight">High-level helper to generate a complete stylesheet (Variables + Utilities).  <br /></td></tr>
 <tr class="separator:a4b035df6ad72782fe3ada62f32dd848e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
@@ -153,7 +161,80 @@ Functions</h2></td></tr>
 <div class="textblock"><p>Dynamic CSS Synthesis and Color Mathematics Implementation. </p>
 
 <p class="definition">Definition in file <a class="el" href="../../dd/dd7/css__composer_8c_source.html">css_composer.c</a>.</p>
-</div><h2 class="groupheader">Function Documentation</h2>
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a37c6d7fcb9c177c308ef38e1d51d35e3" name="a37c6d7fcb9c177c308ef38e1d51d35e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a37c6d7fcb9c177c308ef38e1d51d35e3">&#9670;&#160;</a></span>MAX3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MAX3</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">a, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">b, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">c&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td>&#160;&#160;&#160;((a) &gt; (b) ? ((a) &gt; (c) ? (a) : (c)) : ((b) &gt; (c) ? (b) : (c)))</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00013">13</a> of file <a class="el" href="../../dd/dd7/css__composer_8c_source.html">css_composer.c</a>.</p>
+
+</div>
+</div>
+<a id="a4887ceeae88266064841cbbc11ef8b53" name="a4887ceeae88266064841cbbc11ef8b53"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4887ceeae88266064841cbbc11ef8b53">&#9670;&#160;</a></span>MIN3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MIN3</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">a, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">b, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">c&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td>&#160;&#160;&#160;((a) &lt; (b) ? ((a) &lt; (c) ? (a) : (c)) : ((b) &lt; (c) ? (b) : (c)))</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00012">12</a> of file <a class="el" href="../../dd/dd7/css__composer_8c_source.html">css_composer.c</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Function Documentation</h2>
 <a id="a9cad6a35c4f4cb0e3a475e54e69e8f15" name="a9cad6a35c4f4cb0e3a475e54e69e8f15"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a9cad6a35c4f4cb0e3a475e54e69e8f15">&#9670;&#160;</a></span>cwist_color_hex_to_rgb()</h2>
 
@@ -288,7 +369,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00015">15</a> of file <a class="el" href="../../dd/dd7/css__composer_8c_source.html">css_composer.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00018">cwist_color_rgb::b</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00017">cwist_color_rgb::g</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00025">cwist_color_hsl::h</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00027">cwist_color_hsl::l</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00016">cwist_color_rgb::r</a>, and <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00026">cwist_color_hsl::s</a>.</p>
+<p class="reference">References <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00018">cwist_color_rgb::b</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00017">cwist_color_rgb::g</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00025">cwist_color_hsl::h</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00027">cwist_color_hsl::l</a>, <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00013">MAX3</a>, <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00012">MIN3</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00016">cwist_color_rgb::r</a>, and <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00026">cwist_color_hsl::s</a>.</p>
 
 </div>
 </div>
@@ -329,7 +410,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_sstring * cwist_css_generate_stylesheet </td>
+          <td class="memname"><a class="el" href="../../d5/ddc/structcwist__sstring.html">cwist_sstring</a> * cwist_css_generate_stylesheet </td>
           <td>(</td>
           <td class="paramtype">const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *&#160;</td>
           <td class="paramname"><em>cfg</em></td><td>)</td>
@@ -349,7 +430,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00207">207</a> of file <a class="el" href="../../dd/dd7/css__composer_8c_source.html">css_composer.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00166">cwist_css_generate_utility_classes()</a>, and <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00112">cwist_css_generate_variables()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00166">cwist_css_generate_utility_classes()</a>, <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00112">cwist_css_generate_variables()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00341">cwist_sstring_append()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00576">cwist_sstring_create()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00597">cwist_sstring_destroy()</a>, and <a class="el" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html#l00015">cwist_sstring::data</a>.</p>
 
 </div>
 </div>
@@ -360,7 +441,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_sstring * cwist_css_generate_utility_classes </td>
+          <td class="memname"><a class="el" href="../../d5/ddc/structcwist__sstring.html">cwist_sstring</a> * cwist_css_generate_utility_classes </td>
           <td>(</td>
           <td class="paramtype">const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *&#160;</td>
           <td class="paramname"><em>cfg</em></td><td>)</td>
@@ -380,6 +461,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00166">166</a> of file <a class="el" href="../../dd/dd7/css__composer_8c_source.html">css_composer.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../dd/d79/sstring_8c_source.html#l00341">cwist_sstring_append()</a>, and <a class="el" href="../../dd/d79/sstring_8c_source.html#l00576">cwist_sstring_create()</a>.</p>
+
 <p class="reference">Referenced by <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00207">cwist_css_generate_stylesheet()</a>.</p>
 
 </div>
@@ -391,7 +474,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_sstring * cwist_css_generate_variables </td>
+          <td class="memname"><a class="el" href="../../d5/ddc/structcwist__sstring.html">cwist_sstring</a> * cwist_css_generate_variables </td>
           <td>(</td>
           <td class="paramtype">const <a class="el" href="../../d3/dd1/structcwist__css__config.html">cwist_css_config</a> *&#160;</td>
           <td class="paramname"><em>cfg</em></td><td>)</td>
@@ -411,7 +494,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00112">112</a> of file <a class="el" href="../../dd/dd7/css__composer_8c_source.html">css_composer.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00085">cwist_color_rgb_to_hex()</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00039">cwist_css_config::is_dark_mode</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00035">cwist_css_config::primary_color</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00037">cwist_css_config::roundness_px</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00036">cwist_css_config::secondary_color</a>, and <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00038">cwist_css_config::spacing_base_px</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00085">cwist_color_rgb_to_hex()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00341">cwist_sstring_append()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00576">cwist_sstring_create()</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00039">cwist_css_config::is_dark_mode</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00035">cwist_css_config::primary_color</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00037">cwist_css_config::roundness_px</a>, <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00036">cwist_css_config::secondary_color</a>, and <a class="el" href="../../da/d0a/css__composer_8h_source.html#l00038">cwist_css_config::spacing_base_px</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../dd/dd7/css__composer_8c_source.html#l00207">cwist_css_generate_stylesheet()</a>.</p>
 

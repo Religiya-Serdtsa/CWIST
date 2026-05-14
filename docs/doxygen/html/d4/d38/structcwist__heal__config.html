@@ -96,28 +96,105 @@ Collaboration diagram for cwist_heal_config:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:a841d71ad7a3ec9e9e0e6e866c5852343" id="r_a841d71ad7a3ec9e9e0e6e866c5852343"><td class="memItemLeft" align="right" valign="top"><a id="a841d71ad7a3ec9e9e0e6e866c5852343" name="a841d71ad7a3ec9e9e0e6e866c5852343"></a>
-double&#160;</td><td class="memItemRight" valign="bottom"><b>threshold</b></td></tr>
-<tr class="memdesc:a841d71ad7a3ec9e9e0e6e866c5852343"><td class="mdescLeft">&#160;</td><td class="mdescRight">Min confidence (0.0–1.0) to accept recovery. Default: 0.8. <br /></td></tr>
+<tr class="memitem:a841d71ad7a3ec9e9e0e6e866c5852343" id="r_a841d71ad7a3ec9e9e0e6e866c5852343"><td class="memItemLeft" align="right" valign="top">double&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d38/structcwist__heal__config.html#a841d71ad7a3ec9e9e0e6e866c5852343">threshold</a></td></tr>
+<tr class="memdesc:a841d71ad7a3ec9e9e0e6e866c5852343"><td class="mdescLeft">&#160;</td><td class="mdescRight">Min confidence (0.0–1.0) to accept recovery. Default: 0.8.  <br /></td></tr>
 <tr class="separator:a841d71ad7a3ec9e9e0e6e866c5852343"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6f2672c51ee45c26e20ea1f1b380fa27" id="r_a6f2672c51ee45c26e20ea1f1b380fa27"><td class="memItemLeft" align="right" valign="top"><a id="a6f2672c51ee45c26e20ea1f1b380fa27" name="a6f2672c51ee45c26e20ea1f1b380fa27"></a>
-const <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><b>schema</b></td></tr>
-<tr class="memdesc:a6f2672c51ee45c26e20ea1f1b380fa27"><td class="mdescLeft">&#160;</td><td class="mdescRight">Schema for L2 alignment (may be NULL). <br /></td></tr>
+<tr class="memitem:a6f2672c51ee45c26e20ea1f1b380fa27" id="r_a6f2672c51ee45c26e20ea1f1b380fa27"><td class="memItemLeft" align="right" valign="top">const <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d38/structcwist__heal__config.html#a6f2672c51ee45c26e20ea1f1b380fa27">schema</a></td></tr>
+<tr class="memdesc:a6f2672c51ee45c26e20ea1f1b380fa27"><td class="mdescLeft">&#160;</td><td class="mdescRight">Schema for L2 alignment (may be NULL).  <br /></td></tr>
 <tr class="separator:a6f2672c51ee45c26e20ea1f1b380fa27"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:acb7a7d4ff9826b9a7c55c862711e05b7" id="r_acb7a7d4ff9826b9a7c55c862711e05b7"><td class="memItemLeft" align="right" valign="top"><a id="acb7a7d4ff9826b9a7c55c862711e05b7" name="acb7a7d4ff9826b9a7c55c862711e05b7"></a>
-<a class="el" href="../../db/dd3/json__heal_8h.html#ae61f8087f8dfc87ea0a74936c7f710a9">cwist_sllm_heal_fn</a>&#160;</td><td class="memItemRight" valign="bottom"><b>sllm_fn</b></td></tr>
-<tr class="memdesc:acb7a7d4ff9826b9a7c55c862711e05b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Optional L3 deep-recovery callback. <br /></td></tr>
+<tr class="memitem:acb7a7d4ff9826b9a7c55c862711e05b7" id="r_acb7a7d4ff9826b9a7c55c862711e05b7"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../db/dd3/json__heal_8h.html#ae61f8087f8dfc87ea0a74936c7f710a9">cwist_sllm_heal_fn</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d38/structcwist__heal__config.html#acb7a7d4ff9826b9a7c55c862711e05b7">sllm_fn</a></td></tr>
+<tr class="memdesc:acb7a7d4ff9826b9a7c55c862711e05b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Optional L3 deep-recovery callback.  <br /></td></tr>
 <tr class="separator:acb7a7d4ff9826b9a7c55c862711e05b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a53a49a03f5bc66d49e0ffb7083490960" id="r_a53a49a03f5bc66d49e0ffb7083490960"><td class="memItemLeft" align="right" valign="top"><a id="a53a49a03f5bc66d49e0ffb7083490960" name="a53a49a03f5bc66d49e0ffb7083490960"></a>
-void *&#160;</td><td class="memItemRight" valign="bottom"><b>sllm_userdata</b></td></tr>
-<tr class="memdesc:a53a49a03f5bc66d49e0ffb7083490960"><td class="mdescLeft">&#160;</td><td class="mdescRight">Passed verbatim to sllm_fn. <br /></td></tr>
+<tr class="memitem:a53a49a03f5bc66d49e0ffb7083490960" id="r_a53a49a03f5bc66d49e0ffb7083490960"><td class="memItemLeft" align="right" valign="top">void *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d4/d38/structcwist__heal__config.html#a53a49a03f5bc66d49e0ffb7083490960">sllm_userdata</a></td></tr>
+<tr class="memdesc:a53a49a03f5bc66d49e0ffb7083490960"><td class="mdescLeft">&#160;</td><td class="mdescRight">Passed verbatim to sllm_fn.  <br /></td></tr>
 <tr class="separator:a53a49a03f5bc66d49e0ffb7083490960"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Configuration passed to <a class="el" href="../../db/dd3/json__heal_8h.html#af0d1d9376f0734a5c4e00d061767e76a" title="Attempt to heal a potentially broken JSON string.">cwist_json_heal()</a>. </p>
 
 <p class="definition">Definition at line <a class="el" href="../../db/dd3/json__heal_8h_source.html#l00098">98</a> of file <a class="el" href="../../db/dd3/json__heal_8h_source.html">json_heal.h</a>.</p>
-</div><hr/>The documentation for this struct was generated from the following file:<ul>
+</div><h2 class="groupheader">Member Data Documentation</h2>
+<a id="a6f2672c51ee45c26e20ea1f1b380fa27" name="a6f2672c51ee45c26e20ea1f1b380fa27"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6f2672c51ee45c26e20ea1f1b380fa27">&#9670;&#160;</a></span>schema</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">const <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a>* cwist_heal_config::schema</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Schema for L2 alignment (may be NULL). </p>
+
+<p class="definition">Definition at line <a class="el" href="../../db/dd3/json__heal_8h_source.html#l00100">100</a> of file <a class="el" href="../../db/dd3/json__heal_8h_source.html">json_heal.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d2/db5/db_8c_source.html#l00400">cwist_db_insert_healed()</a>, and <a class="el" href="../../d1/d8b/json__heal_8c_source.html#l00375">cwist_json_heal()</a>.</p>
+
+</div>
+</div>
+<a id="acb7a7d4ff9826b9a7c55c862711e05b7" name="acb7a7d4ff9826b9a7c55c862711e05b7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb7a7d4ff9826b9a7c55c862711e05b7">&#9670;&#160;</a></span>sllm_fn</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../db/dd3/json__heal_8h.html#ae61f8087f8dfc87ea0a74936c7f710a9">cwist_sllm_heal_fn</a> cwist_heal_config::sllm_fn</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Optional L3 deep-recovery callback. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../db/dd3/json__heal_8h_source.html#l00101">101</a> of file <a class="el" href="../../db/dd3/json__heal_8h_source.html">json_heal.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d1/d8b/json__heal_8c_source.html#l00375">cwist_json_heal()</a>.</p>
+
+</div>
+</div>
+<a id="a53a49a03f5bc66d49e0ffb7083490960" name="a53a49a03f5bc66d49e0ffb7083490960"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53a49a03f5bc66d49e0ffb7083490960">&#9670;&#160;</a></span>sllm_userdata</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void* cwist_heal_config::sllm_userdata</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Passed verbatim to sllm_fn. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../db/dd3/json__heal_8h_source.html#l00102">102</a> of file <a class="el" href="../../db/dd3/json__heal_8h_source.html">json_heal.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d1/d8b/json__heal_8c_source.html#l00375">cwist_json_heal()</a>.</p>
+
+</div>
+</div>
+<a id="a841d71ad7a3ec9e9e0e6e866c5852343" name="a841d71ad7a3ec9e9e0e6e866c5852343"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a841d71ad7a3ec9e9e0e6e866c5852343">&#9670;&#160;</a></span>threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">double cwist_heal_config::threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Min confidence (0.0–1.0) to accept recovery. Default: 0.8. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../db/dd3/json__heal_8h_source.html#l00099">99</a> of file <a class="el" href="../../db/dd3/json__heal_8h_source.html">json_heal.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d2/db5/db_8c_source.html#l00400">cwist_db_insert_healed()</a>, and <a class="el" href="../../d1/d8b/json__heal_8c_source.html#l00375">cwist_json_heal()</a>.</p>
+
+</div>
+</div>
+<hr/>The documentation for this struct was generated from the following file:<ul>
 <li>include/cwist/core/utils/<a class="el" href="../../db/dd3/json__heal_8h_source.html">json_heal.h</a></li>
 </ul>
 </div><!-- contents -->

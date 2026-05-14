@@ -1,12 +1,12 @@
 <map id="src/core/utils/json_builder.c" name="src/core/utils/json_builder.c">
 <area shape="rect" id="Node000001" title="Incremental JSON emission helpers backed by cwist_sstring." alt="" coords="252,5,388,45"/>
-<area shape="rect" id="Node000002" href="$d3/dc7/core_2utils_2json__builder_8h_source.html" title=" " alt="" coords="80,93,231,133"/>
+<area shape="rect" id="Node000002" href="$d3/dc7/core_2utils_2json__builder_8h.html" title="Simple JSON string builder utility." alt="" coords="80,93,231,133"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="285,48,205,89,202,85,282,43"/>
-<area shape="rect" id="Node000003" href="$d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="117,181,253,221"/>
+<area shape="rect" id="Node000003" href="$d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="117,181,253,221"/>
 <area shape="poly" id="edge11_Node000001_Node000003" title=" " alt="" coords="309,47,244,135,213,172,209,169,240,132,305,44"/>
 <area shape="rect" id="Node000005" title=" " alt="" coords="338,277,408,302"/>
 <area shape="poly" id="edge15_Node000001_Node000005" title=" " alt="" coords="325,45,336,122,356,221,367,263,362,264,350,222,331,123,319,46"/>
-<area shape="rect" id="Node000010" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="357,101,530,126"/>
+<area shape="rect" id="Node000010" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="357,101,530,126"/>
 <area shape="poly" id="edge12_Node000001_Node000010" title=" " alt="" coords="349,43,417,91,414,95,346,48"/>
 <area shape="rect" id="Node000013" title=" " alt="" coords="554,101,621,126"/>
 <area shape="poly" id="edge16_Node000001_Node000013" title=" " alt="" coords="389,43,543,91,549,93,547,98,541,96,387,48"/>

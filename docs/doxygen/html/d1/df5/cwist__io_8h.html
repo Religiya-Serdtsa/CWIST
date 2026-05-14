@@ -116,9 +116,8 @@ This graph shows which files directly or indirectly include this file:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
-<tr class="memitem:a3fc0472d3c48cdb9925cce08d02593dc" id="r_a3fc0472d3c48cdb9925cce08d02593dc"><td class="memItemLeft" align="right" valign="top"><a id="a3fc0472d3c48cdb9925cce08d02593dc" name="a3fc0472d3c48cdb9925cce08d02593dc"></a>
-typedef struct cwist_io_queue&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_io_queue</b></td></tr>
-<tr class="memdesc:a3fc0472d3c48cdb9925cce08d02593dc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Opaque handle for the IO Queue. Backend implementation depends on OS (io_uring, kqueue, select). <br /></td></tr>
+<tr class="memitem:a3fc0472d3c48cdb9925cce08d02593dc" id="r_a3fc0472d3c48cdb9925cce08d02593dc"><td class="memItemLeft" align="right" valign="top">typedef struct cwist_io_queue&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/df5/cwist__io_8h.html#a3fc0472d3c48cdb9925cce08d02593dc">cwist_io_queue</a></td></tr>
+<tr class="memdesc:a3fc0472d3c48cdb9925cce08d02593dc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Opaque handle for the IO Queue. Backend implementation depends on OS (io_uring, kqueue, select).  <br /></td></tr>
 <tr class="separator:a3fc0472d3c48cdb9925cce08d02593dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a0447e35daf4a82549bf7d207d5ce8a28" id="r_a0447e35daf4a82549bf7d207d5ce8a28"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/df5/cwist__io_8h.html#a0447e35daf4a82549bf7d207d5ce8a28">cwist_job_func</a>) (void *arg)</td></tr>
 <tr class="memdesc:a0447e35daf4a82549bf7d207d5ce8a28"><td class="mdescLeft">&#160;</td><td class="mdescRight">Job function signature.  <br /></td></tr>
@@ -144,6 +143,24 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition in file <a class="el" href="../../d1/df5/cwist__io_8h_source.html">cwist_io.h</a>.</p>
 </div><h2 class="groupheader">Typedef Documentation</h2>
+<a id="a3fc0472d3c48cdb9925cce08d02593dc" name="a3fc0472d3c48cdb9925cce08d02593dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3fc0472d3c48cdb9925cce08d02593dc">&#9670;&#160;</a></span>cwist_io_queue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef struct cwist_io_queue cwist_io_queue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Opaque handle for the IO Queue. Backend implementation depends on OS (io_uring, kqueue, select). </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/df5/cwist__io_8h_source.html#l00016">16</a> of file <a class="el" href="../../d1/df5/cwist__io_8h_source.html">cwist_io.h</a>.</p>
+
+</div>
+</div>
 <a id="a0447e35daf4a82549bf7d207d5ce8a28" name="a0447e35daf4a82549bf7d207d5ce8a28"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0447e35daf4a82549bf7d207d5ce8a28">&#9670;&#160;</a></span>cwist_job_func</h2>
 
@@ -220,6 +237,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/d70/io__select_8c_source.html#l00139">139</a> of file <a class="el" href="../../d9/d70/io__select_8c_source.html">io_select.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, and <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
+
 </div>
 </div>
 <a id="a90a553923ea4f601ffb5acaf8660d9fe" name="a90a553923ea4f601ffb5acaf8660d9fe"></a>
@@ -262,6 +281,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/d70/io__select_8c_source.html#l00217">217</a> of file <a class="el" href="../../d9/d70/io__select_8c_source.html">io_select.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
+
 </div>
 </div>
 <a id="a817485c076ee5f5cb2a203917931e2cc" name="a817485c076ee5f5cb2a203917931e2cc"></a>
@@ -303,6 +324,8 @@ Functions</h2></td></tr>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/d70/io__select_8c_source.html#l00192">192</a> of file <a class="el" href="../../d9/d70/io__select_8c_source.html">io_select.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
 
 </div>
 </div>
@@ -380,6 +403,8 @@ Functions</h2></td></tr>
 <dl class="section return"><dt>Returns</dt><dd>true on success, false when event registration fails. </dd></dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/d70/io__select_8c_source.html#l00176">176</a> of file <a class="el" href="../../d9/d70/io__select_8c_source.html">io_select.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, and <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
 
 </div>
 </div>

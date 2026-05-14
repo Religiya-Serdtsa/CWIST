@@ -1,0 +1,5 @@
+<map id="include/cwist/net/http/mux.h" name="include/cwist/net/http/mux.h">
+<area shape="rect" id="Node000001" title="HTTP request multiplexer (router)." alt="" coords="5,5,168,45"/>
+<area shape="rect" id="Node000002" href="$dd/d49/mux_8c.html" title="Fixed&#45;bucket HTTP route dispatch using a lightweight path signature." alt="" coords="17,93,157,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="89,59,89,93,84,93,84,59"/>
+</map>

@@ -217,6 +217,7 @@ cwist_http_request *cwist_http_request_create(void) {
     req->flash = cwist_query_map_create();
     req->upgraded = false;
     req->content_length = 0;
+    req->stream_id = 0;
     req->private_data = NULL;
     req->endpoint_opts = CWIST_ENDPOINT_DEFAULT;
 

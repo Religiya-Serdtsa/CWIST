@@ -84,7 +84,7 @@ $(function() {
 <p>Linux lock-free queue backend currently used as CWIST's io_uring placeholder.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="../../d1/df5/cwist__io_8h_source.html">cwist/sys/io/cwist_io.h</a>&gt;</code><br />
-<code>#include &lt;cwist/core/mem/alloc.h&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d2/dfe/alloc_8h_source.html">cwist/core/mem/alloc.h</a>&gt;</code><br />
 <code>#include &lt;pthread.h&gt;</code><br />
 <code>#include &lt;stdatomic.h&gt;</code><br />
 <code>#include &lt;stdbool.h&gt;</code><br />
@@ -93,23 +93,23 @@ Include dependency graph for io_uring.c:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../d6/d2a/io__uring_8c__incl.png" border="0" usemap="#asrc_2sys_2io_2io__uring_8c" alt=""/></div>
 <map name="asrc_2sys_2io_2io__uring_8c" id="asrc_2sys_2io_2io__uring_8c">
-<area shape="rect" title="Linux lock&#45;free queue backend currently used as CWIST&#39;s io_uring placeholder." alt="" coords="245,5,394,33"/>
-<area shape="rect" href="../../d1/df5/cwist__io_8h.html" title="Platform Agnostic Async Job Queue Interface." alt="" coords="43,81,209,109"/>
-<area shape="poly" title=" " alt="" coords="286,36,175,78,173,73,284,31"/>
-<area shape="rect" title=" " alt="" coords="5,157,87,184"/>
-<area shape="poly" title=" " alt="" coords="244,28,183,35,120,46,66,62,46,72,33,83,27,96,26,111,34,142,29,143,21,111,22,94,29,79,43,67,64,57,118,41,182,30,244,23"/>
-<area shape="rect" href="../../d2/dfe/alloc_8h_source.html" title=" " alt="" coords="233,81,406,109"/>
-<area shape="poly" title=" " alt="" coords="322,34,322,65,317,65,317,34"/>
-<area shape="rect" title=" " alt="" coords="430,81,513,109"/>
-<area shape="poly" title=" " alt="" coords="348,31,432,72,430,76,345,36"/>
-<area shape="rect" title=" " alt="" coords="537,81,635,109"/>
-<area shape="poly" title=" " alt="" coords="368,31,525,74,523,79,366,36"/>
-<area shape="rect" title=" " alt="" coords="120,157,193,184"/>
-<area shape="poly" title=" " alt="" coords="134,108,148,141,143,143,129,110"/>
-<area shape="poly" title=" " alt="" coords="113,111,73,148,70,144,110,107"/>
-<area shape="poly" title=" " alt="" coords="291,112,200,153,198,148,289,107"/>
-<area shape="rect" title=" " alt="" coords="249,157,390,184"/>
-<area shape="poly" title=" " alt="" coords="322,109,322,141,317,141,317,109"/>
+<area shape="rect" title="Linux lock&#45;free queue backend currently used as CWIST&#39;s io_uring placeholder." alt="" coords="247,5,398,31"/>
+<area shape="rect" href="../../d1/df5/cwist__io_8h.html" title="Platform Agnostic Async Job Queue Interface." alt="" coords="45,79,211,104"/>
+<area shape="poly" title=" " alt="" coords="292,33,173,76,172,71,290,28"/>
+<area shape="rect" title=" " alt="" coords="5,152,88,177"/>
+<area shape="poly" title=" " alt="" coords="247,27,185,34,121,44,67,60,47,69,34,80,28,93,27,108,36,139,31,140,22,109,23,92,30,77,44,65,65,55,120,39,184,28,247,22"/>
+<area shape="rect" href="../../d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="236,79,409,104"/>
+<area shape="poly" title=" " alt="" coords="325,31,325,65,320,65,320,31"/>
+<area shape="rect" title=" " alt="" coords="434,79,518,104"/>
+<area shape="poly" title=" " alt="" coords="348,28,440,70,438,75,346,33"/>
+<area shape="rect" title=" " alt="" coords="543,79,641,104"/>
+<area shape="poly" title=" " alt="" coords="367,28,536,73,535,78,365,33"/>
+<area shape="rect" title=" " alt="" coords="121,152,196,177"/>
+<area shape="poly" title=" " alt="" coords="136,103,151,139,146,141,131,105"/>
+<area shape="poly" title=" " alt="" coords="117,106,72,145,68,141,113,102"/>
+<area shape="poly" title=" " alt="" coords="297,106,199,149,197,144,295,102"/>
+<area shape="rect" title=" " alt="" coords="252,152,393,177"/>
+<area shape="poly" title=" " alt="" coords="325,104,325,138,320,138,320,104"/>
 </map>
 </div>
 </div>
@@ -147,7 +147,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">typedef struct job_node job_node_t</td>
+          <td class="memname">typedef struct job_node <a class="el" href="../../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564">job_node_t</a></td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -184,6 +184,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/d29/io__uring_8c_source.html#l00143">143</a> of file <a class="el" href="../../d2/d29/io__uring_8c_source.html">io_uring.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, and <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
+
 </div>
 </div>
 <a id="a90a553923ea4f601ffb5acaf8660d9fe" name="a90a553923ea4f601ffb5acaf8660d9fe"></a>
@@ -212,6 +214,8 @@ Functions</h2></td></tr>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d2/d29/io__uring_8c_source.html#l00223">223</a> of file <a class="el" href="../../d2/d29/io__uring_8c_source.html">io_uring.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
 
 </div>
 </div>

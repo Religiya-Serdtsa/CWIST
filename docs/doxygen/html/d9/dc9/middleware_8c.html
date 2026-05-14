@@ -75,6 +75,7 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#define-members">Macros</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">middleware.c File Reference</div></div>
 </div><!--header-->
@@ -82,11 +83,11 @@ $(function() {
 
 <p>Built-in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth.  
 <a href="#details">More...</a></p>
-<div class="textblock"><code>#include &lt;cwist/sys/app/middleware.h&gt;</code><br />
+<div class="textblock"><code>#include &lt;<a class="el" href="../../d3/d30/sys_2app_2middleware_8h_source.html">cwist/sys/app/middleware.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="../../d9/dab/net_2http_2http_8h_source.html">cwist/net/http/http.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="../../da/dec/core_2macros_8h_source.html">cwist/core/macros.h</a>&gt;</code><br />
-<code>#include &lt;cwist/core/utils/json_builder.h&gt;</code><br />
-<code>#include &lt;cwist/core/mem/alloc.h&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d3/dc7/core_2utils_2json__builder_8h_source.html">cwist/core/utils/json_builder.h</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d2/dfe/alloc_8h_source.html">cwist/core/mem/alloc.h</a>&gt;</code><br />
 <code>#include &lt;stdio.h&gt;</code><br />
 <code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
@@ -99,151 +100,165 @@ Include dependency graph for middleware.c:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../d5/d1b/middleware_8c__incl.png" border="0" usemap="#asrc_2sys_2app_2middleware_8c" alt=""/></div>
 <map name="asrc_2sys_2app_2middleware_8c" id="asrc_2sys_2app_2middleware_8c">
-<area shape="rect" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="1281,5,1468,31"/>
-<area shape="rect" href="../../d3/d30/sys_2app_2middleware_8h_source.html" title=" " alt="" coords="1109,79,1312,104"/>
-<area shape="poly" title=" " alt="" coords="1349,33,1251,76,1249,71,1347,28"/>
-<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="630,321,783,346"/>
-<area shape="poly" title=" " alt="" coords="1285,33,1118,59,922,100,828,127,746,156,680,190,656,208,638,227,633,237,632,248,641,271,659,292,680,310,676,314,655,296,636,273,627,249,628,236,634,224,652,204,677,185,743,152,827,121,921,95,1118,54,1284,28"/>
-<area shape="rect" title=" " alt="" coords="6,497,77,522"/>
-<area shape="poly" title=" " alt="" coords="1281,24,651,42,327,59,210,69,142,81,92,93,49,105,32,113,19,125,11,141,8,164,8,335,11,376,18,416,36,483,30,484,13,418,6,376,3,335,3,163,6,139,15,121,29,109,47,100,91,88,141,76,210,64,327,54,650,37,1281,18"/>
-<area shape="rect" title=" " alt="" coords="190,497,261,522"/>
-<area shape="poly" title=" " alt="" coords="1281,22,962,29,761,36,556,49,364,67,206,92,144,107,97,124,68,143,61,153,59,164,59,334,62,361,72,386,87,408,105,429,148,464,189,488,187,493,145,468,102,433,83,412,67,388,57,363,53,335,53,163,56,151,65,139,95,119,142,102,204,87,364,62,555,44,761,31,962,23,1281,17"/>
-<area shape="rect" href="../../da/dec/core_2macros_8h.html" title="Convenience size&#45;conversion and utility macros shared across CWIST." alt="" coords="1211,233,1363,258"/>
-<area shape="poly" title=" " alt="" coords="1373,32,1299,220,1294,218,1368,30"/>
-<area shape="rect" title=" " alt="" coords="1339,409,1403,434"/>
-<area shape="poly" title=" " alt="" coords="1381,30,1394,87,1400,125,1403,163,1403,247,1395,329,1380,396,1375,394,1389,328,1397,247,1397,163,1395,125,1389,88,1375,31"/>
-<area shape="rect" href="../../d3/dc7/core_2utils_2json__builder_8h_source.html" title=" " alt="" coords="94,313,245,353"/>
-<area shape="poly" title=" " alt="" coords="1281,30,1105,49,902,81,750,112,633,139,518,174,373,228,286,268,213,309,210,304,284,263,371,223,516,169,631,134,749,107,901,76,1104,44,1281,24"/>
-<area shape="rect" href="../../d2/dfe/alloc_8h_source.html" title=" " alt="" coords="1437,79,1611,104"/>
-<area shape="poly" title=" " alt="" coords="1400,28,1488,70,1486,75,1398,33"/>
-<area shape="rect" title=" " alt="" coords="1635,79,1701,104"/>
-<area shape="poly" title=" " alt="" coords="1423,28,1622,76,1620,81,1422,33"/>
-<area shape="rect" title=" " alt="" coords="1725,79,1816,104"/>
-<area shape="poly" title=" " alt="" coords="1443,28,1712,76,1711,81,1442,33"/>
-<area shape="rect" title=" " alt="" coords="1840,79,1915,104"/>
-<area shape="poly" title=" " alt="" coords="1469,26,1632,46,1827,76,1826,81,1631,51,1468,32"/>
-<area shape="rect" title=" " alt="" coords="1939,79,2023,104"/>
-<area shape="poly" title=" " alt="" coords="1469,24,1674,44,1926,76,1926,81,1674,49,1468,29"/>
-<area shape="rect" href="../../d0/d77/sys_2app_2app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="930,152,1081,177"/>
-<area shape="poly" title=" " alt="" coords="1179,107,1052,150,1051,145,1177,101"/>
-<area shape="rect" href="../../d5/d6c/jwt_8h.html" title="JWT (JSON Web Token) generation and verification." alt="" coords="1437,313,1573,353"/>
-<area shape="poly" title=" " alt="" coords="1226,102,1376,223,1473,302,1470,307,1373,227,1223,106"/>
-<area shape="poly" title=" " alt="" coords="988,180,915,227,890,248,864,268,808,296,754,318,752,313,806,291,861,263,887,244,912,223,985,175"/>
-<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="943,489,1086,529"/>
-<area shape="poly" title=" " alt="" coords="1037,175,1071,194,1087,208,1100,224,1116,257,1122,287,1118,317,1109,354,1096,390,1079,424,1041,480,1037,477,1074,421,1091,388,1104,353,1113,316,1116,287,1111,259,1095,227,1083,211,1068,199,1035,180"/>
-<area shape="rect" href="../../d0/dae/core_2db_2sql_8h_source.html" title=" " alt="" coords="1171,409,1314,434"/>
-<area shape="poly" title=" " alt="" coords="1052,175,1099,194,1122,207,1143,223,1178,265,1206,312,1225,357,1238,394,1233,396,1220,359,1201,314,1174,268,1139,227,1119,211,1096,198,1050,180"/>
-<area shape="rect" href="../../d7/d67/net_2http_2https_8h_source.html" title=" " alt="" coords="925,233,1085,258"/>
-<area shape="poly" title=" " alt="" coords="1008,178,1008,219,1003,219,1003,178"/>
-<area shape="poly" title=" " alt="" coords="1047,175,1233,226,1232,232,1046,180"/>
-<area shape="rect" href="../../da/d2c/big__dumb__reply_8h.html" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="269,313,448,353"/>
-<area shape="poly" title=" " alt="" coords="930,172,627,191,485,208,436,217,408,228,393,242,381,261,367,300,362,299,376,259,389,239,405,223,434,212,484,202,627,186,929,167"/>
-<area shape="rect" title=" " alt="" coords="648,233,851,258"/>
-<area shape="poly" title=" " alt="" coords="969,180,801,231,799,226,967,175"/>
-<area shape="rect" href="../../dd/dec/net_2websocket_2websocket_8h_source.html" title=" " alt="" coords="419,225,573,265"/>
-<area shape="poly" title=" " alt="" coords="932,180,587,233,587,227,931,175"/>
-<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="187,401,323,441"/>
-<area shape="poly" title=" " alt="" coords="647,349,337,407,336,402,646,343"/>
-<area shape="poly" title=" " alt="" coords="766,343,894,371,949,386,979,399,993,416,1003,436,1014,475,1009,477,998,438,989,419,976,403,947,391,893,377,765,349"/>
-<area shape="rect" href="../../d1/d7a/net_2http_2query_8h_source.html" title=" " alt="" coords="756,497,919,522"/>
-<area shape="poly" title=" " alt="" coords="764,343,881,371,931,386,957,400,965,421,957,443,944,460,928,474,892,494,890,489,925,469,940,456,952,440,959,421,953,403,929,391,880,376,762,349"/>
-<area shape="poly" title=" " alt="" coords="779,343,1158,404,1157,409,778,349"/>
-<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="549,489,720,529"/>
-<area shape="poly" title=" " alt="" coords="666,349,624,369,605,384,590,403,585,421,588,440,597,459,609,477,605,480,592,462,583,442,580,421,586,400,601,380,621,365,664,344"/>
-<area shape="rect" title=" " alt="" coords="720,409,816,434"/>
-<area shape="poly" title=" " alt="" coords="717,345,754,396,749,399,713,348"/>
-<area shape="rect" title=" " alt="" coords="841,409,943,434"/>
-<area shape="poly" title=" " alt="" coords="733,344,856,400,854,405,731,349"/>
-<area shape="rect" title=" " alt="" coords="600,409,696,434"/>
-<area shape="poly" title=" " alt="" coords="701,348,666,398,662,395,697,345"/>
-<area shape="poly" title=" " alt="" coords="209,444,83,494,81,489,207,439"/>
-<area shape="poly" title=" " alt="" coords="251,442,236,484,231,482,246,441"/>
-<area shape="rect" title=" " alt="" coords="631,665,713,691"/>
-<area shape="poly" title=" " alt="" coords="263,441,298,537,321,585,343,615,363,626,391,636,464,652,545,663,617,670,617,676,544,669,463,658,390,642,361,631,340,619,316,588,293,539,258,443"/>
-<area shape="poly" title=" " alt="" coords="323,424,586,445,755,463,930,487,930,492,755,468,585,450,323,429"/>
-<area shape="poly" title=" " alt="" coords="977,532,709,662,707,657,975,527"/>
-<area shape="rect" title=" " alt="" coords="563,585,634,610"/>
-<area shape="poly" title=" " alt="" coords="944,529,931,532,648,589,647,584,930,527,943,524"/>
-<area shape="rect" title=" " alt="" coords="1270,665,1381,691"/>
-<area shape="poly" title=" " alt="" coords="1051,527,1293,656,1291,661,1048,532"/>
-<area shape="poly" title=" " alt="" coords="806,525,645,582,643,577,804,520"/>
-<area shape="rect" title=" " alt="" coords="1485,665,1560,691"/>
-<area shape="poly" title=" " alt="" coords="885,519,1473,662,1471,667,884,525"/>
-<area shape="poly" title=" " alt="" coords="1213,437,1078,487,1077,482,1211,432"/>
-<area shape="poly" title=" " alt="" coords="1290,432,1343,450,1401,479,1428,498,1453,521,1474,547,1489,576,1495,598,1489,619,1470,639,1446,654,1395,672,1393,667,1444,650,1466,635,1484,616,1490,598,1484,578,1469,550,1449,524,1425,502,1398,484,1341,455,1288,437"/>
-<area shape="rect" title=" " alt="" coords="1110,497,1189,522"/>
-<area shape="poly" title=" " alt="" coords="1232,436,1174,489,1170,485,1228,432"/>
-<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="1323,577,1474,617"/>
-<area shape="poly" title=" " alt="" coords="1296,432,1344,452,1367,468,1386,488,1396,506,1402,525,1405,563,1399,563,1396,526,1391,508,1382,491,1364,472,1342,457,1294,436"/>
-<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="1213,497,1371,522"/>
-<area shape="poly" title=" " alt="" coords="1252,433,1281,483,1276,486,1247,436"/>
-<area shape="poly" title=" " alt="" coords="1324,609,727,673,727,668,1323,604"/>
-<area shape="poly" title=" " alt="" coords="1383,619,1348,657,1344,653,1379,616"/>
-<area shape="poly" title=" " alt="" coords="1430,615,1494,656,1491,660,1427,620"/>
-<area shape="poly" title=" " alt="" coords="1250,525,727,665,726,659,1249,520"/>
-<area shape="poly" title=" " alt="" coords="1296,522,1313,617,1321,651,1316,653,1308,618,1291,523"/>
-<area shape="poly" title=" " alt="" coords="1308,520,1366,567,1363,571,1305,524"/>
-<area shape="poly" title=" " alt="" coords="642,529,669,651,664,652,636,530"/>
-<area shape="poly" title=" " alt="" coords="629,531,611,573,606,571,624,529"/>
-<area shape="poly" title=" " alt="" coords="966,261,761,319,759,314,964,256"/>
-<area shape="poly" title=" " alt="" coords="958,261,911,276,868,297,853,309,844,322,842,336,849,352,866,368,885,375,906,377,927,375,949,373,971,375,992,382,1011,400,1021,418,1026,437,1025,476,1019,476,1020,438,1016,419,1007,403,989,387,970,380,949,379,928,380,906,382,884,381,863,373,844,355,836,337,839,320,849,305,865,292,909,271,956,256"/>
-<area shape="rect" title=" " alt="" coords="859,321,965,346"/>
-<area shape="poly" title=" " alt="" coords="995,260,937,313,933,309,991,256"/>
-<area shape="rect" title=" " alt="" coords="990,321,1095,346"/>
-<area shape="poly" title=" " alt="" coords="1013,257,1035,307,1030,309,1008,259"/>
-<area shape="poly" title=" " alt="" coords="337,356,290,394,287,390,334,352"/>
-<area shape="poly" title=" " alt="" coords="357,354,349,405,346,476,350,513,358,550,372,585,394,615,409,626,430,636,489,652,556,663,617,670,617,675,555,668,488,657,429,641,406,631,390,619,368,588,353,552,344,514,341,476,343,405,352,353"/>
-<area shape="poly" title=" " alt="" coords="371,352,419,433,454,482,495,527,529,555,564,576,562,580,526,559,492,531,450,485,414,436,366,355"/>
-<area shape="poly" title=" " alt="" coords="449,339,617,351,726,356,818,357,974,356,1049,358,1130,364,1220,377,1326,399,1335,401,1334,406,1325,404,1219,382,1129,369,1049,363,974,361,817,363,725,361,617,356,448,344"/>
-<area shape="poly" title=" " alt="" coords="543,263,667,313,665,318,541,268"/>
-<area shape="poly" title=" " alt="" coords="495,266,488,331,487,424,493,475,505,525,525,573,553,616,583,641,619,659,617,664,580,646,549,619,520,575,500,527,488,476,482,424,482,331,490,265"/>
-<area shape="poly" title=" " alt="" coords="501,265,521,416,540,528,556,553,575,574,572,577,552,556,535,530,516,416,496,266"/>
-<area shape="poly" title=" " alt="" coords="1502,355,1487,392,1463,441,1429,490,1409,512,1385,532,1332,559,1258,584,1169,606,1071,625,877,655,727,674,727,668,876,650,1070,620,1167,601,1256,579,1330,554,1383,527,1405,508,1425,487,1458,438,1482,390,1497,353"/>
-<area shape="poly" title=" " alt="" coords="1509,353,1524,651,1519,652,1504,354"/>
-<area shape="poly" title=" " alt="" coords="1477,356,1402,403,1399,399,1474,351"/>
-<area shape="poly" title=" " alt="" coords="190,352,228,390,224,393,186,355"/>
-<area shape="poly" title=" " alt="" coords="167,354,162,389,159,434,163,483,170,506,180,528,205,564,233,584,267,599,310,615,392,640,475,657,553,667,617,672,617,678,552,673,474,663,390,646,308,620,265,604,230,589,201,567,175,531,165,508,158,484,153,434,156,389,162,353"/>
-<area shape="poly" title=" " alt="" coords="1544,102,1569,123,1593,151,1614,195,1619,244,1619,511,1611,554,1593,595,1569,630,1546,657,1542,654,1565,627,1588,592,1606,553,1613,510,1613,244,1609,196,1588,153,1565,126,1540,106"/>
-<area shape="rect" title=" " alt="" coords="1437,152,1579,177"/>
-<area shape="poly" title=" " alt="" coords="1524,105,1516,139,1511,138,1519,104"/>
+<area shape="rect" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="980,5,1167,31"/>
+<area shape="rect" href="../../d3/d30/sys_2app_2middleware_8h.html" title="Built&#45;in middleware factories." alt="" coords="269,79,472,104"/>
+<area shape="poly" title=" " alt="" coords="980,31,486,81,485,76,979,26"/>
+<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="942,321,1095,346"/>
+<area shape="poly" title=" " alt="" coords="1074,31,1026,307,1020,306,1069,30"/>
+<area shape="rect" title=" " alt="" coords="45,497,115,522"/>
+<area shape="poly" title=" " alt="" coords="980,24,793,29,563,40,342,57,252,68,183,81,120,92,63,99,40,106,23,118,12,136,8,164,8,334,14,378,28,419,47,455,65,484,61,487,43,458,24,421,9,379,3,335,3,163,7,135,19,115,38,102,62,94,119,86,182,76,251,63,342,51,563,34,793,24,980,18"/>
+<area shape="rect" title=" " alt="" coords="163,497,234,522"/>
+<area shape="poly" title=" " alt="" coords="980,23,789,27,564,37,365,54,297,66,259,81,243,98,236,116,235,163,235,247,232,314,224,381,207,484,201,483,219,380,226,314,229,247,229,163,231,115,238,95,256,76,295,61,365,49,563,31,789,22,980,18"/>
+<area shape="rect" href="../../da/dec/core_2macros_8h.html" title="Convenience size&#45;conversion and utility macros shared across CWIST." alt="" coords="1533,233,1685,258"/>
+<area shape="poly" title=" " alt="" coords="1077,30,1082,60,1093,100,1112,142,1125,160,1142,175,1173,191,1216,202,1322,213,1431,217,1515,223,1542,227,1541,233,1514,228,1430,222,1321,218,1215,207,1171,196,1138,180,1121,163,1107,144,1088,102,1077,62,1072,31"/>
+<area shape="rect" title=" " alt="" coords="360,409,424,434"/>
+<area shape="poly" title=" " alt="" coords="1022,33,929,58,808,98,743,124,678,154,614,189,555,227,507,269,466,316,408,398,404,395,462,313,504,265,552,223,612,184,675,149,741,119,806,93,927,53,1021,28"/>
+<area shape="rect" href="../../d3/dc7/core_2utils_2json__builder_8h.html" title="Simple JSON string builder utility." alt="" coords="43,313,194,353"/>
+<area shape="poly" title=" " alt="" coords="980,23,780,27,540,36,329,54,256,66,231,73,215,81,191,103,172,129,156,158,144,189,129,250,123,300,117,299,124,249,139,187,151,156,167,126,187,99,212,76,229,68,254,61,329,48,540,31,780,21,980,17"/>
+<area shape="rect" href="../../d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="1136,79,1309,104"/>
+<area shape="poly" title=" " alt="" coords="1098,28,1187,70,1185,75,1096,33"/>
+<area shape="rect" title=" " alt="" coords="1333,79,1400,104"/>
+<area shape="poly" title=" " alt="" coords="1122,28,1320,76,1319,81,1121,33"/>
+<area shape="rect" title=" " alt="" coords="1424,79,1515,104"/>
+<area shape="poly" title=" " alt="" coords="1141,28,1411,76,1410,81,1140,33"/>
+<area shape="rect" title=" " alt="" coords="1539,79,1613,104"/>
+<area shape="poly" title=" " alt="" coords="1167,26,1330,46,1525,76,1524,81,1330,51,1167,32"/>
+<area shape="rect" title=" " alt="" coords="1638,79,1722,104"/>
+<area shape="poly" title=" " alt="" coords="1167,24,1373,44,1625,76,1624,81,1372,49,1167,29"/>
+<area shape="rect" href="../../d0/d77/sys_2app_2app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="859,152,1010,177"/>
+<area shape="poly" title=" " alt="" coords="462,101,846,150,845,155,461,107"/>
+<area shape="rect" href="../../d5/d6c/jwt_8h.html" title="JWT (JSON Web Token) generation and verification." alt="" coords="285,313,421,353"/>
+<area shape="poly" title=" " alt="" coords="372,104,358,300,353,299,367,104"/>
+<area shape="poly" title=" " alt="" coords="945,176,974,224,1012,307,1007,309,970,227,940,179"/>
+<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="1243,489,1386,529"/>
+<area shape="poly" title=" " alt="" coords="1010,168,1133,185,1201,201,1266,223,1309,239,1343,254,1372,276,1397,312,1402,338,1402,376,1397,415,1389,442,1374,464,1356,483,1352,479,1370,461,1384,440,1392,414,1397,376,1397,339,1392,314,1368,279,1341,258,1307,244,1264,228,1199,206,1132,190,1010,173"/>
+<area shape="rect" href="../../d0/dae/core_2db_2sql_8h.html" title="Database operations wrapper (SQLite3)." alt="" coords="1483,409,1626,434"/>
+<area shape="poly" title=" " alt="" coords="1010,170,1284,196,1406,211,1465,223,1486,241,1503,262,1528,308,1545,355,1554,394,1548,395,1539,357,1523,310,1498,265,1482,244,1463,228,1405,216,1283,201,1010,175"/>
+<area shape="rect" href="../../d7/d67/net_2http_2https_8h.html" title="HTTPS/TLS wrapper interface." alt="" coords="1093,233,1253,258"/>
+<area shape="poly" title=" " alt="" coords="970,175,1126,226,1125,231,969,180"/>
+<area shape="poly" title=" " alt="" coords="1011,170,1277,196,1515,223,1543,227,1542,233,1514,228,1277,201,1010,176"/>
+<area shape="rect" href="../../da/d2c/big__dumb__reply_8h.html" title="Auto&#45;Caching Layer for repetitive requests." alt="" coords="507,313,685,353"/>
+<area shape="poly" title=" " alt="" coords="859,170,778,174,691,184,615,201,587,213,569,227,561,244,561,262,567,282,577,301,572,303,562,284,556,263,556,242,565,224,585,208,614,196,690,179,778,169,859,164"/>
+<area shape="rect" title=" " alt="" coords="579,233,781,258"/>
+<area shape="poly" title=" " alt="" coords="898,180,731,231,729,226,897,175"/>
+<area shape="rect" href="../../dd/dec/net_2websocket_2websocket_8h.html" title="WebSocket upgrade and frame handling." alt="" coords="805,225,960,265"/>
+<area shape="poly" title=" " alt="" coords="929,179,905,215,900,213,925,176"/>
+<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h.html" title="Safe string type with helper methods." alt="" coords="448,401,584,441"/>
+<area shape="poly" title=" " alt="" coords="952,349,598,409,597,404,951,343"/>
+<area shape="poly" title=" " alt="" coords="1070,343,1201,375,1284,399,1298,416,1307,436,1316,475,1311,476,1302,438,1293,419,1281,404,1200,380,1068,349"/>
+<area shape="rect" title=" " alt="" coords="958,585,1029,610"/>
+<area shape="poly" title=" " alt="" coords="1076,343,1161,367,1197,382,1219,400,1228,421,1220,443,1200,462,1179,471,1157,474,1135,473,1090,472,1068,478,1046,491,1029,509,1017,530,1001,572,996,570,1012,528,1025,506,1042,487,1066,473,1090,466,1136,467,1157,468,1178,466,1197,457,1215,440,1223,421,1215,403,1194,387,1159,372,1075,349"/>
+<area shape="rect" href="../../d1/d7a/net_2http_2query_8h.html" title="Query string parser and map." alt="" coords="1056,497,1219,522"/>
+<area shape="poly" title=" " alt="" coords="1074,343,1189,371,1238,386,1263,399,1271,415,1270,429,1264,443,1252,455,1220,477,1184,494,1182,489,1218,472,1249,451,1259,440,1265,428,1265,416,1259,403,1236,391,1188,376,1073,349"/>
+<area shape="poly" title=" " alt="" coords="1071,343,1108,351,1303,382,1470,406,1470,411,1302,388,1108,356,1070,349"/>
+<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="760,489,931,529"/>
+<area shape="poly" title=" " alt="" coords="943,348,892,368,870,383,852,403,843,420,839,438,840,475,835,475,834,437,838,418,847,400,866,379,889,363,941,343"/>
+<area shape="rect" title=" " alt="" coords="1109,409,1205,434"/>
+<area shape="poly" title=" " alt="" coords="1039,344,1128,399,1125,404,1036,348"/>
+<area shape="rect" title=" " alt="" coords="862,409,965,434"/>
+<area shape="poly" title=" " alt="" coords="1006,348,940,402,936,398,1003,344"/>
+<area shape="rect" title=" " alt="" coords="989,409,1085,434"/>
+<area shape="poly" title=" " alt="" coords="1024,346,1034,394,1029,395,1019,347"/>
+<area shape="poly" title=" " alt="" coords="449,441,436,444,294,467,151,492,129,497,128,492,150,487,293,462,436,439,447,436"/>
+<area shape="poly" title=" " alt="" coords="449,444,248,498,246,492,447,438"/>
+<area shape="rect" title=" " alt="" coords="681,665,764,691"/>
+<area shape="poly" title=" " alt="" coords="522,441,532,477,548,523,572,572,605,615,637,640,672,658,670,663,634,645,601,619,568,575,543,525,527,479,517,442"/>
+<area shape="poly" title=" " alt="" coords="585,424,862,444,1044,462,1230,487,1229,492,1043,467,862,449,584,429"/>
+<area shape="poly" title=" " alt="" coords="1275,532,1170,576,1041,620,899,652,778,672,777,667,898,647,1039,615,1168,571,1273,527"/>
+<area shape="poly" title=" " alt="" coords="1245,532,1043,586,1041,581,1243,527"/>
+<area shape="rect" title=" " alt="" coords="1571,665,1682,691"/>
+<area shape="poly" title=" " alt="" coords="1337,527,1391,571,1460,615,1516,640,1571,659,1570,664,1514,645,1457,620,1388,575,1334,532"/>
+<area shape="poly" title=" " alt="" coords="1119,524,1026,580,1023,575,1117,520"/>
+<area shape="rect" title=" " alt="" coords="1329,665,1404,691"/>
+<area shape="poly" title=" " alt="" coords="1155,520,1341,655,1338,659,1152,524"/>
+<area shape="poly" title=" " alt="" coords="1523,437,1381,487,1379,482,1521,432"/>
+<area shape="poly" title=" " alt="" coords="1620,432,1668,452,1690,468,1708,488,1717,510,1719,534,1715,557,1706,581,1679,623,1651,657,1647,653,1675,620,1701,578,1710,556,1714,533,1712,511,1703,491,1686,472,1666,456,1618,437"/>
+<area shape="rect" title=" " alt="" coords="1410,497,1489,522"/>
+<area shape="poly" title=" " alt="" coords="1542,436,1476,490,1472,486,1539,432"/>
+<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="1470,577,1621,617"/>
+<area shape="poly" title=" " alt="" coords="1605,432,1649,452,1670,468,1686,488,1694,509,1686,531,1663,556,1635,574,1632,569,1660,552,1682,528,1688,509,1682,491,1666,472,1647,457,1602,437"/>
+<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="1513,497,1671,522"/>
+<area shape="poly" title=" " alt="" coords="1562,433,1584,483,1579,485,1557,435"/>
+<area shape="poly" title=" " alt="" coords="1470,608,778,674,777,669,1470,603"/>
+<area shape="poly" title=" " alt="" coords="1567,616,1606,654,1603,657,1563,619"/>
+<area shape="poly" title=" " alt="" coords="1504,620,1406,662,1404,657,1501,615"/>
+<area shape="poly" title=" " alt="" coords="1547,525,1360,569,1116,620,931,651,778,672,777,667,930,646,1116,615,1358,564,1546,519"/>
+<area shape="poly" title=" " alt="" coords="1604,521,1622,545,1636,577,1640,616,1636,652,1630,651,1635,616,1631,578,1617,548,1600,524"/>
+<area shape="poly" title=" " alt="" coords="1588,523,1565,566,1560,564,1583,521"/>
+<area shape="poly" title=" " alt="" coords="833,531,741,656,737,653,829,528"/>
+<area shape="poly" title=" " alt="" coords="879,527,963,576,961,580,876,532"/>
+<area shape="poly" title=" " alt="" coords="1154,261,1053,316,1050,312,1151,256"/>
+<area shape="poly" title=" " alt="" coords="1254,250,1286,257,1318,270,1348,287,1372,312,1382,332,1386,354,1385,377,1380,400,1362,443,1340,479,1335,477,1357,441,1375,398,1380,376,1381,355,1377,334,1367,315,1344,291,1316,274,1285,262,1253,255"/>
+<area shape="rect" title=" " alt="" coords="1120,321,1227,346"/>
+<area shape="poly" title=" " alt="" coords="1176,258,1176,306,1171,306,1171,258"/>
+<area shape="rect" title=" " alt="" coords="1251,321,1357,346"/>
+<area shape="poly" title=" " alt="" coords="1192,256,1276,311,1273,315,1189,260"/>
+<area shape="poly" title=" " alt="" coords="580,355,545,393,541,389,576,352"/>
+<area shape="poly" title=" " alt="" coords="605,353,716,651,711,653,600,354"/>
+<area shape="poly" title=" " alt="" coords="611,352,678,448,717,496,750,527,798,553,850,571,901,582,945,589,944,595,900,588,848,576,796,558,746,531,713,500,674,451,606,355"/>
+<area shape="poly" title=" " alt="" coords="552,356,437,404,432,406,430,401,435,399,550,351"/>
+<area shape="poly" title=" " alt="" coords="914,263,990,311,988,316,911,268"/>
+<area shape="poly" title=" " alt="" coords="847,268,808,293,768,328,751,348,738,370,729,394,725,420,725,511,725,652,720,652,720,511,720,420,723,393,733,368,747,345,765,324,805,289,845,263"/>
+<area shape="poly" title=" " alt="" coords="874,267,857,301,843,346,838,395,842,418,852,440,861,452,871,459,894,465,919,471,944,487,960,507,973,529,989,571,984,573,968,532,956,510,941,491,917,476,892,470,868,463,857,455,847,443,837,420,833,395,837,345,852,299,869,264"/>
+<area shape="poly" title=" " alt="" coords="336,355,319,377,306,402,285,464,272,517,271,541,276,565,287,590,306,615,330,633,367,647,413,657,465,665,574,673,667,675,667,680,574,678,464,670,412,662,365,652,327,638,302,619,282,592,271,567,266,541,266,516,280,463,302,400,315,374,332,352"/>
+<area shape="poly" title=" " alt="" coords="348,354,339,397,341,419,350,440,381,477,412,508,443,533,474,552,506,566,539,576,608,588,681,592,761,594,849,599,946,615,1048,634,1151,650,1316,669,1315,675,1150,655,1047,639,945,620,849,605,761,599,681,597,607,593,538,582,505,571,472,556,440,537,408,512,377,481,346,443,336,421,334,396,343,353"/>
+<area shape="poly" title=" " alt="" coords="364,353,383,395,379,397,359,355"/>
+<area shape="poly" title=" " alt="" coords="195,347,435,398,434,404,194,353"/>
+<area shape="poly" title=" " alt="" coords="100,355,68,390,38,434,28,458,23,482,24,506,34,528,51,546,75,563,142,592,226,616,321,635,515,660,667,671,667,677,514,665,320,640,225,622,140,597,73,568,48,550,30,531,19,507,17,482,23,457,33,432,64,386,96,352"/>
+<area shape="poly" title=" " alt="" coords="1298,101,1445,127,1614,161,1691,181,1754,201,1797,222,1809,233,1813,243,1813,423,1810,455,1801,485,1787,512,1768,537,1745,559,1718,579,1659,611,1594,636,1529,654,1418,674,1417,669,1528,649,1592,631,1657,606,1716,574,1741,555,1764,533,1782,510,1796,483,1805,454,1808,423,1808,245,1804,236,1794,226,1752,206,1689,186,1613,166,1444,132,1297,107"/>
+<area shape="rect" title=" " alt="" coords="1152,152,1293,177"/>
+<area shape="poly" title=" " alt="" coords="1225,104,1225,138,1220,138,1220,104"/>
 </map>
 </div>
 </div>
 <p><a href="../../d9/dc9/middleware_8c_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:a3024ccd4a9af5109d24e6c57565d74a1" id="r_a3024ccd4a9af5109d24e6c57565d74a1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a3024ccd4a9af5109d24e6c57565d74a1">_POSIX_C_SOURCE</a>&#160;&#160;&#160;200809L</td></tr>
+<tr class="separator:a3024ccd4a9af5109d24e6c57565d74a1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad5faeb14f6e78b68bc29e5b8f8e0a7a0" id="r_ad5faeb14f6e78b68bc29e5b8f8e0a7a0"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#ad5faeb14f6e78b68bc29e5b8f8e0a7a0">MAX_IP_TRACK</a>&#160;&#160;&#160;1024</td></tr>
+<tr class="separator:ad5faeb14f6e78b68bc29e5b8f8e0a7a0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8b9e829020fbc96912c4c2ed9743171d" id="r_a8b9e829020fbc96912c4c2ed9743171d"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a8b9e829020fbc96912c4c2ed9743171d">CWIST_JWT_CTX_MAGIC</a>&#160;&#160;&#160;0x4A574354UL  /* &quot;JWCT&quot; */</td></tr>
+<tr class="separator:a8b9e829020fbc96912c4c2ed9743171d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2288bbf3d5e4da30f5da07dec19971ad" id="r_a2288bbf3d5e4da30f5da07dec19971ad"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a2288bbf3d5e4da30f5da07dec19971ad">CWIST_JWT_MAX_SECRETS</a>&#160;&#160;&#160;8</td></tr>
+<tr class="separator:a2288bbf3d5e4da30f5da07dec19971ad"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad7de38f8347fe00c4118c9bb64fca2f2" id="r_ad7de38f8347fe00c4118c9bb64fca2f2"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#ad7de38f8347fe00c4118c9bb64fca2f2">CWIST_JWT_DEFINE_WRAPPER</a>(N)</td></tr>
+<tr class="separator:ad7de38f8347fe00c4118c9bb64fca2f2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a18ad84edb807cd9b1c252e3c9de181cf" id="r_a18ad84edb807cd9b1c252e3c9de181cf"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a18ad84edb807cd9b1c252e3c9de181cf">cwist_mw_request_id_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
+<tr class="memitem:a18ad84edb807cd9b1c252e3c9de181cf" id="r_a18ad84edb807cd9b1c252e3c9de181cf"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a18ad84edb807cd9b1c252e3c9de181cf">cwist_mw_request_id_handler</a> (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> next)</td></tr>
 <tr class="memdesc:a18ad84edb807cd9b1c252e3c9de181cf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attach an X-Request-Id header to both the request and the response.  <br /></td></tr>
 <tr class="separator:a18ad84edb807cd9b1c252e3c9de181cf"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4b6f6d40a953fcbe496f65902a7f0797" id="r_a4b6f6d40a953fcbe496f65902a7f0797"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a4b6f6d40a953fcbe496f65902a7f0797">cwist_mw_request_id</a> (const char *header_name)</td></tr>
 <tr class="memdesc:a4b6f6d40a953fcbe496f65902a7f0797"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the built-in request ID middleware.  <br /></td></tr>
 <tr class="separator:a4b6f6d40a953fcbe496f65902a7f0797"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a524acac4e5f3f722693764e719ec4972" id="r_a524acac4e5f3f722693764e719ec4972"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a524acac4e5f3f722693764e719ec4972">cwist_mw_access_log_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
+<tr class="memitem:a524acac4e5f3f722693764e719ec4972" id="r_a524acac4e5f3f722693764e719ec4972"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a524acac4e5f3f722693764e719ec4972">cwist_mw_access_log_handler</a> (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> next)</td></tr>
 <tr class="memdesc:a524acac4e5f3f722693764e719ec4972"><td class="mdescLeft">&#160;</td><td class="mdescRight">Log method, path, status, latency, and payload sizes for one request.  <br /></td></tr>
 <tr class="separator:a524acac4e5f3f722693764e719ec4972"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af4504a9f9f2a2395ec721cc6cf0bf46e" id="r_af4504a9f9f2a2395ec721cc6cf0bf46e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#af4504a9f9f2a2395ec721cc6cf0bf46e">cwist_mw_access_log</a> (<a class="el" href="../../d3/db9/middleware_8h.html#a22009cad9633c4143994338668ad016a">cwist_log_format_t</a> format)</td></tr>
 <tr class="memdesc:af4504a9f9f2a2395ec721cc6cf0bf46e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the built-in access-log middleware.  <br /></td></tr>
 <tr class="separator:af4504a9f9f2a2395ec721cc6cf0bf46e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae136d15fb110da74b8219e1e777c06af" id="r_ae136d15fb110da74b8219e1e777c06af"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#ae136d15fb110da74b8219e1e777c06af">cwist_mw_rate_limit_ip_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
+<tr class="memitem:ae136d15fb110da74b8219e1e777c06af" id="r_ae136d15fb110da74b8219e1e777c06af"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#ae136d15fb110da74b8219e1e777c06af">cwist_mw_rate_limit_ip_handler</a> (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> next)</td></tr>
 <tr class="memdesc:ae136d15fb110da74b8219e1e777c06af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enforce a simple per-IP request cap using an in-memory one-minute window.  <br /></td></tr>
 <tr class="separator:ae136d15fb110da74b8219e1e777c06af"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aea3a871e2f49f765a5ab7ae87f3354df" id="r_aea3a871e2f49f765a5ab7ae87f3354df"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#aea3a871e2f49f765a5ab7ae87f3354df">cwist_mw_rate_limit_ip</a> (int requests_per_minute)</td></tr>
 <tr class="memdesc:aea3a871e2f49f765a5ab7ae87f3354df"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the built-in per-IP rate-limiter middleware.  <br /></td></tr>
 <tr class="separator:aea3a871e2f49f765a5ab7ae87f3354df"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a944c9e96084a9fb96edbf87860826e45" id="r_a944c9e96084a9fb96edbf87860826e45"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a944c9e96084a9fb96edbf87860826e45">cwist_mw_cors_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
+<tr class="memitem:a944c9e96084a9fb96edbf87860826e45" id="r_a944c9e96084a9fb96edbf87860826e45"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a944c9e96084a9fb96edbf87860826e45">cwist_mw_cors_handler</a> (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> next)</td></tr>
 <tr class="memdesc:a944c9e96084a9fb96edbf87860826e45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Inject permissive CORS headers and short-circuit preflight requests.  <br /></td></tr>
 <tr class="separator:a944c9e96084a9fb96edbf87860826e45"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a502f7df4b6e4faeb32a3dac05175359d" id="r_a502f7df4b6e4faeb32a3dac05175359d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a502f7df4b6e4faeb32a3dac05175359d">cwist_mw_cors</a> (void)</td></tr>
 <tr class="memdesc:a502f7df4b6e4faeb32a3dac05175359d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the built-in permissive CORS middleware.  <br /></td></tr>
 <tr class="separator:a502f7df4b6e4faeb32a3dac05175359d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a12b9de9450d489d489c138745cf90d50" id="r_a12b9de9450d489d489c138745cf90d50"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a12b9de9450d489d489c138745cf90d50">cwist_mw_jwt_auth_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
+<tr class="memitem:a12b9de9450d489d489c138745cf90d50" id="r_a12b9de9450d489d489c138745cf90d50"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a12b9de9450d489d489c138745cf90d50">cwist_mw_jwt_auth_handler</a> (<a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> next)</td></tr>
 <tr class="memdesc:a12b9de9450d489d489c138745cf90d50"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate a bearer token and expose its decoded claims to downstream handlers.  <br /></td></tr>
 <tr class="separator:a12b9de9450d489d489c138745cf90d50"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a49bd9e920c1ec6ff450b7225b544ff40" id="r_a49bd9e920c1ec6ff450b7225b544ff40"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a49bd9e920c1ec6ff450b7225b544ff40">cwist_mw_jwt_auth</a> (const char *secret)</td></tr>
 <tr class="memdesc:a49bd9e920c1ec6ff450b7225b544ff40"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a JWT secret in a static slot and return the matching middleware wrapper.  <br /></td></tr>
 <tr class="separator:a49bd9e920c1ec6ff450b7225b544ff40"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4e08ffed838908a792a6b7f431cdca4e" id="r_a4e08ffed838908a792a6b7f431cdca4e"><td class="memItemLeft" align="right" valign="top">const cwist_jwt_claims *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a4e08ffed838908a792a6b7f431cdca4e">cwist_mw_jwt_get_claims</a> (const cwist_http_request *req)</td></tr>
+<tr class="memitem:a4e08ffed838908a792a6b7f431cdca4e" id="r_a4e08ffed838908a792a6b7f431cdca4e"><td class="memItemLeft" align="right" valign="top">const cwist_jwt_claims *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a4e08ffed838908a792a6b7f431cdca4e">cwist_mw_jwt_get_claims</a> (const <a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req)</td></tr>
 <tr class="memdesc:a4e08ffed838908a792a6b7f431cdca4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retrieve the active JWT claims object from request private_data when present.  <br /></td></tr>
 <tr class="separator:a4e08ffed838908a792a6b7f431cdca4e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
@@ -251,7 +266,108 @@ Functions</h2></td></tr>
 <div class="textblock"><p>Built-in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth. </p>
 
 <p class="definition">Definition in file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
-</div><h2 class="groupheader">Function Documentation</h2>
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a3024ccd4a9af5109d24e6c57565d74a1" name="a3024ccd4a9af5109d24e6c57565d74a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3024ccd4a9af5109d24e6c57565d74a1">&#9670;&#160;</a></span>_POSIX_C_SOURCE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define _POSIX_C_SOURCE&#160;&#160;&#160;200809L</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00001">1</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
+
+</div>
+</div>
+<a id="a8b9e829020fbc96912c4c2ed9743171d" name="a8b9e829020fbc96912c4c2ed9743171d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8b9e829020fbc96912c4c2ed9743171d">&#9670;&#160;</a></span>CWIST_JWT_CTX_MAGIC</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_JWT_CTX_MAGIC&#160;&#160;&#160;0x4A574354UL  /* &quot;JWCT&quot; */</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00246">246</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
+
+</div>
+</div>
+<a id="ad7de38f8347fe00c4118c9bb64fca2f2" name="ad7de38f8347fe00c4118c9bb64fca2f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad7de38f8347fe00c4118c9bb64fca2f2">&#9670;&#160;</a></span>CWIST_JWT_DEFINE_WRAPPER</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_JWT_DEFINE_WRAPPER</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">N</td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><span class="keyword">static</span> <span class="keywordtype">void</span> cwist_mw_jwt_wrap_##N(<a class="code hl_struct" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *req, <a class="code hl_struct" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, <a class="code hl_typedef" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a> next) { \</div>
+<div class="line">    cwist_jwt_ctx_t ctx = { \</div>
+<div class="line">        .magic = <a class="code hl_define" href="../../d9/dc9/middleware_8c.html#a8b9e829020fbc96912c4c2ed9743171d">CWIST_JWT_CTX_MAGIC</a>, \</div>
+<div class="line">        .secret = s_jwt_cfgs[N].secret, \</div>
+<div class="line">        .claims = NULL, \</div>
+<div class="line">        .prev_private_data = req-&gt;<a class="code hl_variable" href="../../dd/d68/structcwist__http__request.html#a9d8f44e3e022dbeb0fcea418d916b41f">private_data</a> \</div>
+<div class="line">    }; \</div>
+<div class="line">    req-&gt;<a class="code hl_variable" href="../../dd/d68/structcwist__http__request.html#a9d8f44e3e022dbeb0fcea418d916b41f">private_data</a> = &amp;ctx; \</div>
+<div class="line">    cwist_mw_jwt_auth_handler(req, res, next); \</div>
+<div class="line">    req-&gt;<a class="code hl_variable" href="../../dd/d68/structcwist__http__request.html#a9d8f44e3e022dbeb0fcea418d916b41f">private_data</a> = ctx.prev_private_data; \</div>
+<div class="line">}</div>
+<div class="ttc" id="aapp_8h_html_a2a3910c6b268a4a04e17075671a4c28c"><div class="ttname"><a href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a></div><div class="ttdeci">void(* cwist_handler_func)(cwist_http_request *req, cwist_http_response *res)</div><div class="ttdef"><b>Definition</b> <a href="../../d2/d39/app_8h_source.html#l00014">app.h:14</a></div></div>
+<div class="ttc" id="amiddleware_8c_html_a8b9e829020fbc96912c4c2ed9743171d"><div class="ttname"><a href="../../d9/dc9/middleware_8c.html#a8b9e829020fbc96912c4c2ed9743171d">CWIST_JWT_CTX_MAGIC</a></div><div class="ttdeci">#define CWIST_JWT_CTX_MAGIC</div><div class="ttdef"><b>Definition</b> <a href="../../d9/dc9/middleware_8c_source.html#l00246">middleware.c:246</a></div></div>
+<div class="ttc" id="astructcwist__http__request_html"><div class="ttname"><a href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a></div><div class="ttdef"><b>Definition</b> <a href="../../dd/d56/http_8h_source.html#l00054">http.h:54</a></div></div>
+<div class="ttc" id="astructcwist__http__request_html_a9d8f44e3e022dbeb0fcea418d916b41f"><div class="ttname"><a href="../../dd/d68/structcwist__http__request.html#a9d8f44e3e022dbeb0fcea418d916b41f">cwist_http_request::private_data</a></div><div class="ttdeci">void * private_data</div><div class="ttdoc">Internal framework use (protocol-specific context).</div><div class="ttdef"><b>Definition</b> <a href="../../dd/d56/http_8h_source.html#l00067">http.h:67</a></div></div>
+<div class="ttc" id="astructcwist__http__response_html"><div class="ttname"><a href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a></div><div class="ttdoc">HTTP Response Object. Supports standard string body or Zero-Copy pointer body.</div><div class="ttdef"><b>Definition</b> <a href="../../dd/d56/http_8h_source.html#l00071">http.h:71</a></div></div>
+</div><!-- fragment -->
+<p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00338">338</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
+
+</div>
+</div>
+<a id="a2288bbf3d5e4da30f5da07dec19971ad" name="a2288bbf3d5e4da30f5da07dec19971ad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2288bbf3d5e4da30f5da07dec19971ad">&#9670;&#160;</a></span>CWIST_JWT_MAX_SECRETS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CWIST_JWT_MAX_SECRETS&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00330">330</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
+
+</div>
+</div>
+<a id="ad5faeb14f6e78b68bc29e5b8f8e0a7a0" name="ad5faeb14f6e78b68bc29e5b8f8e0a7a0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad5faeb14f6e78b68bc29e5b8f8e0a7a0">&#9670;&#160;</a></span>MAX_IP_TRACK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MAX_IP_TRACK&#160;&#160;&#160;1024</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00129">129</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Function Documentation</h2>
 <a id="af4504a9f9f2a2395ec721cc6cf0bf46e" name="af4504a9f9f2a2395ec721cc6cf0bf46e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af4504a9f9f2a2395ec721cc6cf0bf46e">&#9670;&#160;</a></span>cwist_mw_access_log()</h2>
 
@@ -293,7 +409,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void cwist_mw_access_log_handler </td>
           <td>(</td>
-          <td class="paramtype">cwist_http_request *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *&#160;</td>
           <td class="paramname"><em>req</em>, </td>
         </tr>
         <tr>
@@ -305,7 +421,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>next</em>&#160;</td>
         </tr>
         <tr>
@@ -328,7 +444,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00087">87</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>, and <a class="el" href="../../dd/d43/http_8c_source.html#l00054">cwist_http_method_to_string()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/d56/http_8h_source.html#l00062">cwist_http_request::body</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00076">cwist_http_response::body</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00054">cwist_http_method_to_string()</a>, <a class="el" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html#l00015">cwist_sstring::data</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00075">cwist_http_response::headers</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00055">cwist_http_request::method</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00056">cwist_http_request::path</a>, <a class="el" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html#l00018">cwist_sstring::size</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00073">cwist_http_response::status_code</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00116">cwist_mw_access_log()</a>.</p>
 
@@ -369,7 +485,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void cwist_mw_cors_handler </td>
           <td>(</td>
-          <td class="paramtype">cwist_http_request *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *&#160;</td>
           <td class="paramname"><em>req</em>, </td>
         </tr>
         <tr>
@@ -381,7 +497,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>next</em>&#160;</td>
         </tr>
         <tr>
@@ -404,7 +520,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00207">207</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00030">CWIST_HTTP_NO_CONTENT</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00023">CWIST_HTTP_OPTIONS</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00075">cwist_http_response::headers</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00055">cwist_http_request::method</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00073">cwist_http_response::status_code</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00229">cwist_mw_cors()</a>.</p>
 
@@ -438,6 +554,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00370">370</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00330">CWIST_JWT_MAX_SECRETS</a>.</p>
+
 </div>
 </div>
 <a id="a12b9de9450d489d489c138745cf90d50" name="a12b9de9450d489d489c138745cf90d50"></a>
@@ -449,7 +567,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void cwist_mw_jwt_auth_handler </td>
           <td>(</td>
-          <td class="paramtype">cwist_http_request *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *&#160;</td>
           <td class="paramname"><em>req</em>, </td>
         </tr>
         <tr>
@@ -461,7 +579,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>next</em>&#160;</td>
         </tr>
         <tr>
@@ -484,7 +602,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00261">261</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>, <a class="el" href="../../d8/d80/jwt_8c_source.html#l00367">cwist_jwt_claims_destroy()</a>, and <a class="el" href="../../d8/d80/jwt_8c_source.html#l00258">cwist_jwt_verify()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/d56/http_8h_source.html#l00076">cwist_http_response::body</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00035">CWIST_HTTP_INTERNAL_ERROR</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00032">CWIST_HTTP_UNAUTHORIZED</a>, <a class="el" href="../../d8/d80/jwt_8c_source.html#l00367">cwist_jwt_claims_destroy()</a>, <a class="el" href="../../d8/d80/jwt_8c_source.html#l00258">cwist_jwt_verify()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00291">cwist_sstring_assign()</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00061">cwist_http_request::headers</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00075">cwist_http_response::headers</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00067">cwist_http_request::private_data</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00073">cwist_http_response::status_code</a>.</p>
 
 </div>
 </div>
@@ -497,7 +615,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">const cwist_jwt_claims * cwist_mw_jwt_get_claims </td>
           <td>(</td>
-          <td class="paramtype">const cwist_http_request *&#160;</td>
+          <td class="paramtype">const <a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *&#160;</td>
           <td class="paramname"><em>req</em></td><td>)</td>
           <td></td>
         </tr>
@@ -515,6 +633,8 @@ Functions</h2></td></tr>
 <dl class="section return"><dt>Returns</dt><dd>Active decoded claims, or NULL when the request is not inside JWT auth. </dd></dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00401">401</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00246">CWIST_JWT_CTX_MAGIC</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00067">cwist_http_request::private_data</a>.</p>
 
 </div>
 </div>
@@ -559,7 +679,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void cwist_mw_rate_limit_ip_handler </td>
           <td>(</td>
-          <td class="paramtype">cwist_http_request *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *&#160;</td>
           <td class="paramname"><em>req</em>, </td>
         </tr>
         <tr>
@@ -571,7 +691,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>next</em>&#160;</td>
         </tr>
         <tr>
@@ -594,7 +714,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00140">140</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00237">cwist_get_client_ip_from_fd()</a>, and <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/d56/http_8h_source.html#l00076">cwist_http_response::body</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00064">cwist_http_request::client_fd</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00238">cwist_get_client_ip_from_fd()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00291">cwist_sstring_assign()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00622">cwist_sstring_compare()</a>, <a class="el" href="../../dd/d79/sstring_8c_source.html#l00597">cwist_sstring_destroy()</a>, <a class="el" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html#l00015">cwist_sstring::data</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00075">cwist_http_response::headers</a>, <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00129">MAX_IP_TRACK</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00073">cwist_http_response::status_code</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00194">cwist_mw_rate_limit_ip()</a>.</p>
 
@@ -618,6 +738,7 @@ Functions</h2></td></tr>
 
 <p>Return the built-in request ID middleware. </p>
 <p>Request ID middleware.</p>
+<p>Request ID middleware factory.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">header_name</td><td>Currently unused custom header override. </td></tr>
@@ -641,7 +762,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void cwist_mw_request_id_handler </td>
           <td>(</td>
-          <td class="paramtype">cwist_http_request *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/d68/structcwist__http__request.html">cwist_http_request</a> *&#160;</td>
           <td class="paramname"><em>req</em>, </td>
         </tr>
         <tr>
@@ -653,7 +774,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#a2a3910c6b268a4a04e17075671a4c28c">cwist_handler_func</a>&#160;</td>
           <td class="paramname"><em>next</em>&#160;</td>
         </tr>
         <tr>
@@ -676,7 +797,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00049">49</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, and <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>.</p>
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00272">cwist_strdup()</a>, <a class="el" href="../../dd/d56/http_8h_source.html#l00061">cwist_http_request::headers</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00075">cwist_http_response::headers</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00072">cwist_mw_request_id()</a>.</p>
 

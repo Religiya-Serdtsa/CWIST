@@ -74,6 +74,10 @@ $(function() {
 </div>
 </div><!-- top -->
 <div class="header">
+  <div class="summary">
+<a href="#nested-classes">Classes</a> &#124;
+<a href="#typedef-members">Typedefs</a> &#124;
+<a href="#enum-members">Enumerations</a>  </div>
   <div class="headertitle"><div class="title">logger.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
@@ -103,7 +107,7 @@ This graph shows which files directly or indirectly include this file:</div>
 <div class="center"><img src="../../d4/dcf/logger_8h__dep__incl.png" border="0" usemap="#ainclude_2cwist_2sys_2app_2logger_8hdep" alt=""/></div>
 <map name="ainclude_2cwist_2sys_2app_2logger_8hdep" id="ainclude_2cwist_2sys_2app_2logger_8hdep">
 <area shape="rect" title="Application&#45;level structured logging." alt="" coords="75,5,236,45"/>
-<area shape="rect" href="../../df/d7f/app_8c_source.html" title=" " alt="" coords="5,93,140,119"/>
+<area shape="rect" href="../../df/d7f/app_8c.html" title=" " alt="" coords="5,93,140,119"/>
 <area shape="poly" title=" " alt="" coords="127,57,87,95,83,91,124,53"/>
 <area shape="rect" href="../../d1/d22/logger_8c.html" title="logger.c interface." alt="" coords="164,93,315,119"/>
 <area shape="poly" title=" " alt="" coords="187,53,229,91,225,95,184,57"/>
@@ -111,11 +115,431 @@ This graph shows which files directly or indirectly include this file:</div>
 </div>
 </div>
 <p><a href="../../d1/d8c/logger_8h_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a24c2c48ea3d2df790594088c2f47f695" id="r_a24c2c48ea3d2df790594088c2f47f695"><td class="memItemLeft" align="right" valign="top">typedef struct <a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#a24c2c48ea3d2df790594088c2f47f695">cwist_logger</a></td></tr>
+<tr class="separator:a24c2c48ea3d2df790594088c2f47f695"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a5eab471d74c604fefaa9d315979b4f28" id="r_a5eab471d74c604fefaa9d315979b4f28"><td class="memItemLeft" align="right" valign="top">enum &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28">cwist_log_level_t</a> { <a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28adbb13a46e0cdc0b8dba4ceed0b1acf5b">CWIST_LOG_DEBUG</a>
+, <a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28a35dec4e8110da2ed18e2db953160b9b9">CWIST_LOG_INFO</a>
+, <a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28ab6184775e2bdf8a23a8fac3984941710">CWIST_LOG_WARN</a>
+, <a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28a8f6d479cf149502aaf4121c1dc854326">CWIST_LOG_ERROR</a>
+ }</td></tr>
+<tr class="separator:a5eab471d74c604fefaa9d315979b4f28"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr><td colspan="2"><div class="groupHeader">Lifecycle</div></td></tr>
+<tr class="memitem:a0addd75c1758784e98136bfa174ead16" id="r_a0addd75c1758784e98136bfa174ead16"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#a0addd75c1758784e98136bfa174ead16">cwist_logger_create</a> (const char *name)</td></tr>
+<tr class="memdesc:a0addd75c1758784e98136bfa174ead16"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a logger.  <br /></td></tr>
+<tr class="separator:a0addd75c1758784e98136bfa174ead16"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af8e75f74e366b81f796c1f8528b00ccf" id="r_af8e75f74e366b81f796c1f8528b00ccf"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#af8e75f74e366b81f796c1f8528b00ccf">cwist_logger_destroy</a> (<a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *log)</td></tr>
+<tr class="memdesc:af8e75f74e366b81f796c1f8528b00ccf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destroy a logger.  <br /></td></tr>
+<tr class="separator:af8e75f74e366b81f796c1f8528b00ccf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr><td colspan="2"><div class="groupHeader">Configuration</div></td></tr>
+<tr class="memitem:ad55e4c9448e174e8cfb3a90f6477304d" id="r_ad55e4c9448e174e8cfb3a90f6477304d"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#ad55e4c9448e174e8cfb3a90f6477304d">cwist_logger_set_level</a> (<a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *log, <a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28">cwist_log_level_t</a> level)</td></tr>
+<tr class="memdesc:ad55e4c9448e174e8cfb3a90f6477304d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the minimum log level.  <br /></td></tr>
+<tr class="separator:ad55e4c9448e174e8cfb3a90f6477304d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa0fe18643d565c90ccc7d436bc1aceac" id="r_aa0fe18643d565c90ccc7d436bc1aceac"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#aa0fe18643d565c90ccc7d436bc1aceac">cwist_logger_set_colors</a> (<a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *log, bool enabled)</td></tr>
+<tr class="memdesc:aa0fe18643d565c90ccc7d436bc1aceac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable or disable colored output.  <br /></td></tr>
+<tr class="separator:aa0fe18643d565c90ccc7d436bc1aceac"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr><td colspan="2"><div class="groupHeader">Logging</div></td></tr>
+<tr class="memitem:a64dc773c3b1dba994bb3dfef1d0a54e9" id="r_a64dc773c3b1dba994bb3dfef1d0a54e9"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#a64dc773c3b1dba994bb3dfef1d0a54e9">cwist_logger_log</a> (<a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *log, <a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28">cwist_log_level_t</a> level, const char *fmt,...)</td></tr>
+<tr class="memdesc:a64dc773c3b1dba994bb3dfef1d0a54e9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a log message.  <br /></td></tr>
+<tr class="separator:a64dc773c3b1dba994bb3dfef1d0a54e9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afacc05c0c9aa9cc7167e697e037dc8c9" id="r_afacc05c0c9aa9cc7167e697e037dc8c9"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#afacc05c0c9aa9cc7167e697e037dc8c9">cwist_logger_debug</a> (<a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *log, const char *fmt,...)</td></tr>
+<tr class="memdesc:afacc05c0c9aa9cc7167e697e037dc8c9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a debug message.  <br /></td></tr>
+<tr class="separator:afacc05c0c9aa9cc7167e697e037dc8c9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad47777d52e51ac0bb1e7ceca2c94a574" id="r_ad47777d52e51ac0bb1e7ceca2c94a574"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#ad47777d52e51ac0bb1e7ceca2c94a574">cwist_logger_info</a> (<a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *log, const char *fmt,...)</td></tr>
+<tr class="memdesc:ad47777d52e51ac0bb1e7ceca2c94a574"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write an info message.  <br /></td></tr>
+<tr class="separator:ad47777d52e51ac0bb1e7ceca2c94a574"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a018a4a7f22d9f77e0ddfd84b903d6b3b" id="r_a018a4a7f22d9f77e0ddfd84b903d6b3b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#a018a4a7f22d9f77e0ddfd84b903d6b3b">cwist_logger_warn</a> (<a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *log, const char *fmt,...)</td></tr>
+<tr class="memdesc:a018a4a7f22d9f77e0ddfd84b903d6b3b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a warning message.  <br /></td></tr>
+<tr class="separator:a018a4a7f22d9f77e0ddfd84b903d6b3b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a22966fc2ce7d1780df90d1b18534fd7f" id="r_a22966fc2ce7d1780df90d1b18534fd7f"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d1/d8c/logger_8h.html#a22966fc2ce7d1780df90d1b18534fd7f">cwist_logger_error</a> (<a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *log, const char *fmt,...)</td></tr>
+<tr class="memdesc:a22966fc2ce7d1780df90d1b18534fd7f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write an error message.  <br /></td></tr>
+<tr class="separator:a22966fc2ce7d1780df90d1b18534fd7f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Application-level structured logging. </p>
 
 <p class="definition">Definition in file <a class="el" href="../../d1/d8c/logger_8h_source.html">logger.h</a>.</p>
-</div></div><!-- contents -->
+</div><h2 class="groupheader">Typedef Documentation</h2>
+<a id="a24c2c48ea3d2df790594088c2f47f695" name="a24c2c48ea3d2df790594088c2f47f695"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a24c2c48ea3d2df790594088c2f47f695">&#9670;&#160;</a></span>cwist_logger</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef struct <a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> <a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Enumeration Type Documentation</h2>
+<a id="a5eab471d74c604fefaa9d315979b4f28" name="a5eab471d74c604fefaa9d315979b4f28"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5eab471d74c604fefaa9d315979b4f28">&#9670;&#160;</a></span>cwist_log_level_t</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28">cwist_log_level_t</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a5eab471d74c604fefaa9d315979b4f28adbb13a46e0cdc0b8dba4ceed0b1acf5b" name="a5eab471d74c604fefaa9d315979b4f28adbb13a46e0cdc0b8dba4ceed0b1acf5b"></a>CWIST_LOG_DEBUG&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a5eab471d74c604fefaa9d315979b4f28a35dec4e8110da2ed18e2db953160b9b9" name="a5eab471d74c604fefaa9d315979b4f28a35dec4e8110da2ed18e2db953160b9b9"></a>CWIST_LOG_INFO&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a5eab471d74c604fefaa9d315979b4f28ab6184775e2bdf8a23a8fac3984941710" name="a5eab471d74c604fefaa9d315979b4f28ab6184775e2bdf8a23a8fac3984941710"></a>CWIST_LOG_WARN&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a5eab471d74c604fefaa9d315979b4f28a8f6d479cf149502aaf4121c1dc854326" name="a5eab471d74c604fefaa9d315979b4f28a8f6d479cf149502aaf4121c1dc854326"></a>CWIST_LOG_ERROR&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d8c/logger_8h_source.html#l00013">13</a> of file <a class="el" href="../../d1/d8c/logger_8h_source.html">logger.h</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Function Documentation</h2>
+<a id="a0addd75c1758784e98136bfa174ead16" name="a0addd75c1758784e98136bfa174ead16"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0addd75c1758784e98136bfa174ead16">&#9670;&#160;</a></span>cwist_logger_create()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> * cwist_logger_create </td>
+          <td>(</td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>name</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Create a logger. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00020">20</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d7/d7f/log_8h_source.html#l00049">CWIST_LOG_INFO</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00272">cwist_strdup()</a>, <a class="el" href="../../d1/d8c/logger_8h_source.html#l00022">cwist_logger::level</a>, <a class="el" href="../../d1/d8c/logger_8h_source.html#l00021">cwist_logger::name</a>, and <a class="el" href="../../d1/d8c/logger_8h_source.html#l00023">cwist_logger::use_colors</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l00901">cwist_app_create()</a>.</p>
+
+</div>
+</div>
+<a id="afacc05c0c9aa9cc7167e697e037dc8c9" name="afacc05c0c9aa9cc7167e697e037dc8c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afacc05c0c9aa9cc7167e697e037dc8c9">&#9670;&#160;</a></span>cwist_logger_debug()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_logger_debug </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td>
+          <td class="paramname"><em>log</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>fmt</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Write a debug message. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00063">63</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d7f/log_8h_source.html#l00051">CWIST_LOG_DEBUG</a>, and <a class="el" href="../../d1/d22/logger_8c_source.html#l00043">cwist_logger_log()</a>.</p>
+
+</div>
+</div>
+<a id="af8e75f74e366b81f796c1f8528b00ccf" name="af8e75f74e366b81f796c1f8528b00ccf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af8e75f74e366b81f796c1f8528b00ccf">&#9670;&#160;</a></span>cwist_logger_destroy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_logger_destroy </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td>
+          <td class="paramname"><em>log</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Destroy a logger. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00029">29</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, and <a class="el" href="../../d1/d8c/logger_8h_source.html#l00021">cwist_logger::name</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01021">cwist_app_destroy()</a>.</p>
+
+</div>
+</div>
+<a id="a22966fc2ce7d1780df90d1b18534fd7f" name="a22966fc2ce7d1780df90d1b18534fd7f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22966fc2ce7d1780df90d1b18534fd7f">&#9670;&#160;</a></span>cwist_logger_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_logger_error </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td>
+          <td class="paramname"><em>log</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>fmt</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Write an error message. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00114">114</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d1/d8c/logger_8h_source.html#l00017">CWIST_LOG_ERROR</a>, <a class="el" href="../../d1/d8c/logger_8h_source.html#l00021">cwist_logger::name</a>, and <a class="el" href="../../d1/d8c/logger_8h_source.html#l00023">cwist_logger::use_colors</a>.</p>
+
+</div>
+</div>
+<a id="ad47777d52e51ac0bb1e7ceca2c94a574" name="ad47777d52e51ac0bb1e7ceca2c94a574"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad47777d52e51ac0bb1e7ceca2c94a574">&#9670;&#160;</a></span>cwist_logger_info()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_logger_info </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td>
+          <td class="paramname"><em>log</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>fmt</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Write an info message. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00074">74</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d7f/log_8h_source.html#l00049">CWIST_LOG_INFO</a>, <a class="el" href="../../d1/d8c/logger_8h_source.html#l00021">cwist_logger::name</a>, and <a class="el" href="../../d1/d8c/logger_8h_source.html#l00023">cwist_logger::use_colors</a>.</p>
+
+</div>
+</div>
+<a id="a64dc773c3b1dba994bb3dfef1d0a54e9" name="a64dc773c3b1dba994bb3dfef1d0a54e9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64dc773c3b1dba994bb3dfef1d0a54e9">&#9670;&#160;</a></span>cwist_logger_log()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_logger_log </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td>
+          <td class="paramname"><em>log</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28">cwist_log_level_t</a>&#160;</td>
+          <td class="paramname"><em>level</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>fmt</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Write a log message. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00043">43</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d1/d8c/logger_8h_source.html#l00021">cwist_logger::name</a>, and <a class="el" href="../../d1/d8c/logger_8h_source.html#l00023">cwist_logger::use_colors</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../d1/d22/logger_8c_source.html#l00063">cwist_logger_debug()</a>.</p>
+
+</div>
+</div>
+<a id="aa0fe18643d565c90ccc7d436bc1aceac" name="aa0fe18643d565c90ccc7d436bc1aceac"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa0fe18643d565c90ccc7d436bc1aceac">&#9670;&#160;</a></span>cwist_logger_set_colors()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_logger_set_colors </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td>
+          <td class="paramname"><em>log</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>enabled</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Enable or disable colored output. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00039">39</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d1/d8c/logger_8h_source.html#l00023">cwist_logger::use_colors</a>.</p>
+
+</div>
+</div>
+<a id="ad55e4c9448e174e8cfb3a90f6477304d" name="ad55e4c9448e174e8cfb3a90f6477304d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad55e4c9448e174e8cfb3a90f6477304d">&#9670;&#160;</a></span>cwist_logger_set_level()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_logger_set_level </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td>
+          <td class="paramname"><em>log</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28">cwist_log_level_t</a>&#160;</td>
+          <td class="paramname"><em>level</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Set the minimum log level. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00035">35</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d1/d8c/logger_8h_source.html#l00022">cwist_logger::level</a>.</p>
+
+</div>
+</div>
+<a id="a018a4a7f22d9f77e0ddfd84b903d6b3b" name="a018a4a7f22d9f77e0ddfd84b903d6b3b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a018a4a7f22d9f77e0ddfd84b903d6b3b">&#9670;&#160;</a></span>cwist_logger_warn()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_logger_warn </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d0/dd4/structcwist__logger.html">cwist_logger</a> *&#160;</td>
+          <td class="paramname"><em>log</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>fmt</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Write a warning message. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../d1/d22/logger_8c_source.html#l00094">94</a> of file <a class="el" href="../../d1/d22/logger_8c_source.html">logger.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d7f/log_8h_source.html#l00050">CWIST_LOG_WARN</a>, <a class="el" href="../../d1/d8c/logger_8h_source.html#l00021">cwist_logger::name</a>, and <a class="el" href="../../d1/d8c/logger_8h_source.html#l00023">cwist_logger::use_colors</a>.</p>
+
+</div>
+</div>
+</div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
 Generated by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="../../doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.8

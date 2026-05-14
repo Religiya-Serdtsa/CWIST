@@ -83,7 +83,7 @@ $(function() {
 <p>Session allocation helpers built from a resettable arena and RC payloads.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="../../d5/d63/sys_2session_2session__manager_8h_source.html">cwist/sys/session/session_manager.h</a>&gt;</code><br />
-<code>#include &lt;cwist/core/mem/alloc.h&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d2/dfe/alloc_8h_source.html">cwist/core/mem/alloc.h</a>&gt;</code><br />
 <code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
@@ -94,7 +94,7 @@ Include dependency graph for session_manager.c:</div>
 <area shape="rect" title="Session allocation helpers built from a resettable arena and RC payloads." alt="" coords="291,5,465,45"/>
 <area shape="rect" href="../../d5/d63/sys_2session_2session__manager_8h.html" title="Request&#45;scoped arena and shared&#45;payload helpers for session data." alt="" coords="5,93,193,133"/>
 <area shape="poly" title=" " alt="" coords="318,48,174,92,172,87,316,43"/>
-<area shape="rect" href="../../d2/dfe/alloc_8h_source.html" title=" " alt="" coords="218,101,391,126"/>
+<area shape="rect" href="../../d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="218,101,391,126"/>
 <area shape="poly" title=" " alt="" coords="364,47,326,91,322,88,360,44"/>
 <area shape="rect" title=" " alt="" coords="416,101,487,126"/>
 <area shape="poly" title=" " alt="" coords="396,44,434,88,430,91,392,47"/>
@@ -175,6 +175,7 @@ Functions</h2></td></tr>
 
 <p>Allocate aligned bytes from the request arena. </p>
 <p>Allocate aligned storage from the request arena.</p>
+<p>Allocate from a session arena.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">arena</td><td>Arena that owns the backing storage. </td></tr>
@@ -185,6 +186,8 @@ Functions</h2></td></tr>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to a contiguous region, or NULL when the arena is exhausted. </dd></dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00030">30</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00016">session_arena::buffer</a>, <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00017">session_arena::capacity</a>, and <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00018">session_arena::offset</a>.</p>
 
 </div>
 </div>
@@ -222,6 +225,7 @@ Functions</h2></td></tr>
 
 <p>Initialize a linear arena over caller-provided storage. </p>
 <p>Bind a caller-owned buffer to a session arena and reset its cursor.</p>
+<p>Initialize a session arena.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">arena</td><td>Arena to initialize. </td></tr>
@@ -232,6 +236,8 @@ Functions</h2></td></tr>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00017">17</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00016">session_arena::buffer</a>, <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00017">session_arena::capacity</a>, and <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00018">session_arena::offset</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00111">session_manager_init()</a>.</p>
 
@@ -255,6 +261,7 @@ Functions</h2></td></tr>
 
 <p>Rewind the arena so subsequent allocations reuse the full buffer. </p>
 <p>Reset the request arena so future allocations reuse the full buffer.</p>
+<p>Reset a session arena.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">arena</td><td>Arena to reset. </td></tr>
@@ -263,6 +270,8 @@ Functions</h2></td></tr>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00045">45</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00018">session_arena::offset</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00120">session_manager_reset()</a>.</p>
 
@@ -302,6 +311,7 @@ Functions</h2></td></tr>
 
 <p>Initialize the request-scoped allocator state for a session manager. </p>
 <p>Initialize a session manager around a caller-supplied arena buffer.</p>
+<p>Initialize session manager.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">manager</td><td>Manager to initialize. </td></tr>
@@ -313,7 +323,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00111">111</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00017">session_arena_init()</a>.</p>
+<p class="reference">References <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00022">session_manager::request_arena</a>, and <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00017">session_arena_init()</a>.</p>
 
 </div>
 </div>
@@ -334,6 +344,7 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Reset all request-scoped allocations owned by the manager. </p>
+<p>Reset session manager.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">manager</td><td>Manager whose arena should be rewound. </td></tr>
@@ -343,7 +354,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00120">120</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00045">session_arena_reset()</a>.</p>
+<p class="reference">References <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00022">session_manager::request_arena</a>, and <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00045">session_arena_reset()</a>.</p>
 
 </div>
 </div>
@@ -375,6 +386,7 @@ Functions</h2></td></tr>
 
 <p>Initialize the reference-count metadata for a shared payload. </p>
 <p>Initialize the metadata that tracks a shared session allocation.</p>
+<p>Initialize reference-counted header.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">header</td><td>Header that precedes the payload. </td></tr>
@@ -384,6 +396,8 @@ Functions</h2></td></tr>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00055">55</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00012">session_rc_header::destructor</a>, and <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00011">session_rc_header::ref_count</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00067">session_shared_alloc()</a>.</p>
 
@@ -417,6 +431,7 @@ Functions</h2></td></tr>
 
 <p>Allocate a shared payload with an in-band reference-count header. </p>
 <p>Allocate a zeroed payload preceded by a reference-count header.</p>
+<p>Allocate shared session memory.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">payload_size</td><td>Number of bytes visible to callers. </td></tr>
@@ -428,7 +443,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00067">67</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00055">session_rc_init()</a>.</p>
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00012">session_rc_header::destructor</a>, and <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00055">session_rc_init()</a>.</p>
 
 </div>
 </div>
@@ -450,14 +465,17 @@ Functions</h2></td></tr>
 
 <p>Drop a reference and destroy the payload when the count reaches zero. </p>
 <p>Decrement the reference count and free the payload when it reaches zero.</p>
+<p>Decrement reference count and free if zero.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate a shared payload with an in-band reference-count header.">session_shared_alloc()</a>. </td></tr>
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate shared session memory.">session_shared_alloc()</a>. </td></tr>
   </table>
   </dd>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00092">92</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00012">session_rc_header::destructor</a>, and <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00011">session_rc_header::ref_count</a>.</p>
 
 </div>
 </div>
@@ -478,14 +496,17 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Increment the reference count for a shared payload. </p>
+<p>Increment reference count.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d4/db3/session__manager_8c.html#a8cefd1119397912329c9d845b41e425a" title="Allocate a shared payload with an in-band reference-count header.">session_shared_alloc()</a>. </td></tr>
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate shared session memory.">session_shared_alloc()</a>. </td></tr>
   </table>
   </dd>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00082">82</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../d7/d95/session__manager_8h_source.html#l00011">session_rc_header::ref_count</a>.</p>
 
 </div>
 </div>

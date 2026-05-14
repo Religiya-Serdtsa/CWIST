@@ -1,6 +1,6 @@
 <map id="src/core/db/db.c" name="src/core/db/db.c">
 <area shape="rect" id="Node000001" title="SQLite convenience wrappers plus lightweight heuristics for query execution and JSON healing." alt="" coords="520,5,644,31"/>
-<area shape="rect" id="Node000002" href="$d0/dae/core_2db_2sql_8h_source.html" title=" " alt="" coords="294,79,436,104"/>
+<area shape="rect" id="Node000002" href="$d0/dae/core_2db_2sql_8h.html" title="Database operations wrapper (SQLite3)." alt="" coords="294,79,436,104"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="548,33,414,77,412,72,546,28"/>
 <area shape="rect" id="Node000003" title=" " alt="" coords="196,159,275,185"/>
 <area shape="poly" id="edge22_Node000001_Node000003" title=" " alt="" coords="520,28,386,47,324,62,282,81,269,95,258,112,244,147,239,145,253,109,264,92,279,76,322,57,385,42,520,22"/>
@@ -12,7 +12,7 @@
 <area shape="poly" id="edge16_Node000001_Node000008" title=" " alt="" coords="583,31,551,227,546,226,578,30"/>
 <area shape="rect" id="Node000010" href="$dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="351,159,510,185"/>
 <area shape="poly" id="edge17_Node000001_Node000010" title=" " alt="" coords="573,33,453,152,449,148,569,29"/>
-<area shape="rect" id="Node000011" href="$d2/dfe/alloc_8h_source.html" title=" " alt="" coords="620,79,793,104"/>
+<area shape="rect" id="Node000011" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="620,79,793,104"/>
 <area shape="poly" id="edge19_Node000001_Node000011" title=" " alt="" coords="603,28,675,69,673,74,601,33"/>
 <area shape="rect" id="Node000013" title=" " alt="" coords="817,79,884,104"/>
 <area shape="poly" id="edge23_Node000001_Node000013" title=" " alt="" coords="626,28,804,75,803,80,625,33"/>
