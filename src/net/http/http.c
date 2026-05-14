@@ -3,6 +3,7 @@
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/sys/app/shutdown.h>
 
 #include <limits.h>
 #include <stdio.h>
@@ -1220,10 +1221,11 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
     }
 
     if (config->use_forking) {
-        while (true) {
+        while (atomic_load(&g_cwist_running)) {
             int client_fd = accept(server_fd, NULL, NULL);
             if (client_fd < 0) {
                 int accept_err = errno;
+                if (accept_err == EBADF || accept_err == EINVAL) break;
                 if (cwist_accept_error_should_retry(accept_err)) {
                     cwist_accept_error_backoff(accept_err);
                     continue;
@@ -1236,10 +1238,11 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
     }
 
     if (config->use_threading) {
-        while (true) {
+        while (atomic_load(&g_cwist_running)) {
             int client_fd = accept(server_fd, NULL, NULL);
             if (client_fd < 0) {
                 int accept_err = errno;
+                if (accept_err == EBADF || accept_err == EINVAL) break;
                 if (cwist_accept_error_should_retry(accept_err)) {
                     cwist_accept_error_backoff(accept_err);
                     continue;
@@ -1281,11 +1284,12 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
             return err;
         }
 
-        while (true) {
+        while (atomic_load(&g_cwist_running)) {
             struct epoll_event events[16];
             int count = epoll_wait(epoll_fd, events, 16, -1);
             if (count < 0) {
                 if (errno == EINTR) continue;
+                if (errno == EBADF) break;
                 break;
             }
             for (int i = 0; i < count; i++) {
@@ -1295,6 +1299,7 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
                         handler(client_fd, ctx);
                     } else {
                         int accept_err = errno;
+                        if (accept_err == EBADF || accept_err == EINVAL) break;
                         if (cwist_accept_error_should_retry(accept_err)) {
                             cwist_accept_error_backoff(accept_err);
                             continue;
@@ -1325,11 +1330,12 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
             return err;
         }
 
-        while (true) {
+        while (atomic_load(&g_cwist_running)) {
             struct kevent events[16];
             int count = kevent(kqueue_fd, NULL, 0, events, 16, NULL);
             if (count < 0) {
                 if (errno == EINTR) continue;
+                if (errno == EBADF) break;
                 break;
             }
             for (int i = 0; i < count; i++) {
@@ -1339,6 +1345,7 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
                         handler(client_fd, ctx);
                     } else {
                         int accept_err = errno;
+                        if (accept_err == EBADF || accept_err == EINVAL) break;
                         if (cwist_accept_error_should_retry(accept_err)) {
                             cwist_accept_error_backoff(accept_err);
                             continue;

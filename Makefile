@@ -115,7 +115,10 @@ SRCS = src/core/sstring/sstring.c \
        src/sys/app/middleware.c \
        src/sys/app/config.c \
        src/sys/app/logger.c \
+       src/sys/app/shutdown.c \
+       src/sys/app/compress.c \
        src/sys/app/test_client.c \
+       src/core/log/log.c \
        src/sys/session/flash.c \
        src/core/template/template.c \
        src/core/html/builder.c \
@@ -255,6 +258,9 @@ TEST_TARGETS = test_sstring \
                test_https \
                test_http2 \
                test_http3 \
+               test_shutdown \
+               test_compress \
+               test_log \
                nuke_missing_user_test
 
 .PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild
@@ -316,6 +322,18 @@ test_cors: $(LIB_NAME) tests/test_cors.c
 test_websocket: $(LIB_NAME) tests/test_websocket.c
 	$(CC) $(CFLAGS) -o test_websocket tests/test_websocket.c $(LIB_NAME) $(LIBS)
 	./test_websocket
+
+test_shutdown: $(LIB_NAME) tests/test_shutdown.c
+	$(CC) $(CFLAGS) -o test_shutdown tests/test_shutdown.c $(LIB_NAME) $(LIBS)
+	./test_shutdown
+
+test_compress: $(LIB_NAME) tests/test_compress.c
+	$(CC) $(CFLAGS) -o test_compress tests/test_compress.c $(LIB_NAME) $(LIBS)
+	./test_compress
+
+test_log: $(LIB_NAME) tests/test_log.c
+	$(CC) $(CFLAGS) -o test_log tests/test_log.c $(LIB_NAME) $(LIBS)
+	./test_log
 
 nuke_missing_user_test: $(LIB_NAME) tests/nuke_missing_user_test.c
 	$(CC) $(CFLAGS) -o nuke_missing_user_test tests/nuke_missing_user_test.c $(LIB_NAME) $(LIBS)

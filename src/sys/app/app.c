@@ -3,6 +3,7 @@
 #include <cwist/sys/app/app.h>
 #include <cwist/sys/app/config.h>
 #include <cwist/sys/app/logger.h>
+#include <cwist/sys/app/shutdown.h>
 #include <cwist/net/http/http.h>
 #include <cwist/net/http/http2.h>
 #include <cwist/net/http/http3.h>
@@ -1809,6 +1810,7 @@ static void *h3_server_thread_func(void *arg) {
 int cwist_app_listen(cwist_app *app, int port) {
     // Ignore SIGPIPE
     signal(SIGPIPE, SIG_IGN);
+    cwist_shutdown_install_handlers();
     if (!app) return -1;
     app->port = port;
     
@@ -1864,6 +1866,7 @@ int cwist_app_listen(cwist_app *app, int port) {
                     pthread_t h3_tid;
                     if (pthread_create(&h3_tid, NULL, h3_server_thread_func, h3_p) == 0) {
                         pthread_detach(h3_tid);
+                        g_cwist_udp_fd = udp_fd;
                         printf("HTTP/3 (QUIC) enabled on UDP port %d\n", port);
                     } else {
                         free(h3_p);
@@ -1885,12 +1888,14 @@ int cwist_app_listen(cwist_app *app, int port) {
         perror("Failed to bind port");
         return -1;
     }
+    g_cwist_listen_fd = server_fd;
     
     printf("CWIST App running on port %d (SSL: %s)\n", port, app->use_ssl ? "On" : "Off");
     
     if (app->use_ssl) {
         if (!app->ssl_ctx) {
             fprintf(stderr, "SSL enabled but context not initialized.\n");
+            g_cwist_listen_fd = -1;
             return -1;
         }
         cwist_https_server_loop(server_fd, app->ssl_ctx, static_ssl_handler, app);
@@ -1898,6 +1903,22 @@ int cwist_app_listen(cwist_app *app, int port) {
         cwist_server_config config = { .use_forking = false, .use_threading = true, .use_epoll = false };
         cwist_http_server_loop(server_fd, &config, static_http_handler, app);
     }
+
+    /* Graceful shutdown cleanup */
+    g_cwist_listen_fd = -1;
+    g_cwist_udp_fd = -1;
+
+    if (app->h3_ctx) {
+        app->h3_ctx->running = 0;
+    }
+
+    if (app->mem_manager) {
+        app->mem_manager->watcher_running = false;
+    }
+
+    printf("[CWIST] Draining connections for %d seconds...\n", g_cwist_drain_timeout_sec);
+    sleep(g_cwist_drain_timeout_sec);
+    printf("[CWIST] Shutdown complete.\n");
     
     return 0;
 }

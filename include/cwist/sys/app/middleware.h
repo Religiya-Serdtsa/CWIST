@@ -43,6 +43,17 @@ cwist_middleware_func cwist_mw_cors(void);
 cwist_middleware_func cwist_mw_jwt_auth(const char *secret);
 
 /**
+ * @brief Response compression middleware factory.
+ *
+ * Inspects Accept-Encoding, compresses the response body using a registered
+ * backend, and adds the Content-Encoding header.
+ *
+ * @param min_body_size Minimum uncompressed body size (bytes) to trigger compression.
+ * @return Middleware function pointer.
+ */
+cwist_middleware_func cwist_mw_compress(size_t min_body_size);
+
+/**
  * @brief Retrieve JWT claims stored by cwist_mw_jwt_auth from a request.
  *
  * Only valid inside a handler that sits behind the JWT middleware.

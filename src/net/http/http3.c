@@ -12,6 +12,7 @@
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/sys/err/cwist_err.h>
+#include <cwist/sys/app/shutdown.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -916,7 +917,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     }
 #endif
 
-    while (ctx && ctx->running) {
+    while (ctx && ctx->running && atomic_load(&g_cwist_running)) {
         int diff = 100000; /* default 100 ms in microseconds */
         if (lsquic_engine_earliest_adv_tick(engine, &diff)) {
             if (diff <= 0)

@@ -50,16 +50,16 @@
 | JSON Builder / Healer | ✅ | `json_builder`, `json_heal` |
 | HTML / CSS Builder | ✅ | Programmatic HTML/CSS generation |
 | **Form / Multipart Parser** | ✅ | `multipart/form-data` via `multipart-parser-c` submodule |
-| **Compression (gzip / brotli)** | ⏳ | No built-in response compression |
+| **Compression (gzip / brotli)** | ✅ | Compression middleware with swappable backend (`gzip` via zlib), `cwist_mw_compress` factory, tests added |
 | **Caching Layer** | ⏳ | No HTTP cache (ETag, Last-Modified, Cache-Control) or in-memory cache |
 | **Rate Limiting** | ⏳ | Token bucket or leaky bucket not implemented |
 | **CORS** | 🔄 | Basic CORS test exists; configurable CORS middleware missing |
 | **SSE (Server-Sent Events)** | ⏳ | No structured SSE stream API |
-| **Access Logging** | ⏳ | No standardized access log format (Common / Combined / JSON) |
+| **Access Logging** | 🔄 | Macro-based internal logging added; standardized Common/Combined/JSON access format pending |
 | **Request ID / Tracing** | ⏳ | No distributed tracing or request correlation ID injection |
-| Graceful Shutdown | 🔄 | HTTP/3 has `running` flag; HTTP/1.1/2 needs unified graceful stop |
+| Graceful Shutdown | ✅ | Unified atomic `running` flag + SIGTERM/SIGINT handlers across HTTP/1.1, HTTP/2, HTTP/3 loops |
 | **Health Check Endpoint** | ⏳ | No built-in `/healthz` or readiness/liveness probe |
-| **Metrics / Observability** | 🔄 | Basic structured logger exists; Prometheus endpoint missing |
+| **Metrics / Observability** | 🔄 | Basic structured logger + macro-based `core/log` added; Prometheus endpoint missing |
 | **Per-Status Error Handlers** | ✅ | `cwist_app_register_error_handler` for custom 404, 500, etc. |
 | **URL Reverse Routing** | ✅ | `cwist_app_get_named` + `cwist_url_for` with param substitution |
 | **Flash Messages** | ✅ | One-time session-scoped messages via `cwist_flash_get/set` |
@@ -129,8 +129,8 @@
 ### P0 — Framework Gap (Must Have)
 1. ~~**Advanced Router** with parameterized routes and route groups~~ ✅
 2. ~~**Multipart / File Upload** parser~~ ✅
-3. **Graceful Shutdown** unified across HTTP/1.1, HTTP/2, HTTP/3
-4. **Compression** (gzip at minimum, brotli preferred)
+3. ~~**Graceful Shutdown** unified across HTTP/1.1, HTTP/2, HTTP/3~~ ✅
+4. ~~**Compression** (gzip at minimum, brotli preferred)~~ ✅
 5. **Form / Request Validation** middleware
 
 ### P1 — Production Readiness

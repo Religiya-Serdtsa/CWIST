@@ -4,6 +4,7 @@
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/sys/app/shutdown.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <stdio.h>
@@ -519,14 +520,15 @@ cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, v
         return err;
     }
 
-    while (1) {
+    while (atomic_load(&g_cwist_running)) {
         struct sockaddr_in addr;
         socklen_t len = sizeof(addr);
         int client_fd = accept(server_fd, (struct sockaddr*)&addr, &len);
 
         if (client_fd < 0) {
             if (errno == EINTR) continue;
-            continue; 
+            if (errno == EBADF || errno == EINVAL) break;
+            continue;
         }
 
         pthread_t thread;
