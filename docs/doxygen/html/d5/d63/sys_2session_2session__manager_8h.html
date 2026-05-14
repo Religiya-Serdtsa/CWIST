@@ -353,8 +353,6 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00111">111</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00017">session_arena_init()</a>.</p>
-
 </div>
 </div>
 <a id="a43b8cdaf9e6cddea3bc2562fef1d0cdb" name="a43b8cdaf9e6cddea3bc2562fef1d0cdb"></a>
@@ -383,8 +381,6 @@ Functions</h2></td></tr>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00120">120</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00045">session_arena_reset()</a>.</p>
 
 </div>
 </div>
@@ -484,8 +480,6 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00067">67</a> of file <a class="el" href="../../d4/db3/session__manager_8c_source.html">session_manager.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d4/db3/session__manager_8c_source.html#l00055">session_rc_init()</a>.</p>
-
 </div>
 </div>
 <a id="a362a4383acec3e35d726ff7ba772fb48" name="a362a4383acec3e35d726ff7ba772fb48"></a>
@@ -507,14 +501,14 @@ Functions</h2></td></tr>
 <p>Decrement the reference count and free the payload when it reaches zero. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">payload</td><td>Payload returned by session_shared_alloc().</td></tr>
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate a shared payload with an in-band reference-count header.">session_shared_alloc()</a>.</td></tr>
   </table>
   </dd>
 </dl>
 <p>Decrement the reference count and free the payload when it reaches zero.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">payload</td><td>Payload returned by session_shared_alloc(). </td></tr>
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate a shared payload with an in-band reference-count header.">session_shared_alloc()</a>. </td></tr>
   </table>
   </dd>
 </dl>
@@ -542,7 +536,7 @@ Functions</h2></td></tr>
 <p>Increment the reference count for a shared payload. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">payload</td><td>Payload returned by session_shared_alloc(). </td></tr>
+    <tr><td class="paramname">payload</td><td>Payload returned by <a class="el" href="../../d7/d95/session__manager_8h.html#a8cefd1119397912329c9d845b41e425a" title="Allocate a shared payload with an in-band reference-count header.">session_shared_alloc()</a>. </td></tr>
   </table>
   </dd>
 </dl>

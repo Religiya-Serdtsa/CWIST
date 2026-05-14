@@ -2,6 +2,6 @@
 <area shape="rect" id="Node000001" title="Application&#45;level structured logging." alt="" coords="75,5,236,45"/>
 <area shape="rect" id="Node000002" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="5,93,140,119"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="127,57,87,95,83,91,124,53"/>
-<area shape="rect" id="Node000003" href="$d1/d22/logger_8c_source.html" title=" " alt="" coords="164,93,315,119"/>
+<area shape="rect" id="Node000003" href="$d1/d22/logger_8c.html" title="logger.c interface." alt="" coords="164,93,315,119"/>
 <area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="187,53,229,91,225,95,184,57"/>
 </map>

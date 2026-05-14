@@ -1,5 +1,5 @@
 <map id="include/cwist/sys/app/test_client.h" name="include/cwist/sys/app/test_client.h">
 <area shape="rect" id="Node000001" title="In&#45;process HTTP test client (ala Flask test_client)." alt="" coords="14,5,175,45"/>
-<area shape="rect" id="Node000002" href="$dc/df0/test__client_8c_source.html" title=" " alt="" coords="5,93,184,119"/>
+<area shape="rect" id="Node000002" href="$dc/df0/test__client_8c.html" title="test_client.c interface." alt="" coords="5,93,184,119"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="97,59,97,93,92,93,92,59"/>
 </map>

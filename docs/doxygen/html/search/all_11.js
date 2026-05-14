@@ -9,5 +9,6 @@ var searchData=
   ['revalidate_5fhits_6',['revalidate_hits',['../d9/d90/structcwist__bdr__t.html#a4b5c09b0422d6bc9067c64d573e9e2b6',1,'cwist_bdr_t']]],
   ['roundness_5fpx_7',['roundness_px',['../d3/dd1/structcwist__css__config.html#a4d7246670821ad7221ed6fe2d1328d3c',1,'cwist_css_config']]],
   ['router_8',['router',['../dc/da0/structcwist__app.html#a8c33672187918ac728fda9040779ac8f',1,'cwist_app']]],
-  ['running_9',['running',['../d9/dae/structcwist__http3__context.html#a77a5c8708c91ab6fd4cd14ab13f6d047',1,'cwist_http3_context']]]
+  ['routes_9',['routes',['../dc/da0/structcwist__app.html#a23c88c19100ec9e379afe3b0434a9115',1,'cwist_app']]],
+  ['running_10',['running',['../d9/dae/structcwist__http3__context.html#a77a5c8708c91ab6fd4cd14ab13f6d047',1,'cwist_http3_context']]]
 ];

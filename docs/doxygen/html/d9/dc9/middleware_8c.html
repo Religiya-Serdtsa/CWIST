@@ -216,31 +216,31 @@ Functions</h2></td></tr>
 <tr class="memitem:a18ad84edb807cd9b1c252e3c9de181cf" id="r_a18ad84edb807cd9b1c252e3c9de181cf"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a18ad84edb807cd9b1c252e3c9de181cf">cwist_mw_request_id_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
 <tr class="memdesc:a18ad84edb807cd9b1c252e3c9de181cf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attach an X-Request-Id header to both the request and the response.  <br /></td></tr>
 <tr class="separator:a18ad84edb807cd9b1c252e3c9de181cf"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4b6f6d40a953fcbe496f65902a7f0797" id="r_a4b6f6d40a953fcbe496f65902a7f0797"><td class="memItemLeft" align="right" valign="top">cwist_middleware_func&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a4b6f6d40a953fcbe496f65902a7f0797">cwist_mw_request_id</a> (const char *header_name)</td></tr>
+<tr class="memitem:a4b6f6d40a953fcbe496f65902a7f0797" id="r_a4b6f6d40a953fcbe496f65902a7f0797"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a4b6f6d40a953fcbe496f65902a7f0797">cwist_mw_request_id</a> (const char *header_name)</td></tr>
 <tr class="memdesc:a4b6f6d40a953fcbe496f65902a7f0797"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the built-in request ID middleware.  <br /></td></tr>
 <tr class="separator:a4b6f6d40a953fcbe496f65902a7f0797"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a524acac4e5f3f722693764e719ec4972" id="r_a524acac4e5f3f722693764e719ec4972"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a524acac4e5f3f722693764e719ec4972">cwist_mw_access_log_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
 <tr class="memdesc:a524acac4e5f3f722693764e719ec4972"><td class="mdescLeft">&#160;</td><td class="mdescRight">Log method, path, status, latency, and payload sizes for one request.  <br /></td></tr>
 <tr class="separator:a524acac4e5f3f722693764e719ec4972"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af4504a9f9f2a2395ec721cc6cf0bf46e" id="r_af4504a9f9f2a2395ec721cc6cf0bf46e"><td class="memItemLeft" align="right" valign="top">cwist_middleware_func&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#af4504a9f9f2a2395ec721cc6cf0bf46e">cwist_mw_access_log</a> (cwist_log_format_t format)</td></tr>
+<tr class="memitem:af4504a9f9f2a2395ec721cc6cf0bf46e" id="r_af4504a9f9f2a2395ec721cc6cf0bf46e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#af4504a9f9f2a2395ec721cc6cf0bf46e">cwist_mw_access_log</a> (<a class="el" href="../../d3/db9/middleware_8h.html#a22009cad9633c4143994338668ad016a">cwist_log_format_t</a> format)</td></tr>
 <tr class="memdesc:af4504a9f9f2a2395ec721cc6cf0bf46e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the built-in access-log middleware.  <br /></td></tr>
 <tr class="separator:af4504a9f9f2a2395ec721cc6cf0bf46e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae136d15fb110da74b8219e1e777c06af" id="r_ae136d15fb110da74b8219e1e777c06af"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#ae136d15fb110da74b8219e1e777c06af">cwist_mw_rate_limit_ip_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
 <tr class="memdesc:ae136d15fb110da74b8219e1e777c06af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enforce a simple per-IP request cap using an in-memory one-minute window.  <br /></td></tr>
 <tr class="separator:ae136d15fb110da74b8219e1e777c06af"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aea3a871e2f49f765a5ab7ae87f3354df" id="r_aea3a871e2f49f765a5ab7ae87f3354df"><td class="memItemLeft" align="right" valign="top">cwist_middleware_func&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#aea3a871e2f49f765a5ab7ae87f3354df">cwist_mw_rate_limit_ip</a> (int requests_per_minute)</td></tr>
+<tr class="memitem:aea3a871e2f49f765a5ab7ae87f3354df" id="r_aea3a871e2f49f765a5ab7ae87f3354df"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#aea3a871e2f49f765a5ab7ae87f3354df">cwist_mw_rate_limit_ip</a> (int requests_per_minute)</td></tr>
 <tr class="memdesc:aea3a871e2f49f765a5ab7ae87f3354df"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the built-in per-IP rate-limiter middleware.  <br /></td></tr>
 <tr class="separator:aea3a871e2f49f765a5ab7ae87f3354df"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a944c9e96084a9fb96edbf87860826e45" id="r_a944c9e96084a9fb96edbf87860826e45"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a944c9e96084a9fb96edbf87860826e45">cwist_mw_cors_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
 <tr class="memdesc:a944c9e96084a9fb96edbf87860826e45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Inject permissive CORS headers and short-circuit preflight requests.  <br /></td></tr>
 <tr class="separator:a944c9e96084a9fb96edbf87860826e45"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a502f7df4b6e4faeb32a3dac05175359d" id="r_a502f7df4b6e4faeb32a3dac05175359d"><td class="memItemLeft" align="right" valign="top">cwist_middleware_func&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a502f7df4b6e4faeb32a3dac05175359d">cwist_mw_cors</a> (void)</td></tr>
+<tr class="memitem:a502f7df4b6e4faeb32a3dac05175359d" id="r_a502f7df4b6e4faeb32a3dac05175359d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a502f7df4b6e4faeb32a3dac05175359d">cwist_mw_cors</a> (void)</td></tr>
 <tr class="memdesc:a502f7df4b6e4faeb32a3dac05175359d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the built-in permissive CORS middleware.  <br /></td></tr>
 <tr class="separator:a502f7df4b6e4faeb32a3dac05175359d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a12b9de9450d489d489c138745cf90d50" id="r_a12b9de9450d489d489c138745cf90d50"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a12b9de9450d489d489c138745cf90d50">cwist_mw_jwt_auth_handler</a> (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, cwist_handler_func next)</td></tr>
 <tr class="memdesc:a12b9de9450d489d489c138745cf90d50"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate a bearer token and expose its decoded claims to downstream handlers.  <br /></td></tr>
 <tr class="separator:a12b9de9450d489d489c138745cf90d50"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a49bd9e920c1ec6ff450b7225b544ff40" id="r_a49bd9e920c1ec6ff450b7225b544ff40"><td class="memItemLeft" align="right" valign="top">cwist_middleware_func&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a49bd9e920c1ec6ff450b7225b544ff40">cwist_mw_jwt_auth</a> (const char *secret)</td></tr>
+<tr class="memitem:a49bd9e920c1ec6ff450b7225b544ff40" id="r_a49bd9e920c1ec6ff450b7225b544ff40"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a49bd9e920c1ec6ff450b7225b544ff40">cwist_mw_jwt_auth</a> (const char *secret)</td></tr>
 <tr class="memdesc:a49bd9e920c1ec6ff450b7225b544ff40"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a JWT secret in a static slot and return the matching middleware wrapper.  <br /></td></tr>
 <tr class="separator:a49bd9e920c1ec6ff450b7225b544ff40"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4e08ffed838908a792a6b7f431cdca4e" id="r_a4e08ffed838908a792a6b7f431cdca4e"><td class="memItemLeft" align="right" valign="top">const cwist_jwt_claims *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dc9/middleware_8c.html#a4e08ffed838908a792a6b7f431cdca4e">cwist_mw_jwt_get_claims</a> (const cwist_http_request *req)</td></tr>
@@ -259,9 +259,9 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_middleware_func cwist_mw_access_log </td>
+          <td class="memname"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a> cwist_mw_access_log </td>
           <td>(</td>
-          <td class="paramtype">cwist_log_format_t&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d3/db9/middleware_8h.html#a22009cad9633c4143994338668ad016a">cwist_log_format_t</a>&#160;</td>
           <td class="paramname"><em>format</em></td><td>)</td>
           <td></td>
         </tr>
@@ -328,6 +328,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00087">87</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>, and <a class="el" href="../../dd/d43/http_8c_source.html#l00054">cwist_http_method_to_string()</a>.</p>
+
 <p class="reference">Referenced by <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00116">cwist_mw_access_log()</a>.</p>
 
 </div>
@@ -339,7 +341,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_middleware_func cwist_mw_cors </td>
+          <td class="memname"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a> cwist_mw_cors </td>
           <td>(</td>
           <td class="paramtype">void&#160;</td>
           <td class="paramname"></td><td>)</td>
@@ -402,6 +404,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00207">207</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
+<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>.</p>
+
 <p class="reference">Referenced by <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00229">cwist_mw_cors()</a>.</p>
 
 </div>
@@ -413,7 +417,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_middleware_func cwist_mw_jwt_auth </td>
+          <td class="memname"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a> cwist_mw_jwt_auth </td>
           <td>(</td>
           <td class="paramtype">const char *&#160;</td>
           <td class="paramname"><em>secret</em></td><td>)</td>
@@ -480,7 +484,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00261">261</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d8/d80/jwt_8c_source.html#l00367">cwist_jwt_claims_destroy()</a>, and <a class="el" href="../../d8/d80/jwt_8c_source.html#l00258">cwist_jwt_verify()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>, <a class="el" href="../../d8/d80/jwt_8c_source.html#l00367">cwist_jwt_claims_destroy()</a>, and <a class="el" href="../../d8/d80/jwt_8c_source.html#l00258">cwist_jwt_verify()</a>.</p>
 
 </div>
 </div>
@@ -521,7 +525,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_middleware_func cwist_mw_rate_limit_ip </td>
+          <td class="memname"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a> cwist_mw_rate_limit_ip </td>
           <td>(</td>
           <td class="paramtype">int&#160;</td>
           <td class="paramname"><em>requests_per_minute</em></td><td>)</td>
@@ -590,7 +594,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00140">140</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00236">cwist_get_client_ip_from_fd()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00237">cwist_get_client_ip_from_fd()</a>, and <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00194">cwist_mw_rate_limit_ip()</a>.</p>
 
@@ -603,7 +607,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cwist_middleware_func cwist_mw_request_id </td>
+          <td class="memname"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a> cwist_mw_request_id </td>
           <td>(</td>
           <td class="paramtype">const char *&#160;</td>
           <td class="paramname"><em>header_name</em></td><td>)</td>
@@ -671,6 +675,8 @@ Functions</h2></td></tr>
 </dl>
 
 <p class="definition">Definition at line <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00049">49</a> of file <a class="el" href="../../d9/dc9/middleware_8c_source.html">middleware.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../dd/d43/http_8c_source.html#l00092">cwist_http_header_add()</a>, and <a class="el" href="../../dd/d43/http_8c_source.html#l00123">cwist_http_header_get()</a>.</p>
 
 <p class="reference">Referenced by <a class="el" href="../../d9/dc9/middleware_8c_source.html#l00072">cwist_mw_request_id()</a>.</p>
 

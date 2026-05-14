@@ -180,25 +180,29 @@ This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../da/d35/sys_2app_2app_8h__dep__incl.png" border="0" usemap="#ainclude_2cwist_2sys_2app_2app_8hdep" alt=""/></div>
 <map name="ainclude_2cwist_2sys_2app_2app_8hdep" id="ainclude_2cwist_2sys_2app_2app_8hdep">
-<area shape="rect" title="Core Application Structure and Lifecycle Management." alt="" coords="379,5,541,45"/>
+<area shape="rect" title="Core Application Structure and Lifecycle Management." alt="" coords="471,5,633,45"/>
 <area shape="rect" href="../../d5/da9/net_2http_2mux_8h_source.html" title=" " alt="" coords="5,93,168,133"/>
-<area shape="poly" title=" " alt="" coords="366,51,169,96,168,91,365,46"/>
-<area shape="rect" href="../../dc/d81/ech_8h_source.html" title=" " alt="" coords="192,93,355,133"/>
-<area shape="poly" title=" " alt="" coords="408,53,315,96,313,91,406,49"/>
-<area shape="rect" href="../../d3/d30/sys_2app_2middleware_8h_source.html" title=" " alt="" coords="379,93,541,133"/>
-<area shape="poly" title=" " alt="" coords="463,59,463,93,457,93,457,59"/>
-<area shape="rect" href="../../db/de3/test__client_8h.html" title="In&#45;process HTTP test client (ala Flask test_client)." alt="" coords="565,93,726,133"/>
-<area shape="poly" title=" " alt="" coords="514,49,606,91,604,96,512,54"/>
-<area shape="rect" href="../../df/d7f/app_8c_source.html" title=" " alt="" coords="750,101,885,126"/>
-<area shape="poly" title=" " alt="" coords="552,46,770,98,769,103,551,51"/>
+<area shape="poly" title=" " alt="" coords="458,46,180,96,169,98,168,93,180,91,457,40"/>
+<area shape="rect" href="../../dc/d81/ech_8h.html" title="ech.h interface." alt="" coords="192,93,355,133"/>
+<area shape="poly" title=" " alt="" coords="479,52,335,96,334,91,477,47"/>
+<area shape="rect" href="../../df/d4c/compress_8h.html" title="Compression middleware with swappable backend interface." alt="" coords="379,93,541,133"/>
+<area shape="poly" title=" " alt="" coords="524,57,482,95,479,91,520,53"/>
+<area shape="rect" href="../../d3/d30/sys_2app_2middleware_8h_source.html" title=" " alt="" coords="565,93,726,133"/>
+<area shape="poly" title=" " alt="" coords="585,53,626,91,623,95,581,57"/>
+<area shape="rect" href="../../db/de3/test__client_8h.html" title="In&#45;process HTTP test client (ala Flask test_client)." alt="" coords="750,93,911,133"/>
+<area shape="poly" title=" " alt="" coords="627,47,770,91,769,96,625,52"/>
+<area shape="rect" href="../../df/d7f/app_8c_source.html" title=" " alt="" coords="935,101,1070,126"/>
+<area shape="poly" title=" " alt="" coords="646,39,925,91,957,98,956,103,923,96,646,45"/>
 <area shape="rect" href="../../dd/d49/mux_8c.html" title="Fixed&#45;bucket HTTP route dispatch using a lightweight path signature." alt="" coords="17,181,157,207"/>
 <area shape="poly" title=" " alt="" coords="89,147,89,181,84,181,84,147"/>
-<area shape="rect" href="../../d6/db1/ech_8c_source.html" title=" " alt="" coords="188,181,343,207"/>
+<area shape="rect" href="../../d6/db1/ech_8c.html" title="ech.c interface." alt="" coords="188,181,343,207"/>
 <area shape="poly" title=" " alt="" coords="273,147,269,181,264,181,267,147"/>
-<area shape="rect" href="../../d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="367,181,553,207"/>
-<area shape="poly" title=" " alt="" coords="463,147,463,181,457,181,457,147"/>
-<area shape="rect" href="../../dc/df0/test__client_8c_source.html" title=" " alt="" coords="577,181,756,207"/>
-<area shape="poly" title=" " alt="" coords="657,146,666,180,661,182,651,147"/>
+<area shape="rect" href="../../d0/d6b/compress_8c.html" title="Compression middleware and built&#45;in zlib backends." alt="" coords="367,181,540,207"/>
+<area shape="poly" title=" " alt="" coords="460,147,457,181,452,181,455,147"/>
+<area shape="rect" href="../../d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="564,181,751,207"/>
+<area shape="poly" title=" " alt="" coords="653,147,658,181,653,181,648,147"/>
+<area shape="rect" href="../../dc/df0/test__client_8c.html" title="test_client.c interface." alt="" coords="775,181,953,207"/>
+<area shape="poly" title=" " alt="" coords="846,145,861,180,857,182,842,147"/>
 </map>
 </div>
 </div>
@@ -286,7 +290,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 <tr class="memdesc:ab3ca8957a5373a7a4fb845e6546b861e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch a request internally through the app's router and middleware. Used by the test client and advanced integrations. <br /></td></tr>
 <tr class="separator:ab3ca8957a5373a7a4fb845e6546b861e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr><td colspan="2"><div class="groupHeader">Middleware</div></td></tr>
-<tr class="memitem:a88046a9e7f5c0f069c94aefd233dd815" id="r_a88046a9e7f5c0f069c94aefd233dd815"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a88046a9e7f5c0f069c94aefd233dd815">cwist_app_use</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, cwist_middleware_func mw)</td></tr>
+<tr class="memitem:a88046a9e7f5c0f069c94aefd233dd815" id="r_a88046a9e7f5c0f069c94aefd233dd815"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d77/sys_2app_2app_8h.html#a88046a9e7f5c0f069c94aefd233dd815">cwist_app_use</a> (<a class="el" href="../../dc/da0/structcwist__app.html">cwist_app</a> *app, <a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a> mw)</td></tr>
 <tr class="memdesc:a88046a9e7f5c0f069c94aefd233dd815"><td class="mdescLeft">&#160;</td><td class="mdescRight">Append a middleware callback to the application's execution chain.  <br /></td></tr>
 <tr class="separator:a88046a9e7f5c0f069c94aefd233dd815"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr><td colspan="2"><div class="groupHeader">Error Handling Configuration</div></td></tr>
@@ -485,7 +489,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01011">1011</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01012">1012</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 <p class="reference">References <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00102">cwist_app::bdr_ctx</a>, and <a class="el" href="../../dc/da3/big__dumb__reply_8c_source.html#l00539">cwist_bdr_set_limits()</a>.</p>
 
@@ -508,11 +512,10 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Creates a new CWIST application instance. </p>
-<p>&mdash; API &mdash; </p><dl class="section return"><dt>Returns</dt><dd>Pointer to the allocated app, or NULL on failure. </dd></dl>
+<p>&mdash; API &mdash; </p><dl class="section return"><dt>Returns</dt><dd>Pointer to the allocated app, or NULL on failure.</dd></dl>
+<p>Creates a new CWIST application instance. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00900">900</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00102">cwist_app::bdr_ctx</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00087">cwist_app::config</a>, <a class="el" href="../../dc/da3/big__dumb__reply_8c_source.html#l00165">cwist_bdr_create()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d2/d39/app_8h_source.html#l00044">cwist_app::error_handler</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00085">cwist_app::error_handlers</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00091">cwist_app::h3_ctx</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00088">cwist_app::logger</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00097">cwist_app::max_mem_space</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00099">cwist_app::mem_manager</a>, <a class="el" href="../../d2/d39/app_8h_source.html#l00038">cwist_app::middlewares</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00081">cwist_app::router</a>, <a class="el" href="../../d2/d39/app_8h_source.html#l00047">cwist_app::ssl_ctx</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00082">cwist_app::static_dirs</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00071">cwist_app::use_http2</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00072">cwist_app::use_http3</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00073">cwist_app::use_https2</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00074">cwist_app::use_https3</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00901">901</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -547,9 +550,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01020">1020</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00102">cwist_app::bdr_ctx</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00087">cwist_app::config</a>, <a class="el" href="../../dc/da3/big__dumb__reply_8c_source.html#l00185">cwist_bdr_destroy()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00218">cwist_nuke_close()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00085">cwist_app::error_handlers</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00134">cwist_fix_server_mem::file_tree</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00129">cwist_fix_server_mem::files</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00112">cwist_file_t::fs_path</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00091">cwist_app::h3_ctx</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00088">cwist_app::logger</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00099">cwist_app::mem_manager</a>, <a class="el" href="../../d2/d39/app_8h_source.html#l00038">cwist_app::middlewares</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00116">cwist_file_t::node</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00111">cwist_file_t::path</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00081">cwist_app::router</a>, <a class="el" href="../../d2/d39/app_8h_source.html#l00047">cwist_app::ssl_ctx</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00082">cwist_app::static_dirs</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01021">1021</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -587,6 +588,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 
 <p>Registers a GET route handler. </p>
 <p>Registers a GET route handler.</p>
+<p>Routing.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -596,9 +598,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01412">1412</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../de/d66/endpoint__opts_8h_source.html#l00028">CWIST_ENDPOINT_DEFAULT</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01413">1413</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -627,7 +627,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Database wrapper, or NULL when no database is configured. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01333">1333</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01334">1334</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 <p class="reference">References <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00393">cwist_nuke_get_db()</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
 
@@ -682,7 +682,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01452">1452</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01453">1453</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -713,6 +713,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Initialize runtime services and enter the HTTP or HTTPS server loop. </p>
+<p>Add other methods as needed.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application instance to run. </td></tr>
@@ -722,9 +723,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>0 on success, or -1 when initialization or bind fails. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01809">1809</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00091">cwist_app::h3_ctx</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00099">cwist_app::mem_manager</a>, <a class="el" href="../../d2/d39/app_8h_source.html#l00047">cwist_app::ssl_ctx</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00071">cwist_app::use_http2</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00072">cwist_app::use_http3</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00073">cwist_app::use_https2</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00074">cwist_app::use_https3</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01810">1810</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -770,9 +769,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01426">1426</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../de/d66/endpoint__opts_8h_source.html#l00028">CWIST_ENDPOINT_DEFAULT</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01427">1427</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -825,7 +822,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01463">1463</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01464">1464</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -856,6 +853,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Install a custom HTTP error callback. </p>
+<p>Error Handling Configuration.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -864,9 +862,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00971">971</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d2/d39/app_8h_source.html#l00044">cwist_app::error_handler</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00972">972</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -913,7 +909,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00962">962</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00963">963</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 <p class="reference">References <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00097">cwist_app::max_mem_space</a>.</p>
 
@@ -972,9 +968,9 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Tagged CWIST error describing success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01348">1348</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01349">1349</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00082">cwist_app::static_dirs</a>.</p>
+<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00082">cwist_app::static_dirs</a>.</p>
 
 </div>
 </div>
@@ -993,7 +989,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_middleware_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d2/d39/app_8h.html#ab61e763134014868b93ec963af056f91">cwist_middleware_func</a>&#160;</td>
           <td class="paramname"><em>mw</em>&#160;</td>
         </tr>
         <tr>
@@ -1005,6 +1001,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </div><div class="memdoc">
 
 <p>Append a middleware callback to the application's execution chain. </p>
+<p>Middleware.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">app</td><td>Application being configured. </td></tr>
@@ -1013,9 +1010,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00942">942</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d2/d39/app_8h_source.html#l00038">cwist_app::middlewares</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l00943">943</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -1055,11 +1050,11 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Tagged CWIST error describing success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01249">1249</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01250">1250</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
+<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
 
-<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01282">cwist_app_use_nuke_db()</a>.</p>
+<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01283">cwist_app_use_nuke_db()</a>.</p>
 
 </div>
 </div>
@@ -1099,9 +1094,9 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 <dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Status. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01219">1219</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01220">1220</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00071">cwist_app::use_http2</a>.</p>
+<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00071">cwist_app::use_http2</a>.</p>
 
 </div>
 </div>
@@ -1141,9 +1136,9 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 <dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Status. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01231">1231</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01232">1232</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00072">cwist_app::use_http3</a>.</p>
+<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00072">cwist_app::use_http3</a>.</p>
 
 </div>
 </div>
@@ -1190,9 +1185,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Tagged CWIST error describing success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01151">1151</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00072">cwist_app::use_http3</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00074">cwist_app::use_https3</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01152">1152</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -1239,9 +1232,9 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Tagged CWIST error describing success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01282">1282</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01283">1283</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../df/d7f/app_8c_source.html#l01249">cwist_app_use_db()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00218">cwist_nuke_close()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00393">cwist_nuke_get_db()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00298">cwist_nuke_init()</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00021">CWIST_NUKE_OK</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
+<p class="reference">References <a class="el" href="../../df/d7f/app_8c_source.html#l01250">cwist_app_use_db()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00218">cwist_nuke_close()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00393">cwist_nuke_get_db()</a>, <a class="el" href="../../d0/d14/nuke__db_8c_source.html#l00298">cwist_nuke_init()</a>, <a class="el" href="../../dc/dfe/nuke__db_8h_source.html#l00021">CWIST_NUKE_OK</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00092">cwist_app::db</a>, <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00093">cwist_app::db_path</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00094">cwist_app::nuke_enabled</a>.</p>
 
 </div>
 </div>
@@ -1287,9 +1280,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01440">1440</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../de/d66/endpoint__opts_8h_source.html#l00028">CWIST_ENDPOINT_DEFAULT</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00081">cwist_app::router</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01441">1441</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 </div>
 </div>
@@ -1342,7 +1333,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_app_dispatch</b
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01474">1474</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../df/d7f/app_8c_source.html#l01475">1475</a> of file <a class="el" href="../../df/d7f/app_8c_source.html">app.c</a>.</p>
 
 <p class="reference">References <a class="el" href="../../de/d66/endpoint__opts_8h_source.html#l00028">CWIST_ENDPOINT_DEFAULT</a>, and <a class="el" href="../../d0/d77/sys_2app_2app_8h_source.html#l00081">cwist_app::router</a>.</p>
 

@@ -204,7 +204,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ac4a61ffa64bd13a921b1beedbe6e1481" id="r_ac4a61ffa64bd13a921b1beedbe6e1481"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/d49/mux_8c.html#ac4a61ffa64bd13a921b1beedbe6e1481">cwist_mux_router_destroy</a> (cwist_mux_router *router)</td></tr>
 <tr class="memdesc:ac4a61ffa64bd13a921b1beedbe6e1481"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destroy a mux router and all registered route records.  <br /></td></tr>
 <tr class="separator:ac4a61ffa64bd13a921b1beedbe6e1481"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6290a5d6bf876fcbca27e7fc79603427" id="r_a6290a5d6bf876fcbca27e7fc79603427"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/d49/mux_8c.html#a6290a5d6bf876fcbca27e7fc79603427">cwist_mux_handle</a> (cwist_mux_router *router, cwist_http_method_t method, const char *path, cwist_http_handler_func handler)</td></tr>
+<tr class="memitem:a6290a5d6bf876fcbca27e7fc79603427" id="r_a6290a5d6bf876fcbca27e7fc79603427"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/d49/mux_8c.html#a6290a5d6bf876fcbca27e7fc79603427">cwist_mux_handle</a> (cwist_mux_router *router, <a class="el" href="../../dd/d56/http_8h.html#aa7eeb74d97e9a5416ffc3cd53366683d">cwist_http_method_t</a> method, const char *path, <a class="el" href="../../d5/d57/mux_8h.html#a53a0bd703fe17831f5b0ad878328c4cb">cwist_http_handler_func</a> handler)</td></tr>
 <tr class="memdesc:a6290a5d6bf876fcbca27e7fc79603427"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a concrete method/path pair inside the mux buckets.  <br /></td></tr>
 <tr class="separator:a6290a5d6bf876fcbca27e7fc79603427"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a48a6012e8d8b1a226160d5374eca116b" id="r_a48a6012e8d8b1a226160d5374eca116b"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/d49/mux_8c.html#a48a6012e8d8b1a226160d5374eca116b">cwist_mux_serve</a> (cwist_mux_router *router, cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res)</td></tr>
@@ -231,7 +231,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_http_method_t&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/d56/http_8h.html#aa7eeb74d97e9a5416ffc3cd53366683d">cwist_http_method_t</a>&#160;</td>
           <td class="paramname"><em>method</em>, </td>
         </tr>
         <tr>
@@ -243,7 +243,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_http_handler_func&#160;</td>
+          <td class="paramtype"><a class="el" href="../../d5/d57/mux_8h.html#a53a0bd703fe17831f5b0ad878328c4cb">cwist_http_handler_func</a>&#160;</td>
           <td class="paramname"><em>handler</em>&#160;</td>
         </tr>
         <tr>
@@ -255,6 +255,7 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Register a concrete method/path pair inside the mux buckets. </p>
+<p>Route Management.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">router</td><td>Router that will own the route metadata. </td></tr>
@@ -286,6 +287,7 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Create an empty mux router with the default bucket fan-out. </p>
+<p>Lifecycle.</p>
 <dl class="section return"><dt>Returns</dt><dd>Newly allocated router, or NULL when allocation fails. </dd></dl>
 
 <p class="definition">Definition at line <a class="el" href="../../dd/d49/mux_8c_source.html#l00267">267</a> of file <a class="el" href="../../dd/d49/mux_8c_source.html">mux.c</a>.</p>

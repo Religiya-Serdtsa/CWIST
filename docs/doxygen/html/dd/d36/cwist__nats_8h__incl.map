@@ -1,0 +1,13 @@
+<map id="include/cwist/net/nats/cwist_nats.h" name="include/cwist/net/nats/cwist_nats.h">
+<area shape="rect" id="Node000001" title="cwist_nats.h interface." alt="" coords="127,5,291,45"/>
+<area shape="rect" id="Node000002" href="$d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="71,93,213,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="196,47,167,84,163,81,192,44"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="238,101,313,126"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="226,44,260,88,256,91,221,47"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="5,181,76,207"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="119,136,68,175,65,170,116,131"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="101,181,183,207"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="145,134,145,167,139,167,139,134"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="208,181,319,207"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="173,131,235,172,233,176,170,136"/>
+</map>

@@ -184,7 +184,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:a3c2b697641812cf3867fd89d504b19c6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable or disable QUIC datagram support (RFC 9221).  <br /></td></tr>
 <tr class="separator:a3c2b697641812cf3867fd89d504b19c6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr><td colspan="2"><div class="groupHeader">Request Execution</div></td></tr>
-<tr class="memitem:a1cebceb867dbe446f274df968cb30cdd" id="r_a1cebceb867dbe446f274df968cb30cdd"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../df/dad/http3__client_8h.html#a1cebceb867dbe446f274df968cb30cdd">cwist_http3_client_request</a> (cwist_http3_client *client, const char *path, cwist_http_method_t method, <a class="el" href="../../d3/d72/structcwist__http__header__node.html">cwist_http_header_node</a> *headers, const char *body, size_t body_len, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> **out_response)</td></tr>
+<tr class="memitem:a1cebceb867dbe446f274df968cb30cdd" id="r_a1cebceb867dbe446f274df968cb30cdd"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../df/dad/http3__client_8h.html#a1cebceb867dbe446f274df968cb30cdd">cwist_http3_client_request</a> (cwist_http3_client *client, const char *path, <a class="el" href="../../dd/d56/http_8h.html#aa7eeb74d97e9a5416ffc3cd53366683d">cwist_http_method_t</a> method, <a class="el" href="../../d3/d72/structcwist__http__header__node.html">cwist_http_header_node</a> *headers, const char *body, size_t body_len, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> **out_response)</td></tr>
 <tr class="memdesc:a1cebceb867dbe446f274df968cb30cdd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Perform a synchronous HTTP/3 request.  <br /></td></tr>
 <tr class="separator:a1cebceb867dbe446f274df968cb30cdd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr><td colspan="2"><div class="groupHeader">Datagrams (RFC 9221)</div></td></tr>
@@ -350,7 +350,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_http_method_t&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/d56/http_8h.html#aa7eeb74d97e9a5416ffc3cd53366683d">cwist_http_method_t</a>&#160;</td>
           <td class="paramname"><em>method</em>, </td>
         </tr>
         <tr>
@@ -403,7 +403,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../d1/d88/http3__client_8c_source.html#l00529">529</a> of file <a class="el" href="../../d1/d88/http3__client_8c_source.html">http3_client.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, and <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>.</p>
+<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
 
 </div>
 </div>

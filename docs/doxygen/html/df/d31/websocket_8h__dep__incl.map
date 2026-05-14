@@ -1,0 +1,7 @@
+<map id="include/cwist/websocket.h" name="include/cwist/websocket.h">
+<area shape="rect" id="Node000001" title="websocket.h interface." alt="" coords="9,5,201,31"/>
+<area shape="rect" id="Node000002" href="$d2/d39/app_8h.html" title="app.h interface." alt="" coords="32,79,179,104"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="108,44,108,79,103,79,103,44"/>
+<area shape="rect" id="Node000003" href="$d3/db9/middleware_8h.html" title="middleware.h interface." alt="" coords="5,152,205,177"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="108,118,108,152,103,152,103,118"/>
+</map>

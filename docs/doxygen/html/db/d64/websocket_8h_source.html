@@ -82,51 +82,47 @@ $(document).ready(function() { init_codefold(1); });
   <div class="headertitle"><div class="title">websocket.h</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#ifndef __CWIST_WEBSOCKET_H__</span></div>
-<div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span><span class="preprocessor">#define __CWIST_WEBSOCKET_H__</span></div>
-<div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span> </div>
-<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;cwist/http.h&gt;</span></div>
-<div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;stdint.h&gt;</span></div>
-<div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="preprocessor">#include &lt;stdbool.h&gt;</span></div>
-<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span> </div>
-<div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="keyword">typedef</span> <span class="keyword">struct </span>cwist_websocket {</div>
-<div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span>    <span class="keywordtype">int</span> fd;</div>
-<div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span>    <span class="keywordtype">bool</span> is_closed;</div>
-<div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span>} cwist_websocket;</div>
-<div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span> </div>
-<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span><span class="keyword">typedef</span> <span class="keyword">enum</span> {</div>
-<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>    CWIST_WS_FRAME_CONTINUATION = 0x0,</div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>    CWIST_WS_FRAME_TEXT = 0x1,</div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    CWIST_WS_FRAME_BINARY = 0x2,</div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>    CWIST_WS_FRAME_CLOSE = 0x8,</div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    CWIST_WS_FRAME_PING = 0x9,</div>
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    CWIST_WS_FRAME_PONG = 0xA</div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>} cwist_ws_opcode_t;</div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span> </div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="keyword">typedef</span> <span class="keyword">struct </span>cwist_ws_frame {</div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    <span class="keywordtype">bool</span> fin;</div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    cwist_ws_opcode_t opcode;</div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    uint8_t *payload;</div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    <span class="keywordtype">size_t</span> payload_len;</div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>} cwist_ws_frame;</div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="comment">// Upgrade a standard HTTP request to a WebSocket connection.</span></div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="comment">// Returns NULL if the handshake fails or the request is not a valid WebSocket upgrade.</span></div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="comment">// If successful, sends the 101 Switching Protocols response and returns the WS context.</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>cwist_websocket *cwist_websocket_upgrade(cwist_http_request *req, <span class="keywordtype">int</span> client_fd);</div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span> </div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="comment">// Receive a frame. Blocks until a frame is received or connection closed.</span></div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="comment">// Returns NULL on error or connection close.</span></div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>cwist_ws_frame *cwist_websocket_receive(cwist_websocket *ws);</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span> </div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="comment">// Send a frame.</span></div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">int</span> cwist_websocket_send(cwist_websocket *ws, cwist_ws_opcode_t opcode, <span class="keyword">const</span> uint8_t *data, <span class="keywordtype">size_t</span> len);</div>
+<a href="../../db/d64/websocket_8h.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span> </div>
+<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#ifndef __CWIST_WEBSOCKET_H__</span></div>
+<div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#define __CWIST_WEBSOCKET_H__</span></div>
+<div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span> </div>
+<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="preprocessor">#include &lt;<a class="code" href="../../dd/d56/http_8h.html">cwist/http.h</a>&gt;</span></div>
+<div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="preprocessor">#include &lt;stdint.h&gt;</span></div>
+<div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span><span class="preprocessor">#include &lt;stdbool.h&gt;</span></div>
+<div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span> </div>
+<div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="keyword">typedef</span> <span class="keyword">struct </span>cwist_websocket {</div>
+<div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span>    <span class="keywordtype">int</span> fd;</div>
+<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>    <span class="keywordtype">bool</span> is_closed;</div>
+<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>} cwist_websocket;</div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span> </div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="keyword">typedef</span> <span class="keyword">enum</span> {</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>    CWIST_WS_FRAME_CONTINUATION = 0x0,</div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    CWIST_WS_FRAME_TEXT = 0x1,</div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    CWIST_WS_FRAME_BINARY = 0x2,</div>
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>    CWIST_WS_FRAME_CLOSE = 0x8,</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>    CWIST_WS_FRAME_PING = 0x9,</div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>    CWIST_WS_FRAME_PONG = 0xA</div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>} cwist_ws_opcode_t;</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="keyword">typedef</span> <span class="keyword">struct </span>cwist_ws_frame {</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    <span class="keywordtype">bool</span> fin;</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    cwist_ws_opcode_t opcode;</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    uint8_t *payload;</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    <span class="keywordtype">size_t</span> payload_len;</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>} cwist_ws_frame;</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>cwist_websocket *cwist_websocket_upgrade(cwist_http_request *req, <span class="keywordtype">int</span> client_fd);</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span> </div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>cwist_ws_frame *cwist_websocket_receive(cwist_websocket *ws);</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span><span class="keywordtype">void</span> cwist_websocket_frame_destroy(cwist_ws_frame *frame);</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="keywordtype">void</span> cwist_websocket_close(cwist_websocket *ws);</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="keywordtype">void</span> cwist_websocket_destroy(cwist_websocket *ws);</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span> </div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="keywordtype">int</span> cwist_websocket_send(cwist_websocket *ws, cwist_ws_opcode_t opcode, <span class="keyword">const</span> uint8_t *data, <span class="keywordtype">size_t</span> len);</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span> </div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="keywordtype">void</span> cwist_websocket_frame_destroy(cwist_ws_frame *frame);</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="keywordtype">void</span> cwist_websocket_close(cwist_websocket *ws);</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="keywordtype">void</span> cwist_websocket_destroy(cwist_websocket *ws);</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span> </div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="preprocessor">#endif</span></div>
+<div class="ttc" id="ahttp_8h_html"><div class="ttname"><a href="../../dd/d56/http_8h.html">http.h</a></div><div class="ttdoc">http.h interface.</div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

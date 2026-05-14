@@ -195,7 +195,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_http_client_des
 <tr class="memitem:a2bd87b67daa51f0be3a4ce2b18fde35b" id="r_a2bd87b67daa51f0be3a4ce2b18fde35b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d6/d32/http__client_8c.html#a2bd87b67daa51f0be3a4ce2b18fde35b">cwist_http_client_set_altsvc_db</a> (cwist_http_client *client, const char *path)</td></tr>
 <tr class="memdesc:a2bd87b67daa51f0be3a4ce2b18fde35b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set Alt-Svc cache database file path.  <br /></td></tr>
 <tr class="separator:a2bd87b67daa51f0be3a4ce2b18fde35b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6f802eeeb71d3ddbb7dbe2717ba10b20" id="r_a6f802eeeb71d3ddbb7dbe2717ba10b20"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d6/d32/http__client_8c.html#a6f802eeeb71d3ddbb7dbe2717ba10b20">cwist_http_client_request</a> (cwist_http_client *client, const char *url, cwist_http_method_t method, <a class="el" href="../../d3/d72/structcwist__http__header__node.html">cwist_http_header_node</a> *headers, const char *body, size_t body_len, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> **out_response)</td></tr>
+<tr class="memitem:a6f802eeeb71d3ddbb7dbe2717ba10b20" id="r_a6f802eeeb71d3ddbb7dbe2717ba10b20"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d6/d32/http__client_8c.html#a6f802eeeb71d3ddbb7dbe2717ba10b20">cwist_http_client_request</a> (cwist_http_client *client, const char *url, <a class="el" href="../../dd/d56/http_8h.html#aa7eeb74d97e9a5416ffc3cd53366683d">cwist_http_method_t</a> method, <a class="el" href="../../d3/d72/structcwist__http__header__node.html">cwist_http_header_node</a> *headers, const char *body, size_t body_len, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> **out_response)</td></tr>
 <tr class="memdesc:a6f802eeeb71d3ddbb7dbe2717ba10b20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Perform a synchronous HTTP request.  <br /></td></tr>
 <tr class="separator:a6f802eeeb71d3ddbb7dbe2717ba10b20"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
@@ -288,7 +288,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_http_client_des
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cwist_http_method_t&#160;</td>
+          <td class="paramtype"><a class="el" href="../../dd/d56/http_8h.html#aa7eeb74d97e9a5416ffc3cd53366683d">cwist_http_method_t</a>&#160;</td>
           <td class="paramname"><em>method</em>, </td>
         </tr>
         <tr>
@@ -333,7 +333,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_http_client_des
     <tr><td class="paramname">headers</td><td>Optional request headers linked list (may be NULL). </td></tr>
     <tr><td class="paramname">body</td><td>Optional request body (may be NULL). </td></tr>
     <tr><td class="paramname">body_len</td><td>Length of <code>body</code> in bytes. </td></tr>
-    <tr><td class="paramname">out_response</td><td>Output pointer for the parsed response. Caller must destroy with cwist_http_response_destroy(). </td></tr>
+    <tr><td class="paramname">out_response</td><td>Output pointer for the parsed response. Caller must destroy with <a class="el" href="../../dd/d56/http_8h.html#abb4d7c3cd5624faea1646f36b835ec69" title="Destroy an HTTP response and release any attached body resources.">cwist_http_response_destroy()</a>. </td></tr>
   </table>
   </dd>
 </dl>
@@ -341,7 +341,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_http_client_des
 
 <p class="definition">Definition at line <a class="el" href="../../d6/d32/http__client_8c_source.html#l00247">247</a> of file <a class="el" href="../../d6/d32/http__client_8c_source.html">http_client.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00069">cwist_http_response::status_text</a>.</p>
+<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00138">cwist_http_header_free_all()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00054">cwist_http_method_to_string()</a>, <a class="el" href="../../dd/d43/http_8c_source.html#l00324">cwist_http_response_create()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, and <a class="el" href="../../dd/d56/http_8h_source.html#l00072">cwist_http_response::status_text</a>.</p>
 
 </div>
 </div>

@@ -1,18 +1,20 @@
 var searchData=
 [
-  ['macros_2eh_0',['macros.h',['../da/dec/core_2macros_8h.html',1,'']]],
-  ['make_5ferror_1',['make_error',['../d7/da1/sys_2err_2cwist__err_8h.html#acebd12423b82bb0e4580503397972ac0',1,'make_error(cwist_errtype_t type):&#160;error.c'],['../db/dcc/error_8c.html#acebd12423b82bb0e4580503397972ac0',1,'make_error(cwist_errtype_t type):&#160;error.c']]],
+  ['macros_2eh_0',['macros.h',['../da/dec/core_2macros_8h.html',1,'(Global Namespace)'],['../de/d3c/macros_8h.html',1,'(Global Namespace)']]],
+  ['make_5ferror_1',['make_error',['../db/dcc/error_8c.html#acebd12423b82bb0e4580503397972ac0',1,'make_error(cwist_errtype_t type):&#160;error.c'],['../d7/da1/sys_2err_2cwist__err_8h.html#acebd12423b82bb0e4580503397972ac0',1,'make_error(cwist_errtype_t type):&#160;error.c'],['../d3/d73/err_2cwist__err_8h.html#acebd12423b82bb0e4580503397972ac0',1,'make_error(cwist_errtype_t type):&#160;error.c']]],
   ['max_5fbytes_2',['max_bytes',['../d9/d90/structcwist__bdr__t.html#a6c224571b874ac111326d99deb0ca2c9',1,'cwist_bdr_t']]],
   ['max_5fentry_5fage_5fsec_3',['max_entry_age_sec',['../d9/d90/structcwist__bdr__t.html#a49d315bce92eae0216a0c5c1f47c680f',1,'cwist_bdr_t']]],
   ['max_5fmem_5fspace_4',['max_mem_space',['../dc/da0/structcwist__app.html#a0dd0babfca6fb67cfe27d3d8c789443c',1,'cwist_app']]],
   ['mem_5fdb_5',['mem_db',['../d4/d32/structcwist__nuke__db__t.html#ab729b9bd62d36dd083da0e7ea4abd839',1,'cwist_nuke_db_t']]],
   ['mem_5fmanager_6',['mem_manager',['../dc/da0/structcwist__app.html#a4e1a5f14818648344e5510d681c92e5d',1,'cwist_app']]],
   ['middleware_2ec_7',['middleware.c',['../d9/dc9/middleware_8c.html',1,'']]],
-  ['middlewares_8',['middlewares',['../dc/da0/structcwist__app.html#a39cdeb5e4aae77e376e674edb8e29183',1,'cwist_app']]],
-  ['migrate_2ec_9',['migrate.c',['../d7/da4/migrate_8c.html',1,'']]],
-  ['migrate_2eh_10',['migrate.h',['../d1/d2a/migrate_8h.html',1,'']]],
-  ['model_11',['Encryption model',['../d9/df9/db__crypt_8h.html#autotoc_md1',1,'']]],
-  ['multipart_2ec_12',['multipart.c',['../d3/d79/multipart_8c.html',1,'']]],
-  ['multipart_2eh_13',['multipart.h',['../d0/dd6/multipart_8h.html',1,'']]],
-  ['mux_2ec_14',['mux.c',['../dd/d49/mux_8c.html',1,'']]]
+  ['middleware_2eh_8',['middleware.h',['../d3/db9/middleware_8h.html',1,'']]],
+  ['middlewares_9',['middlewares',['../dc/da0/structcwist__app.html#a39cdeb5e4aae77e376e674edb8e29183',1,'cwist_app']]],
+  ['migrate_2ec_10',['migrate.c',['../d7/da4/migrate_8c.html',1,'']]],
+  ['migrate_2eh_11',['migrate.h',['../d1/d2a/migrate_8h.html',1,'']]],
+  ['model_12',['Encryption model',['../d9/df9/db__crypt_8h.html#autotoc_md1',1,'']]],
+  ['multipart_2ec_13',['multipart.c',['../d3/d79/multipart_8c.html',1,'']]],
+  ['multipart_2eh_14',['multipart.h',['../d0/dd6/multipart_8h.html',1,'']]],
+  ['mux_2ec_15',['mux.c',['../dd/d49/mux_8c.html',1,'']]],
+  ['mux_2eh_16',['mux.h',['../d5/d57/mux_8h.html',1,'']]]
 ];

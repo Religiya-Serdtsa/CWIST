@@ -82,110 +82,114 @@ $(document).ready(function() { init_codefold(1); });
   <div class="headertitle"><div class="title">cwist_nats.c</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#define _GNU_SOURCE</span></div>
-<div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span><span class="preprocessor">#include &lt;cwist/net/nats/cwist_nats.h&gt;</span></div>
-<div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="preprocessor">#include &lt;cwist/core/mem/alloc.h&gt;</span></div>
-<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;nats.h&gt;</span></div>
-<div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;stdlib.h&gt;</span></div>
-<div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="preprocessor">#include &lt;string.h&gt;</span></div>
-<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span> </div>
-<div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="keyword">struct </span>cwist_nats {</div>
-<div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span>    natsConnection *conn;</div>
-<div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span>    natsSubscription *sub;</div>
-<div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span>    cwist_nats_msg_cb user_cb;</div>
-<div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span>    <span class="keywordtype">void</span> *user_ctx;</div>
-<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>};</div>
-<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span> </div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="keyword">static</span> <span class="keywordtype">void</span> cwist_nats_adapter(natsConnection *nc, natsSubscription *sub, natsMsg *msg, <span class="keywordtype">void</span> *closure) {</div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    (void)nc;</div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>    (void)sub;</div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    cwist_nats_t *nats = (cwist_nats_t *)closure;</div>
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    <span class="keywordflow">if</span> (nats &amp;&amp; nats-&gt;user_cb) {</div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>        <span class="keyword">const</span> <span class="keywordtype">char</span> *subject = natsMsg_GetSubject(msg);</div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>        <span class="keyword">const</span> <span class="keywordtype">char</span> *data = natsMsg_GetData(msg);</div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>        <span class="keywordtype">int</span> len = natsMsg_GetDataLength(msg);</div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>        nats-&gt;user_cb(subject, data, (<span class="keywordtype">size_t</span>)len, nats-&gt;user_ctx);</div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    }</div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    natsMsg_Destroy(msg);</div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>}</div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_nats_connect(cwist_nats_t **nats, <span class="keyword">const</span> <span class="keywordtype">char</span> *url) {</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    <a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> err = make_error(CWIST_ERR_INT16);</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>    <span class="keywordflow">if</span> (!nats) {</div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = <a class="code hl_define" href="../../d7/da1/sys_2err_2cwist__err_8h.html#a0ae92b5d5f56c49cfeb670fdd09ed70f">CWIST_ERROR_INVALID_PARAM</a>;</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>        <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>    }</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    cwist_nats_t *obj = (cwist_nats_t *)cwist_alloc(<span class="keyword">sizeof</span>(cwist_nats_t));</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <span class="keywordflow">if</span> (!obj) {</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = <a class="code hl_define" href="../../d7/da1/sys_2err_2cwist__err_8h.html#a800f1aab8ae12af67cf13a0a8fdf7b86">CWIST_ERROR_NOMEM</a>;</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>        <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    }</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    memset(obj, 0, <span class="keyword">sizeof</span>(*obj));</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    natsStatus s = natsConnection_ConnectTo(&amp;obj-&gt;conn, url ? url : NATS_DEFAULT_URL);</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <span class="keywordflow">if</span> (s != NATS_OK) {</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>        cwist_free(obj);</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = (int16_t)s;</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>        <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    }</div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    *nats = obj;</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = 0;</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>}</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span> </div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_nats_subscribe(cwist_nats_t *nats, <span class="keyword">const</span> <span class="keywordtype">char</span> *subject, cwist_nats_msg_cb cb, <span class="keywordtype">void</span> *ctx) {</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> err = make_error(CWIST_ERR_INT16);</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    <span class="keywordflow">if</span> (!nats || !nats-&gt;conn || !subject) {</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = <a class="code hl_define" href="../../d7/da1/sys_2err_2cwist__err_8h.html#a0ae92b5d5f56c49cfeb670fdd09ed70f">CWIST_ERROR_INVALID_PARAM</a>;</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>        <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    }</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="keywordflow">if</span> (nats-&gt;sub) {</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>        natsSubscription_Destroy(nats-&gt;sub);</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>        nats-&gt;sub = NULL;</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    }</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    nats-&gt;user_cb = cb;</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    nats-&gt;user_ctx = ctx;</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    natsStatus s = natsConnection_Subscribe(&amp;nats-&gt;sub, nats-&gt;conn, subject, cwist_nats_adapter, nats);</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <span class="keywordflow">if</span> (s != NATS_OK) {</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = (int16_t)s;</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>        <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    }</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = 0;</div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>}</div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span> </div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_nats_publish_string(cwist_nats_t *nats, <span class="keyword">const</span> <span class="keywordtype">char</span> *subject, <span class="keyword">const</span> <span class="keywordtype">char</span> *data) {</div>
-<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> err = make_error(CWIST_ERR_INT16);</div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>    <span class="keywordflow">if</span> (!nats || !nats-&gt;conn || !subject) {</div>
-<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = <a class="code hl_define" href="../../d7/da1/sys_2err_2cwist__err_8h.html#a0ae92b5d5f56c49cfeb670fdd09ed70f">CWIST_ERROR_INVALID_PARAM</a>;</div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>        <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    }</div>
-<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>    natsStatus s = natsConnection_PublishString(nats-&gt;conn, subject, data ? data : <span class="stringliteral">&quot;&quot;</span>);</div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <span class="keywordflow">if</span> (s == NATS_OK) {</div>
-<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>        s = natsConnection_Flush(nats-&gt;conn);</div>
-<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    }</div>
-<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = (int16_t)s;</div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    <span class="keywordflow">return</span> err;</div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>}</div>
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span> </div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span><span class="keywordtype">void</span> cwist_nats_dispatch(cwist_nats_t *nats) {</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <span class="keywordflow">if</span> (nats &amp;&amp; nats-&gt;conn) {</div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>        natsConnection_Flush(nats-&gt;conn);</div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    }</div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>}</div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span> </div>
-<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span><span class="keywordtype">void</span> cwist_nats_destroy(cwist_nats_t *nats) {</div>
-<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    <span class="keywordflow">if</span> (!nats) <span class="keywordflow">return</span>;</div>
-<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    <span class="keywordflow">if</span> (nats-&gt;sub) {</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>        natsSubscription_Destroy(nats-&gt;sub);</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    }</div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    <span class="keywordflow">if</span> (nats-&gt;conn) {</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>        natsConnection_Destroy(nats-&gt;conn);</div>
+<a href="../../d6/d53/cwist__nats_8c.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span> </div>
+<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#define _GNU_SOURCE</span></div>
+<div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;<a class="code" href="../../d1/de1/cwist__nats_8h.html">cwist/net/nats/cwist_nats.h</a>&gt;</span></div>
+<div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="preprocessor">#include &lt;cwist/core/mem/alloc.h&gt;</span></div>
+<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="preprocessor">#include &lt;nats.h&gt;</span></div>
+<div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="preprocessor">#include &lt;stdlib.h&gt;</span></div>
+<div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span><span class="preprocessor">#include &lt;string.h&gt;</span></div>
+<div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span> </div>
+<div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="keyword">struct </span>cwist_nats {</div>
+<div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span>    natsConnection *conn;</div>
+<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>    natsSubscription *sub;</div>
+<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>    cwist_nats_msg_cb user_cb;</div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>    <span class="keywordtype">void</span> *user_ctx;</div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>};</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span> </div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="keyword">static</span> <span class="keywordtype">void</span> cwist_nats_adapter(natsConnection *nc, natsSubscription *sub, natsMsg *msg, <span class="keywordtype">void</span> *closure) {</div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    (void)nc;</div>
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>    (void)sub;</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>    cwist_nats_t *nats = (cwist_nats_t *)closure;</div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>    <span class="keywordflow">if</span> (nats &amp;&amp; nats-&gt;user_cb) {</div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>        <span class="keyword">const</span> <span class="keywordtype">char</span> *subject = natsMsg_GetSubject(msg);</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>        <span class="keyword">const</span> <span class="keywordtype">char</span> *data = natsMsg_GetData(msg);</div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>        <span class="keywordtype">int</span> len = natsMsg_GetDataLength(msg);</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>        nats-&gt;user_cb(subject, data, (<span class="keywordtype">size_t</span>)len, nats-&gt;user_ctx);</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    }</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    natsMsg_Destroy(msg);</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>}</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_nats_connect(cwist_nats_t **nats, <span class="keyword">const</span> <span class="keywordtype">char</span> *url) {</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>    <a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> err = <a class="code hl_function" href="../../d3/d73/err_2cwist__err_8h.html#acebd12423b82bb0e4580503397972ac0">make_error</a>(<a class="code hl_enumvalue" href="../../d3/d73/err_2cwist__err_8h.html#a5d9104925cd11ab0ded2ddfcef4375baa7ddc038cc3ea431cfc59c528e375e518">CWIST_ERR_INT16</a>);</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>    <span class="keywordflow">if</span> (!nats) {</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = <a class="code hl_define" href="../../d7/da1/sys_2err_2cwist__err_8h.html#a0ae92b5d5f56c49cfeb670fdd09ed70f">CWIST_ERROR_INVALID_PARAM</a>;</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>        <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    }</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    cwist_nats_t *obj = (cwist_nats_t *)cwist_alloc(<span class="keyword">sizeof</span>(cwist_nats_t));</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    <span class="keywordflow">if</span> (!obj) {</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = <a class="code hl_define" href="../../d7/da1/sys_2err_2cwist__err_8h.html#a800f1aab8ae12af67cf13a0a8fdf7b86">CWIST_ERROR_NOMEM</a>;</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>        <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    }</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    memset(obj, 0, <span class="keyword">sizeof</span>(*obj));</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    natsStatus s = natsConnection_ConnectTo(&amp;obj-&gt;conn, url ? url : NATS_DEFAULT_URL);</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keywordflow">if</span> (s != NATS_OK) {</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>        cwist_free(obj);</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = (int16_t)s;</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>        <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    }</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    *nats = obj;</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = 0;</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>}</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span> </div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_nats_subscribe(cwist_nats_t *nats, <span class="keyword">const</span> <span class="keywordtype">char</span> *subject, cwist_nats_msg_cb cb, <span class="keywordtype">void</span> *ctx) {</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> err = <a class="code hl_function" href="../../d3/d73/err_2cwist__err_8h.html#acebd12423b82bb0e4580503397972ac0">make_error</a>(<a class="code hl_enumvalue" href="../../d3/d73/err_2cwist__err_8h.html#a5d9104925cd11ab0ded2ddfcef4375baa7ddc038cc3ea431cfc59c528e375e518">CWIST_ERR_INT16</a>);</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <span class="keywordflow">if</span> (!nats || !nats-&gt;conn || !subject) {</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = <a class="code hl_define" href="../../d7/da1/sys_2err_2cwist__err_8h.html#a0ae92b5d5f56c49cfeb670fdd09ed70f">CWIST_ERROR_INVALID_PARAM</a>;</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>        <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    }</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keywordflow">if</span> (nats-&gt;sub) {</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>        natsSubscription_Destroy(nats-&gt;sub);</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>        nats-&gt;sub = NULL;</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    }</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    nats-&gt;user_cb = cb;</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    nats-&gt;user_ctx = ctx;</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    natsStatus s = natsConnection_Subscribe(&amp;nats-&gt;sub, nats-&gt;conn, subject, cwist_nats_adapter, nats);</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="keywordflow">if</span> (s != NATS_OK) {</div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = (int16_t)s;</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>        <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    }</div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>    err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = 0;</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>    <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>}</div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span> </div>
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_nats_publish_string(cwist_nats_t *nats, <span class="keyword">const</span> <span class="keywordtype">char</span> *subject, <span class="keyword">const</span> <span class="keywordtype">char</span> *data) {</div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> err = <a class="code hl_function" href="../../d3/d73/err_2cwist__err_8h.html#acebd12423b82bb0e4580503397972ac0">make_error</a>(<a class="code hl_enumvalue" href="../../d3/d73/err_2cwist__err_8h.html#a5d9104925cd11ab0ded2ddfcef4375baa7ddc038cc3ea431cfc59c528e375e518">CWIST_ERR_INT16</a>);</div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <span class="keywordflow">if</span> (!nats || !nats-&gt;conn || !subject) {</div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>        err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = <a class="code hl_define" href="../../d7/da1/sys_2err_2cwist__err_8h.html#a0ae92b5d5f56c49cfeb670fdd09ed70f">CWIST_ERROR_INVALID_PARAM</a>;</div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>        <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    }</div>
+<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    natsStatus s = natsConnection_PublishString(nats-&gt;conn, subject, data ? data : <span class="stringliteral">&quot;&quot;</span>);</div>
+<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    <span class="keywordflow">if</span> (s == NATS_OK) {</div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>        s = natsConnection_Flush(nats-&gt;conn);</div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    }</div>
+<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>    err.<a class="code hl_variable" href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">error</a>.<a class="code hl_variable" href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">err_i16</a> = (int16_t)s;</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    <span class="keywordflow">return</span> err;</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>}</div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span> </div>
+<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span><span class="keywordtype">void</span> cwist_nats_dispatch(cwist_nats_t *nats) {</div>
+<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>    <span class="keywordflow">if</span> (nats &amp;&amp; nats-&gt;conn) {</div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>        natsConnection_Flush(nats-&gt;conn);</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    }</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>}</div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span> </div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span><span class="keywordtype">void</span> cwist_nats_destroy(cwist_nats_t *nats) {</div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    <span class="keywordflow">if</span> (!nats) <span class="keywordflow">return</span>;</div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    <span class="keywordflow">if</span> (nats-&gt;sub) {</div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>        natsSubscription_Destroy(nats-&gt;sub);</div>
 <div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    }</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>    cwist_free(nats);</div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>}</div>
-<div class="ttc" id="astruct____prim__cwist__error__t_html_a4b42814c5b2380b0af9a27820a2ba8e2"><div class="ttname"><a href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">__prim_cwist_error_t::err_i16</a></div><div class="ttdeci">int16_t err_i16</div><div class="ttdef"><b>Definition</b> <a href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">cwist_err.h:45</a></div></div>
-<div class="ttc" id="astructcwist__error__t_html"><div class="ttname"><a href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a></div><div class="ttdoc">Integrated error structure used throughout the system.</div><div class="ttdef"><b>Definition</b> <a href="../../d3/d73/err_2cwist__err_8h_source.html#l00068">cwist_err.h:68</a></div></div>
-<div class="ttc" id="astructcwist__error__t_html_acff1b9ee2047a170190bf1aec42dcea5"><div class="ttname"><a href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">cwist_error_t::error</a></div><div class="ttdeci">__prim_cwist_error_t error</div><div class="ttdef"><b>Definition</b> <a href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_err.h:70</a></div></div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>    <span class="keywordflow">if</span> (nats-&gt;conn) {</div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>        natsConnection_Destroy(nats-&gt;conn);</div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    }</div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    cwist_free(nats);</div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>}</div>
+<div class="ttc" id="acwist__nats_8h_html"><div class="ttname"><a href="../../d1/de1/cwist__nats_8h.html">cwist_nats.h</a></div><div class="ttdoc">cwist_nats.h interface.</div></div>
+<div class="ttc" id="aerr_2cwist__err_8h_html_a5d9104925cd11ab0ded2ddfcef4375baa7ddc038cc3ea431cfc59c528e375e518"><div class="ttname"><a href="../../d3/d73/err_2cwist__err_8h.html#a5d9104925cd11ab0ded2ddfcef4375baa7ddc038cc3ea431cfc59c528e375e518">CWIST_ERR_INT16</a></div><div class="ttdeci">@ CWIST_ERR_INT16</div><div class="ttdoc">used when checking common errcodes in Unix/Linux</div><div class="ttdef"><b>Definition</b> <a href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">cwist_err.h:15</a></div></div>
+<div class="ttc" id="aerr_2cwist__err_8h_html_acebd12423b82bb0e4580503397972ac0"><div class="ttname"><a href="../../d3/d73/err_2cwist__err_8h.html#acebd12423b82bb0e4580503397972ac0">make_error</a></div><div class="ttdeci">cwist_error_t make_error(cwist_errtype_t type)</div><div class="ttdoc">Initialize a cwist_error_t with the requested storage variant.</div><div class="ttdef"><b>Definition</b> <a href="../../db/dcc/error_8c_source.html#l00013">error.c:13</a></div></div>
+<div class="ttc" id="astruct____prim__cwist__error__t_html_a4b42814c5b2380b0af9a27820a2ba8e2"><div class="ttname"><a href="../../d8/dca/struct____prim__cwist__error__t.html#a4b42814c5b2380b0af9a27820a2ba8e2">__prim_cwist_error_t::err_i16</a></div><div class="ttdeci">int16_t err_i16</div><div class="ttdef"><b>Definition</b> <a href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">cwist_err.h:48</a></div></div>
+<div class="ttc" id="astructcwist__error__t_html"><div class="ttname"><a href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a></div><div class="ttdoc">Integrated error structure used throughout the system.</div><div class="ttdef"><b>Definition</b> <a href="../../d3/d73/err_2cwist__err_8h_source.html#l00071">cwist_err.h:71</a></div></div>
+<div class="ttc" id="astructcwist__error__t_html_acff1b9ee2047a170190bf1aec42dcea5"><div class="ttname"><a href="../../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5">cwist_error_t::error</a></div><div class="ttdeci">__prim_cwist_error_t error</div><div class="ttdef"><b>Definition</b> <a href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_err.h:73</a></div></div>
 <div class="ttc" id="asys_2err_2cwist__err_8h_html_a0ae92b5d5f56c49cfeb670fdd09ed70f"><div class="ttname"><a href="../../d7/da1/sys_2err_2cwist__err_8h.html#a0ae92b5d5f56c49cfeb670fdd09ed70f">CWIST_ERROR_INVALID_PARAM</a></div><div class="ttdeci">#define CWIST_ERROR_INVALID_PARAM</div><div class="ttdef"><b>Definition</b> <a href="../../d7/da1/sys_2err_2cwist__err_8h_source.html#l00102">cwist_err.h:102</a></div></div>
 <div class="ttc" id="asys_2err_2cwist__err_8h_html_a800f1aab8ae12af67cf13a0a8fdf7b86"><div class="ttname"><a href="../../d7/da1/sys_2err_2cwist__err_8h.html#a800f1aab8ae12af67cf13a0a8fdf7b86">CWIST_ERROR_NOMEM</a></div><div class="ttdeci">#define CWIST_ERROR_NOMEM</div><div class="ttdef"><b>Definition</b> <a href="../../d7/da1/sys_2err_2cwist__err_8h_source.html#l00101">cwist_err.h:101</a></div></div>
 </div><!-- fragment --></div><!-- contents -->
