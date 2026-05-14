@@ -17,7 +17,7 @@ CWIST is a modern, lightweight C web framework designed for building secure and 
 
 ## Features
 
-- **HTTP/1.1 Server**: Robust request parsing and response handling.
+- **HTTP/1.1-HTTP/3 Server**: Robust request parsing and response handling.
 - **SString**: Custom string library with compare and substr support.
 - **WebSocket Support**: Easy upgrade from HTTP to persistent connections.
 - **Middleware System**: Chainable processing for logging and security.
