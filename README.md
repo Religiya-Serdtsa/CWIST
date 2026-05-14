@@ -14,6 +14,7 @@
 CWIST is a modern, lightweight C web framework designed for building secure and scalable applications. It brings the ergonomics of modern web frameworks to C without sacrificing performance or control.
 
 [TEXT Readme](./README)
+[Documentation](https://religiya-serdtsa.github.io/CWIST/)
 
 ## Features
 
