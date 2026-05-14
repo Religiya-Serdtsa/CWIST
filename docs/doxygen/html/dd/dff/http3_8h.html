@@ -84,70 +84,67 @@ $(function() {
 
 <p>HTTP/3 (QUIC-based) Protocol Definitions for CWIST.  
 <a href="#details">More...</a></p>
-<div class="textblock"><code>#include &lt;<a class="el" href="../../dd/d56/http_8h_source.html">cwist/net/http/http.h</a>&gt;</code><br />
-<code>#include &lt;<a class="el" href="../../d7/d82/cwist__err_8h_source.html">cwist/sys/err/cwist_err.h</a>&gt;</code><br />
+<div class="textblock"><code>#include &lt;<a class="el" href="../../d9/dab/net_2http_2http_8h_source.html">cwist/net/http/http.h</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="../../d7/da1/sys_2err_2cwist__err_8h_source.html">cwist/sys/err/cwist_err.h</a>&gt;</code><br />
 <code>#include &lt;openssl/ssl.h&gt;</code><br />
-<code>#include &lt;openssl/quic.h&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for http3.h:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../d7/d23/http3_8h__incl.png" border="0" usemap="#ainclude_2cwist_2net_2http_2http3_8h" alt=""/></div>
 <map name="ainclude_2cwist_2net_2http_2http3_8h" id="ainclude_2cwist_2net_2http_2http3_8h">
-<area shape="rect" title="HTTP/3 (QUIC&#45;based) Protocol Definitions for CWIST." alt="" coords="637,5,798,50"/>
-<area shape="rect" href="../../dd/d56/http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="566,98,718,126"/>
-<area shape="poly" title=" " alt="" coords="700,52,666,88,662,85,696,49"/>
-<area shape="rect" href="../../d7/d82/cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="364,266,506,311"/>
-<area shape="poly" title=" " alt="" coords="645,53,599,73,555,100,520,135,490,176,467,217,451,253,446,251,463,214,486,173,516,131,552,96,597,68,643,48"/>
-<area shape="rect" title=" " alt="" coords="742,98,848,126"/>
-<area shape="poly" title=" " alt="" coords="740,49,774,85,770,88,736,52"/>
-<area shape="rect" title=" " alt="" coords="871,98,986,126"/>
-<area shape="poly" title=" " alt="" coords="775,48,881,89,879,94,773,53"/>
-<area shape="rect" href="../../d1/d34/sstring_8h_source.html" title=" " alt="" coords="574,174,709,218"/>
-<area shape="poly" title=" " alt="" coords="644,126,644,158,639,158,639,126"/>
-<area shape="poly" title=" " alt="" coords="621,128,553,176,507,217,467,257,463,253,503,213,549,172,618,124"/>
-<area shape="rect" href="../../dd/d6e/query_8h_source.html" title=" " alt="" coords="962,275,1124,302"/>
-<area shape="poly" title=" " alt="" coords="719,121,731,123,813,127,919,129,973,132,1021,140,1061,152,1089,172,1096,183,1099,195,1095,219,1083,243,1068,264,1064,261,1079,241,1090,218,1093,195,1091,185,1085,176,1059,157,1020,145,972,138,919,134,813,132,731,128,718,127"/>
-<area shape="rect" href="../../d4/d59/sql_8h_source.html" title=" " alt="" coords="219,182,361,210"/>
-<area shape="poly" title=" " alt="" coords="586,129,362,181,360,176,585,124"/>
-<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="530,266,700,311"/>
-<area shape="poly" title=" " alt="" coords="615,128,586,148,564,175,560,195,563,215,573,235,585,253,581,256,568,238,558,217,554,194,559,172,583,144,612,124"/>
-<area shape="rect" title=" " alt="" coords="734,182,829,210"/>
-<area shape="poly" title=" " alt="" coords="666,124,748,172,745,176,663,129"/>
-<area shape="rect" title=" " alt="" coords="854,182,955,210"/>
-<area shape="poly" title=" " alt="" coords="687,124,843,171,852,174,851,179,841,176,686,129"/>
-<area shape="rect" title=" " alt="" coords="979,182,1075,210"/>
-<area shape="poly" title=" " alt="" coords="719,121,836,142,968,171,979,174,977,179,966,176,835,147,718,127"/>
-<area shape="rect" title=" " alt="" coords="868,275,938,302"/>
-<area shape="poly" title=" " alt="" coords="710,214,857,264,863,266,861,271,856,269,709,220"/>
-<area shape="rect" title=" " alt="" coords="775,275,844,302"/>
-<area shape="poly" title=" " alt="" coords="683,217,773,265,771,269,681,221"/>
-<area shape="rect" title=" " alt="" coords="398,452,480,479"/>
-<area shape="poly" title=" " alt="" coords="675,217,697,238,715,265,721,289,715,312,698,343,675,370,647,392,617,411,554,439,496,456,494,451,552,434,615,407,644,388,671,366,693,340,710,310,716,289,710,267,693,242,671,221"/>
-<area shape="poly" title=" " alt="" coords="593,221,499,262,497,257,591,216"/>
-<area shape="poly" title=" " alt="" coords="438,311,441,436,436,436,433,311"/>
-<area shape="rect" title=" " alt="" coords="508,368,578,395"/>
-<area shape="poly" title=" " alt="" coords="462,309,518,355,514,359,459,313"/>
-<area shape="rect" title=" " alt="" coords="80,452,190,479"/>
-<area shape="poly" title=" " alt="" coords="365,309,303,331,242,361,193,401,156,441,152,438,190,397,239,357,301,326,363,304"/>
-<area shape="poly" title=" " alt="" coords="987,306,950,314,753,349,594,375,593,370,752,344,949,308,986,301"/>
-<area shape="rect" title=" " alt="" coords="690,452,764,479"/>
-<area shape="poly" title=" " alt="" coords="1021,305,765,446,763,442,1018,301"/>
-<area shape="poly" title=" " alt="" coords="312,208,389,256,386,260,309,212"/>
-<area shape="poly" title=" " alt="" coords="219,208,161,218,102,231,51,248,33,257,21,268,10,290,9,313,16,337,29,361,67,405,107,440,104,444,63,409,25,364,11,339,4,314,5,289,17,265,30,253,49,243,100,225,160,212,218,203"/>
-<area shape="rect" title=" " alt="" coords="212,275,290,302"/>
-<area shape="poly" title=" " alt="" coords="287,211,265,262,260,260,282,209"/>
-<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="252,359,402,404"/>
-<area shape="poly" title=" " alt="" coords="295,210,322,343,317,344,290,211"/>
-<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="31,275,189,302"/>
-<area shape="poly" title=" " alt="" coords="265,213,151,270,148,265,262,208"/>
-<area shape="poly" title=" " alt="" coords="358,402,411,440,407,444,355,406"/>
-<area shape="poly" title=" " alt="" coords="277,407,181,448,179,443,275,402"/>
-<area shape="poly" title=" " alt="" coords="403,395,676,451,675,456,402,401"/>
-<area shape="poly" title=" " alt="" coords="123,301,172,350,205,377,242,401,314,432,384,451,382,456,312,437,239,406,202,382,168,354,119,305"/>
-<area shape="poly" title=" " alt="" coords="114,303,134,436,128,437,109,303"/>
-<area shape="poly" title=" " alt="" coords="142,301,262,350,260,355,140,306"/>
-<area shape="poly" title=" " alt="" coords="619,312,614,358,606,383,592,405,571,425,547,439,496,458,494,453,544,434,568,420,588,402,601,381,608,357,613,311"/>
-<area shape="poly" title=" " alt="" coords="600,313,565,357,561,353,596,310"/>
+<area shape="rect" title="HTTP/3 (QUIC&#45;based) Protocol Definitions for CWIST." alt="" coords="565,5,728,45"/>
+<area shape="rect" href="../../d9/dab/net_2http_2http_8h.html" title="HTTP Protocol Definitions and Helpers." alt="" coords="570,93,723,119"/>
+<area shape="poly" title=" " alt="" coords="649,46,649,79,644,79,644,46"/>
+<area shape="rect" href="../../d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="368,255,511,295"/>
+<area shape="poly" title=" " alt="" coords="619,48,590,69,560,95,528,132,500,172,458,243,453,241,495,169,524,129,557,91,586,65,616,43"/>
+<area shape="rect" title=" " alt="" coords="748,93,854,119"/>
+<area shape="poly" title=" " alt="" coords="685,43,767,85,765,89,682,48"/>
+<area shape="rect" href="../../d4/dbd/core_2sstring_2sstring_8h_source.html" title=" " alt="" coords="578,167,714,207"/>
+<area shape="poly" title=" " alt="" coords="649,119,649,153,644,153,644,119"/>
+<area shape="poly" title=" " alt="" coords="629,121,557,169,510,209,470,247,466,243,507,205,554,165,626,117"/>
+<area shape="rect" href="../../d1/d7a/net_2http_2query_8h_source.html" title=" " alt="" coords="972,262,1134,287"/>
+<area shape="poly" title=" " alt="" coords="723,115,1096,165,1106,187,1102,210,1090,233,1076,253,1071,250,1086,230,1097,209,1100,187,1093,169,723,120"/>
+<area shape="rect" href="../../d0/dae/core_2db_2sql_8h_source.html" title=" " alt="" coords="220,174,363,199"/>
+<area shape="poly" title=" " alt="" coords="595,121,357,174,356,168,594,116"/>
+<area shape="rect" href="../../de/d66/endpoint__opts_8h.html" title="Endpoint&#45;level behavior flags for CWIST apps." alt="" coords="536,255,706,295"/>
+<area shape="poly" title=" " alt="" coords="622,121,592,140,579,153,569,168,565,187,569,207,579,226,593,243,588,246,575,229,564,209,559,187,564,166,575,149,589,136,619,116"/>
+<area shape="rect" title=" " alt="" coords="738,174,834,199"/>
+<area shape="poly" title=" " alt="" coords="668,117,755,165,753,170,666,121"/>
+<area shape="rect" title=" " alt="" coords="859,174,962,199"/>
+<area shape="poly" title=" " alt="" coords="686,116,860,168,858,173,684,121"/>
+<area shape="rect" title=" " alt="" coords="986,174,1082,199"/>
+<area shape="poly" title=" " alt="" coords="724,116,842,136,975,164,988,168,987,173,974,169,841,141,723,121"/>
+<area shape="rect" title=" " alt="" coords="876,262,947,287"/>
+<area shape="poly" title=" " alt="" coords="714,204,866,252,873,255,871,260,864,257,712,209"/>
+<area shape="rect" title=" " alt="" coords="782,262,852,287"/>
+<area shape="poly" title=" " alt="" coords="685,204,783,253,781,258,683,209"/>
+<area shape="rect" title=" " alt="" coords="402,431,485,456"/>
+<area shape="poly" title=" " alt="" coords="678,205,702,226,721,254,726,275,721,296,703,326,680,353,652,375,621,393,557,420,499,436,498,430,555,415,619,388,649,370,676,349,699,323,716,294,721,275,716,256,698,230,675,209"/>
+<area shape="poly" title=" " alt="" coords="602,209,499,252,497,247,600,204"/>
+<area shape="poly" title=" " alt="" coords="443,295,446,417,440,417,438,295"/>
+<area shape="rect" title=" " alt="" coords="512,350,583,375"/>
+<area shape="poly" title=" " alt="" coords="465,293,524,339,520,343,462,297"/>
+<area shape="rect" title=" " alt="" coords="79,431,190,456"/>
+<area shape="poly" title=" " alt="" coords="369,295,306,315,244,345,194,383,155,422,151,418,190,379,241,340,304,310,367,290"/>
+<area shape="poly" title=" " alt="" coords="998,290,960,297,597,357,596,351,959,292,997,285"/>
+<area shape="rect" title=" " alt="" coords="697,431,772,456"/>
+<area shape="poly" title=" " alt="" coords="1032,290,770,427,767,422,1030,285"/>
+<area shape="poly" title=" " alt="" coords="313,197,397,245,394,250,310,202"/>
+<area shape="poly" title=" " alt="" coords="221,198,162,207,102,219,51,236,33,246,21,256,10,277,9,300,16,322,30,345,68,387,108,420,105,424,64,391,26,348,12,325,4,300,5,276,16,253,30,241,49,231,101,214,161,202,220,193"/>
+<area shape="rect" title=" " alt="" coords="214,262,292,287"/>
+<area shape="poly" title=" " alt="" coords="289,201,266,250,262,248,284,198"/>
+<area shape="rect" href="../../db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="255,343,406,383"/>
+<area shape="poly" title=" " alt="" coords="297,199,326,329,321,330,292,200"/>
+<area shape="rect" href="../../dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="31,262,190,287"/>
+<area shape="poly" title=" " alt="" coords="268,202,149,258,146,254,266,197"/>
+<area shape="poly" title=" " alt="" coords="359,381,417,420,414,425,356,385"/>
+<area shape="poly" title=" " alt="" coords="284,385,177,428,175,423,282,380"/>
+<area shape="poly" title=" " alt="" coords="406,376,684,430,683,435,405,381"/>
+<area shape="poly" title=" " alt="" coords="123,286,173,331,207,358,244,380,318,410,389,429,388,434,316,416,241,385,204,362,170,336,120,290"/>
+<area shape="poly" title=" " alt="" coords="115,287,133,416,128,417,109,288"/>
+<area shape="poly" title=" " alt="" coords="141,285,270,335,268,340,139,290"/>
+<area shape="poly" title=" " alt="" coords="624,295,619,339,611,363,598,384,576,404,551,418,499,436,497,431,549,413,573,399,594,381,606,361,614,338,619,295"/>
+<area shape="poly" title=" " alt="" coords="607,297,569,341,565,337,603,293"/>
 </map>
 </div>
 </div><div class="textblock"><div class="dynheader">
@@ -155,11 +152,11 @@ This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../d3/d54/http3_8h__dep__incl.png" border="0" usemap="#ainclude_2cwist_2net_2http_2http3_8hdep" alt=""/></div>
 <map name="ainclude_2cwist_2net_2http_2http3_8hdep" id="ainclude_2cwist_2net_2http_2http3_8hdep">
-<area shape="rect" title="HTTP/3 (QUIC&#45;based) Protocol Definitions for CWIST." alt="" coords="78,5,240,50"/>
-<area shape="rect" href="../../de/daf/http3_8c.html" title="Implementation of HTTP/3 protocol handler for CWIST." alt="" coords="5,98,150,126"/>
-<area shape="poly" title=" " alt="" coords="129,63,92,99,89,95,125,59"/>
-<area shape="rect" href="../../df/d7f/app_8c_source.html" title=" " alt="" coords="174,98,307,126"/>
-<area shape="poly" title=" " alt="" coords="193,59,229,95,225,99,189,63"/>
+<area shape="rect" title="HTTP/3 (QUIC&#45;based) Protocol Definitions for CWIST." alt="" coords="78,5,241,45"/>
+<area shape="rect" href="../../de/daf/http3_8c.html" title="lsquic/BoringSSL&#45;based HTTP/3 server for CWIST." alt="" coords="5,93,151,119"/>
+<area shape="poly" title=" " alt="" coords="132,57,92,95,88,91,128,53"/>
+<area shape="rect" href="../../df/d7f/app_8c_source.html" title=" " alt="" coords="175,93,309,119"/>
+<area shape="poly" title=" " alt="" coords="191,53,231,91,228,95,187,57"/>
 </map>
 </div>
 </div>
@@ -168,7 +165,7 @@ This graph shows which files directly or indirectly include this file:</div>
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">HTTP/3 server context encapsulating OpenSSL QUIC settings.  <a href="../../d9/dae/structcwist__http3__context.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">HTTP/3 server context encapsulating lsquic/BoringSSL settings.  <a href="../../d9/dae/structcwist__http3__context.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/d42/structcwist__http3__connection.html">cwist_http3_connection</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Represents an active HTTP/3 connection via QUIC.  <a href="../../dd/d42/structcwist__http3__connection.html#details">More...</a><br /></td></tr>
@@ -177,8 +174,10 @@ Classes</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
 <tr class="memitem:a7578186c59139d081e252829586a2c10" id="r_a7578186c59139d081e252829586a2c10"><td class="memItemLeft" align="right" valign="top">typedef struct <a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#a7578186c59139d081e252829586a2c10">cwist_http3_context</a></td></tr>
-<tr class="memdesc:a7578186c59139d081e252829586a2c10"><td class="mdescLeft">&#160;</td><td class="mdescRight">HTTP/3 server context encapsulating OpenSSL QUIC settings.  <br /></td></tr>
 <tr class="separator:a7578186c59139d081e252829586a2c10"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0ddd7eeaebe08f0c409fca3b8a3f1a53" id="r_a0ddd7eeaebe08f0c409fca3b8a3f1a53"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#a0ddd7eeaebe08f0c409fca3b8a3f1a53">cwist_webtransport_handler_func</a>) (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, void *stream)</td></tr>
+<tr class="memdesc:a0ddd7eeaebe08f0c409fca3b8a3f1a53"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback function type for handling WebTransport sessions over HTTP/3.  <br /></td></tr>
+<tr class="separator:a0ddd7eeaebe08f0c409fca3b8a3f1a53"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a0e036e05b4010700d538d43e526236ea" id="r_a0e036e05b4010700d538d43e526236ea"><td class="memItemLeft" align="right" valign="top"><a id="a0e036e05b4010700d538d43e526236ea" name="a0e036e05b4010700d538d43e526236ea"></a>
 typedef struct <a class="el" href="../../dd/d42/structcwist__http3__connection.html">cwist_http3_connection</a>&#160;</td><td class="memItemRight" valign="bottom"><b>cwist_http3_connection</b></td></tr>
 <tr class="memdesc:a0e036e05b4010700d538d43e526236ea"><td class="mdescLeft">&#160;</td><td class="mdescRight">Represents an active HTTP/3 connection via QUIC. <br /></td></tr>
@@ -190,20 +189,29 @@ typedef struct <a class="el" href="../../dd/d42/structcwist__http3__connection.h
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a450069a1e05bc23a8e61e420c0bfd3e4" id="r_a450069a1e05bc23a8e61e420c0bfd3e4"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#a450069a1e05bc23a8e61e420c0bfd3e4">cwist_http3_init_context</a> (<a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> **ctx, const char *cert_path, const char *key_path)</td></tr>
-<tr class="memdesc:a450069a1e05bc23a8e61e420c0bfd3e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize an HTTP/3 context for a UDP socket.  <br /></td></tr>
+<tr class="memdesc:a450069a1e05bc23a8e61e420c0bfd3e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback function type for handling WebTransport sessions over HTTP/3.  <br /></td></tr>
 <tr class="separator:a450069a1e05bc23a8e61e420c0bfd3e4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:afec2cffad5a60cfc7c08f73eb268ec3c" id="r_afec2cffad5a60cfc7c08f73eb268ec3c"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#afec2cffad5a60cfc7c08f73eb268ec3c">cwist_http3_init_context_ephemeral</a> (<a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> **ctx)</td></tr>
-<tr class="memdesc:afec2cffad5a60cfc7c08f73eb268ec3c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize an HTTP/3 context without manual certificates.  <br /></td></tr>
-<tr class="separator:afec2cffad5a60cfc7c08f73eb268ec3c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3b8be16f94dac189c5f2a8b360dea4f0" id="r_a3b8be16f94dac189c5f2a8b360dea4f0"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#a3b8be16f94dac189c5f2a8b360dea4f0">cwist_http3_destroy_context</a> (<a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *ctx)</td></tr>
-<tr class="memdesc:a3b8be16f94dac189c5f2a8b360dea4f0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destroy an HTTP/3 context and release its resources.  <br /></td></tr>
-<tr class="separator:a3b8be16f94dac189c5f2a8b360dea4f0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac32d2cd3a8bcbade7f1a972e68625e3c" id="r_ac32d2cd3a8bcbade7f1a972e68625e3c"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#ac32d2cd3a8bcbade7f1a972e68625e3c">cwist_http3_serve_connection</a> (<a class="el" href="../../dd/d42/structcwist__http3__connection.html">cwist_http3_connection</a> *conn, void *user_ctx, <a class="el" href="../../dd/dff/http3_8h.html#ac5677399dbfa619d5b8c90cb4e598a78">cwist_http3_request_handler_func</a> handler)</td></tr>
-<tr class="memdesc:ac32d2cd3a8bcbade7f1a972e68625e3c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handles an HTTP/3 connection over QUIC.  <br /></td></tr>
-<tr class="separator:ac32d2cd3a8bcbade7f1a972e68625e3c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8d60b85d41105c404f177a04a03f0d51" id="r_a8d60b85d41105c404f177a04a03f0d51"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#a8d60b85d41105c404f177a04a03f0d51">cwist_http3_server_loop</a> (int udp_fd, <a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *ctx, <a class="el" href="../../dd/dff/http3_8h.html#ac5677399dbfa619d5b8c90cb4e598a78">cwist_http3_request_handler_func</a> handler, void *user_ctx)</td></tr>
-<tr class="memdesc:a8d60b85d41105c404f177a04a03f0d51"><td class="mdescLeft">&#160;</td><td class="mdescRight">Starts a simple UDP-based event loop for handling HTTP/3 connections.  <br /></td></tr>
-<tr class="separator:a8d60b85d41105c404f177a04a03f0d51"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad3ca65b797048ad91a8a62eaf329c6cd" id="r_ad3ca65b797048ad91a8a62eaf329c6cd"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#ad3ca65b797048ad91a8a62eaf329c6cd">cwist_http3_set_push_enabled</a> (<a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *ctx, int enabled)</td></tr>
+<tr class="memdesc:ad3ca65b797048ad91a8a62eaf329c6cd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable or disable HTTP/3 server push on the given context.  <br /></td></tr>
+<tr class="separator:ad3ca65b797048ad91a8a62eaf329c6cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afe2dc023265c7f47f7f311b79e48973a" id="r_afe2dc023265c7f47f7f311b79e48973a"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#afe2dc023265c7f47f7f311b79e48973a">cwist_http3_push_resource</a> (cwist_http_request *req, const char *path, const char *content_type)</td></tr>
+<tr class="memdesc:afe2dc023265c7f47f7f311b79e48973a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Push a resource to the client.  <br /></td></tr>
+<tr class="separator:afe2dc023265c7f47f7f311b79e48973a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af2f0b7cd7be74f6592ce2e2f99968242" id="r_af2f0b7cd7be74f6592ce2e2f99968242"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#af2f0b7cd7be74f6592ce2e2f99968242">cwist_http3_set_stream_priority</a> (cwist_http_request *req, unsigned priority)</td></tr>
+<tr class="memdesc:af2f0b7cd7be74f6592ce2e2f99968242"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set stream priority for the current response.  <br /></td></tr>
+<tr class="separator:af2f0b7cd7be74f6592ce2e2f99968242"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab3d036544ab8151674cbf65af2ada7d5" id="r_ab3d036544ab8151674cbf65af2ada7d5"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#ab3d036544ab8151674cbf65af2ada7d5">cwist_http3_set_datagram_enabled</a> (<a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *ctx, int enabled)</td></tr>
+<tr class="memdesc:ab3d036544ab8151674cbf65af2ada7d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable or disable QUIC datagram extension on the given context.  <br /></td></tr>
+<tr class="separator:ab3d036544ab8151674cbf65af2ada7d5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a48b148a623a57a569bbf3b6601e4407a" id="r_a48b148a623a57a569bbf3b6601e4407a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#a48b148a623a57a569bbf3b6601e4407a">cwist_http3_set_datagram_callback</a> (<a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *ctx, void(*cb)(const void *data, size_t len, void *user_ctx), void *user_ctx)</td></tr>
+<tr class="memdesc:a48b148a623a57a569bbf3b6601e4407a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a callback for incoming QUIC datagrams.  <br /></td></tr>
+<tr class="separator:a48b148a623a57a569bbf3b6601e4407a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a99860db5e8d04b8134684ce9ae5ebbc1" id="r_a99860db5e8d04b8134684ce9ae5ebbc1"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#a99860db5e8d04b8134684ce9ae5ebbc1">cwist_http3_send_datagram</a> (void *conn, const void *data, size_t len)</td></tr>
+<tr class="memdesc:a99860db5e8d04b8134684ce9ae5ebbc1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send an unreliable datagram over the given QUIC connection.  <br /></td></tr>
+<tr class="separator:a99860db5e8d04b8134684ce9ae5ebbc1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a31931b2dca829d51ff9112ad76c27ce7" id="r_a31931b2dca829d51ff9112ad76c27ce7"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dd/dff/http3_8h.html#a31931b2dca829d51ff9112ad76c27ce7">cwist_http3_set_webtransport_handler</a> (<a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *ctx, <a class="el" href="../../dd/dff/http3_8h.html#a0ddd7eeaebe08f0c409fca3b8a3f1a53">cwist_webtransport_handler_func</a> handler)</td></tr>
+<tr class="memdesc:a31931b2dca829d51ff9112ad76c27ce7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a WebTransport session handler on the given HTTP/3 context.  <br /></td></tr>
+<tr class="separator:a31931b2dca829d51ff9112ad76c27ce7"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>HTTP/3 (QUIC-based) Protocol Definitions for CWIST. </p>
@@ -221,9 +229,9 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>&mdash; Forward Declarations &mdash; </p>
 
-<p>HTTP/3 server context encapsulating OpenSSL QUIC settings. </p>
-<p>&mdash; HTTP/3 Structures &mdash; </p>
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00015">15</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
 
 </div>
 </div>
@@ -249,50 +257,37 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00041">41</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00066">66</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
 
 </div>
 </div>
-<h2 class="groupheader">Function Documentation</h2>
-<a id="a3b8be16f94dac189c5f2a8b360dea4f0" name="a3b8be16f94dac189c5f2a8b360dea4f0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3b8be16f94dac189c5f2a8b360dea4f0">&#9670;&#160;</a></span>cwist_http3_destroy_context()</h2>
+<a id="a0ddd7eeaebe08f0c409fca3b8a3f1a53" name="a0ddd7eeaebe08f0c409fca3b8a3f1a53"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0ddd7eeaebe08f0c409fca3b8a3f1a53">&#9670;&#160;</a></span>cwist_webtransport_handler_func</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void cwist_http3_destroy_context </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *&#160;</td>
-          <td class="paramname"><em>ctx</em></td><td>)</td>
-          <td></td>
+          <td class="memname">typedef void(* cwist_webtransport_handler_func) (cwist_http_request *req, <a class="el" href="../../dd/d22/structcwist__http__response.html">cwist_http_response</a> *res, void *stream)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
-<p>Destroy an HTTP/3 context and release its resources. </p>
+<p>Callback function type for handling WebTransport sessions over HTTP/3. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">ctx</td><td>The HTTP/3 context to destroy.</td></tr>
-  </table>
-  </dd>
-</dl>
-<p>Destroy an HTTP/3 context and release its resources.</p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">ctx</td><td>Context to be destroyed. </td></tr>
+    <tr><td class="paramname">req</td><td>Parsed HTTP request object (CONNECT with :protocol=webtransport). </td></tr>
+    <tr><td class="paramname">res</td><td>HTTP response object to be populated (e.g., 200 OK to accept). </td></tr>
+    <tr><td class="paramname">stream</td><td>Opaque lsquic_stream_t pointer for the WebTransport session. </td></tr>
   </table>
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l00152">152</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../dd/dff/http3_8h_source.html#l00020">cwist_http3_context::ssl_ctx</a>.</p>
-
-<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l00978">cwist_app_destroy()</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00024">24</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
 
 </div>
 </div>
+<h2 class="groupheader">Function Documentation</h2>
 <a id="a450069a1e05bc23a8e61e420c0bfd3e4" name="a450069a1e05bc23a8e61e420c0bfd3e4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a450069a1e05bc23a8e61e420c0bfd3e4">&#9670;&#160;</a></span>cwist_http3_init_context()</h2>
 
@@ -325,98 +320,45 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Initialize an HTTP/3 context for a UDP socket. </p>
-<p>&mdash; API Functions &mdash; </p>
-<p>Creates an OpenSSL QUIC server context, configures ALPN for "h3", and loads the provided TLS certificates.</p>
+<p>Callback function type for handling WebTransport sessions over HTTP/3. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">ctx</td><td>Pointer to the newly allocated HTTP/3 context pointer. </td></tr>
-    <tr><td class="paramname">cert_path</td><td>Path to the PEM-formatted certificate file. </td></tr>
-    <tr><td class="paramname">key_path</td><td>Path to the PEM-formatted private key file. </td></tr>
+    <tr><td class="paramname">req</td><td>Parsed HTTP request object (CONNECT with :protocol=webtransport). </td></tr>
+    <tr><td class="paramname">res</td><td>HTTP response object to be populated (e.g., 200 OK to accept). </td></tr>
+    <tr><td class="paramname">stream</td><td>Opaque lsquic_stream_t pointer for the WebTransport session. &mdash; API Functions &mdash; </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Error status (0 on success).</dd></dl>
-<p>Initialize an HTTP/3 context for a UDP socket.</p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">ctx</td><td>Output pointer for the created context. </td></tr>
-    <tr><td class="paramname">cert_path</td><td>Path to the TLS certificate. </td></tr>
-    <tr><td class="paramname">key_path</td><td>Path to the TLS private key. </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Success or error status. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l00035">35</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l00663">663</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00025">CWIST_ERR_INT16</a>, <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00055">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00081">cwist_error_t::error</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
+<p class="reference">References <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00045">__prim_cwist_error_t::err_i16</a>, and <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00070">cwist_error_t::error</a>.</p>
 
 </div>
 </div>
-<a id="afec2cffad5a60cfc7c08f73eb268ec3c" name="afec2cffad5a60cfc7c08f73eb268ec3c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#afec2cffad5a60cfc7c08f73eb268ec3c">&#9670;&#160;</a></span>cwist_http3_init_context_ephemeral()</h2>
+<a id="afe2dc023265c7f47f7f311b79e48973a" name="afe2dc023265c7f47f7f311b79e48973a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe2dc023265c7f47f7f311b79e48973a">&#9670;&#160;</a></span>cwist_http3_push_resource()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_http3_init_context_ephemeral </td>
+          <td class="memname">int cwist_http3_push_resource </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> **&#160;</td>
-          <td class="paramname"><em>ctx</em></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Initialize an HTTP/3 context without manual certificates. </p>
-<p>Generates an ephemeral self-signed RSA certificate in memory. Ideal for local testing or zero-config QUIC setups.</p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">ctx</td><td>Pointer to the newly allocated HTTP/3 context pointer. </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Error status (0 on success).</dd></dl>
-<p>Generates an ephemeral self-signed RSA certificate in memory. Ideal for local testing or zero-config QUIC setups.</p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">ctx</td><td>Output pointer for the created context. </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Success or error status. </dd></dl>
-
-<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l00088">88</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00025">CWIST_ERR_INT16</a>, <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00055">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00081">cwist_error_t::error</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
-
-</div>
-</div>
-<a id="ac32d2cd3a8bcbade7f1a972e68625e3c" name="ac32d2cd3a8bcbade7f1a972e68625e3c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac32d2cd3a8bcbade7f1a972e68625e3c">&#9670;&#160;</a></span>cwist_http3_serve_connection()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_http3_serve_connection </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="../../dd/d42/structcwist__http3__connection.html">cwist_http3_connection</a> *&#160;</td>
-          <td class="paramname"><em>conn</em>, </td>
+          <td class="paramtype">cwist_http_request *&#160;</td>
+          <td class="paramname"><em>req</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">void *&#160;</td>
-          <td class="paramname"><em>user_ctx</em>, </td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>path</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="../../dd/dff/http3_8h.html#ac5677399dbfa619d5b8c90cb4e598a78">cwist_http3_request_handler_func</a>&#160;</td>
-          <td class="paramname"><em>handler</em>&#160;</td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>content_type</em>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -426,59 +368,87 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Handles an HTTP/3 connection over QUIC. </p>
-<p>Reads incoming QUIC streams, parses HTTP/3 frames (QPACK), triggers the appropriate user-defined request handler, and multiplexes the response back to the client over QUIC streams.</p>
+<p>Push a resource to the client. </p>
+<p>This should be called from inside the request handler callback. The push is associated with the current request stream.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">conn</td><td>Pointer to the QUIC/HTTP3 connection structure. </td></tr>
-    <tr><td class="paramname">user_ctx</td><td>Opaque user context to pass to the handler. </td></tr>
-    <tr><td class="paramname">handler</td><td>Function pointer to the user's HTTP request handler. </td></tr>
+    <tr><td class="paramname">req</td><td>The current request (used to find the underlying stream). </td></tr>
+    <tr><td class="paramname">path</td><td>Resource path to push (e.g. "/style.css"). </td></tr>
+    <tr><td class="paramname">content_type</td><td>Optional Content-Type header value (may be NULL). </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Indicates success or connection error.</dd></dl>
-<p>This represents the QUIC connection lifecycle. It accepts multiplexed QUIC streams created by the client and dispatches them.</p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">conn</td><td>Connection tracking object. </td></tr>
-    <tr><td class="paramname">user_ctx</td><td>Opaque context for user state. </td></tr>
-    <tr><td class="paramname">handler</td><td>Application callback for handling HTTP requests. </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Execution status. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>0 on success, -1 on failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l00233">233</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00025">CWIST_ERR_INT16</a>, <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00055">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00081">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, <a class="el" href="../../dd/dff/http3_8h_source.html#l00028">cwist_http3_connection::quic_ssl</a>, and <a class="el" href="../../dd/dff/http3_8h_source.html#l00029">cwist_http3_connection::udp_fd</a>.</p>
-
-<p class="reference">Referenced by <a class="el" href="../../de/daf/http3_8c_source.html#l00282">cwist_http3_server_loop()</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l01044">1044</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
 
 </div>
 </div>
-<a id="a8d60b85d41105c404f177a04a03f0d51" name="a8d60b85d41105c404f177a04a03f0d51"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8d60b85d41105c404f177a04a03f0d51">&#9670;&#160;</a></span>cwist_http3_server_loop()</h2>
+<a id="a99860db5e8d04b8134684ce9ae5ebbc1" name="a99860db5e8d04b8134684ce9ae5ebbc1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a99860db5e8d04b8134684ce9ae5ebbc1">&#9670;&#160;</a></span>cwist_http3_send_datagram()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_http3_server_loop </td>
+          <td class="memname">int cwist_http3_send_datagram </td>
           <td>(</td>
-          <td class="paramtype">int&#160;</td>
-          <td class="paramname"><em>udp_fd</em>, </td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>conn</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const void *&#160;</td>
+          <td class="paramname"><em>data</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>len</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Send an unreliable datagram over the given QUIC connection. </p>
+<p>This is non-blocking; the datagram is queued and flushed by the engine.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">conn</td><td>Target QUIC connection. </td></tr>
+    <tr><td class="paramname">data</td><td>Datagram payload. </td></tr>
+    <tr><td class="paramname">len</td><td>Payload length in bytes. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>0 on success, -1 on failure. </dd></dl>
+
+<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l01148">1148</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
+
+</div>
+</div>
+<a id="a48b148a623a57a569bbf3b6601e4407a" name="a48b148a623a57a569bbf3b6601e4407a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a48b148a623a57a569bbf3b6601e4407a">&#9670;&#160;</a></span>cwist_http3_set_datagram_callback()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_http3_set_datagram_callback </td>
+          <td>(</td>
           <td class="paramtype"><a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *&#160;</td>
           <td class="paramname"><em>ctx</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="../../dd/dff/http3_8h.html#ac5677399dbfa619d5b8c90cb4e598a78">cwist_http3_request_handler_func</a>&#160;</td>
-          <td class="paramname"><em>handler</em>, </td>
+          <td class="paramtype">void(*)(const void *data, size_t len, void *user_ctx)&#160;</td>
+          <td class="paramname"><em>cb</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -494,34 +464,162 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Starts a simple UDP-based event loop for handling HTTP/3 connections. </p>
-<p>Listens on the provided UDP socket, manages QUIC connections via OpenSSL, and dispatches parsed HTTP/3 requests to the handler.</p>
+<p>Register a callback for incoming QUIC datagrams. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">udp_fd</td><td>The bound UDP socket descriptor. </td></tr>
-    <tr><td class="paramname">ctx</td><td>The initialized HTTP/3 server context. </td></tr>
-    <tr><td class="paramname">handler</td><td>The application-level request handler. </td></tr>
-    <tr><td class="paramname">user_ctx</td><td>Opaque pointer passed to the handler for state tracking. </td></tr>
+    <tr><td class="paramname">ctx</td><td>HTTP/3 context. </td></tr>
+    <tr><td class="paramname">cb</td><td>Callback invoked for each received datagram. </td></tr>
+    <tr><td class="paramname">user_ctx</td><td>Opaque pointer forwarded to <code>cb</code>. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Indicates success or server loop failure.</dd></dl>
-<p>Starts a simple UDP-based event loop for handling HTTP/3 connections.</p>
-<p>Binds OpenSSL's QUIC connection manager to a UDP socket, accepts incoming QUIC connections, and processes their streams.</p>
+
+<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l01139">1139</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
+
+</div>
+</div>
+<a id="ab3d036544ab8151674cbf65af2ada7d5" name="ab3d036544ab8151674cbf65af2ada7d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3d036544ab8151674cbf65af2ada7d5">&#9670;&#160;</a></span>cwist_http3_set_datagram_enabled()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_http3_set_datagram_enabled </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *&#160;</td>
+          <td class="paramname"><em>ctx</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>enabled</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Enable or disable QUIC datagram extension on the given context. </p>
+<p>&mdash; Datagram API &mdash; </p>
+<p>Datagram is disabled by default. When enabled, the application can send and receive unreliable datagrams over QUIC. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l01135">1135</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../dd/dff/http3_8h_source.html#l00043">cwist_http3_context::datagram_enabled</a>.</p>
+
+</div>
+</div>
+<a id="ad3ca65b797048ad91a8a62eaf329c6cd" name="ad3ca65b797048ad91a8a62eaf329c6cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad3ca65b797048ad91a8a62eaf329c6cd">&#9670;&#160;</a></span>cwist_http3_set_push_enabled()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_http3_set_push_enabled </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *&#160;</td>
+          <td class="paramname"><em>ctx</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>enabled</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Enable or disable HTTP/3 server push on the given context. </p>
+<p>&mdash; Advanced Features &mdash; </p>
+<p>Push is disabled by default. When enabled, the handler can push resources by calling <a class="el" href="../../dd/dff/http3_8h.html#afe2dc023265c7f47f7f311b79e48973a" title="Push a resource to the client.">cwist_http3_push_resource()</a>. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l01040">1040</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
+
+<p class="reference">References <a class="el" href="../../dd/dff/http3_8h_source.html#l00040">cwist_http3_context::push_enabled</a>.</p>
+
+</div>
+</div>
+<a id="af2f0b7cd7be74f6592ce2e2f99968242" name="af2f0b7cd7be74f6592ce2e2f99968242"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af2f0b7cd7be74f6592ce2e2f99968242">&#9670;&#160;</a></span>cwist_http3_set_stream_priority()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int cwist_http3_set_stream_priority </td>
+          <td>(</td>
+          <td class="paramtype">cwist_http_request *&#160;</td>
+          <td class="paramname"><em>req</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned&#160;</td>
+          <td class="paramname"><em>priority</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Set stream priority for the current response. </p>
+<p>Valid priority values are 1 through 256, inclusive. Lower value means higher priority. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l01116">1116</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
+
+</div>
+</div>
+<a id="a31931b2dca829d51ff9112ad76c27ce7" name="a31931b2dca829d51ff9112ad76c27ce7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31931b2dca829d51ff9112ad76c27ce7">&#9670;&#160;</a></span>cwist_http3_set_webtransport_handler()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void cwist_http3_set_webtransport_handler </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="../../d9/dae/structcwist__http3__context.html">cwist_http3_context</a> *&#160;</td>
+          <td class="paramname"><em>ctx</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../dd/dff/http3_8h.html#a0ddd7eeaebe08f0c409fca3b8a3f1a53">cwist_webtransport_handler_func</a>&#160;</td>
+          <td class="paramname"><em>handler</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Register a WebTransport session handler on the given HTTP/3 context. </p>
+<p>When an HTTP/3 CONNECT request with <code>:protocol=webtransport</code> is received, the regular request handler is bypassed and <code>handler</code> is invoked instead.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">udp_fd</td><td>Active socket for UDP communications. </td></tr>
-    <tr><td class="paramname">ctx</td><td>Valid HTTP/3 context instance. </td></tr>
-    <tr><td class="paramname">handler</td><td>Route handler callback. </td></tr>
-    <tr><td class="paramname">user_ctx</td><td>Custom application state pointer. </td></tr>
+    <tr><td class="paramname">ctx</td><td>HTTP/3 context. </td></tr>
+    <tr><td class="paramname">handler</td><td>WebTransport session handler. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="../../d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system.">cwist_error_t</a> Runtime error status. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l00282">282</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
-
-<p class="reference">References <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00025">CWIST_ERR_INT16</a>, <a class="el" href="../../de/daf/http3_8c_source.html#l00233">cwist_http3_serve_connection()</a>, <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00055">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d7/d82/cwist__err_8h_source.html#l00081">cwist_error_t::error</a>, <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>, <a class="el" href="../../dd/dff/http3_8h_source.html#l00028">cwist_http3_connection::quic_ssl</a>, and <a class="el" href="../../dd/dff/http3_8h_source.html#l00020">cwist_http3_context::ssl_ctx</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../de/daf/http3_8c_source.html#l01126">1126</a> of file <a class="el" href="../../de/daf/http3_8c_source.html">http3.c</a>.</p>
 
 </div>
 </div>

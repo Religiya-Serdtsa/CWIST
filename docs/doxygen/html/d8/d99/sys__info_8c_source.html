@@ -84,7 +84,7 @@ $(document).ready(function() { init_codefold(1); });
 <div class="contents">
 <a href="../../d8/d99/sys__info_8c.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#define _POSIX_C_SOURCE 200809L</span></div>
 <div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span><span class="preprocessor">#include &lt;<a class="code" href="../../da/d41/sys__info_8h.html">cwist/sys/sys_info.h</a>&gt;</span></div>
-<div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="preprocessor">#include &lt;<a class="code" href="../../de/d3c/macros_8h.html">cwist/core/macros.h</a>&gt;</span></div>
+<div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="preprocessor">#include &lt;<a class="code" href="../../da/dec/core_2macros_8h.html">cwist/core/macros.h</a>&gt;</span></div>
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;stdio.h&gt;</span></div>
 <div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;stdlib.h&gt;</span></div>
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="preprocessor">#include &lt;string.h&gt;</span></div>
@@ -138,7 +138,7 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="comment">// Let&#39;s rely on a simpler &#39;usermem&#39; or just fail-safe to &quot;High Enough&quot; if we can&#39;t detect,</span></div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    <span class="comment">// assuming the user manages their mac well.</span></div>
 <div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    <span class="comment">// Or check vm.page_free_count</span></div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <span class="keywordflow">return</span> <a class="code hl_define" href="../../de/d3c/macros_8h.html#a167e487b37d2730f1633b94a4a7509ea">CWIST_GIB</a>(2); <span class="comment">// Mock for Mac dev env safety to prevent constant switching</span></div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <span class="keywordflow">return</span> <a class="code hl_define" href="../../da/dec/core_2macros_8h.html#a167e487b37d2730f1633b94a4a7509ea">CWIST_GIB</a>(2); <span class="comment">// Mock for Mac dev env safety to prevent constant switching</span></div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span><span class="preprocessor">#else</span></div>
 <div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>    <span class="comment">// FreeBSD</span></div>
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    u_int page_size;</div>
@@ -156,7 +156,7 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span><span class="preprocessor">#else</span></div>
 <div class="foldopen" id="foldopen00090" data-start="{" data-end="}">
 <div class="line"><a id="l00090" name="l00090"></a><span class="lineno"><a class="line" href="../../da/d41/sys__info_8h.html#ad4c237dc6aa45fedcf25cdd3a69f45ce">   90</a></span>uint64_t <a class="code hl_function" href="../../d8/d99/sys__info_8c.html#ad4c237dc6aa45fedcf25cdd3a69f45ce">cwist_get_available_ram</a>(<span class="keywordtype">void</span>) {</div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    <span class="keywordflow">return</span> <a class="code hl_define" href="../../de/d3c/macros_8h.html#a167e487b37d2730f1633b94a4a7509ea">CWIST_GIB</a>(1); <span class="comment">// Default Mock</span></div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    <span class="keywordflow">return</span> <a class="code hl_define" href="../../da/dec/core_2macros_8h.html#a167e487b37d2730f1633b94a4a7509ea">CWIST_GIB</a>(1); <span class="comment">// Default Mock</span></div>
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>}</div>
 </div>
 <div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span><span class="preprocessor">#endif</span></div>
@@ -168,8 +168,8 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    <span class="keywordflow">return</span> avail &lt; threshold_bytes;</div>
 <div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>}</div>
 </div>
-<div class="ttc" id="amacros_8h_html"><div class="ttname"><a href="../../de/d3c/macros_8h.html">macros.h</a></div><div class="ttdoc">Convenience size-conversion and utility macros shared across CWIST.</div></div>
-<div class="ttc" id="amacros_8h_html_a167e487b37d2730f1633b94a4a7509ea"><div class="ttname"><a href="../../de/d3c/macros_8h.html#a167e487b37d2730f1633b94a4a7509ea">CWIST_GIB</a></div><div class="ttdeci">#define CWIST_GIB(x)</div><div class="ttdoc">Convert binary gibibytes to bytes.</div><div class="ttdef"><b>Definition</b> <a href="../../de/d3c/macros_8h_source.html#l00020">macros.h:20</a></div></div>
+<div class="ttc" id="acore_2macros_8h_html"><div class="ttname"><a href="../../da/dec/core_2macros_8h.html">macros.h</a></div><div class="ttdoc">Convenience size-conversion and utility macros shared across CWIST.</div></div>
+<div class="ttc" id="acore_2macros_8h_html_a167e487b37d2730f1633b94a4a7509ea"><div class="ttname"><a href="../../da/dec/core_2macros_8h.html#a167e487b37d2730f1633b94a4a7509ea">CWIST_GIB</a></div><div class="ttdeci">#define CWIST_GIB(x)</div><div class="ttdoc">Convert binary gibibytes to bytes.</div><div class="ttdef"><b>Definition</b> <a href="../../da/dec/core_2macros_8h_source.html#l00020">macros.h:20</a></div></div>
 <div class="ttc" id="asys__info_8c_html_a6e6850d97cd1c683dc5ddd4af5c11303"><div class="ttname"><a href="../../d8/d99/sys__info_8c.html#a6e6850d97cd1c683dc5ddd4af5c11303">cwist_is_ram_critical</a></div><div class="ttdeci">bool cwist_is_ram_critical(uint64_t threshold_bytes)</div><div class="ttdoc">Check whether the current available RAM is below a caller-supplied threshold.</div><div class="ttdef"><b>Definition</b> <a href="../../d8/d99/sys__info_8c_source.html#l00100">sys_info.c:100</a></div></div>
 <div class="ttc" id="asys__info_8c_html_ad4c237dc6aa45fedcf25cdd3a69f45ce"><div class="ttname"><a href="../../d8/d99/sys__info_8c.html#ad4c237dc6aa45fedcf25cdd3a69f45ce">cwist_get_available_ram</a></div><div class="ttdeci">uint64_t cwist_get_available_ram(void)</div><div class="ttdoc">Fallback RAM estimate for unsupported platforms.</div><div class="ttdef"><b>Definition</b> <a href="../../d8/d99/sys__info_8c_source.html#l00090">sys_info.c:90</a></div></div>
 <div class="ttc" id="asys__info_8h_html"><div class="ttname"><a href="../../da/d41/sys__info_8h.html">sys_info.h</a></div><div class="ttdoc">System Resource Monitoring Utilities.</div></div>

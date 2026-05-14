@@ -87,37 +87,37 @@ $(function() {
 <code>#include &lt;cwist/core/mem/alloc.h&gt;</code><br />
 <code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
+<code>#include &lt;ctype.h&gt;</code><br />
 <code>#include &lt;stdio.h&gt;</code><br />
-<code>#include &lt;uriparser/Uri.h&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for query.c:</div>
 <div class="dyncontent">
 <div class="center"><img src="../../d3/da0/query_8c__incl.png" border="0" usemap="#asrc_2net_2http_2query_8c" alt=""/></div>
 <map name="asrc_2net_2http_2query_8c" id="asrc_2net_2http_2query_8c">
-<area shape="rect" title="Hash&#45;map based storage and parsing helpers for URL query parameters." alt="" coords="515,5,661,33"/>
-<area shape="rect" href="../../dd/d6e/query_8h_source.html" title=" " alt="" coords="171,90,333,117"/>
-<area shape="poly" title=" " alt="" coords="535,36,321,88,320,83,533,31"/>
-<area shape="rect" href="../../df/dac/siphash_8h_source.html" title=" " alt="" coords="5,81,147,126"/>
-<area shape="poly" title=" " alt="" coords="515,31,357,51,162,83,161,78,356,46,514,26"/>
-<area shape="rect" href="../../d2/dfe/alloc_8h_source.html" title=" " alt="" coords="356,90,529,117"/>
-<area shape="poly" title=" " alt="" coords="566,36,480,84,478,79,563,31"/>
-<area shape="rect" title=" " alt="" coords="553,90,623,117"/>
-<area shape="poly" title=" " alt="" coords="591,34,591,74,585,74,585,34"/>
-<area shape="rect" title=" " alt="" coords="646,90,716,117"/>
-<area shape="poly" title=" " alt="" coords="605,32,657,77,654,81,601,36"/>
-<area shape="rect" title=" " alt="" coords="741,90,806,117"/>
-<area shape="poly" title=" " alt="" coords="620,31,729,79,733,80,731,85,727,83,618,36"/>
-<area shape="rect" title=" " alt="" coords="830,90,944,117"/>
-<area shape="poly" title=" " alt="" coords="641,31,819,78,831,82,830,87,818,84,640,36"/>
-<area shape="rect" title=" " alt="" coords="81,174,151,201"/>
-<area shape="poly" title=" " alt="" coords="232,120,152,168,149,163,229,115"/>
-<area shape="rect" title=" " alt="" coords="215,174,289,201"/>
-<area shape="poly" title=" " alt="" coords="255,118,255,158,249,158,249,118"/>
-<area shape="poly" title=" " alt="" coords="89,125,105,158,101,161,84,127"/>
-<area shape="poly" title=" " alt="" coords="124,124,211,164,209,169,122,129"/>
-<area shape="poly" title=" " alt="" coords="413,120,297,170,295,165,411,115"/>
-<area shape="rect" title=" " alt="" coords="372,174,513,201"/>
-<area shape="poly" title=" " alt="" coords="445,118,445,158,440,158,440,118"/>
+<area shape="rect" title="Hash&#45;map based storage and parsing helpers for URL query parameters." alt="" coords="519,5,666,31"/>
+<area shape="rect" href="../../d1/d7a/net_2http_2query_8h_source.html" title=" " alt="" coords="173,86,335,111"/>
+<area shape="poly" title=" " alt="" coords="544,33,317,85,316,80,543,28"/>
+<area shape="rect" href="../../d0/db0/core_2siphash_2siphash_8h_source.html" title=" " alt="" coords="5,79,148,119"/>
+<area shape="poly" title=" " alt="" coords="519,30,359,51,162,81,161,76,359,45,519,25"/>
+<area shape="rect" href="../../d2/dfe/alloc_8h_source.html" title=" " alt="" coords="359,86,533,111"/>
+<area shape="poly" title=" " alt="" coords="572,33,481,82,479,77,570,28"/>
+<area shape="rect" title=" " alt="" coords="557,86,628,111"/>
+<area shape="poly" title=" " alt="" coords="595,31,595,72,590,72,590,31"/>
+<area shape="rect" title=" " alt="" coords="652,86,723,111"/>
+<area shape="poly" title=" " alt="" coords="608,29,664,75,661,79,605,33"/>
+<area shape="rect" title=" " alt="" coords="747,86,817,111"/>
+<area shape="poly" title=" " alt="" coords="621,28,743,78,741,83,619,33"/>
+<area shape="rect" title=" " alt="" coords="842,86,909,111"/>
+<area shape="poly" title=" " alt="" coords="649,28,735,49,831,76,837,78,836,83,829,81,734,54,647,33"/>
+<area shape="rect" title=" " alt="" coords="81,167,152,192"/>
+<area shape="poly" title=" " alt="" coords="235,114,150,162,147,158,232,109"/>
+<area shape="rect" title=" " alt="" coords="217,167,291,192"/>
+<area shape="poly" title=" " alt="" coords="257,112,257,153,251,153,251,112"/>
+<area shape="poly" title=" " alt="" coords="89,118,107,153,102,155,84,120"/>
+<area shape="poly" title=" " alt="" coords="120,116,217,159,214,164,118,121"/>
+<area shape="poly" title=" " alt="" coords="419,114,295,164,293,159,417,109"/>
+<area shape="rect" title=" " alt="" coords="375,167,517,192"/>
+<area shape="poly" title=" " alt="" coords="449,112,449,153,443,153,443,112"/>
 </map>
 </div>
 </div>
@@ -270,6 +270,8 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../dd/d7f/query_8c_source.html#l00104">104</a> of file <a class="el" href="../../dd/d7f/query_8c_source.html">query.c</a>.</p>
 
+<p class="reference">Referenced by <a class="el" href="../../dd/d7f/query_8c_source.html#l00157">cwist_query_map_parse()</a>.</p>
+
 </div>
 </div>
 <a id="afc1bffaa7da52b648d4306067c8d21b8" name="afc1bffaa7da52b648d4306067c8d21b8"></a>
@@ -308,9 +310,9 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 
-<p class="definition">Definition at line <a class="el" href="../../dd/d7f/query_8c_source.html#l00125">125</a> of file <a class="el" href="../../dd/d7f/query_8c_source.html">query.c</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../dd/d7f/query_8c_source.html#l00157">157</a> of file <a class="el" href="../../dd/d7f/query_8c_source.html">query.c</a>.</p>
 
-<p class="reference">References <a class="el" href="../../dd/d7f/query_8c_source.html#l00072">cwist_query_map_set()</a>.</p>
+<p class="reference">References <a class="el" href="../../dd/d7f/query_8c_source.html#l00104">cwist_query_map_get()</a>, and <a class="el" href="../../dd/d7f/query_8c_source.html#l00072">cwist_query_map_set()</a>.</p>
 
 </div>
 </div>
@@ -358,7 +360,7 @@ Functions</h2></td></tr>
 
 <p class="definition">Definition at line <a class="el" href="../../dd/d7f/query_8c_source.html#l00072">72</a> of file <a class="el" href="../../dd/d7f/query_8c_source.html">query.c</a>.</p>
 
-<p class="reference">Referenced by <a class="el" href="../../dd/d7f/query_8c_source.html#l00125">cwist_query_map_parse()</a>.</p>
+<p class="reference">Referenced by <a class="el" href="../../dd/d7f/query_8c_source.html#l00157">cwist_query_map_parse()</a>.</p>
 
 </div>
 </div>

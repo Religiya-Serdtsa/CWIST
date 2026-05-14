@@ -8,5 +8,6 @@ var searchData=
   ['retire_5fgrace_5fns_5',['retire_grace_ns',['../d7/dba/structcwist__fix__server__mem.html#aba7e3dc876a2b69838843a3312904e4a',1,'cwist_fix_server_mem']]],
   ['revalidate_5fhits_6',['revalidate_hits',['../d9/d90/structcwist__bdr__t.html#a4b5c09b0422d6bc9067c64d573e9e2b6',1,'cwist_bdr_t']]],
   ['roundness_5fpx_7',['roundness_px',['../d3/dd1/structcwist__css__config.html#a4d7246670821ad7221ed6fe2d1328d3c',1,'cwist_css_config']]],
-  ['router_8',['router',['../dc/da0/structcwist__app.html#a8c33672187918ac728fda9040779ac8f',1,'cwist_app']]]
+  ['router_8',['router',['../dc/da0/structcwist__app.html#a8c33672187918ac728fda9040779ac8f',1,'cwist_app']]],
+  ['running_9',['running',['../d9/dae/structcwist__http3__context.html#a77a5c8708c91ab6fd4cd14ab13f6d047',1,'cwist_http3_context']]]
 ];

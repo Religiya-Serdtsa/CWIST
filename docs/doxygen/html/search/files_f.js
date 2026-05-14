@@ -1,6 +1,9 @@
 var searchData=
 [
-  ['websocket_2ec_0',['websocket.c',['../d4/de6/websocket_8c.html',1,'']]],
-  ['ws_5futils_2ec_1',['ws_utils.c',['../df/db2/ws__utils_8c.html',1,'']]],
-  ['ws_5futils_2eh_2',['ws_utils.h',['../d9/de5/ws__utils_8h.html',1,'']]]
+  ['session_5fmanager_2ec_0',['session_manager.c',['../d4/db3/session__manager_8c.html',1,'']]],
+  ['session_5fmanager_2eh_1',['session_manager.h',['../d5/d63/sys_2session_2session__manager_8h.html',1,'']]],
+  ['siphash_2ec_2',['siphash.c',['../dd/d2d/siphash_8c.html',1,'']]],
+  ['sstring_2ec_3',['sstring.c',['../dd/d79/sstring_8c.html',1,'']]],
+  ['sys_5finfo_2ec_4',['sys_info.c',['../d8/d99/sys__info_8c.html',1,'']]],
+  ['sys_5finfo_2eh_5',['sys_info.h',['../da/d41/sys__info_8h.html',1,'']]]
 ];

@@ -1,0 +1,9 @@
+<map id="include/cwist/sys/app/logger.h" name="include/cwist/sys/app/logger.h">
+<area shape="rect" id="Node000001" title="Application&#45;level structured logging." alt="" coords="65,5,226,45"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,93,80,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="122,48,70,87,67,83,119,43"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="104,93,187,119"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="148,46,148,79,143,79,143,46"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="211,93,285,119"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="172,43,224,83,220,87,169,48"/>
+</map>

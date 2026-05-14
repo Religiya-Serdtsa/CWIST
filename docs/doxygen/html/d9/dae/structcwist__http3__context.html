@@ -77,7 +77,7 @@ $(function() {
 </div><!--header-->
 <div class="contents">
 
-<p>HTTP/3 server context encapsulating OpenSSL QUIC settings.  
+<p>HTTP/3 server context encapsulating lsquic/BoringSSL settings.  
  <a href="../../d9/dae/structcwist__http3__context.html#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>&gt;</code></p>
@@ -88,13 +88,131 @@ Public Attributes</h2></td></tr>
 <tr class="separator:a9e22e2b6aa3d6fd7f10114c845b033f1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a213752bd0aa2f75b9d8e3fe1e764bc42" id="r_a213752bd0aa2f75b9d8e3fe1e764bc42"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">udp_fd</a></td></tr>
 <tr class="separator:a213752bd0aa2f75b9d8e3fe1e764bc42"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acd907e9a760e9806a20553ac355d0dd4" id="r_acd907e9a760e9806a20553ac355d0dd4"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">void</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dae/structcwist__http3__context.html#acd907e9a760e9806a20553ac355d0dd4">engine</a></td></tr>
+<tr class="separator:acd907e9a760e9806a20553ac355d0dd4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a77a5c8708c91ab6fd4cd14ab13f6d047" id="r_a77a5c8708c91ab6fd4cd14ab13f6d047"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">volatile</a> <a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a77a5c8708c91ab6fd4cd14ab13f6d047">running</a></td></tr>
+<tr class="separator:a77a5c8708c91ab6fd4cd14ab13f6d047"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6ba22c6e2f52196c20ac55484f1ab0c6" id="r_a6ba22c6e2f52196c20ac55484f1ab0c6"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a6ba22c6e2f52196c20ac55484f1ab0c6">push_enabled</a></td></tr>
+<tr class="separator:a6ba22c6e2f52196c20ac55484f1ab0c6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6e6eb86c8510232c97739ea248e5434e" id="r_a6e6eb86c8510232c97739ea248e5434e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a6e6eb86c8510232c97739ea248e5434e">early_data_enabled</a></td></tr>
+<tr class="separator:a6e6eb86c8510232c97739ea248e5434e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a791b3f0161b4db5aad4d822d9b8ed4c4" id="r_a791b3f0161b4db5aad4d822d9b8ed4c4"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a791b3f0161b4db5aad4d822d9b8ed4c4">allow_migration</a></td></tr>
+<tr class="separator:a791b3f0161b4db5aad4d822d9b8ed4c4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a751d83957d59560e48eda5a2f915279b" id="r_a751d83957d59560e48eda5a2f915279b"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a751d83957d59560e48eda5a2f915279b">datagram_enabled</a></td></tr>
+<tr class="separator:a751d83957d59560e48eda5a2f915279b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>HTTP/3 server context encapsulating OpenSSL QUIC settings. </p>
+<div class="textblock"><p>HTTP/3 server context encapsulating lsquic/BoringSSL settings. </p>
 <p>&mdash; HTTP/3 Structures &mdash; </p>
 
-<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00019">19</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00033">33</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
 </div><h2 class="groupheader">Member Data Documentation</h2>
+<a id="a791b3f0161b4db5aad4d822d9b8ed4c4" name="a791b3f0161b4db5aad4d822d9b8ed4c4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a791b3f0161b4db5aad4d822d9b8ed4c4">&#9670;&#160;</a></span>allow_migration</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a> cwist_http3_context::allow_migration</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>QUIC connection migration enabled </p>
+
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00042">42</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+
+</div>
+</div>
+<a id="a751d83957d59560e48eda5a2f915279b" name="a751d83957d59560e48eda5a2f915279b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a751d83957d59560e48eda5a2f915279b">&#9670;&#160;</a></span>datagram_enabled</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a> cwist_http3_context::datagram_enabled</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>QUIC datagram extension enabled </p>
+
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00043">43</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../de/daf/http3_8c_source.html#l01135">cwist_http3_set_datagram_enabled()</a>.</p>
+
+</div>
+</div>
+<a id="a6e6eb86c8510232c97739ea248e5434e" name="a6e6eb86c8510232c97739ea248e5434e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6e6eb86c8510232c97739ea248e5434e">&#9670;&#160;</a></span>early_data_enabled</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a> cwist_http3_context::early_data_enabled</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>0-RTT early data enabled </p>
+
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00041">41</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+
+</div>
+</div>
+<a id="acd907e9a760e9806a20553ac355d0dd4" name="acd907e9a760e9806a20553ac355d0dd4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd907e9a760e9806a20553ac355d0dd4">&#9670;&#160;</a></span>engine</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">void</a>* cwist_http3_context::engine</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Opaque lsquic_engine_t pointer </p>
+
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00036">36</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+
+</div>
+</div>
+<a id="a6ba22c6e2f52196c20ac55484f1ab0c6" name="a6ba22c6e2f52196c20ac55484f1ab0c6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ba22c6e2f52196c20ac55484f1ab0c6">&#9670;&#160;</a></span>push_enabled</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a> cwist_http3_context::push_enabled</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>HTTP/3 server push enabled </p>
+
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00040">40</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+
+<p class="reference">Referenced by <a class="el" href="../../de/daf/http3_8c_source.html#l01040">cwist_http3_set_push_enabled()</a>.</p>
+
+</div>
+</div>
+<a id="a77a5c8708c91ab6fd4cd14ab13f6d047" name="a77a5c8708c91ab6fd4cd14ab13f6d047"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77a5c8708c91ab6fd4cd14ab13f6d047">&#9670;&#160;</a></span>running</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">volatile</a> <a class="el" href="../../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42">int</a> cwist_http3_context::running</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Set to 0 to gracefully stop server_loop </p>
+
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00039">39</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+
+</div>
+</div>
 <a id="a9e22e2b6aa3d6fd7f10114c845b033f1" name="a9e22e2b6aa3d6fd7f10114c845b033f1"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a9e22e2b6aa3d6fd7f10114c845b033f1">&#9670;&#160;</a></span>ssl_ctx</h2>
 
@@ -106,11 +224,9 @@ Public Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>OpenSSL QUIC server context </p>
+<p>BoringSSL server context </p>
 
-<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00020">20</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
-
-<p class="reference">Referenced by <a class="el" href="../../de/daf/http3_8c_source.html#l00152">cwist_http3_destroy_context()</a>, and <a class="el" href="../../de/daf/http3_8c_source.html#l00282">cwist_http3_server_loop()</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00034">34</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
 
 </div>
 </div>
@@ -127,7 +243,7 @@ Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 <p>Underlying UDP socket descriptor </p>
 
-<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00021">21</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../dd/dff/http3_8h_source.html#l00035">35</a> of file <a class="el" href="../../dd/dff/http3_8h_source.html">http3.h</a>.</p>
 
 </div>
 </div>

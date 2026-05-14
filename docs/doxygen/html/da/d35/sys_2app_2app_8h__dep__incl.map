@@ -1,0 +1,21 @@
+<map id="include/cwist/sys/app/app.h" name="include/cwist/sys/app/app.h">
+<area shape="rect" id="Node000001" title="Core Application Structure and Lifecycle Management." alt="" coords="379,5,541,45"/>
+<area shape="rect" id="Node000002" href="$d5/da9/net_2http_2mux_8h_source.html" title=" " alt="" coords="5,93,168,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="366,51,169,96,168,91,365,46"/>
+<area shape="rect" id="Node000004" href="$dc/d81/ech_8h_source.html" title=" " alt="" coords="192,93,355,133"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="408,53,315,96,313,91,406,49"/>
+<area shape="rect" id="Node000006" href="$d3/d30/sys_2app_2middleware_8h_source.html" title=" " alt="" coords="379,93,541,133"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="463,59,463,93,457,93,457,59"/>
+<area shape="rect" id="Node000008" href="$db/de3/test__client_8h.html" title="In&#45;process HTTP test client (ala Flask test_client)." alt="" coords="565,93,726,133"/>
+<area shape="poly" id="edge7_Node000001_Node000008" title=" " alt="" coords="514,49,606,91,604,96,512,54"/>
+<area shape="rect" id="Node000010" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="750,101,885,126"/>
+<area shape="poly" id="edge9_Node000001_Node000010" title=" " alt="" coords="552,46,770,98,769,103,551,51"/>
+<area shape="rect" id="Node000003" href="$dd/d49/mux_8c.html" title="Fixed&#45;bucket HTTP route dispatch using a lightweight path signature." alt="" coords="17,181,157,207"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="89,147,89,181,84,181,84,147"/>
+<area shape="rect" id="Node000005" href="$d6/db1/ech_8c_source.html" title=" " alt="" coords="188,181,343,207"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="273,147,269,181,264,181,267,147"/>
+<area shape="rect" id="Node000007" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="367,181,553,207"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="463,147,463,181,457,181,457,147"/>
+<area shape="rect" id="Node000009" href="$dc/df0/test__client_8c_source.html" title=" " alt="" coords="577,181,756,207"/>
+<area shape="poly" id="edge8_Node000008_Node000009" title=" " alt="" coords="657,146,666,180,661,182,651,147"/>
+</map>

@@ -1,0 +1,30 @@
+<map id="include/cwist/core/macros.h" name="include/cwist/core/macros.h">
+<area shape="rect" id="Node000001" title="Convenience size&#45;conversion and utility macros shared across CWIST." alt="" coords="560,5,699,45"/>
+<area shape="rect" id="Node000002" href="$d0/d77/sys_2app_2app_8h.html" title="Core Application Structure and Lifecycle Management." alt="" coords="362,93,523,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="577,53,485,96,482,91,575,49"/>
+<area shape="rect" id="Node000008" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="5,269,192,295"/>
+<area shape="poly" id="edge13_Node000001_Node000008" title=" " alt="" coords="547,40,421,60,277,90,210,110,150,132,103,156,73,183,66,204,70,227,80,250,92,268,87,271,75,252,65,229,61,204,68,180,100,152,148,127,208,105,276,85,420,55,546,34"/>
+<area shape="rect" id="Node000012" href="$d0/d14/nuke__db_8c.html" title="In&#45;memory SQLite mirroring layer that can fall back to disk under memory pressure." alt="" coords="548,101,711,126"/>
+<area shape="poly" id="edge11_Node000001_Node000012" title=" " alt="" coords="632,59,632,100,627,100,627,59"/>
+<area shape="rect" id="Node000013" href="$dc/da3/big__dumb__reply_8c.html" title="Opportunistic response cache that stores stable GET replies in memory or on disk." alt="" coords="735,93,897,133"/>
+<area shape="poly" id="edge12_Node000001_Node000013" title=" " alt="" coords="684,49,776,91,774,96,681,53"/>
+<area shape="rect" id="Node000014" href="$d8/d99/sys__info_8c.html" title="Cross&#45;platform helpers for estimating available RAM and low&#45;memory pressure." alt="" coords="921,101,1057,126"/>
+<area shape="poly" id="edge14_Node000001_Node000014" title=" " alt="" coords="713,44,942,98,941,103,711,49"/>
+<area shape="rect" id="Node000003" href="$d5/da9/net_2http_2mux_8h_source.html" title=" " alt="" coords="800,181,963,221"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="537,131,789,179,800,181,799,186,787,184,536,136"/>
+<area shape="rect" id="Node000005" href="$dc/d81/ech_8h_source.html" title=" " alt="" coords="268,181,431,221"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="414,145,372,183,368,179,410,141"/>
+<area shape="rect" id="Node000007" href="$d3/d30/sys_2app_2middleware_8h_source.html" title=" " alt="" coords="82,181,243,221"/>
+<area shape="poly" id="edge6_Node000002_Node000007" title=" " alt="" coords="369,140,225,184,223,179,367,135"/>
+<area shape="rect" id="Node000009" href="$db/de3/test__client_8h.html" title="In&#45;process HTTP test client (ala Flask test_client)." alt="" coords="455,181,617,221"/>
+<area shape="poly" id="edge8_Node000002_Node000009" title=" " alt="" coords="475,141,517,179,514,183,472,145"/>
+<area shape="rect" id="Node000011" href="$df/d7f/app_8c_source.html" title=" " alt="" coords="641,189,775,214"/>
+<area shape="poly" id="edge10_Node000002_Node000011" title=" " alt="" coords="514,135,674,186,672,191,513,140"/>
+<area shape="rect" id="Node000004" href="$dd/d49/mux_8c.html" title="Fixed&#45;bucket HTTP route dispatch using a lightweight path signature." alt="" coords="811,269,951,295"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="884,235,884,269,879,269,879,235"/>
+<area shape="rect" id="Node000006" href="$d6/db1/ech_8c_source.html" title=" " alt="" coords="269,269,424,295"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="351,235,350,269,344,269,346,235"/>
+<area shape="poly" id="edge7_Node000007_Node000008" title=" " alt="" coords="141,234,110,271,106,267,137,230"/>
+<area shape="rect" id="Node000010" href="$dc/df0/test__client_8c_source.html" title=" " alt="" coords="448,269,627,295"/>
+<area shape="poly" id="edge9_Node000009_Node000010" title=" " alt="" coords="539,235,540,269,534,269,534,235"/>
+</map>

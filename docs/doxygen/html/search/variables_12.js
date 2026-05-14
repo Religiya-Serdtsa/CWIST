@@ -1,6 +1,9 @@
 var searchData=
 [
-  ['threshold_0',['threshold',['../d4/d38/structcwist__heal__config.html#a841d71ad7a3ec9e9e0e6e866c5852343',1,'cwist_heal_config']]],
-  ['total_5fcapacity_1',['total_capacity',['../d7/dba/structcwist__fix__server__mem.html#ae1ca4427cb3d45d4d3c9bf87d746b6cc',1,'cwist_fix_server_mem']]],
-  ['type_2',['type',['../d6/d03/structcwist__schema__field.html#af620c93c71e77f81050175c30e1e82cd',1,'cwist_schema_field']]]
+  ['udp_5ffd_0',['udp_fd',['../d9/dae/structcwist__http3__context.html#a213752bd0aa2f75b9d8e3fe1e764bc42',1,'cwist_http3_context::udp_fd'],['../dd/d42/structcwist__http3__connection.html#afc4d81a62770c75aea90a975395b782f',1,'cwist_http3_connection::udp_fd']]],
+  ['use_5ffile_5fstream_1',['use_file_stream',['../dd/d22/structcwist__http__response.html#a2dc25ecc16aa4a8a602035df19ecc468',1,'cwist_http_response']]],
+  ['use_5fhttp2_2',['use_http2',['../dc/da0/structcwist__app.html#a573d18871d76aa15723a9098e020a497',1,'cwist_app']]],
+  ['use_5fhttp3_3',['use_http3',['../dc/da0/structcwist__app.html#a70eed69c83ea4c036be65bc27fcd401f',1,'cwist_app']]],
+  ['use_5fhttps2_4',['use_https2',['../dc/da0/structcwist__app.html#a074e553f4ea7ec14339c1f0498ab11a3',1,'cwist_app']]],
+  ['use_5fhttps3_5',['use_https3',['../dc/da0/structcwist__app.html#ad05f5c80f94854fc131454e114f50a22',1,'cwist_app']]]
 ];

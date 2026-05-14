@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.9.8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>cwist: include/cwist/core/db/sql.h Source File</title>
+<title>cwist: include/cwist/sql.h Source File</title>
 <link href="../../tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="../../jquery.js"></script>
 <script type="text/javascript" src="../../dynsections.js"></script>
@@ -75,7 +75,7 @@ $(document).ready(function() { init_codefold(1); });
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="../../dir_d44c64559bbebec7f509842c48db8b23.html">include</a></li><li class="navelem"><a class="el" href="../../dir_2109d32ae718f50aecd8856dacda770b.html">cwist</a></li><li class="navelem"><a class="el" href="../../dir_10b21726104ad23c5e3d9a30e698c859.html">core</a></li><li class="navelem"><a class="el" href="../../dir_21fab71df6878f12e51b2d3e02655cb7.html">db</a></li>  </ul>
+<li class="navelem"><a class="el" href="../../dir_d44c64559bbebec7f509842c48db8b23.html">include</a></li><li class="navelem"><a class="el" href="../../dir_2109d32ae718f50aecd8856dacda770b.html">cwist</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div class="header">
@@ -86,41 +86,26 @@ $(document).ready(function() { init_codefold(1); });
 <div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span><span class="preprocessor">#define __CWIST_SQL_H__</span></div>
 <div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span> </div>
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;sqlite3.h&gt;</span></div>
-<div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;<a class="code" href="../../d7/d82/cwist__err_8h.html">cwist/sys/err/cwist_err.h</a>&gt;</span></div>
+<div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="preprocessor">#include &lt;cwist/err/cwist_err.h&gt;</span></div>
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="preprocessor">#include &lt;cjson/cJSON.h&gt;</span></div>
-<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="preprocessor">#include &lt;<a class="code" href="../../db/dd3/json__heal_8h.html">cwist/core/utils/json_heal.h</a>&gt;</span></div>
-<div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="preprocessor">#include &lt;<a class="code" href="../../dc/d6e/zod_8h.html">cwist/core/utils/zod.h</a>&gt;</span></div>
-<div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span> </div>
-<div class="foldopen" id="foldopen00015" data-start="{" data-end="};">
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno"><a class="line" href="../../dd/d55/structcwist__db.html">   15</a></span><span class="keyword">typedef</span> <span class="keyword">struct </span><a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> {</div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    sqlite3 *conn;</div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>} <a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a>;</div>
-</div>
+<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span> </div>
+<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span><span class="keyword">typedef</span> <span class="keyword">struct </span><a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> {</div>
+<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>    sqlite3 *conn;</div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>} <a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a>;</div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span> </div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="comment">/* --- API --- */</span></div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span> </div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_db_open(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> **db, <span class="keyword">const</span> <span class="keywordtype">char</span> *path);</div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="keywordtype">void</span> cwist_db_close(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db);</div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_db_exec(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <span class="keyword">const</span> <span class="keywordtype">char</span> *sql);</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span> </div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_db_query(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <span class="keyword">const</span> <span class="keywordtype">char</span> *sql, cJSON **result);</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span> </div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_db_insert_healed(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <span class="keyword">const</span> <span class="keywordtype">char</span> *table,</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>                                      <span class="keyword">const</span> <span class="keywordtype">char</span> *json_str,</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>                                      <span class="keyword">const</span> <a class="code hl_struct" href="../../d5/d83/structcwist__schema.html">cwist_schema_t</a>  *schema,</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>                                      <span class="keyword">const</span> <a class="code hl_struct" href="../../d4/d38/structcwist__heal__config.html">cwist_heal_config_t</a> *heal_cfg);</div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span> </div>
-<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_db_query_strict(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <span class="keyword">const</span> <span class="keywordtype">char</span> *sql, cJSON **result,</div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>                                     <span class="keyword">const</span> <a class="code hl_struct" href="../../d5/d83/structcwist__schema.html">cwist_schema_t</a> *schema);</div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span> </div>
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span><span class="preprocessor">#endif</span></div>
-<div class="ttc" id="acwist__err_8h_html"><div class="ttname"><a href="../../d7/d82/cwist__err_8h.html">cwist_err.h</a></div><div class="ttdoc">Unified error code and type definitions for the CWIST system layer.</div></div>
-<div class="ttc" id="ajson__heal_8h_html"><div class="ttname"><a href="../../db/dd3/json__heal_8h.html">json_heal.h</a></div><div class="ttdoc">Self-Healing JSON Recovery Layer (CWIST)</div></div>
-<div class="ttc" id="astructcwist__db_html"><div class="ttname"><a href="../../dd/d55/structcwist__db.html">cwist_db</a></div><div class="ttdef"><b>Definition</b> <a href="../../d4/d59/sql_8h_source.html#l00015">sql.h:15</a></div></div>
-<div class="ttc" id="astructcwist__error__t_html"><div class="ttname"><a href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a></div><div class="ttdoc">Integrated error structure used throughout the system.</div><div class="ttdef"><b>Definition</b> <a href="../../d7/d82/cwist__err_8h_source.html#l00079">cwist_err.h:79</a></div></div>
-<div class="ttc" id="astructcwist__heal__config_html"><div class="ttname"><a href="../../d4/d38/structcwist__heal__config.html">cwist_heal_config</a></div><div class="ttdoc">Configuration passed to cwist_json_heal().</div><div class="ttdef"><b>Definition</b> <a href="../../db/dd3/json__heal_8h_source.html#l00098">json_heal.h:98</a></div></div>
-<div class="ttc" id="astructcwist__schema_html"><div class="ttname"><a href="../../d5/d83/structcwist__schema.html">cwist_schema</a></div><div class="ttdoc">A complete schema: array of field descriptors + count.</div><div class="ttdef"><b>Definition</b> <a href="../../db/dd3/json__heal_8h_source.html#l00066">json_heal.h:66</a></div></div>
-<div class="ttc" id="azod_8h_html"><div class="ttname"><a href="../../dc/d6e/zod_8h.html">zod.h</a></div><div class="ttdoc">Strict JSON schema validation (Zod-style) for CWIST.</div></div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_db_open(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> **db, <span class="keyword">const</span> <span class="keywordtype">char</span> *path);</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keywordtype">void</span> cwist_db_close(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db);</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span> </div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_db_exec(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <span class="keyword">const</span> <span class="keywordtype">char</span> *sql);</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span> </div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><a class="code hl_struct" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a> cwist_db_query(<a class="code hl_struct" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <span class="keyword">const</span> <span class="keywordtype">char</span> *sql, cJSON **result);</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span> </div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="preprocessor">#endif</span></div>
+<div class="ttc" id="astructcwist__db_html"><div class="ttname"><a href="../../dd/d55/structcwist__db.html">cwist_db</a></div><div class="ttdef"><b>Definition</b> <a href="../../d0/dae/core_2db_2sql_8h_source.html#l00015">sql.h:15</a></div></div>
+<div class="ttc" id="astructcwist__error__t_html"><div class="ttname"><a href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a></div><div class="ttdoc">Integrated error structure used throughout the system.</div><div class="ttdef"><b>Definition</b> <a href="../../d3/d73/err_2cwist__err_8h_source.html#l00068">cwist_err.h:68</a></div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
