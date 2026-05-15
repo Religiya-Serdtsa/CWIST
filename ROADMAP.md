@@ -21,9 +21,9 @@
 |---------|--------|-------|
 | HTTP/1.1 Server (epoll, threading, forking) | ✅ | Zero-copy sendfile, keep-alive |
 | HTTP/2 Server | ✅ | h2 with ALPN |
-| HTTP/3 Server (QUIC) | ✅ | lsquic + BoringSSL, QPACK, 0-RTT, migration, push |
+| HTTP/3 Server (QUIC) | ✅ | lsquic + BoringSSL, QPACK, 0-RTT, migration, push, resilience timeout knobs |
 | HTTP/1.1 + HTTP/2 Client | ✅ | libcurl based, sync & async APIs |
-| HTTP/3 Client | ✅ | lsquic based, async stream callbacks |
+| HTTP/3 Client | ✅ | lsquic based, async stream callbacks, auto-retry with exponential backoff, conn timeout knobs |
 | WebSocket Server | ✅ | Upgrade, frame parsing, ping/pong |
 | TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH support |
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
@@ -88,7 +88,7 @@
 | SQLite Integration | ✅ | `sqlite3` embedded |
 | Database Migration | ✅ | `migrate` system |
 | **Connection Pool** | ⏳ | SQLite is direct; no generic connection pool abstraction |
-| **ORM / Query Builder** | ⏳ | Raw SQL only; no ActiveRecord-style ORM |
+| **ORM / Query Builder** | ✅ | Socket-backed ORM with dialect-aware query builder, _Generic type-dispatched RETURNING / scalar helpers |
 | **Redis / Key-Value Cache** | ⏳ | No Redis client integration |
 | NATS Integration | ✅ | `cwist_nats` wrapper |
 | **Message Queue (Job Queue)** | 🔄 | `cwist_io_queue` is lock-free job queue; no persistent queue backend |
