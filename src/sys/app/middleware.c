@@ -78,122 +78,289 @@ cwist_middleware_func cwist_mw_request_id(const char *header_name) {
 
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-/**
- * @brief Log method, path, status, latency, and payload sizes for one request.
- * @param req Incoming HTTP request.
- * @param res Outgoing HTTP response.
- * @param next Next middleware or final handler in the chain.
- */
-void cwist_mw_access_log_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
+static void format_clf_time(char *buf, size_t len, const struct timeval *tv) {
+    struct tm tm;
+    localtime_r(&tv->tv_sec, &tm);
+    char tzbuf[8];
+    strftime(tzbuf, sizeof(tzbuf), "%z", &tm);
+    strftime(buf, len, "%d/%b/%Y:%H:%M:%S", &tm);
+    size_t pos = strlen(buf);
+    snprintf(buf + pos, len - pos, " %s", tzbuf);
+}
+
+static void format_iso8601_time(char *buf, size_t len, const struct timeval *tv) {
+    struct tm tm;
+    gmtime_r(&tv->tv_sec, &tm);
+    strftime(buf, len, "%Y-%m-%dT%H:%M:%S", &tm);
+    size_t pos = strlen(buf);
+    snprintf(buf + pos, len - pos, ".%03ldZ", tv->tv_usec / 1000);
+}
+
+static void cwist_mw_access_log_common_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
     struct timeval start, end;
     gettimeofday(&start, NULL);
-
     next(req, res);
+    gettimeofday(&end, NULL);
 
+    const char *rid = cwist_http_header_get(res->headers, "X-Request-Id");
+    cwist_sstring *ip = cwist_get_client_ip_from_fd(req->client_fd);
+    const char *ip_str = ip ? ip->data : "-";
+
+    char time_buf[64];
+    format_clf_time(time_buf, sizeof(time_buf), &end);
+
+    size_t res_bytes = res->body ? res->body->size : 0;
+
+    pthread_mutex_lock(&log_mutex);
+    printf("%s - %s [%s] \"%s %s %s\" %d %zu\n",
+           ip_str, rid ? rid : "-", time_buf,
+           cwist_http_method_to_string(req->method),
+           req->path->data,
+           req->version ? req->version->data : "HTTP/1.1",
+           res->status_code, res_bytes);
+    pthread_mutex_unlock(&log_mutex);
+
+    if (ip) cwist_sstring_destroy(ip);
+}
+
+static void cwist_mw_access_log_combined_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+    next(req, res);
+    gettimeofday(&end, NULL);
+
+    const char *rid = cwist_http_header_get(res->headers, "X-Request-Id");
+    cwist_sstring *ip = cwist_get_client_ip_from_fd(req->client_fd);
+    const char *ip_str = ip ? ip->data : "-";
+
+    char time_buf[64];
+    format_clf_time(time_buf, sizeof(time_buf), &end);
+
+    const char *referer = cwist_http_header_get(req->headers, "Referer");
+    const char *user_agent = cwist_http_header_get(req->headers, "User-Agent");
+    size_t res_bytes = res->body ? res->body->size : 0;
+
+    pthread_mutex_lock(&log_mutex);
+    printf("%s - %s [%s] \"%s %s %s\" %d %zu \"%s\" \"%s\"\n",
+           ip_str, rid ? rid : "-", time_buf,
+           cwist_http_method_to_string(req->method),
+           req->path->data,
+           req->version ? req->version->data : "HTTP/1.1",
+           res->status_code, res_bytes,
+           referer ? referer : "-",
+           user_agent ? user_agent : "-");
+    pthread_mutex_unlock(&log_mutex);
+
+    if (ip) cwist_sstring_destroy(ip);
+}
+
+static void cwist_mw_access_log_json_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+    next(req, res);
     gettimeofday(&end, NULL);
     long msec = (end.tv_sec - start.tv_sec) * 1000 + (end.tv_usec - start.tv_usec) / 1000;
 
-    // get request id from header.
     const char *rid = cwist_http_header_get(res->headers, "X-Request-Id");
-    
+    cwist_sstring *ip = cwist_get_client_ip_from_fd(req->client_fd);
+    const char *ip_str = ip ? ip->data : "-";
+
+    char time_buf[64];
+    format_iso8601_time(time_buf, sizeof(time_buf), &end);
+
+    size_t req_bytes = req->body ? req->body->size : 0;
+    size_t res_bytes = res->body ? res->body->size : 0;
+
     pthread_mutex_lock(&log_mutex);
-    printf("[%s] %s %s -> %d (%ldms) [Req: %zu bytes, Res: %zu bytes]\n",
-           rid ? rid : "-",
+    printf("{\"time\":\"%s\",\"client\":\"%s\",\"rid\":\"%s\",\"method\":\"%s\",\"path\":\"%s\",\"protocol\":\"%s\",\"status\":%d,\"duration_ms\":%ld,\"req_bytes\":%zu,\"res_bytes\":%zu}\n",
+           time_buf, ip_str, rid ? rid : "-",
            cwist_http_method_to_string(req->method),
            req->path->data,
-           res->status_code,
-           msec,
-           req->body ? req->body->size : 0,
-           res->body ? res->body->size : 0);
+           req->version ? req->version->data : "HTTP/1.1",
+           res->status_code, msec, req_bytes, res_bytes);
     pthread_mutex_unlock(&log_mutex);
+
+    if (ip) cwist_sstring_destroy(ip);
 }
 
 /**
  * @brief Return the built-in access-log middleware.
- * @param format Currently unused log format selector.
+ * @param format Log format selector (COMMON, COMBINED, JSON).
  * @return Middleware function pointer for access logging.
  */
 cwist_middleware_func cwist_mw_access_log(cwist_log_format_t format) {
-    CWIST_UNUSED(format);
-    return cwist_mw_access_log_handler;
+    switch (format) {
+        case CWIST_LOG_COMMON: return cwist_mw_access_log_common_handler;
+        case CWIST_LOG_COMBINED: return cwist_mw_access_log_combined_handler;
+        case CWIST_LOG_JSON: return cwist_mw_access_log_json_handler;
+        default: return cwist_mw_access_log_common_handler;
+    }
 }
 
-/* --- Rate Limiter Middleware --- */
+/* --- Metrics Middleware --- */
 
-typedef struct {
-    char ip[46];
-    long last_reset;
-    int count;
-} ip_limit_t;
-
-#define MAX_IP_TRACK 1024
-static ip_limit_t ip_cache[MAX_IP_TRACK];
-static int ip_cache_count = 0;
-static pthread_mutex_t rate_mutex = PTHREAD_MUTEX_INITIALIZER;
+#include <cwist/sys/metrics/metrics.h>
 
 /**
- * @brief Enforce a simple per-IP request cap using an in-memory one-minute window.
+ * @brief Increment request counter and observe duration for Prometheus metrics.
  * @param req Incoming HTTP request.
  * @param res Outgoing HTTP response.
  * @param next Next middleware or final handler in the chain.
  */
-void cwist_mw_rate_limit_ip_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
+void cwist_mw_metrics_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    next(req, res);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long duration_ns = (end.tv_sec - start.tv_sec) * 1000000000L + (end.tv_nsec - start.tv_nsec);
+    cwist_metrics_registry_t *reg = cwist_metrics_registry();
+    if (reg) {
+        cwist_metric_inc(reg, CWIST_METRIC_REQUESTS_TOTAL);
+        cwist_metric_add(reg, CWIST_METRIC_REQUEST_DURATION_NS, (uintmax_t)duration_ns);
+    }
+}
 
-    // Get client ip from fd
+/**
+ * @brief Return the built-in metrics collection middleware.
+ * @return Middleware function pointer for request metrics.
+ */
+cwist_middleware_func cwist_mw_metrics(void) {
+    return cwist_mw_metrics_handler;
+}
+
+/* --- Rate Limiter Middleware --- */
+
+#include <ttak/limit/limit.h>
+
+typedef struct {
+    char ip[46];
+    ttak_token_bucket_t bucket;
+    bool active;
+} ip_bucket_t;
+
+#define MAX_IP_BUCKETS 1024
+static ip_bucket_t ip_buckets[MAX_IP_BUCKETS];
+static int ip_bucket_count = 0;
+static pthread_mutex_t rate_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+typedef struct {
+    int rpm;
+} rate_limit_ctx_t;
+
+static void cwist_mw_rate_limit_ip_handler(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
+    rate_limit_ctx_t *ctx = (rate_limit_ctx_t *)req->private_data;
+    int rpm = (ctx && ctx->rpm > 0) ? ctx->rpm : 60;
+
     cwist_sstring *ip = cwist_get_client_ip_from_fd(req->client_fd);
-
-    time_t now = time(NULL);
-    ip_limit_t *found = NULL;
+    if (!ip) {
+        next(req, res);
+        return;
+    }
 
     pthread_mutex_lock(&rate_mutex);
-
-    // if ip is found on ip_cache, set found = &ip_cache[i];
-    for (int i = 0; i < ip_cache_count; i++) {
-        if (!cwist_sstring_compare(ip, ip_cache[i].ip)) {
-            found = &ip_cache[i];
+    ip_bucket_t *found = NULL;
+    for (int i = 0; i < ip_bucket_count; i++) {
+        if (ip_buckets[i].active && strcmp(ip_buckets[i].ip, ip->data) == 0) {
+            found = &ip_buckets[i];
             break;
         }
     }
 
-    // if not found, add current ip to ip_cache
-    if (!found && ip_cache_count < MAX_IP_TRACK) {
-        found = &ip_cache[ip_cache_count++];
+    if (!found && ip_bucket_count < MAX_IP_BUCKETS) {
+        found = &ip_buckets[ip_bucket_count++];
         strncpy(found->ip, ip->data, sizeof(found->ip) - 1);
-        found->last_reset = now;
-        found->count = 0;
+        found->ip[sizeof(found->ip) - 1] = '\0';
+        found->active = true;
+        double rate = rpm / 60.0;
+        ttak_token_bucket_init(&found->bucket, rate, (double)rpm);
     }
 
-    // if found, refresh reset time
+    bool allowed = false;
     if (found) {
-        if (now - found->last_reset >= 60) {
-            found->last_reset = now;
-            found->count = 0;
-        }
-
-        // if cound count is more than 60, block request
-        if (found->count >= 60) {
-            pthread_mutex_unlock(&rate_mutex);
-            res->status_code = 429;
-            cwist_sstring_assign(res->body, "Too Many Requests");
-            cwist_http_header_add(&res->headers, "Retry-After", "60");
-            return;
-        }
-        found->count++;
+        allowed = ttak_token_bucket_consume(&found->bucket, 1.0);
     }
     cwist_sstring_destroy(ip);
     pthread_mutex_unlock(&rate_mutex);
 
+    if (!allowed) {
+        res->status_code = 429;
+        cwist_sstring_assign(res->body, "Too Many Requests");
+        char retry_buf[16];
+        snprintf(retry_buf, sizeof(retry_buf), "%d", 60 / rpm > 0 ? 60 / rpm : 1);
+        cwist_http_header_add(&res->headers, "Retry-After", retry_buf);
+        return;
+    }
+
     next(req, res);
 }
 
+#define CWIST_RATE_LIMIT_MAX_CFGS 8
+
+typedef struct {
+    int rpm;
+} rate_limit_cfg_t;
+
+static rate_limit_cfg_t s_rate_cfgs[CWIST_RATE_LIMIT_MAX_CFGS];
+static int s_rate_cfg_count = 0;
+static pthread_mutex_t s_rate_cfg_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+#define CWIST_RATE_LIMIT_DEFINE_WRAPPER(N) \
+static void cwist_mw_rate_limit_wrap_##N(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) { \
+    rate_limit_ctx_t ctx = { .rpm = s_rate_cfgs[N].rpm }; \
+    void *prev = req->private_data; \
+    req->private_data = &ctx; \
+    cwist_mw_rate_limit_ip_handler(req, res, next); \
+    req->private_data = prev; \
+}
+
+CWIST_RATE_LIMIT_DEFINE_WRAPPER(0)
+CWIST_RATE_LIMIT_DEFINE_WRAPPER(1)
+CWIST_RATE_LIMIT_DEFINE_WRAPPER(2)
+CWIST_RATE_LIMIT_DEFINE_WRAPPER(3)
+CWIST_RATE_LIMIT_DEFINE_WRAPPER(4)
+CWIST_RATE_LIMIT_DEFINE_WRAPPER(5)
+CWIST_RATE_LIMIT_DEFINE_WRAPPER(6)
+CWIST_RATE_LIMIT_DEFINE_WRAPPER(7)
+
+static cwist_middleware_func s_rate_wrappers[CWIST_RATE_LIMIT_MAX_CFGS] = {
+    cwist_mw_rate_limit_wrap_0, cwist_mw_rate_limit_wrap_1, cwist_mw_rate_limit_wrap_2, cwist_mw_rate_limit_wrap_3,
+    cwist_mw_rate_limit_wrap_4, cwist_mw_rate_limit_wrap_5, cwist_mw_rate_limit_wrap_6, cwist_mw_rate_limit_wrap_7,
+};
+
 /**
  * @brief Return the built-in per-IP rate-limiter middleware.
- * @param requests_per_minute Currently unused custom limit override.
+ * @param requests_per_minute Allowed requests per minute (token bucket rate).
  * @return Middleware function pointer for per-IP rate limiting.
  */
+void cwist_mw_rate_limit_reset(void) {
+    pthread_mutex_lock(&rate_mutex);
+    ip_bucket_count = 0;
+    pthread_mutex_unlock(&rate_mutex);
+}
+
 cwist_middleware_func cwist_mw_rate_limit_ip(int requests_per_minute) {
-    CWIST_UNUSED(requests_per_minute);
-    return cwist_mw_rate_limit_ip_handler;
+    if (requests_per_minute <= 0) requests_per_minute = 60;
+
+    pthread_mutex_lock(&s_rate_cfg_mutex);
+
+    for (int i = 0; i < s_rate_cfg_count; i++) {
+        if (s_rate_cfgs[i].rpm == requests_per_minute) {
+            pthread_mutex_unlock(&s_rate_cfg_mutex);
+            return s_rate_wrappers[i];
+        }
+    }
+
+    if (s_rate_cfg_count >= CWIST_RATE_LIMIT_MAX_CFGS) {
+        pthread_mutex_unlock(&s_rate_cfg_mutex);
+        fprintf(stderr, "[CWIST] cwist_mw_rate_limit_ip: maximum config slots exceeded\n");
+        return s_rate_wrappers[0];
+    }
+
+    int slot = s_rate_cfg_count++;
+    s_rate_cfgs[slot].rpm = requests_per_minute;
+
+    pthread_mutex_unlock(&s_rate_cfg_mutex);
+    return s_rate_wrappers[slot];
 }
 
 /* --- CORS Middleware --- */

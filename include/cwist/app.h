@@ -113,7 +113,17 @@ void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler
  */
 void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handler);
 
-/** @} */
+/**
+ * @brief Enable Prometheus /metrics endpoint.
+ */
+void cwist_app_enable_metrics(cwist_app *app);
+
+/**
+ * @brief Enable health check endpoints (/healthz, /live, /ready).
+ */
+void cwist_app_enable_healthz(cwist_app *app);
+
+/** @}
 
 /** @name Startup */
 /** @{ */

@@ -235,6 +235,40 @@ cwist_http_request *cwist_http_request_create(void) {
  * @param fd Connected client socket descriptor.
  * @return Heap-allocated string containing the textual IP address.
  */
+/**
+ * @brief Format a time_t as an HTTP-date (RFC 7231).
+ * @param t Unix timestamp.
+ * @param buf Output buffer.
+ * @param len Buffer capacity.
+ */
+void cwist_http_format_date(time_t t, char *buf, size_t len) {
+    struct tm tm;
+    gmtime_r(&t, &tm);
+    strftime(buf, len, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+}
+
+/**
+ * @brief Parse an HTTP-date string into a time_t.
+ * @param str HTTP-date string.
+ * @return Parsed timestamp, or (time_t)-1 on failure.
+ */
+time_t cwist_http_parse_date(const char *str) {
+    if (!str) return (time_t)-1;
+    struct tm tm = {0};
+    const char *fmt = "%a, %d %b %Y %H:%M:%S %Z";
+    if (strptime(str, fmt, &tm) == NULL) {
+        // Try alternative formats
+        fmt = "%a, %d-%b-%y %H:%M:%S %Z";
+        if (strptime(str, fmt, &tm) == NULL) {
+            fmt = "%a %b %d %H:%M:%S %Y";
+            if (strptime(str, fmt, &tm) == NULL) {
+                return (time_t)-1;
+            }
+        }
+    }
+    return timegm(&tm);
+}
+
 cwist_sstring* cwist_get_client_ip_from_fd(int fd) {
     cwist_sstring *s = cwist_sstring_create();
     cwist_sstring_assign(s, "127.0.0.1");

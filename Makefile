@@ -271,7 +271,10 @@ TEST_TARGETS = test_sstring \
                nuke_missing_user_test \
                test_bind \
                test_metrics \
-               test_io_uring
+               test_io_uring \
+               test_access_log \
+               test_rate_limit \
+               test_cache
 
 .PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild
 
@@ -360,6 +363,18 @@ test_metrics: $(LIB_NAME) tests/test_metrics.c
 test_io_uring: $(LIB_NAME) tests/test_io_uring.c
 	$(CC) $(CFLAGS) -o test_io_uring tests/test_io_uring.c $(LIB_NAME) $(LIBS)
 	./test_io_uring
+
+test_access_log: $(LIB_NAME) tests/test_access_log.c
+	$(CC) $(CFLAGS) -o test_access_log tests/test_access_log.c $(LIB_NAME) $(LIBS)
+	./test_access_log
+
+test_rate_limit: $(LIB_NAME) tests/test_rate_limit.c
+	$(CC) $(CFLAGS) -o test_rate_limit tests/test_rate_limit.c $(LIB_NAME) $(LIBS)
+	./test_rate_limit
+
+test_cache: $(LIB_NAME) tests/test_cache.c
+	$(CC) $(CFLAGS) -o test_cache tests/test_cache.c $(LIB_NAME) $(LIBS)
+	./test_cache
 
 install: $(LIB_NAME)
 	@echo "Installing library to $(LIBDIR)..."

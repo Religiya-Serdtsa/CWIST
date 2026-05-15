@@ -35,6 +35,7 @@ typedef enum cwist_http_status_t {
     CWIST_HTTP_OK = 200,
     CWIST_HTTP_CREATED = 201,
     CWIST_HTTP_NO_CONTENT = 204,
+    CWIST_HTTP_NOT_MODIFIED = 304,
     CWIST_HTTP_BAD_REQUEST = 400,
     CWIST_HTTP_UNAUTHORIZED = 401,
     CWIST_HTTP_FORBIDDEN = 403,
@@ -128,6 +129,16 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
 /** @name Request Data Processing */
 /** @{ */
 cwist_sstring* cwist_get_client_ip_from_fd(int fd);
+
+/**
+ * @brief Format a time_t as an HTTP-date (RFC 7231).
+ */
+void cwist_http_format_date(time_t t, char *buf, size_t len);
+
+/**
+ * @brief Parse an HTTP-date string into a time_t.
+ */
+time_t cwist_http_parse_date(const char *str);
 /** @} */
 
 /** @name Response Lifecycle */

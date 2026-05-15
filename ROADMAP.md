@@ -51,15 +51,15 @@
 | HTML / CSS Builder | ✅ | Programmatic HTML/CSS generation |
 | **Form / Multipart Parser** | ✅ | `multipart/form-data` via `multipart-parser-c` submodule |
 | **Compression (gzip / brotli)** | ✅ | Compression middleware with swappable backend (`gzip` via zlib), `cwist_mw_compress` factory, tests added |
-| **Caching Layer** | ⏳ | No HTTP cache (ETag, Last-Modified, Cache-Control) or in-memory cache |
-| **Rate Limiting** | ⏳ | Token bucket or leaky bucket not implemented |
-| **CORS** | 🔄 | Basic CORS test exists; configurable CORS middleware missing |
+| **Caching Layer** | ✅ | ETag, Last-Modified, Cache-Control, 304 Not Modified for static files |
+| **Rate Limiting** | ✅ | Per-IP token bucket via libttak; parameter respected |
+| **CORS** | ✅ | Permissive CORS + preflight handler implemented |
 | **SSE (Server-Sent Events)** | ⏳ | No structured SSE stream API |
-| **Access Logging** | 🔄 | Macro-based internal logging added; standardized Common/Combined/JSON access format pending |
-| **Request ID / Tracing** | ⏳ | No distributed tracing or request correlation ID injection |
+| **Access Logging** | ✅ | Common, Combined, and JSON formats implemented |
+| **Request ID / Tracing** | ✅ | X-Request-Id middleware injects and propagates request IDs |
 | Graceful Shutdown | ✅ | Unified atomic `running` flag + SIGTERM/SIGINT handlers across HTTP/1.1, HTTP/2, HTTP/3 loops |
-| **Health Check Endpoint** | 🔄 | Basic `/healthz` endpoint added (`healthz.c`, `healthz.h`) |
-| **Metrics / Observability** | 🔄 | Metrics module added (`metrics.c`, `metrics.h`, `test_metrics.c`); Prometheus endpoint pending |
+| **Health Check Endpoint** | ✅ | `/healthz`, `/live`, `/ready` with probe registry and auto-registration |
+| **Metrics / Observability** | ✅ | Prometheus `/metrics` endpoint wired; request counter & duration middleware |
 | **Per-Status Error Handlers** | ✅ | `cwist_app_register_error_handler` for custom 404, 500, etc. |
 | **URL Reverse Routing** | ✅ | `cwist_app_get_named` + `cwist_url_for` with param substitution |
 | **Flash Messages** | ✅ | One-time session-scoped messages via `cwist_flash_get/set` |
@@ -134,11 +134,11 @@
 5. ~~**Form / Request Validation** middleware~~ ✅
 
 ### P1 — Production Readiness
-6. **Access Logs** (Common/JSON format)
-7. **Metrics endpoint** (Prometheus text format) 🔄
-8. **Rate Limiting** middleware
-9. **Caching** (ETag generation + in-memory cache)
-10. **Health Check** endpoints 🔄
+6. ~~**Access Logs** (Common/JSON format)~~ ✅
+7. ~~**Metrics endpoint** (Prometheus text format)~~ ✅
+8. ~~**Rate Limiting** middleware~~ ✅
+9. ~~**Caching** (ETag generation + in-memory cache)~~ ✅
+10. ~~**Health Check** endpoints~~ ✅
 
 ### P2 — Developer Velocity
 11. **Hot Reload** for development

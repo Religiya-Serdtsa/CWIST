@@ -28,6 +28,12 @@ cwist_middleware_func cwist_mw_access_log(cwist_log_format_t format);
 /** @brief Fixed-window rate limiter middleware (per-IP). */
 cwist_middleware_func cwist_mw_rate_limit_ip(int requests_per_minute);
 
+/** @brief Reset the internal rate-limit IP bucket table (test helper). */
+void cwist_mw_rate_limit_reset(void);
+
+/** @brief Prometheus metrics collection middleware. */
+cwist_middleware_func cwist_mw_metrics(void);
+
 /**
  * @brief CORS middleware.
  * Adds CORS headers and handles OPTIONS requests (returns 204).

@@ -126,7 +126,7 @@ void cwist_app_healthz(cwist_http_response *res) {
 
     switch (overall) {
         case CWIST_HEALTH_OK:       res->status_code = CWIST_HTTP_OK; break;
-        case CWIST_HEALTH_DEGRADED: res->status_code = CWIST_HTTP_NOT_IMPLEMENTED; /* 501 reused */ break;
+        case CWIST_HEALTH_DEGRADED: res->status_code = CWIST_HTTP_SERVICE_UNAVAILABLE; break;
         case CWIST_HEALTH_FAIL:     res->status_code = CWIST_HTTP_SERVICE_UNAVAILABLE; break;
     }
     cwist_json_builder_destroy(jb);
