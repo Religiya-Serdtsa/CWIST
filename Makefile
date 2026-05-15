@@ -106,6 +106,8 @@ SRCS = src/core/sstring/sstring.c \
        src/core/db/db.c \
        src/core/db/nuke_db.c \
        src/core/db/migrate.c \
+       src/core/orm/orm.c \
+       src/core/orm/orm_socket.c \
        src/sys/app/app.c \
        src/net/websocket/websocket.c \
        src/net/websocket/ws_utils.c \
@@ -228,6 +230,7 @@ $(LSQUIC_LIB): $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB)
 	cmake -S $(LSQUIC_DIR) -B $(LSQUIC_BUILD_DIR) \
 		-DCMAKE_C_COMPILER=$(CC) \
 		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_C_FLAGS="-Wno-unused-function" \
 		-DBORINGSSL_DIR=$(abspath $(BORINGSSL_DIR)) \
 		-DBORINGSSL_LIB_ssl=$(abspath $(BORINGSSL_SSL_LIB)) \
 		-DBORINGSSL_LIB_crypto=$(abspath $(BORINGSSL_CRYPTO_LIB)) \

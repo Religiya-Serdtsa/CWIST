@@ -44,6 +44,10 @@ struct cwist_http3_context {
     void (*datagram_cb)(const void *data, size_t len, void *user_ctx);
     void *datagram_user_ctx;
     cwist_webtransport_handler_func wt_handler;
+    int idle_timeout_ms;       /**< 0 = use lsquic default (30s) */
+    int handshake_timeout_ms;  /**< 0 = use lsquic default (10s) */
+    int ping_period_ms;        /**< 0 = use lsquic default (server: none) */
+    int noprogress_timeout_ms; /**< 0 = use lsquic default (60s server) */
 };
 
 /**
@@ -185,5 +189,53 @@ int cwist_http3_send_datagram(void *conn, const void *data, size_t len);
  */
 void cwist_http3_set_webtransport_handler(cwist_http3_context *ctx,
                                           cwist_webtransport_handler_func handler);
+
+/** --- Unstable-network resilience knobs --- */
+
+/**
+ * @brief Set the idle timeout for QUIC connections.
+ *
+ * If the connection is idle for longer than this, it is closed.
+ * Default is 0 (lsquic default, typically 30s).
+ *
+ * @param ctx HTTP/3 context.
+ * @param ms  Timeout in milliseconds, or 0 for default.
+ */
+void cwist_http3_set_idle_timeout(cwist_http3_context *ctx, int ms);
+
+/**
+ * @brief Set the handshake timeout.
+ *
+ * Connections that do not complete the handshake within this time are
+ * dropped.  Increase this on high-latency mobile networks.
+ *
+ * @param ctx HTTP/3 context.
+ * @param ms  Timeout in milliseconds, or 0 for default.
+ */
+void cwist_http3_set_handshake_timeout(cwist_http3_context *ctx, int ms);
+
+/**
+ * @brief Set the keep-alive PING period.
+ *
+ * When non-zero, the server sends PING frames at this interval to keep
+ * NAT bindings alive and detect dead peers early.  Recommended 10000-15000
+ * ms for mobile clients behind aggressive NATs.
+ *
+ * @param ctx HTTP/3 context.
+ * @param ms  Interval in milliseconds, or 0 to disable.
+ */
+void cwist_http3_set_ping_period(cwist_http3_context *ctx, int ms);
+
+/**
+ * @brief Set the no-progress timeout.
+ *
+ * Connections that make no forward progress (no acks, no data) for this
+ * long are terminated.  Default is 0 (lsquic default, typically 60s on
+ * server).
+ *
+ * @param ctx HTTP/3 context.
+ * @param ms  Timeout in milliseconds, or 0 for default.
+ */
+void cwist_http3_set_noprogress_timeout(cwist_http3_context *ctx, int ms);
 
 #endif

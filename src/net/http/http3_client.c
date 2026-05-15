@@ -86,6 +86,9 @@ struct cwist_http3_client {
     uint16_t port;
     int timeout_ms;
     int datagram_enabled;
+    int max_retries;
+    int retry_delay_ms;
+    int conn_timeout_ms;
 
     pthread_mutex_t mtx;
     pthread_cond_t cond;
@@ -383,7 +386,7 @@ static const struct lsquic_stream_if h3c_stream_if = {
 static void h3c_process_io(cwist_http3_client *client, int timeout_ms) {
     lsquic_engine_t *engine = client->engine;
     int diff = timeout_ms * 1000; /* microseconds */
-    if (diff <= 0) diff = 100000;
+    if (diff <= 0) diff = 1000;
 
     unsigned flags = 0;
     if (lsquic_engine_earliest_adv_tick(engine, &diff)) {
@@ -425,6 +428,9 @@ cwist_http3_client *cwist_http3_client_create(void) {
 
     client->udp_fd = -1;
     client->timeout_ms = 30000;
+    client->max_retries = 0;
+    client->retry_delay_ms = 1000;
+    client->conn_timeout_ms = 5000;
     pthread_mutex_init(&client->mtx, NULL);
     pthread_cond_init(&client->cond, NULL);
 
@@ -443,6 +449,23 @@ cwist_http3_client *cwist_http3_client_create(void) {
     struct lsquic_engine_settings settings;
     lsquic_engine_init_settings(&settings, LSENG_HTTP);
     settings.es_versions = (1 << LSQVER_I001) | (1 << LSQVER_I002);
+    settings.es_ping_period = 15;
+    settings.es_noprogress_timeout = 30;
+    settings.es_ecn = 1;
+    settings.es_pace_packets = 1;
+    settings.es_optimistic_nat = 1;
+
+    char err_buf[256];
+    if (lsquic_engine_check_settings(&settings, LSENG_HTTP,
+                                     err_buf, sizeof(err_buf)) != 0) {
+        fprintf(stderr, "[HTTP/3-CLIENT] Invalid engine settings: %s\n", err_buf);
+        SSL_CTX_free(client->ssl_ctx);
+        pthread_mutex_destroy(&client->mtx);
+        pthread_cond_destroy(&client->cond);
+        free(client);
+        h3c_global_cleanup();
+        return NULL;
+    }
 
     struct lsquic_engine_api api = {
         .ea_stream_if        = &h3c_stream_if,
@@ -568,94 +591,150 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
         freeaddrinfo(res);
     }
 
-    /* Start connection if not connected */
-    if (!client->conn) {
-        client->conn = lsquic_engine_connect(client->engine, N_LSQVER,
-                                              NULL,
-                                              (struct sockaddr *)&client->peer_addr,
-                                              client, NULL,
-                                              client->host, 0,
-                                              NULL, 0, NULL, 0);
+    /* ---------------------------------------------------------------- */
+    /* Retry loop with exponential backoff                               */
+    /* ---------------------------------------------------------------- */
+    int attempt = 0;
+    int max_attempts = 1 + client->max_retries;
+    while (attempt < max_attempts) {
+        /* Ensure connection is healthy */
+        if (client->conn) {
+            enum LSQUIC_CONN_STATUS st_status = lsquic_conn_status(client->conn, NULL, 0);
+            if (st_status == LSCONN_ST_CLOSED || st_status == LSCONN_ST_TIMED_OUT ||
+                st_status == LSCONN_ST_ERROR || st_status == LSCONN_ST_RESET ||
+                st_status == LSCONN_ST_HSK_FAILURE) {
+                client->conn = NULL; /* lsquic will clean it up via engine */
+            }
+        }
+
         if (!client->conn) {
+            client->conn = lsquic_engine_connect(client->engine, N_LSQVER,
+                                                  NULL,
+                                                  (struct sockaddr *)&client->peer_addr,
+                                                  client, NULL,
+                                                  client->host, 0,
+                                                  NULL, 0, NULL, 0);
+            if (!client->conn) {
+                err.error.err_i16 = -1;
+                goto retry_backoff;
+            }
+        }
+
+        /* Request a new stream */
+        lsquic_conn_make_stream(client->conn);
+
+        /* I/O loop until stream is created */
+        struct timespec stream_deadline;
+        clock_gettime(CLOCK_REALTIME, &stream_deadline);
+        stream_deadline.tv_sec += client->conn_timeout_ms / 1000;
+        stream_deadline.tv_nsec += (client->conn_timeout_ms % 1000) * 1000000;
+        if (stream_deadline.tv_nsec >= 1000000000) {
+            stream_deadline.tv_sec++;
+            stream_deadline.tv_nsec -= 1000000000;
+        }
+        h3c_stream_ctx_t *st = NULL;
+        while (!st) {
+            h3c_process_io(client, 100);
+            pthread_mutex_lock(&client->mtx);
+            st = client->active_stream;
+            pthread_mutex_unlock(&client->mtx);
+            struct timespec now;
+            clock_gettime(CLOCK_REALTIME, &now);
+            if (now.tv_sec > stream_deadline.tv_sec ||
+                (now.tv_sec == stream_deadline.tv_sec && now.tv_nsec >= stream_deadline.tv_nsec)) {
+                break;
+            }
+        }
+        if (!st) {
             err.error.err_i16 = -1;
+            goto retry_backoff;
+        }
+
+        /* Store request body */
+        if (body && body_len > 0) {
+            st->req_body = malloc(body_len);
+            if (!st->req_body) {
+                err.error.err_i16 = -1;
+                goto retry_backoff;
+            }
+            memcpy(st->req_body, body, body_len);
+            st->req_body_len = body_len;
+        }
+
+        /* I/O loop until response is ready or timeout */
+        struct timespec deadline;
+        clock_gettime(CLOCK_REALTIME, &deadline);
+        deadline.tv_sec += client->timeout_ms / 1000;
+        deadline.tv_nsec += (client->timeout_ms % 1000) * 1000000;
+        if (deadline.tv_nsec >= 1000000000) {
+            deadline.tv_sec++;
+            deadline.tv_nsec -= 1000000000;
+        }
+
+        pthread_mutex_lock(&client->mtx);
+        while (!st->response_ready) {
+            pthread_mutex_unlock(&client->mtx);
+            h3c_process_io(client, 100);
+            pthread_mutex_lock(&client->mtx);
+            struct timespec now;
+            clock_gettime(CLOCK_REALTIME, &now);
+            if (now.tv_sec > deadline.tv_sec ||
+                (now.tv_sec == deadline.tv_sec && now.tv_nsec >= deadline.tv_nsec)) {
+                break;
+            }
+        }
+        pthread_mutex_unlock(&client->mtx);
+
+        if (st->response_ready) {
+            *out_response = st->res;
+            st->res = NULL; /* Transfer ownership */
+            err.error.err_i16 = 0;
             return err;
         }
-    }
 
-    /* Request a new stream */
-    lsquic_conn_make_stream(client->conn);
-
-    /* I/O loop until stream is created */
-    struct timespec stream_deadline;
-    clock_gettime(CLOCK_REALTIME, &stream_deadline);
-    stream_deadline.tv_sec += 5;
-    h3c_stream_ctx_t *st = NULL;
-    while (!st) {
-        h3c_process_io(client, 100);
-        pthread_mutex_lock(&client->mtx);
-        st = client->active_stream;
-        pthread_mutex_unlock(&client->mtx);
-        struct timespec now;
-        clock_gettime(CLOCK_REALTIME, &now);
-        if (now.tv_sec > stream_deadline.tv_sec ||
-            (now.tv_sec == stream_deadline.tv_sec && now.tv_nsec >= stream_deadline.tv_nsec)) {
-            break;
-        }
-    }
-    if (!st) {
+        /* Timeout on this attempt – clean up stream state and retry */
         err.error.err_i16 = -1;
-        return err;
-    }
-
-    /* Store request body */
-    if (body && body_len > 0) {
-        st->req_body = malloc(body_len);
-        if (!st->req_body) {
-            err.error.err_i16 = -1;
-            return err;
-        }
-        memcpy(st->req_body, body, body_len);
-        st->req_body_len = body_len;
-    }
-
-    /* I/O loop until response is ready or timeout */
-    struct timespec deadline;
-    clock_gettime(CLOCK_REALTIME, &deadline);
-    deadline.tv_sec += client->timeout_ms / 1000;
-    deadline.tv_nsec += (client->timeout_ms % 1000) * 1000000;
-    if (deadline.tv_nsec >= 1000000000) {
-        deadline.tv_sec++;
-        deadline.tv_nsec -= 1000000000;
-    }
-
-    pthread_mutex_lock(&client->mtx);
-    while (!st->response_ready) {
-        pthread_mutex_unlock(&client->mtx);
-        h3c_process_io(client, 100);
         pthread_mutex_lock(&client->mtx);
-        struct timespec now;
-        clock_gettime(CLOCK_REALTIME, &now);
-        if (now.tv_sec > deadline.tv_sec ||
-            (now.tv_sec == deadline.tv_sec && now.tv_nsec >= deadline.tv_nsec)) {
-            break;
+        client->active_stream = NULL;
+        pthread_mutex_unlock(&client->mtx);
+        free(st->req_body);
+        st->req_body = NULL;
+        free(st);
+
+    retry_backoff:
+        attempt++;
+        if (attempt < max_attempts && client->retry_delay_ms > 0) {
+            int backoff = client->retry_delay_ms * (1 << (attempt - 1));
+            if (backoff > 30000) backoff = 30000; /* cap at 30s */
+            usleep((useconds_t)backoff * 1000);
         }
     }
-    pthread_mutex_unlock(&client->mtx);
 
-    if (!st->response_ready) {
-        err.error.err_i16 = -1;
-        return err;
-    }
-
-    *out_response = st->res;
-    st->res = NULL; /* Transfer ownership */
-    err.error.err_i16 = 0;
     return err;
 }
 
 /* ------------------------------------------------------------------ */
 /* Datagram stubs (RFC 9221)                                          */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* Resilience knobs                                                   */
+/* ------------------------------------------------------------------ */
+
+void cwist_http3_client_set_max_retries(cwist_http3_client *client,
+                                        int max_retries) {
+    if (client) client->max_retries = max_retries > 0 ? max_retries : 0;
+}
+
+void cwist_http3_client_set_retry_delay_ms(cwist_http3_client *client,
+                                           int delay_ms) {
+    if (client) client->retry_delay_ms = delay_ms > 0 ? delay_ms : 0;
+}
+
+void cwist_http3_client_set_conn_timeout_ms(cwist_http3_client *client,
+                                            int timeout_ms) {
+    if (client) client->conn_timeout_ms = timeout_ms > 0 ? timeout_ms : 5000;
+}
 
 int cwist_http3_client_send_datagram(cwist_http3_client *client,
                                      const void *data, size_t len) {
