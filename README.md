@@ -33,7 +33,7 @@ CWIST is a modern, lightweight C web framework designed for building secure and 
 ### 1. Installation
 
 ```sh
-git clone https://github.com/gg582/cwist.git
+git clone https://github.com/religiya-serdtsa/cwist.git
 cd cwist
 make install
 ```
