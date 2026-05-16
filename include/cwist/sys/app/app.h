@@ -235,6 +235,17 @@ char *cwist_url_for(cwist_app *app, const char *name, cwist_query_map *params);
  * @note Additional method helpers can be added as needed.
  */
 cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const char *directory);
+
+/**
+ * @brief Serves a directory of static files at a URL prefix with custom Cache-Control.
+ * Files are loaded into the fixed memory pool for Zero-Copy serving.
+ * @param app Pointer to the app.
+ * @param url_prefix URL prefix (e.g., "/static").
+ * @param directory Local filesystem path.
+ * @param cache_control Cache-Control directive string (e.g., "public, max-age=31536000, immutable").
+ *        Pass NULL to use the default "public, max-age=3600".
+ */
+cwist_error_t cwist_app_static_with_cache(cwist_app *app, const char *url_prefix, const char *directory, const char *cache_control);
 /** @} */
 
 /** @name Startup */
