@@ -1425,6 +1425,59 @@ cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const cha
     return err;
 }
 
+/**
+ * @brief Register a filesystem directory with a custom Cache-Control header.
+ * @param app Application being configured.
+ * @param url_prefix Request-path prefix such as "/static".
+ * @param directory Filesystem directory that backs the mapping.
+ * @param cache_control Value for the Cache-Control header (e.g. "public, max-age=86400").
+ * @return Tagged CWIST error describing success or failure.
+ */
+cwist_error_t cwist_app_static_with_cache(cwist_app *app, const char *url_prefix, const char *directory, const char *cache_control) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app || !url_prefix || !directory || !cache_control) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    char *normalized = cwist_normalize_prefix(url_prefix);
+    if (!normalized) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    char *resolved = cwist_normalize_directory(directory);
+    if (!resolved) {
+        cwist_free(normalized);
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    cwist_static_dir *entry = (cwist_static_dir *)cwist_alloc(sizeof(cwist_static_dir));
+    if (!entry) {
+        cwist_free(normalized);
+        cwist_free(resolved);
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    entry->url_prefix = normalized;
+    entry->fs_root = resolved;
+    entry->cache_control = cwist_strdup(cache_control);
+    if (!entry->cache_control) {
+        cwist_free(normalized);
+        cwist_free(resolved);
+        cwist_free(entry);
+        err.error.err_i16 = -1;
+        return err;
+    }
+    entry->next = app->static_dirs;
+    app->static_dirs = entry;
+
+    err.error.err_i16 = 0;
+    return err;
+}
+
 static void add_route_named(cwist_app *app,
                             const char *path,
                             const char *name,
