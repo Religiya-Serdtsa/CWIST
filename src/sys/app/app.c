@@ -267,6 +267,7 @@ struct cwist_route_table {
 struct cwist_static_dir {
     char *url_prefix;
     char *fs_root;
+    char *cache_control;
     struct cwist_static_dir *next;
 };
 
@@ -832,29 +833,32 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
             res->status_code = CWIST_HTTP_NOT_MODIFIED; // 304
             cwist_http_header_add(&res->headers, "ETag", etag);
             cwist_http_header_add(&res->headers, "Last-Modified", last_mod_buf);
-            cwist_http_header_add(&res->headers, "Cache-Control", "public, max-age=3600");
+            const char *cc = info->mapping->cache_control ? info->mapping->cache_control : "public, max-age=3600";
+            cwist_http_header_add(&res->headers, "Cache-Control", cc);
             cwist_sstring_assign(res->body, "");
         } else if (req->method == CWIST_HTTP_HEAD) {
+            const char *cc = info->mapping->cache_control ? info->mapping->cache_control : "public, max-age=3600";
             char len_buf[32];
             snprintf(len_buf, sizeof(len_buf), "%zu", file->size);
             cwist_http_header_add(&res->headers, "Content-Length", len_buf);
             cwist_http_header_add(&res->headers, "Content-Type", mime);
             cwist_http_header_add(&res->headers, "ETag", etag);
             cwist_http_header_add(&res->headers, "Last-Modified", last_mod_buf);
-            cwist_http_header_add(&res->headers, "Cache-Control", "public, max-age=3600");
+            cwist_http_header_add(&res->headers, "Cache-Control", cc);
             cwist_sstring_assign(res->body, "");
         } else if (file->data && file->node) {
             // ZERO COPY
             ttak_mem_node_acquire(file->node);
             cwist_http_response_set_body_ptr_managed(res, file->data, file->size, cwist_static_release_body, file->node);
             
+            const char *cc = info->mapping->cache_control ? info->mapping->cache_control : "public, max-age=3600";
             char len_buf[32];
             snprintf(len_buf, sizeof(len_buf), "%zu", file->size);
             cwist_http_header_add(&res->headers, "Content-Length", len_buf);
             cwist_http_header_add(&res->headers, "Content-Type", mime);
             cwist_http_header_add(&res->headers, "ETag", etag);
             cwist_http_header_add(&res->headers, "Last-Modified", last_mod_buf);
-            cwist_http_header_add(&res->headers, "Cache-Control", "public, max-age=3600");
+            cwist_http_header_add(&res->headers, "Cache-Control", cc);
         } else {
             res->status_code = CWIST_HTTP_INTERNAL_ERROR;
             cwist_sstring_assign(res->body, "Static buffer missing");
@@ -1085,6 +1089,7 @@ void cwist_app_destroy(cwist_app *app) {
         cwist_static_dir *next = curr_s->next;
         cwist_free(curr_s->url_prefix);
         cwist_free(curr_s->fs_root);
+        cwist_free(curr_s->cache_control);
         cwist_free(curr_s);
         curr_s = next;
     }
@@ -1412,6 +1417,7 @@ cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const cha
 
     entry->url_prefix = normalized;
     entry->fs_root = resolved;
+    entry->cache_control = NULL;
     entry->next = app->static_dirs;
     app->static_dirs = entry;
 
