@@ -1083,6 +1083,10 @@ int cwist_make_socket_ipv4(struct sockaddr_in *sockv4, const char *address, uint
     return CWIST_HTTP_SETSOCKOPT_FAILED;  
   }
 
+#ifdef SO_REUSEPORT
+  setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+#endif
+
 #if defined(__APPLE__) || defined(__FreeBSD__)
   int no_sig_pipe = 1;
   setsockopt(server_fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sig_pipe, sizeof(no_sig_pipe));

@@ -2018,6 +2018,14 @@ int cwist_app_listen(cwist_app *app, int port) {
     g_cwist_listen_fd = server_fd;
     
     printf("CWIST App running on port %d (SSL: %s)\n", port, app->use_ssl ? "On" : "Off");
+
+    int workers = 1;
+    const char *workers_env = getenv("CWIST_WORKERS");
+    if (workers_env) workers = atoi(workers_env);
+    if (workers < 1) workers = 1;
+    for (int i = 1; i < workers; i++) {
+        if (fork() == 0) break;
+    }
     
     if (app->use_ssl) {
         if (!app->ssl_ctx) {
