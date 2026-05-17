@@ -175,6 +175,7 @@ void cwist_http_header_free_all(cwist_http_header_node *head);
 /** @{ */
 const char *cwist_http_method_to_string(cwist_http_method_t method);
 cwist_http_method_t cwist_http_string_to_method(const char *method_str);
+cwist_http_method_t cwist_http_string_to_method_len(const char *str, size_t len);
 /** @} */
 
 /** @name TCP Socket Helpers */

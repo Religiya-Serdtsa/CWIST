@@ -4,15 +4,22 @@
 #include <cwist/sys/app/config.h>
 #include <cwist/sys/app/logger.h>
 #include <cwist/sys/app/shutdown.h>
-#include <cwist/sys/health/healthz.h>
+#include <cwist/sys/app/app.h>
 #include <cwist/net/http/http.h>
-#include <cwist/net/http/http2.h>
+#include <cwist/net/http/https.h>
 #include <cwist/net/http/http3.h>
+#include <cwist/net/http/async_server.h>
+#include <cwist/net/http/http2.h>
+#include <cwist/sys/health/healthz.h>
 #include <cwist/net/http/https.h>
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/core/db/nuke_db.h>
 #include <cwist/core/mem/alloc.h>
-#include <cwist/core/utils/json_builder.h> // Helper included for apps, though not strictly used here yet
+#include <cwist/core/utils/json_builder.h>
+#include <ttak/net/lattice.h>
+#include <ttak/mols_control.h>
+#include <ttak/priority/scheduler.h>
+#include <ttak/async/sched.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +29,7 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <pthread.h>
 #include <ttak/mem/mem.h>
@@ -29,6 +37,24 @@
 
 #define CWIST_ROUTE_BUCKETS 127
 #define CWIST_STATIC_RETIRE_NS TT_SECOND(5)
+
+/**
+ * @brief Tune system resource limits to handle high concurrency loads.
+ */
+static void cwist_app_tune_system(void) {
+    struct rlimit rl;
+    // Increase File Descriptor limit to 1050000 for C1M
+    if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
+        rl.rlim_cur = 1050000;
+        rl.rlim_max = 1050000;
+        if (setrlimit(RLIMIT_NOFILE, &rl) != 0) {
+            // Fallback to max if 1050000 is too high for the current user
+            rl.rlim_cur = rl.rlim_max;
+            setrlimit(RLIMIT_NOFILE, &rl);
+        }
+    }
+    
+    printf("[CWIST] System tuned for C100K connections.\n");}
 
 /**
  * @brief Read the current libttak tick count used for static-file retirement deadlines.
@@ -1825,16 +1851,22 @@ static void static_http_handler(int client_fd, void *ctx) {
         }
     }
 
-    char *read_buf = cwist_alloc(CWIST_HTTP_READ_BUFFER_SIZE);
-    if (!read_buf) {
-        close(client_fd);
-        return;
-    }
+    /* Apply Choi Seok-jeong's Lattice (Sanpan) for priority scaling. */
+    uint32_t tid = ttak_net_lattice_get_worker_id();
+    uint16_t node_id = (uint16_t)(client_fd % TTAK_MOLS_NODE_COUNT);
+    uint32_t mixed_seed = ttak_apply_mols_control(node_id, tid);
+    
+    /* Jeungseung Gaebang Scaling for priority weighting. */
+    uint32_t priority_weight = ((mixed_seed * 16777619U) >> 8) % 100;
+
+    /* Use stack-allocated buffer for zero-allocation ingress path.
+     * Aligned to cache line to optimize lattice-friendly access and prevent buffer loss. */
+    _Alignas(64) char read_buf[CWIST_HTTP_READ_BUFFER_SIZE];
     size_t buf_len = 0;
     read_buf[0] = '\0';
 
     while (true) {
-        cwist_http_request *req = cwist_http_receive_request(client_fd, read_buf, CWIST_HTTP_READ_BUFFER_SIZE, &buf_len);
+        cwist_http_request *req = cwist_http_receive_request(client_fd, read_buf, sizeof(read_buf), &buf_len);
         if (!req) {
             break;
         }
@@ -1886,10 +1918,17 @@ static void static_http_handler(int client_fd, void *ctx) {
             // --- Big Dumb Reply (Learn) ---
             bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
             bool endpoint_file = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FILE);
+            
+            /* Scale latency threshold using Lattice priority_weight (Jeungseung Gaebang) */
+            uint64_t scaled_threshold = (uint64_t)app->bdr_ctx->latency_threshold_ms;
+            if (priority_weight > 50) {
+                scaled_threshold = scaled_threshold * (100 - priority_weight) / 100;
+            }
+
             if (app->bdr_ctx &&
                 req->method == CWIST_HTTP_GET &&
                 !endpoint_file &&
-                (endpoint_fixed || duration_ms > (uint64_t)app->bdr_ctx->latency_threshold_ms)) {
+                (endpoint_fixed || duration_ms > scaled_threshold)) {
                 // Too slow! Cache it.
                 // We need to serialize the response we just sent.
                 // Note: This duplicates serialization work (once in send_response, once here).
@@ -1911,11 +1950,9 @@ static void static_http_handler(int client_fd, void *ctx) {
             break;
         }
     }
-    
-    cwist_free(read_buf);
+
     close(client_fd);
 }
-
 struct h3_thread_payload {
     int udp_fd;
     cwist_app *app;
@@ -1938,9 +1975,10 @@ int cwist_app_listen(cwist_app *app, int port) {
     // Ignore SIGPIPE
     signal(SIGPIPE, SIG_IGN);
     cwist_shutdown_install_handlers();
+    cwist_app_tune_system();
     if (!app) return -1;
     app->port = port;
-    
+
     // Validate protocol combinations for the same port
     if (app->use_ssl) {
         if (app->use_http2) {
@@ -1974,17 +2012,17 @@ int cwist_app_listen(cwist_app *app, int port) {
             udp_addr.sin_family = AF_INET;
             udp_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
             udp_addr.sin_port = htons(port);
-            
+
             int opt = 1;
             setsockopt(udp_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-#ifdef SO_REUSEPORT
+    #ifdef SO_REUSEPORT
             setsockopt(udp_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
-#endif
+    #endif
             int rcvbuf = 2 * 1024 * 1024;
             int sndbuf = 2 * 1024 * 1024;
             setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
             setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
-            
+
             if (bind(udp_fd, (struct sockaddr *)&udp_addr, sizeof(udp_addr)) == 0) {
                 struct h3_thread_payload *h3_p = malloc(sizeof(*h3_p));
                 if (h3_p) {
@@ -2008,16 +2046,6 @@ int cwist_app_listen(cwist_app *app, int port) {
             }
         }
     }
-    
-    struct sockaddr_in addr;
-    int server_fd = cwist_make_socket_ipv4(&addr, "0.0.0.0", port, 128);
-    if (server_fd < 0) {
-        perror("Failed to bind port");
-        return -1;
-    }
-    g_cwist_listen_fd = server_fd;
-    
-    printf("CWIST App running on port %d (SSL: %s)\n", port, app->use_ssl ? "On" : "Off");
 
     int workers = 1;
     const char *workers_env = getenv("CWIST_WORKERS");
@@ -2026,17 +2054,34 @@ int cwist_app_listen(cwist_app *app, int port) {
     for (int i = 1; i < workers; i++) {
         if (fork() == 0) break;
     }
+
+    struct sockaddr_in addr;
+    int server_fd = cwist_make_socket_ipv4(&addr, "0.0.0.0", port, 32768);
+
+    if (server_fd < 0) {
+        perror("Failed to bind port");
+        return -1;
+    }
+    g_cwist_listen_fd = server_fd;
     
-    if (app->use_ssl) {
-        if (!app->ssl_ctx) {
-            fprintf(stderr, "SSL enabled but context not initialized.\n");
-            g_cwist_listen_fd = -1;
-            return -1;
-        }
-        cwist_https_server_loop(server_fd, app->ssl_ctx, static_ssl_handler, app);
+    printf("CWIST App running on port %d (SSL: %s) [Event-driven]\n", port, app->use_ssl ? "On" : "Off");
+    
+    // Check config for non-blocking scale mode
+    const char *c1m = getenv("CWIST_C1M_MODE");
+    if (c1m && (c1m[0] == '1' || strcmp(c1m, "true") == 0)) {
+        cwist_async_server_loop(server_fd, app);
     } else {
-        cwist_server_config config = { .use_forking = false, .use_threading = true, .use_epoll = false };
-        cwist_http_server_loop(server_fd, &config, static_http_handler, app);
+        if (app->use_ssl) {
+            if (!app->ssl_ctx) {
+                fprintf(stderr, "SSL enabled but context not initialized.\n");
+                g_cwist_listen_fd = -1;
+                return -1;
+            }
+            cwist_https_server_loop(server_fd, app->ssl_ctx, static_ssl_handler, app);
+        } else {
+            cwist_server_config config = { .use_forking = false, .use_threading = true, .use_epoll = false };
+            cwist_http_server_loop(server_fd, &config, static_http_handler, app);
+        }
     }
 
     /* Graceful shutdown cleanup */

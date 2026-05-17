@@ -16,6 +16,122 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdint.h>
+#include <pthread.h>
+#include <stdbool.h>
+
+struct https_thread_payload {
+    int client_fd;
+    cwist_https_context *ctx;
+    void (*handler)(cwist_https_connection *, void *);
+    void *user_ctx;
+};
+
+/* --- Thread Pool for HTTPS --- */
+#define HTTPS_THREAD_POOL_SIZE 256
+#define HTTPS_TASK_QUEUE_SIZE 2097152
+
+typedef struct {
+    int client_fd;
+    cwist_https_context *ctx;
+    void (*handler)(cwist_https_connection *, void *);
+    void *user_ctx;
+} https_pool_task_t;
+
+typedef struct {
+    pthread_t threads[HTTPS_THREAD_POOL_SIZE];
+    https_pool_task_t queue[HTTPS_TASK_QUEUE_SIZE];
+    size_t head;
+    size_t tail;
+    size_t count;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond_not_empty;
+    pthread_cond_t cond_not_full;
+    int shutdown;
+} https_thread_pool_t;
+
+static https_thread_pool_t g_https_pool;
+
+// Forward declaration of existing https_thread_handler
+static void *https_thread_handler(void *arg);
+
+static void *https_pool_worker(void *arg) {
+    (void)arg;
+    while (1) {
+        pthread_mutex_lock(&g_https_pool.mutex);
+        while (g_https_pool.count == 0 && !g_https_pool.shutdown) {
+            pthread_cond_wait(&g_https_pool.cond_not_empty, &g_https_pool.mutex);
+        }
+        if (g_https_pool.shutdown) {
+            pthread_mutex_unlock(&g_https_pool.mutex);
+            break;
+        }
+        https_pool_task_t task = g_https_pool.queue[g_https_pool.head];
+        g_https_pool.head = (g_https_pool.head + 1) % HTTPS_TASK_QUEUE_SIZE;
+        g_https_pool.count--;
+        pthread_cond_signal(&g_https_pool.cond_not_full);
+        pthread_mutex_unlock(&g_https_pool.mutex);
+
+        // We can reuse the existing https_thread_handler logic by wrapping the task
+        struct https_thread_payload *payload = malloc(sizeof(*payload));
+        if (payload) {
+            payload->client_fd = task.client_fd;
+            payload->ctx = task.ctx;
+            payload->handler = task.handler;
+            payload->user_ctx = task.user_ctx;
+            https_thread_handler(payload);
+        } else {
+            close(task.client_fd);
+        }
+    }
+    return NULL;
+}
+
+static int https_pool_init(void) {
+    memset(&g_https_pool, 0, sizeof(g_https_pool));
+    pthread_mutex_init(&g_https_pool.mutex, NULL);
+    pthread_cond_init(&g_https_pool.cond_not_empty, NULL);
+    pthread_cond_init(&g_https_pool.cond_not_full, NULL);
+    for (int i = 0; i < HTTPS_THREAD_POOL_SIZE; i++) {
+        if (pthread_create(&g_https_pool.threads[i], NULL, https_pool_worker, NULL) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void https_pool_submit(int client_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx) {
+    pthread_mutex_lock(&g_https_pool.mutex);
+    while (g_https_pool.count >= HTTPS_TASK_QUEUE_SIZE && !g_https_pool.shutdown) {
+        pthread_cond_wait(&g_https_pool.cond_not_full, &g_https_pool.mutex);
+    }
+    if (g_https_pool.shutdown) {
+        pthread_mutex_unlock(&g_https_pool.mutex);
+        close(client_fd);
+        return;
+    }
+    g_https_pool.queue[g_https_pool.tail].client_fd = client_fd;
+    g_https_pool.queue[g_https_pool.tail].ctx = ctx;
+    g_https_pool.queue[g_https_pool.tail].handler = handler;
+    g_https_pool.queue[g_https_pool.tail].user_ctx = user_ctx;
+    g_https_pool.tail = (g_https_pool.tail + 1) % HTTPS_TASK_QUEUE_SIZE;
+    g_https_pool.count++;
+    pthread_cond_signal(&g_https_pool.cond_not_empty);
+    pthread_mutex_unlock(&g_https_pool.mutex);
+}
+
+static void https_pool_destroy(void) {
+    pthread_mutex_lock(&g_https_pool.mutex);
+    g_https_pool.shutdown = 1;
+    pthread_cond_broadcast(&g_https_pool.cond_not_empty);
+    pthread_mutex_unlock(&g_https_pool.mutex);
+    for (int i = 0; i < HTTPS_THREAD_POOL_SIZE; i++) {
+        pthread_join(g_https_pool.threads[i], NULL);
+    }
+    pthread_mutex_destroy(&g_https_pool.mutex);
+    pthread_cond_destroy(&g_https_pool.cond_not_empty);
+    pthread_cond_destroy(&g_https_pool.cond_not_full);
+}
+/* --- End Thread Pool --- */
 
 #define CWIST_ALPN_HTTP11       ((const unsigned char *)"\x08http/1.1")
 #define CWIST_ALPN_H2_HTTP11    ((const unsigned char *)"\x02h2\x08http/1.1")
@@ -474,13 +590,6 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
     return err;
 }
 
-struct https_thread_payload {
-    int client_fd;
-    cwist_https_context *ctx;
-    void (*handler)(cwist_https_connection *, void *);
-    void *user_ctx;
-};
-
 /**
  * @brief Worker entry point that performs the TLS handshake before dispatching.
  * @param arg Thread payload containing the accepted socket and dispatch callback.
@@ -520,6 +629,11 @@ cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, v
         return err;
     }
 
+    if (https_pool_init() != 0) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
     while (atomic_load(&g_cwist_running)) {
         struct sockaddr_in addr;
         socklen_t len = sizeof(addr);
@@ -531,24 +645,9 @@ cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, v
             continue;
         }
 
-        pthread_t thread;
-        struct https_thread_payload *payload = malloc(sizeof(*payload));
-        if (!payload) {
-            close(client_fd);
-            continue;
-        }
-        payload->client_fd = client_fd;
-        payload->ctx = ctx;
-        payload->handler = handler;
-        payload->user_ctx = user_ctx;
-
-        if (pthread_create(&thread, NULL, https_thread_handler, payload) == 0) {
-            pthread_detach(thread);
-        } else {
-            free(payload);
-            close(client_fd);
-        }
+        https_pool_submit(client_fd, ctx, handler, user_ctx);
     }
     
+    https_pool_destroy();
     return err;
 }

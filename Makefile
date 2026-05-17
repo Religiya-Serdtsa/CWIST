@@ -99,6 +99,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/https.c \
        src/net/http/mux.c \
        src/net/http/multipart.c \
+       src/net/http/async_server.c \
        lib/multipart-parser-c/multipart_parser.c \
        src/net/http/query.c \
        src/sys/session/session_manager.c \
@@ -137,6 +138,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/nats/cwist_nats.c \
        src/core/validation/bind.c \
        src/sys/io/io_uring_backend.c \
+       src/sys/io/reactor.c \
        src/sys/metrics/metrics.c \
        src/sys/health/healthz.c \
        $(IO_SRC)
