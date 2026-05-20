@@ -21,17 +21,8 @@ static void async_accept_cb(int fd, void *ctx) {
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);
     int client_fd;
-    while ((client_fd = accept(fd, (struct sockaddr*)&addr, &len)) >= 0) {
-        int flags = fcntl(client_fd, F_GETFL, 0);
-        if (flags < 0) {
-            close(client_fd);
-            continue;
-        }
-        if (fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-            close(client_fd);
-            continue;
-        }
 
+    while ((client_fd = accept(fd, (struct sockaddr*)&addr, &len)) >= 0) {
         if (app->use_ssl && app->ssl_ctx && app->https_request_handler) {
             https_pool_submit(client_fd, app->ssl_ctx, app->https_request_handler, app);
         } else {
@@ -39,6 +30,7 @@ static void async_accept_cb(int fd, void *ctx) {
             close(client_fd);
         }
     }
+
     /* Re-arm the listening socket so we can accept the next batch. */
     if (g_reactor) {
         cwist_reactor_add(g_reactor, fd, async_accept_cb, ctx);
