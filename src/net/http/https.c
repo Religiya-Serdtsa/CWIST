@@ -50,6 +50,7 @@ typedef struct {
 } https_thread_pool_t;
 
 static https_thread_pool_t g_https_pool;
+static bool g_https_pool_initialized = false;
 
 // Forward declaration of existing https_thread_handler
 static void *https_thread_handler(void *arg);
@@ -86,7 +87,8 @@ static void *https_pool_worker(void *arg) {
     return NULL;
 }
 
-static int https_pool_init(void) {
+int https_pool_init(void) {
+    if (g_https_pool_initialized) return 0;
     memset(&g_https_pool, 0, sizeof(g_https_pool));
     pthread_mutex_init(&g_https_pool.mutex, NULL);
     pthread_cond_init(&g_https_pool.cond_not_empty, NULL);
@@ -96,10 +98,11 @@ static int https_pool_init(void) {
             return -1;
         }
     }
+    g_https_pool_initialized = true;
     return 0;
 }
 
-static void https_pool_submit(int client_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx) {
+void https_pool_submit(int client_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx) {
     pthread_mutex_lock(&g_https_pool.mutex);
     while (g_https_pool.count >= HTTPS_TASK_QUEUE_SIZE && !g_https_pool.shutdown) {
         pthread_cond_wait(&g_https_pool.cond_not_full, &g_https_pool.mutex);
@@ -119,7 +122,8 @@ static void https_pool_submit(int client_fd, cwist_https_context *ctx, void (*ha
     pthread_mutex_unlock(&g_https_pool.mutex);
 }
 
-static void https_pool_destroy(void) {
+void https_pool_destroy(void) {
+    if (!g_https_pool_initialized) return;
     pthread_mutex_lock(&g_https_pool.mutex);
     g_https_pool.shutdown = 1;
     pthread_cond_broadcast(&g_https_pool.cond_not_empty);
@@ -130,6 +134,7 @@ static void https_pool_destroy(void) {
     pthread_mutex_destroy(&g_https_pool.mutex);
     pthread_cond_destroy(&g_https_pool.cond_not_empty);
     pthread_cond_destroy(&g_https_pool.cond_not_full);
+    g_https_pool_initialized = false;
 }
 /* --- End Thread Pool --- */
 

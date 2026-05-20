@@ -103,6 +103,13 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
  */
 cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *conn, void *), void *user_ctx);
 
+/**
+ * Thread pool helpers for hybrid async-accept + threaded-process mode.
+ */
+int https_pool_init(void);
+void https_pool_submit(int client_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx);
+void https_pool_destroy(void);
+
 /** --- Error Codes --- */
 /**
  * @brief Defined as errno-like constants used with `cwist_error_t` fields.

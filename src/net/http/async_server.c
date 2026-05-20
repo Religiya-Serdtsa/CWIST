@@ -14,65 +14,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-typedef struct {
-    int fd;
-    cwist_app *app;
-    cwist_https_connection *https_conn;
-    char *read_buf;
-    size_t buf_len;
-    size_t buf_cap;
-    bool is_tls;
-} async_conn_t;
-
 static cwist_reactor_t *g_reactor = NULL;
-
-static void async_client_cb(int fd, void *ctx) {
-    async_conn_t *conn = (async_conn_t *)ctx;
-    if (!conn) return;
-
-    if (conn->is_tls) {
-        if (!conn->https_conn) {
-            // Handshake phase
-            cwist_https_connection *hc = NULL;
-            cwist_error_t err = cwist_https_accept(conn->app->ssl_ctx, fd, &hc);
-            if (err.error.err_i16 == 0 && hc) {
-                conn->https_conn = hc;
-                cwist_reactor_mod(g_reactor, fd, async_client_cb, conn);
-            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                cwist_reactor_mod(g_reactor, fd, async_client_cb, conn);
-            } else {
-                cwist_reactor_del(g_reactor, fd);
-                close(fd);
-                cwist_free(conn);
-            }
-            return;
-        }
-
-        // Read phase
-        cwist_http_request *req = cwist_https_receive_request(conn->https_conn);
-        if (req) {
-            // Remove from reactor while processing
-            cwist_reactor_del(g_reactor, fd);
-            
-            // Note: In a fully non-blocking architecture, the router would also be non-blocking.
-            // For now, we process it inline. If it blocks, it will hold the reactor loop.
-            // A perfect implementation would hand off to a thread pool here, then resume reactor.
-            
-            // Actually, we MUST hand off to thread pool if we want to process parallel CPU bounds!
-            // But to pass C1M, the fast path is to process it inline if it's simple, or thread pool.
-        } else {
-             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                 cwist_reactor_mod(g_reactor, fd, async_client_cb, conn);
-             } else {
-                 cwist_reactor_del(g_reactor, fd);
-                 cwist_https_close_connection(conn->https_conn);
-                 cwist_free(conn);
-             }
-        }
-    } else {
-        // Cleartext HTTP
-    }
-}
 
 static void async_accept_cb(int fd, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
@@ -81,29 +23,48 @@ static void async_accept_cb(int fd, void *ctx) {
     int client_fd;
     while ((client_fd = accept(fd, (struct sockaddr*)&addr, &len)) >= 0) {
         int flags = fcntl(client_fd, F_GETFL, 0);
-        fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
-        
-        async_conn_t *conn = cwist_alloc(sizeof(async_conn_t));
-        memset(conn, 0, sizeof(*conn));
-        conn->fd = client_fd;
-        conn->app = app;
-        conn->is_tls = app->use_ssl;
-        conn->buf_cap = CWIST_HTTP_READ_BUFFER_SIZE;
-        conn->read_buf = cwist_alloc(conn->buf_cap);
-        
-        cwist_reactor_add(g_reactor, client_fd, async_client_cb, conn);
+        if (flags < 0) {
+            close(client_fd);
+            continue;
+        }
+        if (fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+            close(client_fd);
+            continue;
+        }
+
+        if (app->use_ssl && app->ssl_ctx && app->https_request_handler) {
+            https_pool_submit(client_fd, app->ssl_ctx, app->https_request_handler, app);
+        } else {
+            /* Cleartext HTTP is not implemented in async path yet. */
+            close(client_fd);
+        }
     }
 }
 
 cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
-    cwist_error_t err = make_error(CWIST_ERR_INT16);
-    
+    cwist_error_t err;
+    memset(&err, 0, sizeof(err));
+    err.errtype = CWIST_ERR_INT16;
+    err.error.err_i16 = -1;
+
+    if (app->use_ssl) {
+        if (https_pool_init() != 0) {
+            fprintf(stderr, "[async] Failed to init HTTPS thread pool\n");
+            return err;
+        }
+    }
+
     int flags = fcntl(server_fd, F_GETFL, 0);
-    fcntl(server_fd, F_SETFL, flags | O_NONBLOCK);
+    if (flags < 0 || fcntl(server_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        perror("[async] Failed to set server socket non-blocking");
+        if (app->use_ssl) https_pool_destroy();
+        return err;
+    }
 
     g_reactor = cwist_reactor_create();
     if (!g_reactor) {
-        err.error.err_i16 = -1;
+        fprintf(stderr, "[async] Failed to create reactor\n");
+        if (app->use_ssl) https_pool_destroy();
         return err;
     }
 
@@ -113,6 +74,12 @@ cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
     cwist_reactor_run(g_reactor);
 
     cwist_reactor_destroy(g_reactor);
+    g_reactor = NULL;
+
+    if (app->use_ssl) {
+        https_pool_destroy();
+    }
+
     err.error.err_i16 = 0;
     return err;
 }
