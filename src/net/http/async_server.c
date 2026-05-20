@@ -39,6 +39,10 @@ static void async_accept_cb(int fd, void *ctx) {
             close(client_fd);
         }
     }
+    /* Re-arm the listening socket so we can accept the next batch. */
+    if (g_reactor) {
+        cwist_reactor_add(g_reactor, fd, async_accept_cb, ctx);
+    }
 }
 
 cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
