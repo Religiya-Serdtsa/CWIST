@@ -329,6 +329,7 @@ static bool cwist_prepare_static(cwist_app *app, cwist_http_request *req, cwist_
 static void cwist_static_handler(cwist_http_request *req, cwist_http_response *res);
 static void cwist_multiport_destroy_owned_subapps(cwist_app *root);
 static void cwist_multiport_unlink_app(cwist_app *app);
+static void cwist_multiport_h3_copy_tunables(cwist_http3_context *dst, const cwist_http3_context *src);
 
 /**
  * @brief Detect whether a route pattern contains colon-prefixed path parameters.
@@ -945,7 +946,7 @@ static void cwist_app_refresh_https_request_handler(cwist_app *app) {
  */
 static cwist_error_t cwist_app_refresh_http3_context(cwist_app *app) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
-    if (!app || !app->cert_path || !app->key_path) {
+    if (!app) {
         err.error.err_i16 = -1;
         return err;
     }
@@ -1972,10 +1973,22 @@ typedef struct cwist_multiport_slot {
     struct cwist_multiport_slot *next;
 } cwist_multiport_slot;
 
+typedef struct cwist_multiport_h3_listener {
+    unsigned short port;
+    int udp_fd;
+    pthread_t thread;
+    bool thread_started;
+    bool running;
+    cwist_app *app;
+    cwist_http3_context *ctx;
+} cwist_multiport_h3_listener;
+
 typedef struct cwist_multiport_group {
     cwist_app *root;
     unsigned short public_port;
     cwist_multiport_slot *slots;
+    cwist_multiport_h3_listener h3_listeners[CWIST_MULTIPORT_MAX_PORTS];
+    size_t h3_listener_count;
     struct cwist_multiport_group *next;
 } cwist_multiport_group;
 
@@ -2082,6 +2095,34 @@ static void cwist_multiport_unlink_app(cwist_app *app) {
 }
 
 /**
+ * @brief Stop every HTTP/3 fan-out listener attached to a multiport group.
+ * @param group Multiport group that owns the listener array.
+ */
+static void cwist_multiport_h3_stop_group(cwist_multiport_group *group) {
+    if (!group) return;
+    for (size_t i = 0; i < group->h3_listener_count; i++) {
+        cwist_multiport_h3_listener *listener = &group->h3_listeners[i];
+        if (listener->ctx) {
+            listener->ctx->running = 0;
+        }
+        if (listener->udp_fd >= 0) {
+            close(listener->udp_fd);
+            listener->udp_fd = -1;
+        }
+        if (listener->thread_started) {
+            pthread_join(listener->thread, NULL);
+            listener->thread_started = false;
+            listener->running = false;
+        }
+        if (listener->ctx) {
+            cwist_http3_destroy_context(listener->ctx);
+            listener->ctx = NULL;
+        }
+    }
+    group->h3_listener_count = 0;
+}
+
+/**
  * @brief Destroy sub-apps owned by a root multiport group and remove that group.
  * @param root Root application being destroyed.
  */
@@ -2094,6 +2135,8 @@ static void cwist_multiport_destroy_owned_subapps(cwist_app *root) {
             link = &group->next;
             continue;
         }
+
+        cwist_multiport_h3_stop_group(group);
 
         cwist_multiport_slot *slot = group->slots;
         while (slot) {
@@ -2242,6 +2285,9 @@ static cwist_app *cwist_app_clone_for_multiport(cwist_app *src) {
     if (src->use_http3) {
         cwist_app_use_http3(dst, true);
     }
+    if (src->h3_ctx && dst->h3_ctx) {
+        cwist_multiport_h3_copy_tunables(dst->h3_ctx, src->h3_ctx);
+    }
     if (src->db_path && !src->nuke_enabled) {
         cwist_app_use_db(dst, src->db_path);
     }
@@ -2373,6 +2419,225 @@ static cwist_app *cwist_multiport_bound_app(cwist_multiport_group *group, cwist_
 }
 
 /**
+ * @brief Copy HTTP/3 tunables from one context into another fresh context.
+ * @param dst Destination runtime context.
+ * @param src Source template context.
+ */
+static void cwist_multiport_h3_copy_tunables(cwist_http3_context *dst, const cwist_http3_context *src) {
+    if (!dst || !src) return;
+    dst->push_enabled = src->push_enabled;
+    dst->early_data_enabled = src->early_data_enabled;
+    dst->allow_migration = src->allow_migration;
+    dst->datagram_enabled = src->datagram_enabled;
+    dst->datagram_cb = src->datagram_cb;
+    dst->datagram_user_ctx = src->datagram_user_ctx;
+    dst->wt_handler = src->wt_handler;
+    dst->idle_timeout_ms = src->idle_timeout_ms;
+    dst->handshake_timeout_ms = src->handshake_timeout_ms;
+    dst->ping_period_ms = src->ping_period_ms;
+    dst->noprogress_timeout_ms = src->noprogress_timeout_ms;
+}
+
+/**
+ * @brief Create a fresh HTTP/3 context for one multiport UDP listener.
+ * @param app Application whose protocol settings should be copied.
+ * @param out Receives the newly allocated HTTP/3 context.
+ * @return Tagged CWIST error describing success or failure.
+ */
+static cwist_error_t cwist_multiport_h3_context_create(cwist_app *app, cwist_http3_context **out) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app || !out) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+    *out = NULL;
+
+    if (app->use_https3) {
+        if (!app->cert_path || !app->key_path) {
+            err.error.err_i16 = -1;
+            return err;
+        }
+        err = cwist_http3_init_context(out, app->cert_path, app->key_path);
+    } else if (app->use_http3) {
+        err = cwist_http3_init_context_ephemeral(out);
+    } else {
+        err.error.err_i16 = 0;
+        return err;
+    }
+
+    if (err.error.err_i16 == 0 && app->h3_ctx && *out) {
+        cwist_multiport_h3_copy_tunables(*out, app->h3_ctx);
+    }
+    return err;
+}
+
+/**
+ * @brief Bind a UDP socket for one HTTP/3 multiport listener.
+ * @param port UDP port to bind.
+ * @return UDP socket fd on success, or -1 on failure.
+ */
+static int cwist_multiport_bind_udp(unsigned short port) {
+    int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udp_fd < 0) return -1;
+
+    struct sockaddr_in udp_addr;
+    memset(&udp_addr, 0, sizeof(udp_addr));
+    udp_addr.sin_family = AF_INET;
+    udp_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    udp_addr.sin_port = htons(port);
+
+    int opt = 1;
+    setsockopt(udp_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#ifdef SO_REUSEPORT
+    setsockopt(udp_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+#endif
+    int rcvbuf = 2 * 1024 * 1024;
+    int sndbuf = 2 * 1024 * 1024;
+    setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+    setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
+
+    if (bind(udp_fd, (struct sockaddr *)&udp_addr, sizeof(udp_addr)) != 0) {
+        close(udp_fd);
+        return -1;
+    }
+    return udp_fd;
+}
+
+/**
+ * @brief Run one HTTP/3 multiport listener thread.
+ * @param arg Pointer to cwist_multiport_h3_listener.
+ * @return Always NULL.
+ */
+static void *cwist_multiport_h3_thread(void *arg) {
+    cwist_multiport_h3_listener *listener = (cwist_multiport_h3_listener *)arg;
+    if (!listener || !listener->ctx || !listener->app) return NULL;
+    cwist_http3_server_loop(listener->udp_fd, listener->ctx, static_http3_route_bridge, listener->app);
+    listener->running = false;
+    return NULL;
+}
+
+/**
+ * @brief Start one HTTP/3 UDP fan-out listener for a bound port.
+ * @param group Multiport group that owns the listener slot.
+ * @param app Application assigned to the port.
+ * @param port UDP/TCP port number.
+ * @return 0 on success, or -1 on failure.
+ */
+static int cwist_multiport_h3_start_one(cwist_multiport_group *group, cwist_app *app, unsigned short port) {
+    if (!group || !app || (!app->use_http3 && !app->use_https3)) return 0;
+    if (group->h3_listener_count >= CWIST_MULTIPORT_MAX_PORTS) return -1;
+
+    cwist_multiport_h3_listener *listener = &group->h3_listeners[group->h3_listener_count];
+    memset(listener, 0, sizeof(*listener));
+    listener->port = port;
+    listener->udp_fd = -1;
+    listener->app = app;
+
+    cwist_error_t err = cwist_multiport_h3_context_create(app, &listener->ctx);
+    if (err.error.err_i16 < 0 || !listener->ctx) {
+        return -1;
+    }
+
+    listener->udp_fd = cwist_multiport_bind_udp(port);
+    if (listener->udp_fd < 0) {
+        cwist_http3_destroy_context(listener->ctx);
+        listener->ctx = NULL;
+        return -1;
+    }
+
+    if (pthread_create(&listener->thread, NULL, cwist_multiport_h3_thread, listener) != 0) {
+        close(listener->udp_fd);
+        listener->udp_fd = -1;
+        cwist_http3_destroy_context(listener->ctx);
+        listener->ctx = NULL;
+        return -1;
+    }
+
+    listener->thread_started = true;
+    listener->running = true;
+    group->h3_listener_count++;
+    if (g_cwist_udp_fd < 0) {
+        g_cwist_udp_fd = listener->udp_fd;
+    }
+    printf("CWIST multiport HTTP/3 fan-out listening on UDP port %hu\n", port);
+    return 0;
+}
+
+/**
+ * @brief Start HTTP/3 UDP fan-out listeners for every bound multiport app.
+ * @param group Multiport group.
+ * @param root Root application.
+ * @param bind_ports Bound TCP port list.
+ * @param port_count Number of entries in bind_ports.
+ * @return 0 on success, or -1 on any listener failure.
+ */
+static int cwist_multiport_h3_start_all(cwist_multiport_group *group,
+                                        cwist_app *root,
+                                        const unsigned short *bind_ports,
+                                        size_t port_count) {
+    if (!group || !root || !bind_ports) return -1;
+    cwist_multiport_h3_stop_group(group);
+    for (size_t i = 0; i < port_count; i++) {
+        cwist_app *port_app = cwist_multiport_bound_app(group, root, bind_ports[i]);
+        if (cwist_multiport_h3_start_one(group, port_app, bind_ports[i]) != 0) {
+            cwist_multiport_h3_stop_group(group);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * @brief Validate protocol combinations for a port-bound application.
+ * @param app Application assigned to the port.
+ * @param port Port number used for diagnostics.
+ * @return 0 when valid, or -1 when invalid.
+ */
+static int cwist_multiport_validate_port_app(cwist_app *app, unsigned short port) {
+    if (!app) return -1;
+    if (app->use_ssl && app->use_http2) {
+        fprintf(stderr, "Port %hu invalid: cleartext HTTP/2 cannot share a TLS listener.\n", port);
+        return -1;
+    }
+    if (!app->use_ssl && app->use_https2) {
+        fprintf(stderr, "Port %hu invalid: HTTPS/2 requires cwist_app_use_https.\n", port);
+        return -1;
+    }
+    if (app->use_ssl && !app->ssl_ctx) {
+        fprintf(stderr, "Port %hu invalid: SSL enabled but context not initialized.\n", port);
+        return -1;
+    }
+    if (app->use_http3 && app->use_https3) {
+        fprintf(stderr, "Port %hu invalid: ephemeral HTTP/3 and TLS HTTP/3 cannot both be enabled.\n", port);
+        return -1;
+    }
+    if (app->use_https3 && (!app->cert_path || !app->key_path)) {
+        fprintf(stderr, "Port %hu invalid: HTTPS/3 requires certificate and key paths.\n", port);
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * @brief Check whether any bound app needs the HTTPS worker pool.
+ * @param group Multiport group.
+ * @param root Root application.
+ * @param bind_ports Bound port list.
+ * @param port_count Number of entries in bind_ports.
+ * @return true when at least one assigned app uses TLS over TCP.
+ */
+static bool cwist_multiport_needs_https_pool(cwist_multiport_group *group,
+                                             cwist_app *root,
+                                             const unsigned short *bind_ports,
+                                             size_t port_count) {
+    for (size_t i = 0; i < port_count; i++) {
+        cwist_app *port_app = cwist_multiport_bound_app(group, root, bind_ports[i]);
+        if (port_app && port_app->use_ssl) return true;
+    }
+    return false;
+}
+
+/**
  * @brief Facade listener that serves one cwist_app over multiple TCP ports.
  *
  * The additional ports are counted in cwist_multiport_t so callers can pass a
@@ -2435,6 +2700,14 @@ int cwist_app_multiport(cwist_app **app_ref, unsigned short public_port, cwist_m
         }
     }
 
+    for (size_t i = 0; i < port_count; i++) {
+        cwist_app *port_app = cwist_multiport_bound_app(group, app, bind_ports[i]);
+        if (cwist_multiport_validate_port_app(port_app, bind_ports[i]) != 0) {
+            return -1;
+        }
+    }
+    bool needs_https_pool = cwist_multiport_needs_https_pool(group, app, bind_ports, port_count);
+
     struct pollfd pfds[CWIST_MULTIPORT_MAX_PORTS];
     for (size_t i = 0; i < port_count; i++) {
         pfds[i].fd = -1;
@@ -2460,8 +2733,15 @@ int cwist_app_multiport(cwist_app **app_ref, unsigned short public_port, cwist_m
         printf("CWIST multiport facade listening on TCP port %hu\n", bind_ports[i]);
     }
 
-    if (app->use_ssl && https_pool_init() != 0) {
+    if (cwist_multiport_h3_start_all(group, app, bind_ports, port_count) != 0) {
+        fprintf(stderr, "Failed to initialize multiport HTTP/3 fan-out.\n");
+        cwist_multiport_close_all(pfds, port_count);
+        return -1;
+    }
+
+    if (needs_https_pool && https_pool_init() != 0) {
         fprintf(stderr, "Failed to initialize HTTPS worker pool.\n");
+        cwist_multiport_h3_stop_group(group);
         cwist_multiport_close_all(pfds, port_count);
         return -1;
     }
@@ -2506,11 +2786,13 @@ int cwist_app_multiport(cwist_app **app_ref, unsigned short public_port, cwist_m
         }
     }
 
-    if (app->use_ssl) {
+    if (needs_https_pool) {
         https_pool_destroy();
     }
+    cwist_multiport_h3_stop_group(group);
     cwist_multiport_close_all(pfds, port_count);
     g_cwist_listen_fd = -1;
+    g_cwist_udp_fd = -1;
 
     if (app->mem_manager) {
         app->mem_manager->watcher_running = false;
