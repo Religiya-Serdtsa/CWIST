@@ -13,9 +13,10 @@ Spring Boot나 ReactJS에 익숙한 개발자라면 환영합니다! CWIST는 C 
 4. [미들웨어 (CORS, Logging)](#4-미들웨어-cors-logging)
 5. [데이터베이스와 마이그레이션 (SQLite)](#5-데이터베이스와-마이그레이션-sqlite)
 6. [인증 (JWT 및 DB 암호화)](#6-인증-jwt-및-db-암호화)
-7. [웹소켓 연동 (실시간 양방향 통신)](#7-웹소켓-연동-실시간-양방향-통신)
-8. [템플릿 엔진과 정적 파일 제공](#8-템플릿-엔진과-정적-파일-제공)
-9. [동적 CSS 합성기 (WASM 및 SSR)](#9-동적-css-합성기-wasm-및-ssr)
+7. [PQC TLS (양자내성 하이브리드 키 교환)](#7-pqc-tls-양자내성-하이브리드-키-교환)
+8. [웹소켓 연동 (실시간 양방향 통신)](#8-웹소켓-연동-실시간-양방향-통신)
+9. [템플릿 엔진과 정적 파일 제공](#9-템플릿-엔진과-정적-파일-제공)
+10. [동적 CSS 합성기 (WASM 및 SSR)](#10-동적-css-합성기-wasm-및-ssr)
 
 ---
 
@@ -258,7 +259,44 @@ cwist_error_t auth_middleware(cwist_http_request *req, cwist_http_response *res)
 
 ---
 
-## 7. 웹소켓 연동 (실시간 양방향 통신)
+## 7. PQC TLS (양자내성 하이브리드 키 교환)
+
+CWIST는 단 한 줄의 코드로 양자내성(Post-Quantum) 하이브리드 TLS를 활성화할 수 있습니다. 이는 기존 X25519 ECDH에 NIST 표준 ML-KEM-768(Kyber 계열)을 결합한 hybrid KEM 방식으로, 양자 컴퓨터 환경에서도 키 교환이 안전합니다.
+
+```c
+#include <cwist/sys/app/app.h>
+
+int main() {
+    cwist_app *app = cwist_app_create();
+
+    // HTTPS 활성화
+    cwist_app_use_https(app, "server.crt", "server.key");
+
+    // PQC 하이브리드 레이어 활성화 — 한 줄이면 충분
+    cwist_app_use_pqc_layer(app, true);
+
+    // 이제 모든 TLS 1.3 연결은 X25519MLKEM768:X25519:P-256 그룹을 사용합니다.
+    // TLS 1.2 이하는 자동 비활성화됩니다.
+    cwist_app_listen(app, 8443);
+    cwist_app_destroy(app);
+    return 0;
+}
+```
+
+### 보안 정책 요약
+
+| 항목 | 설정 |
+|------|------|
+| Key Exchange Group | `X25519MLKEM768:X25519:P-256` |
+| 최소 TLS 버전 | 1.3 |
+| 레거시 TLS | 비활성화 (1.0, 1.1, 1.2 제거) |
+| downgrade 보호 | 활성화 |
+
+> **참고**: 이 설정은 **transport 계층**의 키 교환에만 적용됩니다. 인증서 서명(signature)까지 PQC로 전환하려면 별도의 `cwist_app_use_pqc_cert()` 같은 기능이 필요하며, 이는 현재 생태계에서 아직 과도한 단계로 간주됩니다.
+
+---
+
+## 8. 웹소켓 연동 (실시간 양방향 통신)
 
 CWIST는 동일한 포트와 라우터 안에서 HTTP 통신을 WebSocket으로 쉽게 업그레이드 할 수 있습니다.
 
@@ -300,7 +338,7 @@ int main() {
 
 ---
 
-## 8. 템플릿 엔진과 정적 파일 제공
+## 9. 템플릿 엔진과 정적 파일 제공
 
 HTML 기반의 SSR(Server-Side Rendering) 프로젝트를 구축하거나, React의 빌드 결과물(정적 파일)을 서비스할 때 유용합니다.
 

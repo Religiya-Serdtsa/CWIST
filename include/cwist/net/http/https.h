@@ -36,6 +36,8 @@ typedef struct cwist_https_connection {
     bool http3_enabled;
 } cwist_https_connection;
 
+typedef struct cwist_app cwist_app;
+
 typedef struct cwist_https_options {
     bool enable_http2;
     bool enable_http3;
@@ -57,7 +59,8 @@ cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *ce
 cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
                                                     const char *cert_path,
                                                     const char *key_path,
-                                                    const cwist_https_options *options);
+                                                    const cwist_https_options *options,
+                                                    cwist_app *app);
 
 /**
  * Destroy the HTTPS context and cleanup OpenSSL.

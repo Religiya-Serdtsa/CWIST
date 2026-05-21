@@ -2,14 +2,15 @@
 
 *Header:* `<cwist/net/http/https.h>`
 
-Secure transport layer utilizing OpenSSL.
+Secure transport layer utilizing BoringSSL with optional post-quantum cryptography (PQC).
 
 ### `cwist_https_init_context`
 ```c
 cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *cert_path, const char *key_path);
 ```
-Initializes OpenSSL context and loads certificates.
-The context enforces TLS 1.2+ and disables TLS-level compression.
+Initializes the TLS context and loads certificates.
+The context enforces TLS 1.3+ and disables TLS-level compression.
+When the PQC layer is enabled via `cwist_app_use_pqc_layer()`, the context additionally restricts key exchange to the hybrid group `X25519MLKEM768:X25519:P-256`, combining the NIST-standard ML-KEM-768 (Kyber) with classical X25519 ECDH for quantum-resistant transport.
 
 ### `cwist_https_init_context_with_options`
 ```c

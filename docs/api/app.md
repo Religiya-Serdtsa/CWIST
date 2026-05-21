@@ -28,6 +28,15 @@ When enabled, CWIST rebuilds the TLS context with an HTTP/2-compatible TLS profi
 The HTTP/2 handler feeds decoded requests into the existing routing/middleware stack, so handler code does not need to change.
 The current implementation is intentionally narrow: one request stream is handled at a time per TLS connection, with support for the standard client preface, `SETTINGS`, `HEADERS`, `CONTINUATION`, `DATA`, `PING`, and `GOAWAY`.
 
+### `cwist_app_use_pqc_layer`
+```c
+void cwist_app_use_pqc_layer(cwist_app *app, bool enabled);
+```
+Enables the post-quantum cryptography (PQC) hybrid TLS layer.
+When `enabled` is `true`, CWIST forces `X25519MLKEM768:X25519:P-256` as the key-exchange group list, sets TLS 1.3 as the minimum version, and disables all legacy TLSv1.0–1.2 cipher suites.
+This provides **transport-layer quantum resistance** via the NIST-standard ML-KEM-768 (Kyber) hybridized with classical X25519 ECDH, without requiring any OpenSSL knowledge from the application.
+Application code never touches BoringSSL directly.
+
 ### `cwist_app_use_db`
 ```c
 cwist_error_t cwist_app_use_db(cwist_app *app, const char *db_path);

@@ -58,6 +58,7 @@ example/simple-server/simple-server
 example/cde-json-viewer/cde-json-viewer
 example/rps-showcase/rps-showcase
 example/micro/*/*
+!example/micro/*/main.c
 
 # Test binaries
 test_rdbms_auto_mount

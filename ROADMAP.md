@@ -84,6 +84,7 @@
 | JWT (encode/decode/verify) | ✅ | HS256 / RS256 |
 | Database Encryption | ✅ | `db_crypt` layer |
 | ECH (Encrypted Client Hello) | ✅ | BoringSSL ECH |
+| **PQC Hybrid KEM (TLS)** | ✅ | `cwist_app_use_pqc_layer` forces `X25519MLKEM768:X25519:P-256`, TLS 1.3 only |
 | **CSRF Protection** | ⏳ | No double-submit cookie or synchronizer token |
 | **Secure Headers** | ⏳ | No automatic HSTS, CSP, X-Frame-Options injection |
 | **Request Size Limits** | 🔄 | HTTP/3 has body limit; HTTP/1.1/2 limits need audit |

@@ -64,7 +64,7 @@ static void test_https_alpn_negotiates_h2_and_http11_fallback(void) {
     printf("Testing HTTPS ALPN negotiation and HTTP/1.1 fallback...\n");
     cwist_https_options options = { .enable_http2 = true };
     cwist_https_context *ctx = NULL;
-    cwist_error_t err = cwist_https_init_context_with_options(&ctx, TEST_CERT, TEST_KEY, &options);
+    cwist_error_t err = cwist_https_init_context_with_options(&ctx, TEST_CERT, TEST_KEY, &options, NULL);
     assert(err.errtype == CWIST_ERR_INT16);
     assert(err.error.err_i16 == 0);
 
