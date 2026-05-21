@@ -2066,9 +2066,15 @@ int cwist_app_listen(cwist_app *app, int port) {
     
     printf("CWIST App running on port %d (SSL: %s) [Event-driven]\n", port, app->use_ssl ? "On" : "Off");
     
-    // Check config for non-blocking scale mode
+    // Check config for non-blocking scale mode (default enabled)
     const char *c1m = getenv("CWIST_C1M_MODE");
-    if (c1m && (c1m[0] == '1' || strcmp(c1m, "true") == 0)) {
+    bool use_c1m = true;
+    if (c1m) {
+        if (c1m[0] == '0' || strcmp(c1m, "false") == 0) {
+            use_c1m = false;
+        }
+    }
+    if (use_c1m) {
         cwist_async_server_loop(server_fd, app);
     } else {
         if (app->use_ssl) {
