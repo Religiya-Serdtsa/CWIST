@@ -250,7 +250,52 @@ cwist_error_t cwist_app_static_with_cache(cwist_app *app, const char *url_prefix
 
 /** @name Startup */
 /** @{ */
+
+#ifndef CWIST_MULTIPORT_MAX_PORTS
+#define CWIST_MULTIPORT_MAX_PORTS 64
+#endif
+
+/**
+ * @brief Counted multiport descriptor created from a normal C array.
+ */
+typedef struct cwist_multiport_t {
+    unsigned short ports[CWIST_MULTIPORT_MAX_PORTS]; ///< Additional TCP ports.
+    size_t count; ///< Number of valid entries in ports.
+    bool valid; ///< False when construction failed, e.g. too many ports.
+} cwist_multiport_t;
+
+/**
+ * @brief Create a counted multiport descriptor from an explicit pointer and length.
+ * @param ports Source port array.
+ * @param count Number of elements in ports.
+ * @return Counted descriptor accepted by cwist_app_multiport().
+ */
+cwist_multiport_t cwist_create_multiport_from_array(const unsigned short *ports, size_t count);
+
+/**
+ * @brief Create a counted multiport descriptor from a real C array.
+ * @param ports Real C array, not a decayed pointer.
+ */
+#define cwist_create_multiport(ports) cwist_create_multiport_from_array((ports), sizeof(ports) / sizeof((ports)[0]))
+
 int cwist_app_listen(cwist_app *app, int port);
+
+/**
+ * @brief Start one app facade across a public port and counted backend port list.
+ * @param app_ref Address of the cwist_app pointer (use: cwist_app_multiport(&app, 443, ports)).
+ * @param public_port Primary public TCP port.
+ * @param ports Additional TCP ports created by cwist_create_multiport().
+ * @return 0 after graceful shutdown, or -1 on validation/bind failure.
+ */
+int cwist_app_multiport(cwist_app **app_ref, unsigned short public_port, cwist_multiport_t ports);
+
+/**
+ * @brief Detach one additional multiport port into its own tunable application.
+ * @param app_ref Address of the root cwist_app pointer.
+ * @param port Additional port to detach. The public/default port is rejected by cwist_app_multiport().
+ * @return Detached sub-application for per-port tuning, or NULL on allocation failure.
+ */
+cwist_app *cwist_multiport_get_app(cwist_app **app_ref, unsigned short port);
 /** @} */
 
 /**

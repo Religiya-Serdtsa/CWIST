@@ -15,6 +15,14 @@
 
 ---
 
+## Current Snapshot
+
+- Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are already implemented in-tree.
+- The application layer is being extended with a multiport facade: `cwist_multiport_t` converts normal C port arrays into counted descriptors, and `cwist_multiport_get_app(&app, port)` is intended to detach an additional port into a tunable sub-application.
+- Current multiport work builds as part of `libcwist.a`, but still needs focused tests, API docs, and protocol parity hardening before it should be marked stable.
+
+---
+
 ## 1. Transport Layer
 
 | Feature | Status | Notes |
@@ -35,6 +43,8 @@
 | ECN (Explicit Congestion Notification) | ✅ | UDP socket with `IP_RECVTOS` / `IPV6_RECVTCLASS` |
 | Connection Migration | ✅ | `es_allow_migration` enabled |
 | 0-RTT Early Data | ✅ | `SSL_CTX_set_early_data_enabled` |
+| **Multiport TCP Facade** | 🔄 | Counted `cwist_multiport_t` descriptor and shared accept loop are in progress; per-port tests and docs pending |
+| **Multiport HTTP/3 Fan-out** | ⏳ | Needs one UDP socket/context per bound port, with global settings copied unless the port is detached into a sub-app |
 
 ---
 
@@ -63,6 +73,7 @@
 | **Per-Status Error Handlers** | ✅ | `cwist_app_register_error_handler` for custom 404, 500, etc. |
 | **URL Reverse Routing** | ✅ | `cwist_app_get_named` + `cwist_url_for` with param substitution |
 | **Flash Messages** | ✅ | One-time session-scoped messages via `cwist_flash_get/set` |
+| **Per-Port Sub-Applications** | 🔄 | `cwist_multiport_get_app(&app, port)` detaches additional ports for independent tuning; public/default port must remain owned by root app |
 
 ---
 
@@ -139,23 +150,25 @@
 8. ~~**Rate Limiting** middleware~~ ✅
 9. ~~**Caching** (ETag generation + in-memory cache)~~ ✅
 10. ~~**Health Check** endpoints~~ ✅
+11. **Multiport facade hardening** 🔄: counted port descriptor, per-port sub-app lifecycle, duplicate/default-port validation, and smoke tests
 
 ### P2 — Developer Velocity
-11. **Hot Reload** for development
-12. **CLI Tooling** (project scaffold, route generator)
-13. ~~**Configuration** loader (`.env`, `.toml`)~~ ✅
-14. **Test Harness** with HTTP mock client 🔄
+12. **Hot Reload** for development
+13. **CLI Tooling** (project scaffold, route generator)
+14. ~~**Configuration** loader (`.env`, `.toml`)~~ ✅
+15. **Test Harness** with HTTP mock client 🔄
 
 ### P3 — Advanced Protocols
-15. ~~**WebTransport** server + client~~ ✅ (basic server handler)
-16. ~~**HTTP/2 Server Push**~~ ✅
-17. **io_uring** UDP packet loop for HTTP/3 🔄
-18. **kqueue** backend for macOS/BSD
+16. ~~**WebTransport** server + client~~ ✅ (basic server handler)
+17. ~~**HTTP/2 Server Push**~~ ✅
+18. **io_uring** UDP packet loop for HTTP/3 🔄
+19. **kqueue** backend for macOS/BSD
+20. **Multiport HTTP/3 parity** ⏳: per-port UDP contexts and global setting propagation to non-detached ports
 
 ### P4 — Ecosystem
-19. **gRPC** support
-20. **GraphQL** executor
-21. **OpenAPI** generator
+21. **gRPC** support
+22. **GraphQL** executor
+23. **OpenAPI** generator
 
 ---
 

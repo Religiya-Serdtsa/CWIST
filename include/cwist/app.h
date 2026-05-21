@@ -123,15 +123,48 @@ void cwist_app_enable_metrics(cwist_app *app);
  */
 void cwist_app_enable_healthz(cwist_app *app);
 
-/** @}
+/** @} */
 
 /** @name Startup */
 /** @{ */
+
+#ifndef CWIST_MULTIPORT_MAX_PORTS
+#define CWIST_MULTIPORT_MAX_PORTS 64
+#endif
+
+/**
+ * @brief Counted multiport descriptor created from a normal C array.
+ */
+typedef struct cwist_multiport_t {
+    unsigned short ports[CWIST_MULTIPORT_MAX_PORTS];
+    size_t count;
+    bool valid;
+} cwist_multiport_t;
+
+/**
+ * @brief Create a counted multiport descriptor from an explicit pointer and length.
+ */
+cwist_multiport_t cwist_create_multiport_from_array(const unsigned short *ports, size_t count);
+
+/**
+ * @brief Create a counted multiport descriptor from a real C array.
+ */
+#define cwist_create_multiport(ports) cwist_create_multiport_from_array((ports), sizeof(ports) / sizeof((ports)[0]))
 
 /**
  * @brief Start listening on a port.
  */
 int cwist_app_listen(cwist_app *app, int port);
+
+/**
+ * @brief Start one app facade across a public port and counted backend port list.
+ */
+int cwist_app_multiport(cwist_app **app_ref, unsigned short public_port, cwist_multiport_t ports);
+
+/**
+ * @brief Detach one additional multiport port into its own tunable application.
+ */
+cwist_app *cwist_multiport_get_app(cwist_app **app_ref, unsigned short port);
 
 /** @} */
 
