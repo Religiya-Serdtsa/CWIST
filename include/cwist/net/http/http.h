@@ -28,6 +28,7 @@ typedef enum cwist_http_method_t {
     CWIST_HTTP_PATCH,
     CWIST_HTTP_HEAD,
     CWIST_HTTP_OPTIONS,
+    CWIST_HTTP_CONNECT,
     CWIST_HTTP_UNKNOWN
 } cwist_http_method_t;
 

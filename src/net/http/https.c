@@ -19,6 +19,9 @@
 #include <pthread.h>
 #include <stdbool.h>
 
+/* Forward declaration: PQC layer applied inside TLS bootstrap */
+bool cwist_tls_apply_pqc_layer(cwist_app *app, SSL_CTX *ctx);
+
 struct https_thread_payload {
     int client_fd;
     cwist_https_context *ctx;
@@ -245,13 +248,14 @@ static int cwist_https_alpn_select_cb(SSL *ssl,
 /* --- Context Management --- */
 
 cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *cert_path, const char *key_path) {
-    return cwist_https_init_context_with_options(ctx, cert_path, key_path, NULL);
+    return cwist_https_init_context_with_options(ctx, cert_path, key_path, NULL, NULL);
 }
 
 cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
                                                     const char *cert_path,
                                                     const char *key_path,
-                                                    const cwist_https_options *options) {
+                                                    const cwist_https_options *options,
+                                                    cwist_app *app) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     bool enable_http3 = options && options->enable_http3;
     bool enable_http2 = options && (options->enable_http2 || enable_http3);
@@ -276,6 +280,11 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
         return make_ssl_error("Unable to enforce TLS minimum version");
     }
     cwist_https_apply_base_tls_defaults(ssl_ctx);
+
+    if (!cwist_tls_apply_pqc_layer(app, ssl_ctx)) {
+        SSL_CTX_free(ssl_ctx);
+        return make_ssl_error("PQC layer configuration failed");
+    }
 
     if (enable_http2) {
         err = cwist_https_apply_http2_tls_profile(ssl_ctx);
