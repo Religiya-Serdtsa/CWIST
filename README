@@ -1,165 +1,219 @@
-CWIST - C Web development Is Still Trustworthy
++------------------------------------------------------------------+
+|                                            ________              |
+|   #####  #   #  #  #   ####  #####   ==   /        \             |
+|   #      #   #  #  #  #        #      == |     !    \            |
+|   #      #   #  #  #   ###     #       ==|           \___        |
+|   #      #   #  #  #      #    #      == |    | |    /           |
+|   #####  ########  #  ####     #     ==   \_________/            |
+|                                                                  |
+|              C Web development Is Still Trustworthy              |
+|                                                                  |
++------------------------------------------------------------------+
 
-CWIST is a modern, lightweight C web framework designed for building secure and scalable applications. It brings the ergonomics of modern web frameworks to C without sacrificing performance or control.
+A high-performance, C17 web framework that brings modern ergonomics
+-- HTTP/3, WebTransport, Post-Quantum TLS, and zero-copy I/O --
+to systems programming without sacrificing control.
 
-== FEATURES ==
+==================================================================
+ WHY CWIST?
+==================================================================
 
-* HTTP/1.1-HTTP/3 Server: Robust request parsing and response handling.
-* SString: Custom string library with compare and substr support.
-* WebSocket Support: Easy upgrade from HTTP to persistent connections.
-* Middleware System: Chainable processing for logging and security.
-* Path Parameters: Express-style routing with :param support and Mux Router.
-* JSON Builder: Lightweight utility using cJSON for response building.
-* Static Assets & DB Sharing: Serve directories with cwist_app_static and reuse SQLite handles via cwist_app_use_db.
-* Nuke DB: High-performance In-Memory SQLite with persistent disk synchronization (cwist_nuke_init).
-* Secure by Design: Built-in integration with Monocypher.
+Most C web frameworks stop at HTTP/1.1 and leave TLS, protocol
+upgrades, and memory management as exercises for the user. CWIST
+ships with the entire stack:
 
-== QUICK START ==
+* HTTP/3 & WebTransport Server
+  Powered by lsquic. Server-side WebTransport sessions over QUIC
+  with bidirectional and unidirectional streams.
 
-1. Installation:
+* Post-Quantum TLS
+  One API call: cwist_app_use_pqc_layer(app, true)
+  Forces hybrid X25519MLKEM768 and disables legacy TLS < 1.3.
+  No OpenSSL knowledge required.
 
-   git clone https://github.com/gg582/cwist.git
-   cd cwist
-   make install
+* Zero-Copy I/O & C1M Reactor
+  Backed by io_uring / epoll / kqueue with lock-free job queues
+  and generational arena allocators from libttak.
 
-2. Hello World (main.c):
+* Nuke DB
+  A read-optimal, in-memory SQLite engine that syncs to disk on
+  every COMMIT.
 
-====================================== code ===================================
-| #include <cwist/sys/app/app.h>                                              |
-| #include <cwist/core/sstring/sstring.h>                                     |
-|                                                                             |
-| void index_handler(cwist_http_request *req, cwist_http_response *res) {     |
-|     cwist_sstring_assign(res->body, "Hello from CWIST!");                   |
-| }                                                                           |
-|                                                                             |
-| int main() {                                                                |
-|     cwist_app *app = cwist_app_create();                                    |
-|     cwist_app_use_db(app, ":memory:");                                      |
-|     cwist_app_get(app, "/", index_handler);                                 |
-|     cwist_app_listen(app, 8080);                                            |
-|     cwist_app_destroy(app);                                                 |
-|     return 0;                                                               |
-| }                                                                           |
-===============================================================================
+* Auto-RDBMS Detection
+  Probe any TCP port and automatically mount PostgreSQL, MySQL,
+  or MariaDB runtimes by wire-protocol fingerprinting.
 
-3. Compilation:
+==================================================================
+ CORE FEATURES
+==================================================================
 
-   gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
-   ./server
+Protocols       HTTP/1.1, HTTP/2 (h2/h2c), HTTP/3 (QUIC),
+                WebSocket, WebTransport
 
-== NUKE DB ==
+TLS / Security  BoringSSL, PQC hybrid groups, ECH, JWT,
+                DB Crypt, Monocypher
 
-Nuke DB is a Read-Optimal Persistent Store.
-It follows a "Read-from-RAM, Write-to-Disk" philosophy.
+Database        SQLite3 + ORM, Nuke DB (in-memory + WAL sync),
+                RDBMS auto-detection
 
-* Ultra-Fast Reads: All queries execute against an in-memory SQLite instance, providing sub-millisecond response times for read-heavy workloads.
-* Reliable Writes: Every COMMIT triggers an immediate background synchronization to disk using WAL mode.
-* Trade-off: Write performance is slightly affected by disk synchronization, but reads remain consistently fast.
-* Raw Bootstrap: On startup the on-disk SQLite file is read directly as a raw image using sqlite3_deserialize.
-* Integrity Guard: Each bootstrap runs PRAGMA integrity_check and aborts if corruption is detected.
-* Safe Fallback: When the disk-to-memory transfer fails the system switches to the disk handle.
+Routing         Express-style :param routes, Mux router,
+                chainable middleware
 
-Usage:
+Performance     Zero-copy I/O, generational arenas, EBR GC,
+                lock-free queues, Big Dumb Reply cache
 
-1. cwist_nuke_init("data.db", 5000);
-   Loads data.db to memory and enables auto-sync every 5 seconds plus immediate sync on commit.
+Observability   Structured access logs, metrics endpoint,
+                healthz, rate limiting
 
-2. Use cwist_nuke_get_db() to access the in-memory handle.
+Rendering       HTML builder, CSS composer, template engine,
+                JSON builder / heal
 
-3. On application exit (SIGINT or SIGTERM) Nuke DB performs a final synchronization.
+==================================================================
+ QUICK START
+==================================================================
 
-4. Safety:
-   If the initial load from disk fails due to corruption, Nuke DB enters read-only disk protection mode.
+  git clone https://github.com/religiya-serdtsa/cwist.git
+  cd cwist
+  make
 
-== LIBTTAK PERFORMANCE CORE ==
+--------------------------------------- code -----------------------------------
+| #include <cwist/app.h>                                                       |
+|                                                                              |
+| static void hello(cwist_http_request *req, cwist_http_response *res) {       |
+|     cwist_sstring_assign(res->body, "Hello from CWIST!");                    |
+| }                                                                            |
+|                                                                              |
+| int main(void) {                                                             |
+|     cwist_app *app = cwist_app_create();                                     |
+|                                                                              |
+|     /* SQLite + ORM-ready database */                                        |
+|     cwist_app_use_db(app, ":memory:");                                       |
+|                                                                              |
+|     /* Post-Quantum TLS (hybrid X25519MLKEM768) */                           |
+|     cwist_app_use_pqc_layer(app, true);                                      |
+|                                                                              |
+|     /* Observability endpoints */                                            |
+|     cwist_app_enable_metrics(app);                                           |
+|     cwist_app_enable_healthz(app);                                           |
+|                                                                              |
+|     /* Auto-detect RDBMS on localhost */                                     |
+|     cwist_app_auto_rdbms(app, 5432);                                         |
+|                                                                              |
+|     /* Routes */                                                             |
+|     cwist_app_get(app, "/", hello);                                          |
+|                                                                              |
+|     cwist_app_listen(app, 8080);                                             |
+|     cwist_app_destroy(app);                                                  |
+|     return 0;                                                                |
+| }                                                                            |
+--------------------------------------------------------------------------------
 
-CWIST links against the in-tree lib/libttak build and exposes the subsystems that landed with the latest drop.
+  gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
+  ./server
+
+==================================================================
+ NUKE DB
+==================================================================
+
+Read-from-RAM, Write-to-Disk. Nuke DB loads an on-disk SQLite file
+into memory via sqlite3_deserialize, runs PRAGMA integrity_check,
+and then serves every query from RAM. Every COMMIT triggers a
+background WAL sync. If bootstrap fails, it falls back to read-only
+disk protection mode.
+
+  cwist_nuke_init("data.db", 5000);   /* 5-second auto-sync */
+  cwist_db *db = cwist_nuke_get_db();
+
+==================================================================
+ LIBTTAK PERFORMANCE CORE
+==================================================================
+
+CWIST links the in-tree libttak allocator/reactor toolkit:
 
 Generational Arena Allocator
-
-* Static assets (cwist_app_static) and Big Dumb Reply blobs are staged in a tracked arena backed by ttak_mem_tree.
-* Each generation is released in one shot, preventing RSS fragmentation.
-* Cache-aligned chunks keep hot endpoints from repeatedly calling malloc/free.
+  Static assets and BDR blobs are released in one shot, eliminating
+  RSS fragmentation.
 
 Epoch-Based Reclamation (EBR)
-
-* Threads pin critical sections with ttak_epoch_enter/exit.
-* Stale buffers are reclaimed once no worker remains in the previous epoch.
-* CWIST exposes cwist_gc(), cwist_gc_shutdown(), and cwist_reg_ptr() to integrate libttak GC easily.
+  ttak_epoch_enter/exit pin critical sections; stale buffers are
+  reclaimed automatically.
 
 Detachable Memory
-
-* ttak_detachable_mem_alloc layers a small-cache and signal-safe arena on top of EBR.
-* Used for TLS write buffers, websocket frames, and zero-copy HTTP responses.
+  Signal-safe, cache-aligned arenas for TLS write buffers and
+  WebSocket frames.
 
 Lock-Free Job Queue
+  Producers push with a single atomic swap; consumers reuse detached
+  nodes to prevent fragmentation.
 
-* cwist_io_queue mirrors libttak’s lock-free queue design.
-* Producers push jobs using a single atomic swap without mutex contention.
-* Consumers reuse detached nodes as sentinels to prevent fragmentation.
+==================================================================
+ PQC TLS LAYER
+==================================================================
 
-Big Dumb Reply Guardrails
+Enable post-quantum cryptography with one line:
 
-* Entries expire after roughly five minutes or about 100k hits.
-* Default payload budget is capped at 32 MiB.
-* Old blobs are trimmed automatically.
+  cwist_app_use_pqc_layer(app, true);
 
-RPS Showcase Example
+This forces X25519MLKEM768:X25519:P-256, sets TLS 1.3 as the minimum
+version, and strips all legacy TLSv1.0-1.2 ciphers. Application code
+never touches OpenSSL directly.
 
-example/rps-showcase demonstrates a high-throughput configuration.
+==================================================================
+ WEBTRANSPORT
+==================================================================
 
-Run the benchmark:
+CWIST exposes server-side WebTransport over HTTP/3:
 
-========================================================
-| $ wrk -t4 -c128 -d30s http://127.0.0.1:8080/rps      |
-========================================================
+  cwist_app_use_webtransport(app, my_wt_handler);
 
-The showcase ships with its own notes in example/rps-showcase/README.md and is
-meant to be the reproducible throughput entry point for the repository.  The
-top-level benchmark snapshot below mirrors the plain-text style of this README
-so the project can be reviewed comfortably from a terminal, pager, or Doxygen's
-main-page import.
+The framework handles the CONNECT negotiation, keeps the stream open
+after 2xx, and provides cwist_webtransport_read/write/flush/close/
+open_bidi/open_uni APIs.
 
-== BENCHMARK SNAPSHOT ==
+==================================================================
+ RDBMS AUTO-MOUNT
+==================================================================
 
-Recorded ApacheBench sample (see BENCHMARK.txt for the full transcript):
+Point CWIST at a local TCP port and it detects the provider by wire
+protocol:
 
-* Tool: ApacheBench 2.3
-* Command: ab -n 100 -c 85 -k http://localhost:31744/
-* Requests per second: 2958.40 [#/sec] (mean)
-* Mean time per request: 28.732 ms
-* Mean time across all concurrent requests: 0.338 ms
-* Failed requests: 0
+  if (cwist_app_auto_rdbms(app, 5432)) {
+      /* PostgreSQL, MySQL, or MariaDB runtime mounted */
+  }
 
-Benchmark host profile captured from the active container:
+No port-number guessing -- CWIST sends a PostgreSQL StartupMessage
+or reads a MySQL Handshake initiation packet to classify the server.
 
-* Kernel: Linux 6.14.0-1017-azure x86_64
-* CPU allocation: cpuset 0-3 (4 visible logical CPUs via nproc/lscpu)
-* Processor: AMD EPYC 7763 64-Core Processor
-* Topology: 1 socket, 2 cores, 2 threads per core
-* Observed clock during capture: 3.23 GHz to 3.31 GHz
-* Scheduler clock tick: 100 Hz (getconf CLK_TCK)
-* Reported throttling: none in cpu.stat during capture
+==================================================================
+ BENCHMARK SNAPSHOT
+==================================================================
 
-Suggested throughput workflow:
+Recorded on an AMD EPYC 7763 container (4 vCPU, Linux 6.14):
 
-1. Build and run example/rps-showcase.
-2. Warm the server with a short wrk or ab run.
-3. Capture the exact container/kernel/CPU/timer details shown above.
-4. Save the raw tool transcript next to the environment notes in BENCHMARK.txt.
+  Tool              : ApacheBench 2.3
+  Command           : ab -n 100 -c 85 -k http://localhost:31744/
+  Requests/sec      : 2,958.40
+  Mean latency      : 0.338 ms per concurrent request
+  Failed requests   : 0
 
-This keeps the benchmark notes useful as a performance reference instead of a
-single isolated requests-per-second number.
+See BENCHMARK.txt for the full transcript and reproducible workflow.
 
-== DEPENDENCIES ==
+==================================================================
+ DEPENDENCIES
+==================================================================
 
+* BoringSSL     (in-tree)
+* lsquic        (in-tree, compiled with -DLSQUIC_WEBTRANSPORT=ON)
+* libttak       (in-tree)
+* SQLite3       (in-tree)
 * cJSON
-* OpenSSL (libssl, libcrypto)
 * uriparser
-* libttak (https://github.com/gg582/libttak)
-* SQLite3
+* Monocypher
 
-== PAST ROADMAP ==
+==================================================================
+ DOCUMENTATION
+==================================================================
 
-* Security: CORS middleware and origin/header policy management.
-* RestAPI: Dedicated features for optimized RestAPI server deployment.
+* API Reference  : https://religiya-serdtsa.github.io/CWIST/
+* docs/          -- tutorials and Doxygen sources
+* example/       -- runnable demos including rps-showcase and othello-web
