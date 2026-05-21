@@ -1,0 +1,15 @@
+<map id="include/cwist/sys/io/io_uring_backend.h" name="include/cwist/sys/io/io_uring_backend.h">
+<area shape="rect" id="Node000001" title="Low&#45;latency io_uring backend for CWIST event loop integration." alt="" coords="223,5,374,45"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,93,80,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="238,48,94,92,92,87,237,43"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="105,93,175,119"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="262,48,177,90,174,85,259,43"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="200,93,283,119"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="287,47,260,84,256,80,283,44"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="307,93,405,119"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="315,44,341,80,337,84,310,47"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="429,93,525,119"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="343,43,440,85,438,90,340,48"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="550,93,653,119"/>
+<area shape="poly" id="edge6_Node000001_Node000007" title=" " alt="" coords="372,43,545,87,543,92,370,48"/>
+</map>

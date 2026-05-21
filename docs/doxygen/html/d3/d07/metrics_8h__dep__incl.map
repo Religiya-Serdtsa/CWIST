@@ -1,0 +1,9 @@
+<map id="include/cwist/sys/metrics/metrics.h" name="include/cwist/sys/metrics/metrics.h">
+<area shape="rect" id="Node000001" title="Production&#45;grade metrics engine for CWIST." alt="" coords="165,5,351,45"/>
+<area shape="rect" id="Node000002" href="$df/d7f/app_8c.html" title=" " alt="" coords="5,93,140,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="202,53,101,96,99,91,200,48"/>
+<area shape="rect" id="Node000003" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="165,93,351,119"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="261,59,261,93,255,93,255,59"/>
+<area shape="rect" id="Node000004" href="$db/d59/metrics_8c.html" title="Lock&#45;free metrics registry and Prometheus exposition." alt="" coords="375,93,559,119"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="322,48,437,91,435,96,320,53"/>
+</map>

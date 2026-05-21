@@ -148,22 +148,22 @@ Include dependency graph for db.c:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a0e82c15c6fae4fef553c0f17bf985cb9" id="r_a0e82c15c6fae4fef553c0f17bf985cb9"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#a0e82c15c6fae4fef553c0f17bf985cb9">cwist_db_open</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> **db, const char *path)</td></tr>
+<tr class="memitem:a0e82c15c6fae4fef553c0f17bf985cb9" id="r_a0e82c15c6fae4fef553c0f17bf985cb9"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#a0e82c15c6fae4fef553c0f17bf985cb9">cwist_db_open</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> **db, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *path)</td></tr>
 <tr class="memdesc:a0e82c15c6fae4fef553c0f17bf985cb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Open a SQLite database and wrap the resulting connection in a CWIST handle.  <br /></td></tr>
 <tr class="separator:a0e82c15c6fae4fef553c0f17bf985cb9"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab4a9734e8c141ac9d393ed46b8b00207" id="r_ab4a9734e8c141ac9d393ed46b8b00207"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#ab4a9734e8c141ac9d393ed46b8b00207">cwist_db_close</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db)</td></tr>
+<tr class="memitem:ab4a9734e8c141ac9d393ed46b8b00207" id="r_ab4a9734e8c141ac9d393ed46b8b00207"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">void</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#ab4a9734e8c141ac9d393ed46b8b00207">cwist_db_close</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db)</td></tr>
 <tr class="memdesc:ab4a9734e8c141ac9d393ed46b8b00207"><td class="mdescLeft">&#160;</td><td class="mdescRight">Close a CWIST database wrapper and its underlying SQLite connection.  <br /></td></tr>
 <tr class="separator:ab4a9734e8c141ac9d393ed46b8b00207"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a288718ee11fca08882b9b419954a9902" id="r_a288718ee11fca08882b9b419954a9902"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#a288718ee11fca08882b9b419954a9902">cwist_db_exec</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, const char *sql)</td></tr>
+<tr class="memitem:a288718ee11fca08882b9b419954a9902" id="r_a288718ee11fca08882b9b419954a9902"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#a288718ee11fca08882b9b419954a9902">cwist_db_exec</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *<a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">sql</a>)</td></tr>
 <tr class="memdesc:a288718ee11fca08882b9b419954a9902"><td class="mdescLeft">&#160;</td><td class="mdescRight">Execute an arbitrary SQL statement string without returning rows.  <br /></td></tr>
 <tr class="separator:a288718ee11fca08882b9b419954a9902"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a099cfcd65664bde1bdd00c161cf0032e" id="r_a099cfcd65664bde1bdd00c161cf0032e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#a099cfcd65664bde1bdd00c161cf0032e">cwist_db_query</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, const char *sql, cJSON **result)</td></tr>
+<tr class="memitem:a099cfcd65664bde1bdd00c161cf0032e" id="r_a099cfcd65664bde1bdd00c161cf0032e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#a099cfcd65664bde1bdd00c161cf0032e">cwist_db_query</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *<a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">sql</a>, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">cJSON</a> **result)</td></tr>
 <tr class="memdesc:a099cfcd65664bde1bdd00c161cf0032e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Execute a SQL query and collect every row into a cJSON array.  <br /></td></tr>
 <tr class="separator:a099cfcd65664bde1bdd00c161cf0032e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab681c7d7de88a836c782b5279cc1966b" id="r_ab681c7d7de88a836c782b5279cc1966b"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#ab681c7d7de88a836c782b5279cc1966b">cwist_db_insert_healed</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, const char *table, const char *json_str, const <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *schema, const <a class="el" href="../../db/dd3/json__heal_8h.html#a7eb5cf9200f4b56375501e44e0ac68ab">cwist_heal_config_t</a> *heal_cfg)</td></tr>
+<tr class="memitem:ab681c7d7de88a836c782b5279cc1966b" id="r_ab681c7d7de88a836c782b5279cc1966b"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#ab681c7d7de88a836c782b5279cc1966b">cwist_db_insert_healed</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *<a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">table</a>, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *<a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">json_str</a>, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *schema, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../db/dd3/json__heal_8h.html#a7eb5cf9200f4b56375501e44e0ac68ab">cwist_heal_config_t</a> *<a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">heal_cfg</a>)</td></tr>
 <tr class="memdesc:ab681c7d7de88a836c782b5279cc1966b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Heal, validate, and insert a JSON object into a table.  <br /></td></tr>
 <tr class="separator:ab681c7d7de88a836c782b5279cc1966b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a92762ac589b199e85fadb7553d6fc71d" id="r_a92762ac589b199e85fadb7553d6fc71d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#a92762ac589b199e85fadb7553d6fc71d">cwist_db_query_strict</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, const char *sql, cJSON **result, const <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *schema)</td></tr>
+<tr class="memitem:a92762ac589b199e85fadb7553d6fc71d" id="r_a92762ac589b199e85fadb7553d6fc71d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../d4/d50/structcwist__error__t.html">cwist_error_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d2/db5/db_8c.html#a92762ac589b199e85fadb7553d6fc71d">cwist_db_query_strict</a> (<a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *db, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *<a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">sql</a>, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">cJSON</a> **result, <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *schema)</td></tr>
 <tr class="memdesc:a92762ac589b199e85fadb7553d6fc71d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Execute a query and require the result rows to satisfy a CWIST schema.  <br /></td></tr>
 <tr class="separator:a92762ac589b199e85fadb7553d6fc71d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
@@ -179,7 +179,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void cwist_db_close </td>
+          <td class="memname"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">void</a> cwist_db_close </td>
           <td>(</td>
           <td class="paramtype"><a class="el" href="../../dd/d55/structcwist__db.html">cwist_db</a> *&#160;</td>
           <td class="paramname"><em>db</em></td><td>)</td>
@@ -201,7 +201,7 @@ Functions</h2></td></tr>
 
 <p class="reference">References <a class="el" href="../../d0/dae/core_2db_2sql_8h_source.html#l00021">cwist_db::conn</a>, and <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>.</p>
 
-<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01021">cwist_app_destroy()</a>, <a class="el" href="../../df/d7f/app_8c_source.html#l01250">cwist_app_use_db()</a>, and <a class="el" href="../../df/d7f/app_8c_source.html#l01283">cwist_app_use_nuke_db()</a>.</p>
+<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01100">cwist_app_destroy()</a>, <a class="el" href="../../df/d7f/app_8c_source.html#l01365">cwist_app_use_db()</a>, and <a class="el" href="../../df/d7f/app_8c_source.html#l01398">cwist_app_use_nuke_db()</a>.</p>
 
 </div>
 </div>
@@ -220,7 +220,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const char *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *&#160;</td>
           <td class="paramname"><em>sql</em>&#160;</td>
         </tr>
         <tr>
@@ -265,25 +265,25 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const char *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *&#160;</td>
           <td class="paramname"><em>table</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const char *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *&#160;</td>
           <td class="paramname"><em>json_str</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *&#160;</td>
           <td class="paramname"><em>schema</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="../../db/dd3/json__heal_8h.html#a7eb5cf9200f4b56375501e44e0ac68ab">cwist_heal_config_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../db/dd3/json__heal_8h.html#a7eb5cf9200f4b56375501e44e0ac68ab">cwist_heal_config_t</a> *&#160;</td>
           <td class="paramname"><em>heal_cfg</em>&#160;</td>
         </tr>
         <tr>
@@ -329,7 +329,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const char *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *&#160;</td>
           <td class="paramname"><em>path</em>&#160;</td>
         </tr>
         <tr>
@@ -355,7 +355,7 @@ Functions</h2></td></tr>
 
 <p class="reference">References <a class="el" href="../../d9/d39/alloc_8c_source.html#l00221">cwist_alloc()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00015">CWIST_ERR_INT16</a>, <a class="el" href="../../d9/d39/alloc_8c_source.html#l00315">cwist_free()</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00048">__prim_cwist_error_t::err_i16</a>, <a class="el" href="../../d3/d73/err_2cwist__err_8h_source.html#l00073">cwist_error_t::error</a>, and <a class="el" href="../../db/dcc/error_8c_source.html#l00013">make_error()</a>.</p>
 
-<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01250">cwist_app_use_db()</a>.</p>
+<p class="reference">Referenced by <a class="el" href="../../df/d7f/app_8c_source.html#l01365">cwist_app_use_db()</a>.</p>
 
 </div>
 </div>
@@ -374,13 +374,13 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const char *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *&#160;</td>
           <td class="paramname"><em>sql</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cJSON **&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">cJSON</a> **&#160;</td>
           <td class="paramname"><em>result</em>&#160;</td>
         </tr>
         <tr>
@@ -426,19 +426,19 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const char *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">char</a> *&#160;</td>
           <td class="paramname"><em>sql</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">cJSON **&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">cJSON</a> **&#160;</td>
           <td class="paramname"><em>result</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="../../de/daf/http3_8c.html#a7360b55975153b822efc5217b7734e6a">const</a> <a class="el" href="../../db/dd3/json__heal_8h.html#a9cc13dc50bf367a849dfb3ff56fe3b59">cwist_schema_t</a> *&#160;</td>
           <td class="paramname"><em>schema</em>&#160;</td>
         </tr>
         <tr>
