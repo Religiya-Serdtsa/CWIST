@@ -68,3 +68,4 @@ test_mux_param
 # Runtime artifacts
 example/othello-web/othello.db
 payload.json
+test_sstring_run
