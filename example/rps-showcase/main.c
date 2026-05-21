@@ -135,6 +135,7 @@ int main(void) {
     cwist_app_get(app, "/", index_handler);
     cwist_app_get(app, "/rps", rps_handler);
     cwist_app_get(app, "/refresh", refresh_handler);
+    cwist_app_enable_metrics(app);   /* Prometheus /metrics endpoint */
 
     printf("[System] Service listening on http://0.0.0.0:%d\n", SERVER_PORT);
     int code = cwist_app_listen(app, SERVER_PORT);

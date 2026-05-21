@@ -1,13 +1,13 @@
 /**
  * @file main.c
- * @brief Minimal CWIST server — one handler, one listen call.
+ * @brief 01-hello — smallest possible CWIST server.
  */
 
 #include <cwist/app.h>
 
 static void hello(cwist_http_request *req, cwist_http_response *res) {
     (void)req;
-    cwist_sstring_assign(res->body, "Hello, World!");
+    cwist_sstring_assign(res->body, "Hello, CWIST!");
 }
 
 int main(void) {

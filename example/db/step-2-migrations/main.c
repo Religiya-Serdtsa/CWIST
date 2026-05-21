@@ -1,9 +1,13 @@
+/**
+ * @file main.c
+ * @brief Schema migrations via the app-level DB API.
+ */
+
 #include <stdio.h>
-#include <sqlite3.h>
+#include <cwist/app.h>
+#include <cwist/core/db/sql.h>
 #include <cwist/core/db/migrate.h>
 
-/* Define migrations as a flat array.
- * Each entry: version, name, up_sql, down_sql (NULL = irreversible). */
 static const cwist_migration_t migrations[] = {
     {
         1,
@@ -18,7 +22,7 @@ static const cwist_migration_t migrations[] = {
         2,
         "add_email_to_users",
         "ALTER TABLE users ADD COLUMN email TEXT;",
-        NULL   /* SQLite cannot drop columns — irreversible */
+        NULL
     },
     {
         3,
@@ -34,41 +38,36 @@ static const cwist_migration_t migrations[] = {
 
 static const int N = (int)(sizeof(migrations) / sizeof(migrations[0]));
 
-int main() {
+int main(void) {
     printf("=== Schema Migrations Tutorial ===\n");
 
-    sqlite3 *db = NULL;
-    if (sqlite3_open(":memory:", &db) != SQLITE_OK) {
-        fprintf(stderr, "Failed to open database: %s\n", sqlite3_errmsg(db));
-        return 1;
-    }
+    cwist_app *app = cwist_app_create();
+    cwist_app_use_db(app, ":memory:");
+    cwist_db *db = cwist_app_get_db(app);
 
-    /* 1. Apply all pending migrations */
-    printf("\n[Migrate UP — apply all]\n");
-    int rc = cwist_migrate_up(db, migrations, N);
+    printf("\n[Migrate UP -- apply all]\n");
+    int rc = cwist_migrate_up(db->conn, migrations, N);
     if (rc != CWIST_MIGRATE_OK) {
         fprintf(stderr, "Migration up failed: %d\n", rc);
-        sqlite3_close(db);
+        cwist_app_destroy(app);
         return 1;
     }
-    printf("Current version: %d\n", cwist_migrate_version(db));
+    printf("Current version: %d\n", cwist_migrate_version(db->conn));
 
-    /* 2. Roll back the last migration (posts) */
-    printf("\n[Migrate DOWN — roll back 1 step]\n");
-    rc = cwist_migrate_down(db, migrations, N, 1);
+    printf("\n[Migrate DOWN -- roll back 1 step]\n");
+    rc = cwist_migrate_down(db->conn, migrations, N, 1);
     if (rc != CWIST_MIGRATE_OK) {
         fprintf(stderr, "Migration down failed: %d\n", rc);
-        sqlite3_close(db);
+        cwist_app_destroy(app);
         return 1;
     }
-    printf("Current version after rollback: %d\n", cwist_migrate_version(db));
+    printf("Current version after rollback: %d\n", cwist_migrate_version(db->conn));
 
-    /* 3. Re-apply (migrate up again) */
-    printf("\n[Migrate UP — re-apply]\n");
-    cwist_migrate_up(db, migrations, N);
-    printf("Current version: %d\n", cwist_migrate_version(db));
+    printf("\n[Migrate UP -- re-apply]\n");
+    cwist_migrate_up(db->conn, migrations, N);
+    printf("Current version: %d\n", cwist_migrate_version(db->conn));
 
-    sqlite3_close(db);
+    cwist_app_destroy(app);
     printf("\n=== Done ===\n");
     return 0;
 }
