@@ -16,6 +16,9 @@
 
 #include <cwist/net/websocket/websocket.h>
 
+/* Forward declaration for auto-mounted RDBMS runtime */
+struct cwist_rdbms_runtime;
+
 /**
  * @brief Function pointer type for HTTP route handlers.
  * @param req Pointer to the HTTP request object.
@@ -34,11 +37,54 @@ typedef void (*cwist_ws_handler_func)(cwist_websocket *ws);
  */
 typedef void (*cwist_error_handler_func)(cwist_http_request *req, cwist_http_response *res, cwist_http_status_t status);
 
+/**
+ * @brief Callback function type for handling WebTransport sessions over HTTP/3.
+ *
+ * @param req    Parsed HTTP request object (CONNECT with :protocol=webtransport).
+ * @param res    HTTP response object to be populated (e.g., 200 OK to accept).
+ * @param stream Opaque lsquic_stream_t pointer for the WebTransport session.
+ */
+typedef void (*cwist_webtransport_handler_func)(cwist_http_request *req,
+                                                 cwist_http_response *res,
+                                                 void *stream);
+
 typedef struct cwist_error_handler_entry {
     cwist_http_status_t status_code;
     cwist_error_handler_func handler;
     struct cwist_error_handler_entry *next;
 } cwist_error_handler_entry;
+
+/** @brief RDBMS provider auto-detection result */
+typedef enum cwist_rdbms_provider {
+    CWIST_RDBMS_NONE = 0,
+    CWIST_RDBMS_POSTGRES,
+    CWIST_RDBMS_MYSQL,
+    CWIST_RDBMS_MARIADB,
+} cwist_rdbms_provider_t;
+
+/** @brief Mounted RDBMS runtime state */
+typedef struct cwist_rdbms_runtime {
+    cwist_rdbms_provider_t provider; /**< Detected provider */
+    int port;                        /**< Target TCP port */
+    char *host;                      /**< Target host (owned) */
+    bool ready;                      /**< True when runtime is usable */
+} cwist_rdbms_runtime;
+
+/**
+ * @brief Probe a TCP port for an RDBMS wire protocol.
+ * @param port TCP port to probe.
+ * @return Detected provider, or CWIST_RDBMS_UNKNOWN.
+ */
+cwist_rdbms_provider_t cwist_rdbms_probe_port(int port);
+
+/**
+ * @brief Mount an RDBMS runtime for the given provider and port.
+ * @param app      Application context.
+ * @param provider Detected provider.
+ * @param port     Target port.
+ * @return true on success, false on failure.
+ */
+bool cwist_rdbms_mount_runtime(cwist_app *app, cwist_rdbms_provider_t provider, int port);
 
 /**
  * @brief Middleware type that receives req/res pair and the next stage in the chain.
@@ -100,6 +146,17 @@ typedef struct cwist_app {
     
     /** @brief Big Dumb Reply context for auto-caching high-latency endpoints */
     cwist_bdr_t *bdr_ctx;
+
+    /** @brief Mounted RDBMS runtime (auto-detected PostgreSQL/MySQL/MariaDB) */
+    struct cwist_rdbms_runtime *rdbms;
+
+    /** @brief PQC Layer enabled flag */
+    bool pqc_layer_enabled;
+    /** @brief Explicit TLS groups override (NULL = automatic) */
+    char *tls_groups;
+
+    /** @brief WebTransport session handler */
+    cwist_webtransport_handler_func wt_handler;
 } cwist_app;
 
 /** --- Memory Management --- */
@@ -201,9 +258,48 @@ cwist_error_t cwist_app_use_http2(cwist_app *app, bool enabled);
  */
 cwist_error_t cwist_app_use_http3(cwist_app *app, bool enabled);
 
+/**
+ * @brief Enable WebTransport over HTTP/3 on the application.
+ *
+ * This registers a WebTransport session handler.  The application must
+ * also enable HTTP/3 (via cwist_app_use_http3 or cwist_app_use_https3)
+ * for WebTransport to function.
+ *
+ * @param app     Application context.
+ * @param handler WebTransport session handler.
+ */
+void cwist_app_use_webtransport(cwist_app *app, cwist_webtransport_handler_func handler);
+
+/**
+ * @brief Enable Post-Quantum Cryptography (PQC) hybrid key exchange layer.
+ * @param app Application context.
+ * @param enabled True to enable PQC hybrid TLS groups and force TLS 1.3.
+ */
+void cwist_app_use_pqc_layer(cwist_app *app, bool enabled);
+
+/**
+ * @brief Override TLS groups explicitly.
+ * @param app Application context.
+ * @param groups Colon-separated group list (e.g., "X25519MLKEM768:X25519:P-256").
+ *        Pass NULL to reset to automatic selection.
+ */
+void cwist_app_set_tls_groups(cwist_app *app, const char *groups);
+
 cwist_error_t cwist_app_use_db(cwist_app *app, const char *db_path);
 cwist_error_t cwist_app_use_nuke_db(cwist_app *app, const char *db_path, int sync_interval_ms);
 cwist_db *cwist_app_get_db(cwist_app *app);
+
+/**
+ * @brief Auto-detect and mount an RDBMS runtime by probing a TCP port.
+ *
+ * Connects to 127.0.0.1:@p port, probes the wire protocol, detects the
+ * provider (PostgreSQL, MySQL, or MariaDB), and mounts a data runtime.
+ *
+ * @param app  Application context.
+ * @param port Target TCP port for RDBMS probe.
+ * @return true when provider detected and runtime mounted; false otherwise.
+ */
+bool cwist_app_auto_rdbms(cwist_app *app, int port);
 
 #define cwist_use_https2(enabled) cwist_app_use_https2((app), (enabled))
 #define cwist_use_https3(enabled) cwist_app_use_https3((app), (enabled))
@@ -221,6 +317,9 @@ void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handle
 void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
 void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
 void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func handler, cwist_endpoint_opt_t opts);
+
+void cwist_app_enable_metrics(cwist_app *app);
+void cwist_app_enable_healthz(cwist_app *app);
 
 void cwist_app_get_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
 void cwist_app_post_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
