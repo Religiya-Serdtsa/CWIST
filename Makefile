@@ -97,6 +97,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/http_client.c \
        src/net/http/http3_client.c \
        src/net/http/https.c \
+       src/https/pqc_layer.c \
        src/net/http/mux.c \
        src/net/http/multipart.c \
        src/net/http/async_server.c \
@@ -109,6 +110,7 @@ SRCS = src/core/sstring/sstring.c \
        src/core/db/migrate.c \
        src/core/orm/orm.c \
        src/core/orm/orm_socket.c \
+       src/core/orm/rdbms_auto_mount.c \
        src/sys/app/app.c \
        src/net/websocket/websocket.c \
        src/net/websocket/ws_utils.c \
@@ -237,7 +239,8 @@ $(LSQUIC_LIB): $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB)
 		-DBORINGSSL_LIB_ssl=$(abspath $(BORINGSSL_SSL_LIB)) \
 		-DBORINGSSL_LIB_crypto=$(abspath $(BORINGSSL_CRYPTO_LIB)) \
 		-DBORINGSSL_INCLUDE=$(abspath $(BORINGSSL_DIR)/include) \
-		-DBUILD_SHARED_LIBS=OFF
+		-DBUILD_SHARED_LIBS=OFF \
+		-DLSQUIC_WEBTRANSPORT=ON
 	cmake --build $(LSQUIC_BUILD_DIR) --target lsquic
 
 $(CNATS_LIB):
@@ -258,6 +261,7 @@ TEST_TARGETS = test_sstring \
                test_siphash \
                test_mux \
                test_mux_param \
+               test_rdbms_auto_mount \
                stress_test \
                test_cors \
                test_websocket \
@@ -278,7 +282,7 @@ TEST_TARGETS = test_sstring \
                test_rate_limit \
                test_cache
 
-.PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild
+.PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild examples clean-examples
 
 test: $(TEST_TARGETS)
 
@@ -325,6 +329,14 @@ test_http2: $(LIB_NAME) tests/test_http2.c
 test_http3: $(LIB_NAME) tests/test_http3.c
 	$(CC) $(CFLAGS) -o test_http3 tests/test_http3.c $(LIB_NAME) $(LIBS)
 	./test_http3
+
+test_webtransport: $(LIB_NAME) tests/test_webtransport.c
+	$(CC) $(CFLAGS) -o test_webtransport tests/test_webtransport.c $(LIB_NAME) $(LIBS)
+	./test_webtransport
+
+test_rdbms_auto_mount: $(LIB_NAME) tests/test_rdbms_auto_mount.c
+	$(CC) $(CFLAGS) -o test_rdbms_auto_mount tests/test_rdbms_auto_mount.c $(LIB_NAME) $(LIBS)
+	./test_rdbms_auto_mount
 
 stress_test: $(LIB_NAME) tests/stress_test.c
 	$(CC) $(CFLAGS) -o stress_test tests/stress_test.c $(LIB_NAME) $(LIBS)
@@ -414,3 +426,129 @@ clean:
 	-@$(MAKE) -C $(LIBTTAK_DIR) clean || true
 
 rebuild: clean all
+
+# ------------------------------------------------------------------
+# Examples
+# ------------------------------------------------------------------
+
+EXAMPLE_BINS = example/simple-server/simple-server \
+               example/http/step-1-hello-world/hello-world \
+               example/http/step-2-mux-router/mux-router \
+               example/http/step-3-query-params/query-params \
+               example/http/step-4-json-api/json-api \
+               example/jwt/step-2-http-auth/jwt-auth \
+               example/cde-json-viewer/cde-json-viewer \
+               example/db/step-1-open-query/open-query \
+               example/db/step-2-migrations/migrations \
+               example/db/step-4-json-insert/json-insert \
+               example/rps-showcase/rps-showcase
+
+examples: $(EXAMPLE_BINS)
+
+example/simple-server/simple-server: $(LIB_NAME) example/simple-server/main.c
+	$(CC) $(CFLAGS) -o $@ example/simple-server/main.c $(LIB_NAME) $(LIBS)
+
+example/http/step-1-hello-world/hello-world: $(LIB_NAME) example/http/step-1-hello-world/main.c
+	$(CC) $(CFLAGS) -o $@ example/http/step-1-hello-world/main.c $(LIB_NAME) $(LIBS)
+
+example/http/step-2-mux-router/mux-router: $(LIB_NAME) example/http/step-2-mux-router/main.c
+	$(CC) $(CFLAGS) -o $@ example/http/step-2-mux-router/main.c $(LIB_NAME) $(LIBS)
+
+example/http/step-3-query-params/query-params: $(LIB_NAME) example/http/step-3-query-params/main.c
+	$(CC) $(CFLAGS) -o $@ example/http/step-3-query-params/main.c $(LIB_NAME) $(LIBS)
+
+example/http/step-4-json-api/json-api: $(LIB_NAME) example/http/step-4-json-api/main.c
+	$(CC) $(CFLAGS) -o $@ example/http/step-4-json-api/main.c $(LIB_NAME) $(LIBS)
+
+example/jwt/step-2-http-auth/jwt-auth: $(LIB_NAME) example/jwt/step-2-http-auth/main.c
+	$(CC) $(CFLAGS) -o $@ example/jwt/step-2-http-auth/main.c $(LIB_NAME) $(LIBS)
+
+example/cde-json-viewer/cde-json-viewer: $(LIB_NAME) example/cde-json-viewer/main.c
+	$(CC) $(CFLAGS) -o $@ example/cde-json-viewer/main.c $(LIB_NAME) $(LIBS)
+
+example/db/step-1-open-query/open-query: $(LIB_NAME) example/db/step-1-open-query/main.c
+	$(CC) $(CFLAGS) -o $@ example/db/step-1-open-query/main.c $(LIB_NAME) $(LIBS)
+
+example/db/step-2-migrations/migrations: $(LIB_NAME) example/db/step-2-migrations/main.c
+	$(CC) $(CFLAGS) -o $@ example/db/step-2-migrations/main.c $(LIB_NAME) $(LIBS)
+
+example/db/step-4-json-insert/json-insert: $(LIB_NAME) example/db/step-4-json-insert/main.c
+	$(CC) $(CFLAGS) -o $@ example/db/step-4-json-insert/main.c $(LIB_NAME) $(LIBS)
+
+example/rps-showcase/rps-showcase: $(LIB_NAME) example/rps-showcase/main.c
+	$(CC) $(CFLAGS) -o $@ example/rps-showcase/main.c $(LIB_NAME) $(LIBS)
+
+# Micro examples
+MICRO_BINS = example/micro/01-hello/hello \
+             example/micro/02-routes/routes \
+             example/micro/03-path-params/path-params \
+             example/micro/04-query-params/query-params \
+             example/micro/05-json/json \
+             example/micro/06-orm-insert/orm-insert \
+             example/micro/07-orm-query/orm-query \
+             example/micro/08-orm-update-delete/orm-update-delete \
+             example/micro/09-html-builder/html-builder \
+             example/micro/10-static-files/static-files \
+             example/micro/11-jwt-auth/jwt-auth \
+             example/micro/12-middleware/middleware \
+             example/micro/13-nuke-db/nuke-db \
+             example/micro/14-websocket/websocket \
+             example/micro/15-pqc-tls/pqc-tls \
+             example/micro/16-rdbms-auto/rdbms-auto \
+             example/micro/17-blog-crud/blog-crud
+
+micro-examples: $(MICRO_BINS)
+
+example/micro/01-hello/hello: $(LIB_NAME) example/micro/01-hello/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/01-hello/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/02-routes/routes: $(LIB_NAME) example/micro/02-routes/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/02-routes/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/03-path-params/path-params: $(LIB_NAME) example/micro/03-path-params/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/03-path-params/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/04-query-params/query-params: $(LIB_NAME) example/micro/04-query-params/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/04-query-params/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/05-json/json: $(LIB_NAME) example/micro/05-json/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/05-json/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/06-orm-insert/orm-insert: $(LIB_NAME) example/micro/06-orm-insert/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/06-orm-insert/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/07-orm-query/orm-query: $(LIB_NAME) example/micro/07-orm-query/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/07-orm-query/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/08-orm-update-delete/orm-update-delete: $(LIB_NAME) example/micro/08-orm-update-delete/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/08-orm-update-delete/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/09-html-builder/html-builder: $(LIB_NAME) example/micro/09-html-builder/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/09-html-builder/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/10-static-files/static-files: $(LIB_NAME) example/micro/10-static-files/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/10-static-files/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/11-jwt-auth/jwt-auth: $(LIB_NAME) example/micro/11-jwt-auth/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/11-jwt-auth/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/12-middleware/middleware: $(LIB_NAME) example/micro/12-middleware/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/12-middleware/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/13-nuke-db/nuke-db: $(LIB_NAME) example/micro/13-nuke-db/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/13-nuke-db/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/14-websocket/websocket: $(LIB_NAME) example/micro/14-websocket/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/14-websocket/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/15-pqc-tls/pqc-tls: $(LIB_NAME) example/micro/15-pqc-tls/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/15-pqc-tls/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/16-rdbms-auto/rdbms-auto: $(LIB_NAME) example/micro/16-rdbms-auto/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/16-rdbms-auto/main.c $(LIB_NAME) $(LIBS)
+
+example/micro/17-blog-crud/blog-crud: $(LIB_NAME) example/micro/17-blog-crud/main.c
+	$(CC) $(CFLAGS) -o $@ example/micro/17-blog-crud/main.c $(LIB_NAME) $(LIBS)
+
+clean-examples:
+	rm -f $(EXAMPLE_BINS) $(MICRO_BINS)

@@ -930,7 +930,8 @@ static cwist_error_t cwist_app_refresh_https_context(cwist_app *app) {
     return cwist_https_init_context_with_options(&app->ssl_ctx,
                                                  app->cert_path,
                                                  app->key_path,
-                                                 &options);
+                                                 &options,
+                                                 app);
 }
 
 static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx);
@@ -963,6 +964,9 @@ static cwist_error_t cwist_app_refresh_http3_context(cwist_app *app) {
             err = cwist_http3_init_context_ephemeral(&app->h3_ctx);
         } else {
             err.error.err_i16 = -1; // Missing config for strict https3
+        }
+        if (app->h3_ctx && app->wt_handler) {
+            cwist_http3_set_webtransport_handler(app->h3_ctx, app->wt_handler);
         }
     } else {
         err.error.err_i16 = 0;
@@ -1002,6 +1006,9 @@ cwist_app *cwist_app_create(void) {
     app->max_mem_space = 0;
     app->mem_manager = NULL;
     app->bdr_ctx = cwist_bdr_create();
+    app->pqc_layer_enabled = false;
+    app->tls_groups = NULL;
+    app->wt_handler = NULL;
     cwist_app_refresh_https_request_handler(app);
     
     return app;
@@ -1096,6 +1103,7 @@ void cwist_app_destroy(cwist_app *app) {
     cwist_multiport_unlink_app(app);
     if (app->cert_path) cwist_free(app->cert_path);
     if (app->key_path) cwist_free(app->key_path);
+    if (app->tls_groups) cwist_free(app->tls_groups);
     if (app->ssl_ctx) cwist_https_destroy_context(app->ssl_ctx);
     if (app->h3_ctx) cwist_http3_destroy_context(app->h3_ctx);
 
@@ -1117,6 +1125,11 @@ void cwist_app_destroy(cwist_app *app) {
 
     if (app->config) cwist_config_destroy(app->config);
     if (app->logger) cwist_logger_destroy(app->logger);
+    if (app->rdbms) {
+        cwist_rdbms_runtime *rt = app->rdbms;
+        if (rt->host) cwist_free(rt->host);
+        cwist_free(rt);
+    }
 
     cwist_static_dir *curr_s = app->static_dirs;
     while (curr_s) {
@@ -1256,6 +1269,24 @@ cwist_error_t cwist_app_use_https(cwist_app *app, const char *cert_path, const c
     return cwist_app_refresh_https_context(app);
 }
 
+void cwist_app_use_pqc_layer(cwist_app *app, bool enabled)
+{
+    if (!app) return;
+    app->pqc_layer_enabled = enabled;
+}
+
+void cwist_app_set_tls_groups(cwist_app *app, const char *groups)
+{
+    if (!app) return;
+    if (app->tls_groups) {
+        cwist_free(app->tls_groups);
+        app->tls_groups = NULL;
+    }
+    if (groups) {
+        app->tls_groups = cwist_strdup(groups);
+    }
+}
+
 cwist_error_t cwist_app_use_https2(cwist_app *app, bool enabled) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
     if (!app) {
@@ -1314,6 +1345,15 @@ cwist_error_t cwist_app_use_http3(cwist_app *app, bool enabled) {
     app->use_http3 = enabled;
     err.error.err_i16 = 0;
     return cwist_app_refresh_http3_context(app);
+}
+
+void cwist_app_use_webtransport(cwist_app *app, cwist_webtransport_handler_func handler)
+{
+    if (!app) return;
+    app->wt_handler = handler;
+    if (app->h3_ctx) {
+        cwist_http3_set_webtransport_handler(app->h3_ctx, handler);
+    }
 }
 
 /**
@@ -2272,6 +2312,11 @@ static cwist_app *cwist_app_clone_for_multiport(cwist_app *src) {
     dst->use_https3 = src->use_https3;
     dst->error_handler = src->error_handler;
     dst->max_mem_space = src->max_mem_space;
+    dst->pqc_layer_enabled = src->pqc_layer_enabled;
+    if (src->tls_groups) {
+        dst->tls_groups = cwist_strdup(src->tls_groups);
+    }
+    dst->wt_handler = src->wt_handler;
 
     dst->middlewares = cwist_middleware_clone(src->middlewares);
     dst->error_handlers = cwist_error_handlers_clone(src->error_handlers);
