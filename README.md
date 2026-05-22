@@ -21,7 +21,7 @@ management as exercises for the user. CWIST ships with the entire stack:
   over QUIC with bidirectional/unidirectional streams).
 - **Post-Quantum TLS** via a single API call: `cwist_app_use_pqc_layer(app, true)`
   forces hybrid X25519MLKEM768 and disables legacy TLS < 1.3. No OpenSSL knowledge required.
-- **Zero-Copy I/O & C1M Reactor** backed by io_uring / epoll / kqueue with lock-free
+- **Zero-Copy I/O & C100K Reactor** backed by io_uring / epoll / kqueue with lock-free
   job queues and generational arena allocators from libttak.
 - **Nuke DB**: a read-optimal, in-memory SQLite engine that syncs to disk on every COMMIT.
 - **Auto-RDBMS Detection**: probe any TCP port and automatically mount PostgreSQL, MySQL,
