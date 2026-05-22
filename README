@@ -31,7 +31,7 @@ ships with the entire stack:
   Forces hybrid X25519MLKEM768 and disables legacy TLS < 1.3.
   No OpenSSL knowledge required.
 
-* Zero-Copy I/O & C1M Reactor
+* Zero-Copy I/O & C100K Reactor
   Backed by io_uring / epoll / kqueue with lock-free job queues
   and generational arena allocators from libttak.
 
