@@ -5,6 +5,7 @@
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/sys/app/shutdown.h>
+#include "tls_chain.h"
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <stdio.h>
@@ -298,6 +299,11 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
     if (SSL_CTX_use_certificate_chain_file(ssl_ctx, cert_path) <= 0) {
         SSL_CTX_free(ssl_ctx);
         return make_ssl_error("Unable to load certificate");
+    }
+
+    if (cwist_tls_autoload_intermediates(ssl_ctx) < 0) {
+        SSL_CTX_free(ssl_ctx);
+        return make_ssl_error("Unable to complete certificate chain");
     }
 
     if (SSL_CTX_use_PrivateKey_file(ssl_ctx, key_path, SSL_FILETYPE_PEM) <= 0) {

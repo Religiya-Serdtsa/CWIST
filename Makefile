@@ -94,9 +94,11 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/http.c \
        src/net/http/http2.c \
        src/net/http/http3.c \
+       src/net/http/curl_global.c \
        src/net/http/http_client.c \
        src/net/http/http3_client.c \
        src/net/http/https.c \
+       src/net/http/tls_chain.c \
        src/https/pqc_layer.c \
        src/net/http/mux.c \
        src/net/http/multipart.c \

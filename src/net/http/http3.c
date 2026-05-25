@@ -13,6 +13,7 @@
 #include <cwist/core/mem/alloc.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/sys/app/shutdown.h>
+#include "tls_chain.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -727,6 +728,13 @@ cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
 
     if (SSL_CTX_use_certificate_chain_file(ssl_ctx, cert_path) <= 0 ||
         SSL_CTX_use_PrivateKey_file(ssl_ctx, key_path, SSL_FILETYPE_PEM) <= 0) {
+        SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    if (cwist_tls_autoload_intermediates(ssl_ctx) < 0) {
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
