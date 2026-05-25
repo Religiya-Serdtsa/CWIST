@@ -20,30 +20,30 @@ typedef struct {
     uint64_t lo;
 } cwist_mux_signature;
 
-/* Nam Byeong-gil (Gu-iljib) inspired orthogonal layout for segment mixing. */
-static const uint8_t NAM_LS_PRIMARY[4][4] = {
+/* Orthogonal byte-permutation tables for segment mixing. */
+static const uint8_t MUX_PERM_TABLE_A[4][4] = {
     {0, 1, 2, 3},
     {1, 2, 3, 0},
     {2, 3, 0, 1},
     {3, 0, 1, 2}
 };
 
-static const uint8_t NAM_LS_SECONDARY[4][4] = {
+static const uint8_t MUX_PERM_TABLE_B[4][4] = {
     {0, 1, 2, 3},
     {3, 0, 1, 2},
     {1, 2, 3, 0},
     {2, 3, 0, 1}
 };
 
-/* Lo Shu magic square for the method-path grid, lifted from classical Joseon Sanhak texts. */
-static const uint8_t CWIST_LO_SHU[3][3] = {
+/* 3×3 routing hash slot lookup table for method-path grid indexing. */
+static const uint8_t CWIST_ROUTING_HASH_SLOT[3][3] = {
     {8, 1, 6},
     {3, 5, 7},
     {4, 9, 2}
 };
 
-/* Jeungseung Gaebangbeop coefficient matrix used by the Dawonsul solver. */
-static const double JOSEON_RATIO_MATRIX[3][3] = {
+/* Coefficient matrix for the linear solver. */
+static const double MUX_COEFF_MATRIX[3][3] = {
     {1.0, 1.0, 1.0},
     {2.0, 3.0, 5.0},
     {5.0, 3.0, 2.0}
@@ -60,16 +60,16 @@ static inline uint64_t mux_rotl64(uint64_t v, unsigned int r) {
 }
 
 /**
- * @brief Fold two 2-bit symbols into a compact 4-bit latin-square code.
+ * @brief Fold two 2-bit symbols into a compact 4-bit permutation code.
  * @param lhs First symbol, usually the route byte.
  * @param rhs Second symbol, usually the segment-relative position.
  * @return Merged nibble used to perturb the route signature.
  */
-static uint8_t nam_latin_merge(uint8_t lhs, uint8_t rhs) {
+static uint8_t mux_byte_permute(uint8_t lhs, uint8_t rhs) {
     uint8_t row = lhs & 0x3;
     uint8_t col = rhs & 0x3;
-    uint8_t a = NAM_LS_PRIMARY[row][col];
-    uint8_t b = NAM_LS_SECONDARY[col][row];
+    uint8_t a = MUX_PERM_TABLE_A[row][col];
+    uint8_t b = MUX_PERM_TABLE_B[col][row];
     return (uint8_t)((a << 2) | b);
 }
 
@@ -84,7 +84,7 @@ static void cwist_mux_mix_segment(cwist_mux_signature *sig, const char *segment,
     uint64_t acc = 0xA0761D6478BD642FULL ^ ((uint64_t)len << (seg_idx & 15));
     for (size_t i = 0; i < len; ++i) {
         uint8_t ch = (uint8_t)segment[i];
-        uint8_t latin = nam_latin_merge(ch, (uint8_t)(i + seg_idx));
+        uint8_t latin = mux_byte_permute(ch, (uint8_t)(i + seg_idx));
         uint64_t delta = ((uint64_t)latin << 48) |
                          ((uint64_t)ch << 24) |
                          ((uint64_t)(len - i) << 8) |
@@ -95,16 +95,16 @@ static void cwist_mux_mix_segment(cwist_mux_signature *sig, const char *segment,
     sig->lo += mux_rotl64(acc + sig->hi, (unsigned int)(((seg_idx * 17) + 3) & 63));
 }
 
-/* --- Joseon Sanhak-Inspired Matrix Helpers --- */
+/* --- Linear system helpers for router weight derivation --- */
 
 /**
- * @brief Solve a 3x3 linear system using Dawonsul-style elimination.
+ * @brief Solve a 3×3 linear system via Gaussian elimination with partial pivoting.
  * @param matrix Coefficient matrix (row-major order).
  * @param rhs Right-hand side vector.
  * @param out Solution vector written when the system is non-singular.
  * @return true when a stable solution was found.
  */
-static bool cwist_dawonsul_solve3(const double matrix[3][3], const double rhs[3], double out[3]) {
+static bool mux_solve_linear3(const double matrix[3][3], const double rhs[3], double out[3]) {
     double aug[3][4];
     for (size_t r = 0; r < 3; ++r) {
         for (size_t c = 0; c < 3; ++c) {
@@ -153,18 +153,18 @@ static bool cwist_dawonsul_solve3(const double matrix[3][3], const double rhs[3]
 }
 
 /**
- * @brief Extract Jeungseung Gaebangbeop coefficients from the signature.
+ * @brief Derive routing coefficients from the signature.
  * @param sig Route signature.
  * @param coeffs Output vector containing the solved weights.
  */
-static void cwist_jungseung_coeffs(const cwist_mux_signature *sig, double coeffs[3]) {
+static void mux_derive_coeffs(const cwist_mux_signature *sig, double coeffs[3]) {
     double rhs[3] = {
         1.0 + (double)(sig->hi & 0xFFFFULL),
         1.0 + (double)((sig->lo >> 16ULL) & 0xFFFFULL),
         1.0 + (double)((((sig->hi >> 32ULL) ^ sig->lo) & 0xFFFFULL))
     };
 
-    if (!cwist_dawonsul_solve3(JOSEON_RATIO_MATRIX, rhs, coeffs)) {
+    if (!mux_solve_linear3(MUX_COEFF_MATRIX, rhs, coeffs)) {
         coeffs[0] = rhs[0];
         coeffs[1] = rhs[1];
         coeffs[2] = rhs[2];
@@ -172,18 +172,18 @@ static void cwist_jungseung_coeffs(const cwist_mux_signature *sig, double coeffs
 }
 
 /**
- * @brief Select a Lo Shu magic-square coordinate from the signature.
+ * @brief Select a routing hash slot from the signature.
  */
-static uint8_t cwist_magic_square_coord(const cwist_mux_signature *sig) {
+static uint8_t cwist_routing_hash_slot(const cwist_mux_signature *sig) {
     size_t row = (size_t)((sig->hi ^ sig->lo) % 3ULL);
     size_t col = (size_t)(((mux_rotl64(sig->hi, 17) ^ (sig->lo >> 7)) % 3ULL));
-    return CWIST_LO_SHU[row][col];
+    return CWIST_ROUTING_HASH_SLOT[row][col];
 }
 
 /**
- * @brief Apply an al-Kashi style iterative refinement to the magnitude guess.
+ * @brief Iterative magnitude refinement (Newton-Raphson-style).
  */
-static double cwist_al_kashi_refine(double guess, double target) {
+static double mux_refine_magnitude(double guess, double target) {
     double g = fabs(guess) + 1.0;
     double t = fabs(target) + 1.0;
     for (int i = 0; i < 2; ++i) {
@@ -193,9 +193,9 @@ static double cwist_al_kashi_refine(double guess, double target) {
 }
 
 /**
- * @brief Predict the next state using a single Euler step.
+ * @brief Predict next state with a single-step linear extrapolation.
  */
-static double cwist_euler_predict(double state, double slope) {
+static double mux_predict_state(double state, double slope) {
     const double h = 0.125; /* Small integration step. */
     return state + slope * h;
 }
@@ -241,20 +241,20 @@ static cwist_mux_signature cwist_mux_signature_from_path(cwist_http_method_t met
  * @return Stable bucket index in the router's fixed bucket array.
  */
 static size_t cwist_mux_bucket_index(const cwist_mux_router *router, const cwist_mux_signature *sig) {
-    uint8_t magic = cwist_magic_square_coord(sig);
+    uint8_t hash_slot = cwist_routing_hash_slot(sig);
     double coeffs[3];
-    cwist_jungseung_coeffs(sig, coeffs);
+    mux_derive_coeffs(sig, coeffs);
 
     double ratio_mix = coeffs[0] * 7.0 + coeffs[1] * 5.0 + coeffs[2] * 3.0;
-    double refined = cwist_al_kashi_refine(ratio_mix, (double)(sig->hi | 1ULL));
+    double refined = mux_refine_magnitude(ratio_mix, (double)(sig->hi | 1ULL));
     double slope = ((double)((sig->hi >> 8ULL) & 0xFFULL) - (double)((sig->lo >> 8ULL) & 0xFFULL)) / 64.0;
-    double predicted = cwist_euler_predict(refined, slope);
+    double predicted = mux_predict_state(refined, slope);
     if (predicted < 0.0) {
-        predicted = -predicted + (double)magic;
+        predicted = -predicted + (double)hash_slot;
     }
 
-    uint64_t mix = ((uint64_t)predicted) ^ mux_rotl64(sig->hi + sig->lo, magic % 61U);
-    mix ^= mux_rotl64(((uint64_t)magic * 0x9e3779b185ebca87ULL), magic % 31U);
+    uint64_t mix = ((uint64_t)predicted) ^ mux_rotl64(sig->hi + sig->lo, hash_slot % 61U);
+    mix ^= mux_rotl64(((uint64_t)hash_slot * 0x9e3779b185ebca87ULL), hash_slot % 31U);
     return (size_t)(mix % router->bucket_count);
 }
 
