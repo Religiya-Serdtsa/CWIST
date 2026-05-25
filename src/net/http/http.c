@@ -255,6 +255,36 @@ char *cwist_http_header_get(cwist_http_header_node *head, const char *key) {
 }
 
 /**
+ * @brief Add default security headers to an HTTP response if not already present.
+ * @param res Response object to populate.
+ */
+void cwist_http_response_add_security_headers(cwist_http_response *res) {
+    if (!res) return;
+
+    if (!cwist_http_header_get(res->headers, "X-Frame-Options")) {
+        cwist_http_header_add(&res->headers, "X-Frame-Options", "DENY");
+    }
+    if (!cwist_http_header_get(res->headers, "X-Content-Type-Options")) {
+        cwist_http_header_add(&res->headers, "X-Content-Type-Options", "nosniff");
+    }
+    if (!cwist_http_header_get(res->headers, "Referrer-Policy")) {
+        cwist_http_header_add(&res->headers, "Referrer-Policy", "strict-origin-when-cross-origin");
+    }
+    if (!cwist_http_header_get(res->headers, "Content-Security-Policy")) {
+        cwist_http_header_add(&res->headers, "Content-Security-Policy",
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';");
+    }
+}
+
+/**
  * @brief Destroy every node in a request or response header list.
  * @param head Head of the header linked list.
  */
@@ -504,6 +534,8 @@ cwist_http_response *cwist_http_response_create(void) {
     // Defaults
     cwist_sstring_assign(res->version, "HTTP/1.1");
     cwist_sstring_assign(res->status_text, "OK");
+
+    cwist_http_response_add_security_headers(res);
 
     return res;
 }
