@@ -725,7 +725,7 @@ cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
 
     cwist_h3_ssl_ctx_init(ssl_ctx, 0);
 
-    if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path, SSL_FILETYPE_PEM) <= 0 ||
+    if (SSL_CTX_use_certificate_chain_file(ssl_ctx, cert_path) <= 0 ||
         SSL_CTX_use_PrivateKey_file(ssl_ctx, key_path, SSL_FILETYPE_PEM) <= 0) {
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();

@@ -295,7 +295,7 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
     }
 
     // Load Cert and Key
-    if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path, SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_chain_file(ssl_ctx, cert_path) <= 0) {
         SSL_CTX_free(ssl_ctx);
         return make_ssl_error("Unable to load certificate");
     }
