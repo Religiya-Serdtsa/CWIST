@@ -273,14 +273,18 @@ void cwist_http_response_add_security_headers(cwist_http_response *res) {
     if (!cwist_http_header_get(res->headers, "Content-Security-Policy")) {
         cwist_http_header_add(&res->headers, "Content-Security-Policy",
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+            "script-src 'self' https://cdnjs.cloudflare.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' data:; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+            "img-src 'self'; "
             "connect-src 'self'; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
-            "form-action 'self';");
+            "form-action 'self'; "
+            "object-src 'none';");
+    }
+    if (!cwist_http_header_get(res->headers, "Cross-Origin-Resource-Policy")) {
+        cwist_http_header_add(&res->headers, "Cross-Origin-Resource-Policy", "same-origin");
     }
 }
 
@@ -823,7 +827,7 @@ cwist_sstring *cwist_http_stringify_response(cwist_http_response *res) {
     if (res->is_ptr_body && res->ptr_body) {
         cwist_sstring_append_len(s, (char*)res->ptr_body, res->ptr_body_len);
     } else if (res->body) {
-        cwist_sstring_append(s, res->body->data);
+        cwist_sstring_append_len(s, res->body->data, res->body->size);
     }
     return s;
 }
