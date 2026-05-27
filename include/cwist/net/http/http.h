@@ -27,7 +27,7 @@
     #include <unistd.h>
 #endif
 
-static long get_cpu_cores(void) {
+static inline long get_cpu_cores(void) {
 #if defined(_WIN32) || defined(_WIN64)
     /* Windows Environment */
     SYSTEM_INFO sysinfo;
@@ -65,7 +65,7 @@ static long get_cpu_cores(void) {
 #endif
 }
 
-long get_optimal_thread_count(void) {
+static inline long get_optimal_thread_count(void) {
     /* Pure native scheduling policy: strictly enforce "nproc * 2" boundary */
     return get_cpu_cores() * 2;
 }
