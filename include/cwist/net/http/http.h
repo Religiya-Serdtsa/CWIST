@@ -27,7 +27,7 @@
     #include <unistd.h>
 #endif
 
-long get_cpu_cores(void) {
+static long get_cpu_cores(void) {
 #if defined(_WIN32) || defined(_WIN64)
     /* Windows Environment */
     SYSTEM_INFO sysinfo;

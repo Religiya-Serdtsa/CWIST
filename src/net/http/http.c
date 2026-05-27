@@ -57,8 +57,9 @@ typedef struct {
     uint32_t worker_id;
 } http_thread_worker_t;
 
-static http_thread_worker_t g_workers[HTTP_THREAD_POOL_SIZE];
 static size_t g_rr_index = 0;
+static long g_http_thread_count;
+static http_thread_worker_t *g_workers = NULL;
 
 static void *http_pool_worker(void *arg) {
     http_thread_worker_t *w = (http_thread_worker_t *)arg;
@@ -86,9 +87,11 @@ static void *http_pool_worker(void *arg) {
 }
 
 static int http_pool_init(void) {
+    g_http_thread_count = get_optimal_thread_count();
+    g_workers = cwist_alloc(g_http_thread_count * sizeof(http_thread_worker_t));
     g_rr_index = 0;
     memset(g_workers, 0, sizeof(g_workers));
-    for (int i = 0; i < HTTP_THREAD_POOL_SIZE; i++) {
+    for (int i = 0; i < get_optimal_thread_count(); i++) {
         g_workers[i].queue = cwist_alloc(HTTP_TASKS_PER_THREAD * sizeof(http_pool_task_t));
         if (!g_workers[i].queue) return -1;
         
@@ -107,9 +110,9 @@ static void http_pool_submit(int client_fd, void (*handler)(int, void *), void *
     /* Deterministic worker selection using Choi Seok-jeong's MOLS to minimize cache bouncing. */
     uint16_t node_id = (uint16_t)(client_fd % TTAK_MOLS_NODE_COUNT);
     uint32_t mixed = ttak_apply_mols_control(node_id, (uint32_t)g_rr_index);
-    size_t worker_idx = mixed % HTTP_THREAD_POOL_SIZE;
+    size_t worker_idx = mixed % get_optimal_thread_count();
 
-    g_rr_index = (g_rr_index + 1) % HTTP_THREAD_POOL_SIZE;
+    g_rr_index = (g_rr_index + 1) % get_optimal_thread_count();
     
     http_thread_worker_t *w = &g_workers[worker_idx];
 
@@ -131,13 +134,13 @@ static void http_pool_submit(int client_fd, void (*handler)(int, void *), void *
     pthread_mutex_unlock(&w->mutex);
 }
 static void http_pool_destroy(void) {
-    for (int i = 0; i < HTTP_THREAD_POOL_SIZE; i++) {
+    for (int i = 0; i < get_optimal_thread_count(); i++) {
         pthread_mutex_lock(&g_workers[i].mutex);
         g_workers[i].shutdown = 1;
         pthread_cond_broadcast(&g_workers[i].cond_not_empty);
         pthread_mutex_unlock(&g_workers[i].mutex);
     }
-    for (int i = 0; i < HTTP_THREAD_POOL_SIZE; i++) {
+    for (int i = 0; i < get_optimal_thread_count(); i++) {
         pthread_join(g_workers[i].thread, NULL);
         pthread_mutex_destroy(&g_workers[i].mutex);
         pthread_cond_destroy(&g_workers[i].cond_not_empty);

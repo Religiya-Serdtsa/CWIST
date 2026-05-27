@@ -41,7 +41,8 @@ typedef struct {
 } https_pool_task_t;
 
 typedef struct {
-    pthread_t threads[HTTPS_THREAD_POOL_SIZE];
+    pthread_t threads[2048];
+    size_t    threads_size;
     https_pool_task_t queue[HTTPS_TASK_QUEUE_SIZE];
     size_t head;
     size_t tail;
@@ -96,7 +97,7 @@ int https_pool_init(void) {
     pthread_mutex_init(&g_https_pool.mutex, NULL);
     pthread_cond_init(&g_https_pool.cond_not_empty, NULL);
     pthread_cond_init(&g_https_pool.cond_not_full, NULL);
-    for (int i = 0; i < HTTPS_THREAD_POOL_SIZE; i++) {
+    for (int i = 0; i < get_optimal_thread_count(); i++) {
         if (pthread_create(&g_https_pool.threads[i], NULL, https_pool_worker, NULL) != 0) {
             return -1;
         }
@@ -131,7 +132,7 @@ void https_pool_destroy(void) {
     g_https_pool.shutdown = 1;
     pthread_cond_broadcast(&g_https_pool.cond_not_empty);
     pthread_mutex_unlock(&g_https_pool.mutex);
-    for (int i = 0; i < HTTPS_THREAD_POOL_SIZE; i++) {
+    for (int i = 0; i < get_optimal_thread_count(); i++) {
         pthread_join(g_https_pool.threads[i], NULL);
     }
     pthread_mutex_destroy(&g_https_pool.mutex);

@@ -11,7 +11,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#define HTTPS_THREAD_POOL_SIZE HTTP_THREAD_POOL_SIZE
+#define HTTPS_THREAD_POOL_SIZE HTTP_THREAD_POOL_SIZE;
 
 /** --- SSL Structures --- */
 
