@@ -138,6 +138,7 @@ void https_pool_destroy(void) {
     pthread_mutex_destroy(&g_https_pool.mutex);
     pthread_cond_destroy(&g_https_pool.cond_not_empty);
     pthread_cond_destroy(&g_https_pool.cond_not_full);
+
     g_https_pool_initialized = false;
 }
 /* --- End Thread Pool --- */

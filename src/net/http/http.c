@@ -149,6 +149,10 @@ static void http_pool_destroy(void) {
             cwist_free(g_workers[i].queue);
         }
     }
+
+    cwist_free(g_workers);
+    g_workers = nullptr;
+    g_http_thread_count = 0;
 }
 /* --- End Thread Pool --- */
 
