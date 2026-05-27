@@ -18,57 +18,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(_WIN32) || defined(_WIN64)
-    #include <windows.h>
-#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
-    #include <sys/types.h>
-    #include <sys/sysctl.h>
-#else
-    #include <unistd.h>
-#endif
-
-static inline long get_cpu_cores(void) {
-#if defined(_WIN32) || defined(_WIN64)
-    /* Windows Environment */
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo(&sysinfo);
-    return (long)sysinfo.dwNumberOfProcessors;
-
-#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
-    /* BSD Variant - Query kernel MIB tree directly via sysctl */
-    int mib[2];
-    int nproc = 0;
-    size_t len = sizeof(nproc);
-
-    mib[0] = CTL_HW;
-#if defined(HW_NCPUONLINE)
-    /* OpenBSD/FreeBSD preferred: returns counts of actual online cores */
-    mib[1] = HW_NCPUONLINE;
-#else
-    /* Fallback for older BSD kernels */
-    mib[1] = HW_NCPU;
-#endif
-
-    if (sysctl(mib, 2, &nproc, &len, NULL, 0) == 0) {
-        return (long)nproc;
-    }
-    return 4;
-
-#elif defined(_SC_NPROCESSORS_ONLN)
-    /* Linux / Unix POSIX standard */
-    long nproc = sysconf(_SC_NPROCESSORS_ONLN);
-    return (nproc > 0) ? nproc : 4;
-
-#else
-    /* Fallback value for undetermined architecture */
-    return 4;
-#endif
-}
-
-static inline long get_optimal_thread_count(void) {
-    /* Pure native scheduling policy: strictly enforce "nproc * 2" boundary */
-    return get_cpu_cores() * 2;
-}
+long get_cpu_cores(void);
+long get_optimal_thread_count(void);
 
 struct cwist_app;
 
