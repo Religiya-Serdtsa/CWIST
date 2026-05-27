@@ -1,12 +1,26 @@
 var https_8c =
 [
+    [ "_POSIX_C_SOURCE", "d2/db2/https_8c.html#a3024ccd4a9af5109d24e6c57565d74a1", null ],
+    [ "CWIST_ALPN_H2_HTTP11", "d2/db2/https_8c.html#a0c3614e59cbad59c681385c12e9169c9", null ],
+    [ "CWIST_ALPN_H2_HTTP11_LEN", "d2/db2/https_8c.html#a3f670b4d91bd4c15a4fa4b327c02e358", null ],
+    [ "CWIST_ALPN_H3_H2_HTTP11", "d2/db2/https_8c.html#ae1a607cc121b06863bad72554a793e0a", null ],
+    [ "CWIST_ALPN_H3_H2_HTTP11_LEN", "d2/db2/https_8c.html#ae8666293785285feae4439a75f8091f9", null ],
+    [ "CWIST_ALPN_HTTP11", "d2/db2/https_8c.html#ac907bb51a8f07f416f589e88b8d5d748", null ],
+    [ "CWIST_ALPN_HTTP11_LEN", "d2/db2/https_8c.html#a027c2b23babf6b4eb959ff576658be55", null ],
+    [ "HTTPS_TASK_QUEUE_SIZE", "d2/db2/https_8c.html#a8f1634ab90d75c164f0d27d5ae436ea5", null ],
+    [ "HTTPS_THREAD_POOL_SIZE", "d2/db2/https_8c.html#aded948326f120c613ad017251ae2dd37", null ],
     [ "cwist_https_accept", "d2/db2/https_8c.html#a323a4ec2f5001e354c8b443b676ee3d0", null ],
     [ "cwist_https_close_connection", "d2/db2/https_8c.html#a6360fe1aca001bb34f9aff6c5a012428", null ],
+    [ "cwist_https_connection_protocol", "d2/db2/https_8c.html#a6b5b76e3908df5fceb1da3a4860d547b", null ],
     [ "cwist_https_connection_uses_http2", "d2/db2/https_8c.html#ac4e7afa8d66d1822285d2a6aace56df0", null ],
     [ "cwist_https_destroy_context", "d2/db2/https_8c.html#acbe47c933c7464136b05dbbd42864b80", null ],
     [ "cwist_https_init_context", "d2/db2/https_8c.html#a530998c08356b749a885011d96a89496", null ],
-    [ "cwist_https_init_context_with_options", "d2/db2/https_8c.html#a642fd1ff9843730c9d0b7c12ae5e947b", null ],
+    [ "cwist_https_init_context_with_options", "d2/db2/https_8c.html#aa52c1e697fc239828f1b1abe7eff140c", null ],
     [ "cwist_https_receive_request", "d2/db2/https_8c.html#a251baaa81315b64e15308af9287d9a10", null ],
     [ "cwist_https_send_response", "d2/db2/https_8c.html#a52d82fd02567a54801fafd539f5e70bd", null ],
-    [ "cwist_https_server_loop", "d2/db2/https_8c.html#ab53d02b0f79e037af291d00ea334c69d", null ]
+    [ "cwist_https_server_loop", "d2/db2/https_8c.html#ab53d02b0f79e037af291d00ea334c69d", null ],
+    [ "cwist_tls_apply_pqc_layer", "d2/db2/https_8c.html#a2c64f58ea5cd342f9b20500759ef5cd9", null ],
+    [ "https_pool_destroy", "d2/db2/https_8c.html#a660ddac3ecdc671ed794c845fbdbba29", null ],
+    [ "https_pool_init", "d2/db2/https_8c.html#a733cdf1eb87589d9f055ab20c80e12a5", null ],
+    [ "https_pool_submit", "d2/db2/https_8c.html#aff8ce53078fb6a337bd7d2351cd809b6", null ]
 ];

@@ -12,7 +12,7 @@ var searchData=
   ['pending_5fio_5fcount_9',['pending_io_count',['../dd/d04/structcwist__core__stream.html#af261fa054adf3c6d3a2b1f2555f6452d',1,'cwist_core_stream']]],
   ['per_20connection_10',['Wire protocol (per-connection)',['../d6/dd4/db__sync_8h.html#autotoc_md0',1,'']]],
   ['ping_5fperiod_5fms_11',['ping_period_ms',['../d9/dae/structcwist__http3__context.html#a23e87edbe356a32c6d029839c8fca4a0',1,'cwist_http3_context']]],
-  ['port_12',['port',['../d1/dda/structcwist__rdbms__runtime.html#ae864be260694222bb3f0a1fa5c3eec21',1,'cwist_rdbms_runtime::port'],['../dc/da0/structcwist__app.html#acc1a9d43d51c3404f1b2dad333cadcd2',1,'cwist_app::port']]],
+  ['port_12',['port',['../dc/da0/structcwist__app.html#acc1a9d43d51c3404f1b2dad333cadcd2',1,'cwist_app::port'],['../d1/dda/structcwist__rdbms__runtime.html#ae864be260694222bb3f0a1fa5c3eec21',1,'cwist_rdbms_runtime::port']]],
   ['ports_13',['ports',['../d5/d16/structcwist__multiport__t.html#a04f2338f21f244bb1520f805c0a22aee',1,'cwist_multiport_t']]],
   ['pqc_5flayer_2ec_14',['pqc_layer.c',['../d6/d18/pqc__layer_8c.html',1,'']]],
   ['pqc_5flayer_5fenabled_15',['pqc_layer_enabled',['../dc/da0/structcwist__app.html#af5fa3c1fc41d766391f2ab79fb6fe5ec',1,'cwist_app']]],
