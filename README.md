@@ -4,11 +4,14 @@
 
 <h1 align="center">CWIST</h1>
 <p align="center"><strong>C Web development Is Still Trustworthy</strong></p>
+**Implementations powered by lsquic/BoringSSL/OpenSSL without context contamination.**
 
 <p align="center">
 A high-performance, C17 web framework that brings modern ergonomics—HTTP/3, WebTransport,
 Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing control.
 </p>
+
+[Heavy Benchmark on CWIST APP](https://github.com/gg582/fly.board/blob/main/README.md)
 
 ---
 
@@ -21,7 +24,7 @@ management as exercises for the user. CWIST ships with the entire stack:
   over QUIC with bidirectional/unidirectional streams).
 - **Post-Quantum TLS** via a single API call: `cwist_app_use_pqc_layer(app, true)`
   forces hybrid X25519MLKEM768 and disables legacy TLS < 1.3. No OpenSSL knowledge required.
-- **Zero-Copy I/O & C100K Reactor** backed by io_uring / epoll / kqueue with lock-free
+- **Server-side zero-copy I/O & C100K Reactor** backed by io_uring / epoll / kqueue with lock-free
   job queues and generational arena allocators from libttak.
 - **Nuke DB**: a read-optimal, in-memory SQLite engine that syncs to disk on every COMMIT.
 - **Auto-RDBMS Detection**: probe any TCP port and automatically mount PostgreSQL, MySQL,

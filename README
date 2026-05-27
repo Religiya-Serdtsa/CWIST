@@ -13,6 +13,9 @@
 A high-performance, C17 web framework that brings modern ergonomics
 -- HTTP/3, WebTransport, Post-Quantum TLS, and zero-copy I/O --
 to systems programming without sacrificing control.
+Powered by BoringSSL, lsquic, OpenSSL without context contamination.
+
+~~~HEAVY BENCHMARK ON CWIST APP~~~ ==> https://github.com/gg582/fly.board/blob/main/README.md
 
 ==================================================================
  WHY CWIST?
@@ -31,7 +34,7 @@ ships with the entire stack:
   Forces hybrid X25519MLKEM768 and disables legacy TLS < 1.3.
   No OpenSSL knowledge required.
 
-* Zero-Copy I/O & C100K Reactor
+* Server-side zero-copy I/O & C100K Reactor
   Backed by io_uring / epoll / kqueue with lock-free job queues
   and generational arena allocators from libttak.
 
