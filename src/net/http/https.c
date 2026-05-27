@@ -31,7 +31,6 @@ struct https_thread_payload {
 };
 
 /* --- Thread Pool for HTTPS --- */
-#define HTTPS_THREAD_POOL_SIZE 256
 #define HTTPS_TASK_QUEUE_SIZE 2097152
 
 typedef struct {

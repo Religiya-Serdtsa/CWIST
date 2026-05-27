@@ -36,8 +36,6 @@
 #include <sys/event.h>
 #endif
 
-/* --- Thread Pool for HTTP --- */
-#define HTTP_THREAD_POOL_SIZE 1024
 #define HTTP_TASKS_PER_THREAD 32768
 
 typedef struct {
