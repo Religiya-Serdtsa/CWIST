@@ -75,7 +75,7 @@ long get_cpu_cores(void) {
 #elif defined(_SC_NPROCESSORS_ONLN)
     /* Linux / Unix POSIX standard */
     long nproc = sysconf(_SC_NPROCESSORS_ONLN);
-    return (nproc > 0) ? nproc : 4;
+    return (nproc >= 4) ? nproc : 4;
 
 #else
     /* Fallback value for undetermined architecture */
@@ -84,8 +84,9 @@ long get_cpu_cores(void) {
 }
 
 long get_optimal_thread_count(void) {
-    /* Pure native scheduling policy: strictly enforce "nproc * 8" boundary */
-    return get_cpu_cores() * 8;
+    /* Pure native scheduling policy: strictly enforce "nproc * 32" boundary */
+    /* thread count should be enough as HTTP/3 is using QUIC */
+    return get_cpu_cores() * 32;
 }
 
 #define HTTP_TASKS_PER_THREAD 32768
