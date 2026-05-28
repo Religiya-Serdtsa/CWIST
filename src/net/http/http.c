@@ -139,7 +139,7 @@ static void *http_pool_worker(void *arg) {
     return NULL;
 }
 
-static int http_pool_init(void) {
+int cwist_http_pool_init(void) {
     g_http_thread_count = get_optimal_thread_count();
     g_workers = cwist_alloc(g_http_thread_count * sizeof(http_thread_worker_t));
     g_rr_index = 0;
@@ -159,7 +159,7 @@ static int http_pool_init(void) {
     return 0;
 }
 
-static void http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx) {
+void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx) {
     /* Deterministic worker selection using Choi Seok-jeong's MOLS to minimize cache bouncing. */
     uint16_t node_id = (uint16_t)(client_fd % TTAK_MOLS_NODE_COUNT);
     uint32_t mixed = ttak_apply_mols_control(node_id, (uint32_t)g_rr_index);
@@ -186,7 +186,7 @@ static void http_pool_submit(int client_fd, void (*handler)(int, void *), void *
     pthread_cond_signal(&w->cond_not_empty);
     pthread_mutex_unlock(&w->mutex);
 }
-static void http_pool_destroy(void) {
+void cwist_http_pool_destroy(void) {
     for (int i = 0; i < get_optimal_thread_count(); i++) {
         pthread_mutex_lock(&g_workers[i].mutex);
         g_workers[i].shutdown = 1;
@@ -1560,7 +1560,7 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
     }
 
     if (config->use_threading) {
-        if (http_pool_init() != 0) {
+        if (cwist_http_pool_init() != 0) {
             err.error.err_i16 = -1;
             return err;
         }
@@ -1574,12 +1574,12 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
                     continue;
                 }
                 err.error.err_i16 = -1;
-                http_pool_destroy();
+                cwist_http_pool_destroy();
                 return err;
             }
-            http_pool_submit(client_fd, handler, ctx);
+            cwist_http_pool_submit(client_fd, handler, ctx);
         }
-        http_pool_destroy();
+        cwist_http_pool_destroy();
     }
 
 #ifdef __linux__

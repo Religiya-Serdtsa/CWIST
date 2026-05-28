@@ -377,6 +377,7 @@ cwist_multiport_t cwist_create_multiport_from_array(const unsigned short *ports,
  */
 #define cwist_create_multiport(ports) cwist_create_multiport_from_array((ports), sizeof(ports) / sizeof((ports)[0]))
 
+void cwist_app_http_handler(int client_fd, void *ctx);
 int cwist_app_listen(cwist_app *app, int port);
 
 /**
