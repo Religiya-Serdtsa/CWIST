@@ -280,9 +280,13 @@ TEST_TARGETS = test_sstring \
                test_bind \
                test_metrics \
                test_io_uring \
+               test_io_uring_demolition \
                test_access_log \
                test_rate_limit \
-               test_cache
+               test_cache \
+               test_secure_headers \
+               test_http_chunked \
+               test_static_and_range
 
 .PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild examples clean-examples
 
@@ -380,9 +384,17 @@ test_io_uring: $(LIB_NAME) tests/test_io_uring.c
 	$(CC) $(CFLAGS) -o test_io_uring tests/test_io_uring.c $(LIB_NAME) $(LIBS)
 	./test_io_uring
 
+test_io_uring_demolition: $(LIB_NAME) tests/test_io_uring_demolition.c
+	$(CC) $(CFLAGS) -o test_io_uring_demolition tests/test_io_uring_demolition.c $(LIB_NAME) $(LIBS)
+	./test_io_uring_demolition
+
 test_access_log: $(LIB_NAME) tests/test_access_log.c
 	$(CC) $(CFLAGS) -o test_access_log tests/test_access_log.c $(LIB_NAME) $(LIBS)
 	./test_access_log
+
+test_secure_headers: $(LIB_NAME) tests/test_secure_headers.c
+	$(CC) $(CFLAGS) -o test_secure_headers tests/test_secure_headers.c $(LIB_NAME) $(LIBS)
+	./test_secure_headers
 
 test_rate_limit: $(LIB_NAME) tests/test_rate_limit.c
 	$(CC) $(CFLAGS) -o test_rate_limit tests/test_rate_limit.c $(LIB_NAME) $(LIBS)
@@ -554,3 +566,11 @@ example/micro/17-blog-crud/blog-crud: $(LIB_NAME) example/micro/17-blog-crud/mai
 
 clean-examples:
 	rm -f $(EXAMPLE_BINS) $(MICRO_BINS)
+
+test_http_chunked: $(LIB_NAME) tests/test_http_chunked.c
+	$(CC) $(CFLAGS) -o test_http_chunked tests/test_http_chunked.c $(LIB_NAME) $(LIBS)
+	./test_http_chunked
+
+test_static_and_range: $(LIB_NAME) tests/test_static_and_range.c
+	$(CC) $(CFLAGS) -o test_static_and_range tests/test_static_and_range.c $(LIB_NAME) $(LIBS)
+	./test_static_and_range

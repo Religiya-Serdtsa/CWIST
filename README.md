@@ -88,6 +88,55 @@ gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
 ./server
 ```
 
+## Configuration
+
+CWIST bundles a lightweight configuration loader that reads `.env` files and environment variables with optional prefixes.
+
+### Loading `.env` files
+
+```c
+cwist_config *cfg = cwist_config_create();
+cwist_config_load_file(cfg, ".env");
+
+const char *db_url = cwist_config_get(cfg, "DATABASE_URL");
+int workers       = cwist_config_get_int(cfg, "WORKERS", 4);
+bool debug        = cwist_config_get_bool(cfg, "DEBUG", false);
+
+cwist_config_destroy(cfg);
+```
+
+### Loading environment variables by prefix
+
+```c
+cwist_config_load_env(cfg, "CWIST_");
+/* Now CWIST_PORT=8080 is accessible as cwist_config_get(cfg, "CWIST_PORT") */
+```
+
+### `.env` file format
+
+```bash
+# Lines starting with # are comments
+PORT=8080
+DATABASE_URL="sqlite3:data.db"
+DEBUG=true
+WORKERS=4
+```
+
+- Keys and values are separated by `=`.
+- Values may be quoted with double quotes (`"..."`).
+- Leading/trailing whitespace around keys and values is trimmed automatically.
+
+### Framework-built-in environment variables
+
+These variables are read directly by the framework runtime (no prefix required):
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `CWIST_WORKERS` | integer | `1` | Number of worker processes to fork before entering the event loop. |
+| `CWIST_C1M_MODE` | boolean | `true` | Enables the high-concurrency C1M async server loop. Set to `0` or `false` to fall back to a blocking accept loop. |
+
+Some example applications (e.g. `example/othello-web`) also read the standard `PORT` variable when no explicit port is given.
+
 ## Nuke DB
 
 Read-from-RAM, Write-to-Disk. Nuke DB loads an on-disk SQLite file into memory via
