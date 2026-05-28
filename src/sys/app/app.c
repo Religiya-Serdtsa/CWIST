@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <strings.h>
 #include <unistd.h>
 #include <signal.h>
@@ -516,6 +517,28 @@ static cwist_route_entry *cwist_route_table_match_params(cwist_route_table *tabl
 }
 
 /**
+ * @brief Decode percent-encoded URL components in-place into dst.
+ * @return Number of bytes written to dst (excluding NUL).
+ */
+static size_t cwist_url_decode(const char *src, char *dst, size_t dst_size) {
+    size_t i = 0, j = 0;
+    while (src[i] && j + 1 < dst_size) {
+        if (src[i] == '%' && isxdigit((unsigned char)src[i + 1]) && isxdigit((unsigned char)src[i + 2])) {
+            char hex[3] = { src[i + 1], src[i + 2], '\0' };
+            dst[j++] = (char)strtol(hex, NULL, 16);
+            i += 3;
+        } else if (src[i] == '+') {
+            dst[j++] = ' ';
+            i++;
+        } else {
+            dst[j++] = src[i++];
+        }
+    }
+    dst[j] = '\0';
+    return j;
+}
+
+/**
  * @brief Reject static-file paths that attempt parent-directory traversal.
  * @param path Relative path component derived from the request.
  * @return true when the path contains `..` traversal segments.
@@ -749,8 +772,13 @@ static char *cwist_normalize_prefix(const char *prefix) {
 
 static char *cwist_normalize_directory(const char *directory) {
     if (!directory || directory[0] == '\0') {
-        return cwist_strdup(".");
+        directory = ".";
     }
+    char *resolved = realpath(directory, NULL);
+    if (resolved) {
+        return resolved;
+    }
+    /* Fallback when the path does not yet exist: strip trailing slashes */
     size_t len = strlen(directory);
     while (len > 1 && directory[len - 1] == '/') {
         len--;
@@ -799,17 +827,36 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
     }
     relative_buf[PATH_MAX - 1] = '\0';
 
-    if (cwist_path_has_parent_ref(relative_buf)) {
+    char decoded_relative[PATH_MAX];
+    cwist_url_decode(relative_buf, decoded_relative, sizeof(decoded_relative));
+
+    if (cwist_path_has_parent_ref(decoded_relative)) {
         res->status_code = CWIST_HTTP_FORBIDDEN;
         cwist_sstring_assign(res->body, "Directory traversal blocked");
         return;
     }
 
     char fs_path[PATH_MAX];
-    int written = snprintf(fs_path, sizeof(fs_path), "%s/%s", info->mapping->fs_root, relative_buf);
+    int written = snprintf(fs_path, sizeof(fs_path), "%s/%s", info->mapping->fs_root, decoded_relative);
     if (written < 0 || written >= (int)sizeof(fs_path)) {
         res->status_code = CWIST_HTTP_BAD_REQUEST;
         cwist_sstring_assign(res->body, "Static path too long");
+        return;
+    }
+
+    char canonical[PATH_MAX];
+    if (!realpath(fs_path, canonical)) {
+        res->status_code = CWIST_HTTP_NOT_FOUND;
+        cwist_sstring_assign(res->body, "Not Found");
+        return;
+    }
+
+    /* Ensure the resolved path stays inside the configured static root */
+    size_t root_len = strlen(info->mapping->fs_root);
+    if (strncmp(canonical, info->mapping->fs_root, root_len) != 0 ||
+        (canonical[root_len] != '/' && canonical[root_len] != '\0')) {
+        res->status_code = CWIST_HTTP_FORBIDDEN;
+        cwist_sstring_assign(res->body, "Directory traversal blocked");
         return;
     }
 
@@ -822,11 +869,11 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
 
     cwist_fix_server_mem *mem = app->mem_manager;
     pthread_mutex_lock(&mem->lock);
-    cwist_file_t *file = cwist_mem_get_file(mem, fs_path);
-    
+    cwist_file_t *file = cwist_mem_get_file(mem, canonical);
+
     if (file) {
         // Simple MIME guess
-        const char *dot = strrchr(fs_path, '.');
+        const char *dot = strrchr(canonical, '.');
         const char *mime = "application/octet-stream";
         if (dot) {
             if (strcasecmp(dot, ".html") == 0) mime = "text/html; charset=utf-8";
@@ -878,25 +925,73 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
             cwist_http_header_add(&res->headers, "Last-Modified", last_mod_buf);
             cwist_http_header_add(&res->headers, "Cache-Control", cc);
             cwist_sstring_assign(res->body, "");
-        } else if (file->data && file->node) {
-            // ZERO COPY
-            ttak_mem_node_acquire(file->node);
-            cwist_http_response_set_body_ptr_managed(res, file->data, file->size, cwist_static_release_body, file->node);
-            
-            const char *cc = info->mapping->cache_control ? info->mapping->cache_control : "public, max-age=3600";
-            char len_buf[32];
-            snprintf(len_buf, sizeof(len_buf), "%zu", file->size);
-            cwist_http_header_add(&res->headers, "Content-Length", len_buf);
-            cwist_http_header_add(&res->headers, "Content-Type", mime);
-            cwist_http_header_add(&res->headers, "ETag", etag);
-            cwist_http_header_add(&res->headers, "Last-Modified", last_mod_buf);
-            cwist_http_header_add(&res->headers, "Cache-Control", cc);
         } else {
-            res->status_code = CWIST_HTTP_INTERNAL_ERROR;
-            cwist_sstring_assign(res->body, "Static buffer missing");
-        }
-        if (!not_modified) {
-            res->status_code = CWIST_HTTP_OK;
+            size_t send_offset = 0;
+            size_t send_len = file->size;
+
+            /* --- Range Request Handling --- */
+            const char *range_hdr = cwist_http_header_get(req->headers, "Range");
+            if (range_hdr && strncmp(range_hdr, "bytes=", 6) == 0) {
+                const char *p = range_hdr + 6;
+                size_t range_start = 0, range_end = file->size - 1;
+                bool range_valid = true;
+
+                if (p[0] == '-') {
+                    size_t suffix = (size_t)atoi(p + 1);
+                    range_start = (file->size > suffix) ? file->size - suffix : 0;
+                    range_end = file->size - 1;
+                } else {
+                    range_start = (size_t)atoi(p);
+                    char *dash = strchr(p, '-');
+                    if (dash && dash[1] != '\0') {
+                        range_end = (size_t)atoi(dash + 1);
+                    } else {
+                        range_end = file->size - 1;
+                    }
+                }
+
+                if (range_start > range_end || range_start >= file->size) {
+                    range_valid = false;
+                    res->status_code = CWIST_HTTP_RANGE_NOT_SATISFIABLE;
+                    char cr[64];
+                    snprintf(cr, sizeof(cr), "bytes */%zu", file->size);
+                    cwist_http_header_add(&res->headers, "Content-Range", cr);
+                    cwist_sstring_assign(res->body, "");
+                } else {
+                    if (range_end >= file->size) range_end = file->size - 1;
+                    send_offset = range_start;
+                    send_len = range_end - range_start + 1;
+                    res->status_code = CWIST_HTTP_PARTIAL_CONTENT;
+                    char cr[64];
+                    snprintf(cr, sizeof(cr), "bytes %zu-%zu/%zu", range_start, range_end, file->size);
+                    cwist_http_header_add(&res->headers, "Content-Range", cr);
+                }
+            }
+
+            if (res->status_code != CWIST_HTTP_RANGE_NOT_SATISFIABLE) {
+                if (file->data && file->node) {
+                    ttak_mem_node_acquire(file->node);
+                    cwist_http_response_set_body_ptr_managed(res, (char *)file->data + send_offset, send_len, cwist_static_release_body, file->node);
+                } else {
+                    res->status_code = CWIST_HTTP_INTERNAL_ERROR;
+                    cwist_sstring_assign(res->body, "Static buffer missing");
+                }
+            }
+
+            if (res->status_code != CWIST_HTTP_INTERNAL_ERROR && res->status_code != CWIST_HTTP_RANGE_NOT_SATISFIABLE) {
+                const char *cc = info->mapping->cache_control ? info->mapping->cache_control : "public, max-age=3600";
+                char len_buf[32];
+                snprintf(len_buf, sizeof(len_buf), "%zu", send_len);
+                cwist_http_header_add(&res->headers, "Content-Length", len_buf);
+                cwist_http_header_add(&res->headers, "Content-Type", mime);
+                cwist_http_header_add(&res->headers, "ETag", etag);
+                cwist_http_header_add(&res->headers, "Last-Modified", last_mod_buf);
+                cwist_http_header_add(&res->headers, "Cache-Control", cc);
+                cwist_http_header_add(&res->headers, "Accept-Ranges", "bytes");
+                if (res->status_code != CWIST_HTTP_PARTIAL_CONTENT) {
+                    res->status_code = CWIST_HTTP_OK;
+                }
+            }
         }
     } else {
         res->status_code = CWIST_HTTP_NOT_FOUND;
