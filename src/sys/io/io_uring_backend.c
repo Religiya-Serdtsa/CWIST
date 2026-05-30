@@ -170,9 +170,11 @@ cwist_uring_backend_t *cwist_uring_backend_create(const cwist_uring_config_t *cf
         if (be->buf_pool.base != MAP_FAILED) {
             be->buf_pool.buf_size  = be->cfg.fixed_buf_size;
             be->buf_pool.buf_count = be->cfg.fixed_buf_count;
-            be->buf_pool.bid_map   = ttak_mem_alloc(be->cfg.fixed_buf_count * sizeof(int), __TTAK_UNSAFE_MEM_FOREVER__, now);
-            if (be->buf_pool.bid_map) {
-                memset(be->buf_pool.bid_map, 0, sizeof(int) * be->cfg.fixed_buf_count);
+            be->buf_pool.free_stack = ttak_mem_alloc(be->cfg.fixed_buf_count * sizeof(uint32_t), __TTAK_UNSAFE_MEM_FOREVER__, now);
+            if (be->buf_pool.free_stack) {
+                for (uint32_t i = 0; i < be->cfg.fixed_buf_count; ++i)
+                    be->buf_pool.free_stack[i] = (be->cfg.fixed_buf_count - 1) - i;
+                atomic_init(&be->buf_pool.free_top, be->cfg.fixed_buf_count);
                 be->buf_pool.free_count = be->cfg.fixed_buf_count;
                 struct iovec iov = {.iov_base = be->buf_pool.base, .iov_len = total};
                 if (sys_io_uring_register(fd, IORING_REGISTER_BUFFERS, &iov, 1) < 0) be->cfg.use_fixed_buf = false;
@@ -192,7 +194,7 @@ void cwist_uring_backend_destroy(cwist_uring_backend_t *be) {
     if (be->buf_pool.base) {
         sys_io_uring_register(be->ring_fd, IORING_UNREGISTER_BUFFERS, NULL, 0);
         munmap(be->buf_pool.base, be->buf_pool.buf_size * be->buf_pool.buf_count);
-        ttak_mem_free(be->buf_pool.bid_map);
+        ttak_mem_free(be->buf_pool.free_stack);
     }
     if (be->sq.sqes) munmap(be->sq.sqes, be->sq.sqe_sz);
     if (be->cq.cqes) munmap((char *)be->cq.cqes - be->params.cq_off.cqes, be->cq.ring_sz);
@@ -414,23 +416,23 @@ void cwist_uring_backend_stop(cwist_uring_backend_t *be) {
 
 bool cwist_uring_buf_acquire(cwist_uring_backend_t *be, uint16_t *bid, void **ptr) {
     if (!be || !bid || !ptr || !be->buf_pool.base || be->buf_pool.free_count == 0) return false;
-    for (size_t i = 0; i < be->buf_pool.buf_count; ++i) {
-        if (be->buf_pool.bid_map[i] == 0) {
-            be->buf_pool.bid_map[i] = 1;
-            be->buf_pool.free_count--;
-            *bid = (uint16_t)i;
-            *ptr = be->buf_pool.base + i * be->buf_pool.buf_size;
-            return true;
-        }
-    }
-    return false;
+    uint32_t top = atomic_load_explicit(&be->buf_pool.free_top, memory_order_acquire);
+    if (top == 0) return false;
+    top--;
+    uint32_t idx = be->buf_pool.free_stack[top];
+    atomic_store_explicit(&be->buf_pool.free_top, top, memory_order_release);
+    be->buf_pool.free_count--;
+    *bid = (uint16_t)idx;
+    *ptr = be->buf_pool.base + idx * be->buf_pool.buf_size;
+    return true;
 }
 
 void cwist_uring_buf_release(cwist_uring_backend_t *be, uint16_t bid) {
-    if (be && be->buf_pool.base && bid < be->buf_pool.buf_count && be->buf_pool.bid_map[bid] != 0) {
-        be->buf_pool.bid_map[bid] = 0;
-        be->buf_pool.free_count++;
-    }
+    if (!be || !be->buf_pool.base || bid >= be->buf_pool.buf_count) return;
+    uint32_t top = atomic_load_explicit(&be->buf_pool.free_top, memory_order_acquire);
+    be->buf_pool.free_stack[top] = bid;
+    atomic_store_explicit(&be->buf_pool.free_top, top + 1, memory_order_release);
+    be->buf_pool.free_count++;
 }
 
 uint32_t cwist_uring_pending_sqes(const cwist_uring_backend_t *be) {

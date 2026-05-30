@@ -64,7 +64,8 @@ typedef struct cwist_uring_buf_pool {
     uint8_t *base;
     size_t   buf_size;
     size_t   buf_count;
-    int     *bid_map;       ///< bid -> availability (0=free, 1=in-flight).
+    uint32_t *free_stack;   ///< O(1) free-list stack for BIDs.
+    atomic_uint free_top;   ///< Stack pointer (number of free BIDs).
     size_t   free_count;
 } cwist_uring_buf_pool_t;
 
