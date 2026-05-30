@@ -113,7 +113,8 @@ static const uint8_t CHOE_ORTHO_SECONDARY[4][4] = {
  * @return Rotated value.
  */
 static inline uint64_t rotl64(uint64_t v, unsigned int r) {
-    return (v << r) | (v >> (64U - r));
+    r &= 63U;
+    return (v << r) | (v >> ((64U - r)  & 63U));
 }
 
 /**
