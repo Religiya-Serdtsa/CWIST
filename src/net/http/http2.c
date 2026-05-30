@@ -56,6 +56,7 @@
 #define H2_ERR_SETTINGS_TIMEOUT   0x4
 #define H2_ERR_STREAM_CLOSED      0x5
 #define H2_ERR_FRAME_SIZE_ERROR   0x6
+#define H2_ERR_REFUSED_STREAM     0x7
 #define H2_ERR_COMPRESSION_ERROR  0x9
 
 /* --- Stream & Connection State --- */
@@ -100,10 +101,10 @@ static void h2_conn_destroy(h2_conn *hc) {
     while (s) {
         h2_stream *next = s->next;
         if (s->req) cwist_http_request_destroy(s->req);
-        free(s);
+        cwist_free(s);
         s = next;
     }
-    free(hc->cont_buf);
+    cwist_free(hc->cont_buf);
 }
 
 static h2_stream *h2_stream_find(h2_conn *hc, uint32_t stream_id) {
@@ -116,7 +117,7 @@ static h2_stream *h2_stream_find(h2_conn *hc, uint32_t stream_id) {
 }
 
 static h2_stream *h2_stream_create(h2_conn *hc, uint32_t stream_id) {
-    h2_stream *s = (h2_stream *)calloc(1, sizeof(*s));
+    h2_stream *s = (h2_stream *)cwist_alloc(sizeof(*s));
     if (!s) return NULL;
     s->stream_id = stream_id;
     s->send_window = (int32_t)hc->peer_initial_window_size;
@@ -133,7 +134,7 @@ static void h2_stream_remove(h2_conn *hc, uint32_t stream_id) {
         if (s->stream_id == stream_id) {
             *pp = s->next;
             if (s->req) cwist_http_request_destroy(s->req);
-            free(s);
+            cwist_free(s);
             return;
         }
         pp = &s->next;
@@ -641,7 +642,7 @@ char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_le
     h2_huffman_init();
     size_t cap = src_len * 2 + 1;
     if (cap < 16) cap = 16;
-    char *out = (char *)malloc(cap);
+    char *out = (char *)cwist_alloc(cap);
     if (!out) return NULL;
     size_t out_pos = 0;
 
@@ -651,16 +652,16 @@ char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_le
         for (int b = 7; b >= 0; --b) {
             int bit = (byte >> b) & 1;
             node = node->child[bit];
-            if (!node) { free(out); return NULL; }
+            if (!node) { cwist_free(out); return NULL; }
             if (node->is_terminal) {
                 if (node->symbol == 256) {
-                    free(out);
+                    cwist_free(out);
                     return NULL;
                 }
                 if (out_pos + 1 >= cap) {
                     cap *= 2;
-                    char *tmp = (char *)realloc(out, cap);
-                    if (!tmp) { free(out); return NULL; }
+                    char *tmp = (char *)cwist_realloc(out, cap);
+                    if (!tmp) { cwist_free(out); return NULL; }
                     out = tmp;
                 }
                 out[out_pos++] = (char)node->symbol;
@@ -675,7 +676,7 @@ char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_le
             check = check->child[1];
         }
         if (!check || check->symbol != 256) {
-            free(out);
+            cwist_free(out);
             return NULL;
         }
     }
@@ -699,7 +700,7 @@ char *h2_decode_string(const unsigned char *buf, size_t len, size_t *pos) {
         return out;
     }
 
-    char *out = (char *)malloc((size_t)str_len + 1);
+    char *out = (char *)cwist_alloc((size_t)str_len + 1);
     if (!out) return NULL;
     memcpy(out, buf + *pos, str_len);
     out[str_len] = '\0';
@@ -782,7 +783,7 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
             const cwist_http2_static_header *entry = h2_static_header(name_index);
             if (!entry || !entry->name) {
                 char *discard = h2_decode_string(payload, len, &pos);
-                free(discard);
+                cwist_free(discard);
                 continue;
             }
             name = strdup(entry->name);
@@ -791,8 +792,8 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
         }
         value = h2_decode_string(payload, len, &pos);
         if (!name || !value) {
-            free(name);
-            free(value);
+            cwist_free(name);
+            cwist_free(value);
             break;
         }
         h2_apply_header(req, name, value);
@@ -984,15 +985,15 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
         size_t remaining = res->file_stream_len;
         while (remaining > 0) {
             uint32_t chunk = (uint32_t)(remaining > max_frame_size ? max_frame_size : remaining);
-            unsigned char *chunk_buf = (unsigned char *)malloc(chunk);
+            unsigned char *chunk_buf = (unsigned char *)cwist_alloc(chunk);
             if (!chunk_buf) return -1;
             ssize_t r = pread(res->file_stream_fd, chunk_buf, chunk, offset);
-            if (r <= 0) { free(chunk_buf); return -1; }
+            if (r <= 0) { cwist_free(chunk_buf); return -1; }
             uint8_t flags = (remaining == (size_t)r) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
             if (h2_write_frame(conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id, chunk_buf, (uint32_t)r) != 0) {
-                free(chunk_buf); return -1;
+                cwist_free(chunk_buf); return -1;
             }
-            free(chunk_buf);
+            cwist_free(chunk_buf);
             offset += r;
             remaining -= (size_t)r;
         }
@@ -1058,7 +1059,7 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
             if ((int32_t)allowed > hc->conn_send_window) allowed = (uint32_t)hc->conn_send_window;
             if (s && (int32_t)allowed > s->send_window) allowed = (uint32_t)s->send_window;
 
-            unsigned char *chunk_buf = (unsigned char *)malloc(allowed);
+            unsigned char *chunk_buf = (unsigned char *)cwist_alloc(allowed);
             if (!chunk_buf) return -1;
             ssize_t r = pread(res->file_stream_fd, chunk_buf, allowed, offset);
             if (r <= 0) { free(chunk_buf); return -1; }
@@ -1133,7 +1134,7 @@ static int h2_begin_headers(h2_conn *hc, uint32_t stream_id,
     hc->cont_end_stream = end_stream;
     hc->cont_len = block_len;
     hc->cont_cap = block_len < 1024 ? 1024 : block_len * 2;
-    hc->cont_buf = (unsigned char *)malloc(hc->cont_cap);
+    hc->cont_buf = (unsigned char *)cwist_alloc(hc->cont_cap);
     if (!hc->cont_buf) {
         hc->expecting_continuation = false;
         return -1;
@@ -1155,7 +1156,7 @@ static int h2_handle_continuation(h2_conn *hc, uint32_t stream_id,
         if (hc->cont_len + len > hc->cont_cap) {
             size_t new_cap = hc->cont_cap * 2;
             while (new_cap < hc->cont_len + len) new_cap *= 2;
-            unsigned char *tmp = (unsigned char *)realloc(hc->cont_buf, new_cap);
+            unsigned char *tmp = (unsigned char *)cwist_realloc(hc->cont_buf, new_cap);
             if (!tmp) return -1;
             hc->cont_buf = tmp;
             hc->cont_cap = new_cap;
@@ -1342,6 +1343,7 @@ cwist_error_t cwist_http2_serve_connection(
     }
 
     bool connected = true;
+    bool sent_goaway = false;
     while (connected && atomic_load(&g_cwist_running)) {
         unsigned char hdr[9];
         int offset = 0;
@@ -1374,7 +1376,7 @@ cwist_error_t cwist_http2_serve_connection(
 
         unsigned char *payload = NULL;
         if (len > 0) {
-            payload = (unsigned char *)malloc(len);
+            payload = (unsigned char *)cwist_alloc(len);
             if (!payload) { connected = false; break; }
             int off = 0;
             while (off < (int)len) {
@@ -1383,7 +1385,7 @@ cwist_error_t cwist_http2_serve_connection(
                 off += r;
             }
         }
-        if (!connected) { free(payload); break; }
+        if (!connected) { cwist_free(payload); break; }
 
         switch (type) {
             case CWIST_HTTP2_FRAME_SETTINGS: {
@@ -1503,6 +1505,12 @@ cwist_error_t cwist_http2_serve_connection(
                     }
                 }
                 if (payload && len > 0) {
+                    if (s->req->body->size + len > CWIST_HTTP_MAX_BODY_SIZE) {
+                        uint8_t rst[4] = {0, 0, 0, H2_ERR_REFUSED_STREAM};
+                        h2_write_frame(hc.conn, CWIST_HTTP2_FRAME_RST_STREAM, 0, stream_id, rst, 4);
+                        h2_stream_remove(&hc, stream_id);
+                        break;
+                    }
                     cwist_sstring_append_len(s->req->body, (const char *)payload, len);
                 }
                 if (flags & CWIST_HTTP2_FLAG_END_STREAM) {
@@ -1568,7 +1576,12 @@ cwist_error_t cwist_http2_serve_connection(
                 break;
         }
 
-        free(payload);
+        cwist_free(payload);
+    }
+
+    if (connected && !atomic_load(&g_cwist_running) && !sent_goaway) {
+        h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR);
+        sent_goaway = true;
     }
 
     h2_conn_destroy(&hc);

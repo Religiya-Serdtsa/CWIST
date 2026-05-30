@@ -1,5 +1,7 @@
 var websocket_8c =
 [
+    [ "_GNU_SOURCE", "d4/de6/websocket_8c.html#a369266c24eacffb87046522897a570d5", null ],
+    [ "WS_GUID", "d4/de6/websocket_8c.html#a19b2fa8561bcd550d68b56b81d783e98", null ],
     [ "cwist_websocket_close", "d4/de6/websocket_8c.html#a81ea5930173790e2b2157c5c3693f641", null ],
     [ "cwist_websocket_destroy", "d4/de6/websocket_8c.html#adfa3c97f06abeb3ba1a0fe252b8e4eac", null ],
     [ "cwist_websocket_frame_destroy", "d4/de6/websocket_8c.html#ad0076021ccbab9a5990c269dca59df99", null ],

@@ -4,6 +4,9 @@
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/sys/app/shutdown.h>
+#include <ttak/mols_control.h>
+#include <ttak/net/lattice.h>
+#include <ttak/priority/scheduler.h>
 
 #include <limits.h>
 #include <stdio.h>
@@ -32,6 +35,186 @@
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #include <sys/event.h>
 #endif
+
+#if defined(_WIN32) || defined(_WIN64)
+    #include <windows.h>
+#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    #include <sys/types.h>
+    #include <sys/sysctl.h>
+#else
+    #include <unistd.h>
+#endif
+
+long get_cpu_cores(void) {
+#if defined(_WIN32) || defined(_WIN64)
+    /* Windows Environment */
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    return (long)sysinfo.dwNumberOfProcessors;
+
+#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    /* BSD Variant - Query kernel MIB tree directly via sysctl */
+    int mib[2];
+    int nproc = 0;
+    size_t len = sizeof(nproc);
+
+    mib[0] = CTL_HW;
+#if defined(HW_NCPUONLINE)
+    /* OpenBSD/FreeBSD preferred: returns counts of actual online cores */
+    mib[1] = HW_NCPUONLINE;
+#else
+    /* Fallback for older BSD kernels */
+    mib[1] = HW_NCPU;
+#endif
+
+    if (sysctl(mib, 2, &nproc, &len, NULL, 0) == 0) {
+        return (long)nproc;
+    }
+    return 4;
+
+#elif defined(_SC_NPROCESSORS_ONLN)
+    /* Linux / Unix POSIX standard */
+    long nproc = sysconf(_SC_NPROCESSORS_ONLN);
+    return (nproc >= 4) ? nproc : 4;
+
+#else
+    /* Fallback value for undetermined architecture */
+    return 4;
+#endif
+}
+
+long get_optimal_thread_count(void) {
+    /* Pure native scheduling policy: strictly enforce "nproc * 32" boundary */
+    /* thread count should be enough as HTTP/3 is using QUIC */
+    return get_cpu_cores() * 32;
+}
+
+#define HTTP_TASKS_PER_THREAD 32768
+
+typedef struct {
+    int client_fd;
+    void (*handler_func)(int, void *);
+    void *ctx;
+} http_pool_task_t;
+
+typedef struct {
+    pthread_t thread;
+    http_pool_task_t *queue;
+    size_t head;
+    size_t tail;
+    size_t count;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond_not_empty;
+    pthread_cond_t cond_not_full;
+    int shutdown;
+    uint32_t worker_id;
+} http_thread_worker_t;
+
+static size_t g_rr_index = 0;
+static long g_http_thread_count;
+static http_thread_worker_t *g_workers = NULL;
+
+static void *http_pool_worker(void *arg) {
+    http_thread_worker_t *w = (http_thread_worker_t *)arg;
+    /* Bind this thread to the lattice worker ID for deterministic slot selection. */
+    ttak_net_lattice_set_worker_id(w->worker_id);
+
+    while (1) {
+        pthread_mutex_lock(&w->mutex);
+        while (w->count == 0 && !w->shutdown) {
+            pthread_cond_wait(&w->cond_not_empty, &w->mutex);
+        }
+        if (w->shutdown && w->count == 0) {
+            pthread_mutex_unlock(&w->mutex);
+            break;
+        }
+        http_pool_task_t task = w->queue[w->head];
+        w->head = (w->head + 1) % HTTP_TASKS_PER_THREAD;
+        w->count--;
+        pthread_cond_signal(&w->cond_not_full);
+        pthread_mutex_unlock(&w->mutex);
+
+        task.handler_func(task.client_fd, task.ctx);
+    }
+    return NULL;
+}
+
+int cwist_http_pool_init(void) {
+    g_http_thread_count = get_optimal_thread_count();
+    g_workers = cwist_alloc(g_http_thread_count * sizeof(http_thread_worker_t));
+    g_rr_index = 0;
+    memset(g_workers, 0, g_http_thread_count * sizeof(http_thread_worker_t));
+    for (int i = 0; i < get_optimal_thread_count(); i++) {
+        g_workers[i].queue = cwist_alloc(HTTP_TASKS_PER_THREAD * sizeof(http_pool_task_t));
+        if (!g_workers[i].queue) return -1;
+        
+        pthread_mutex_init(&g_workers[i].mutex, NULL);
+        pthread_cond_init(&g_workers[i].cond_not_empty, NULL);
+        pthread_cond_init(&g_workers[i].cond_not_full, NULL);
+        g_workers[i].worker_id = (uint32_t)i;
+        if (pthread_create(&g_workers[i].thread, NULL, http_pool_worker, &g_workers[i]) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx) {
+    /* Deterministic worker selection using Choi Seok-jeong's MOLS to minimize cache bouncing. */
+    uint16_t node_id = (uint16_t)(client_fd % TTAK_MOLS_NODE_COUNT);
+    uint32_t mixed = ttak_apply_mols_control(node_id, (uint32_t)g_rr_index);
+    size_t worker_idx = mixed % get_optimal_thread_count();
+
+    g_rr_index = (g_rr_index + 1) % get_optimal_thread_count();
+    
+    http_thread_worker_t *w = &g_workers[worker_idx];
+
+    pthread_mutex_lock(&w->mutex);
+    while (w->count >= HTTP_TASKS_PER_THREAD && !w->shutdown) {
+        pthread_cond_wait(&w->cond_not_full, &w->mutex);
+    }
+    if (w->shutdown) {
+        pthread_mutex_unlock(&w->mutex);
+        close(client_fd);
+        return;
+    }
+    w->queue[w->tail].client_fd = client_fd;
+    w->queue[w->tail].handler_func = handler;
+    w->queue[w->tail].ctx = ctx;
+    w->tail = (w->tail + 1) % HTTP_TASKS_PER_THREAD;
+    w->count++;
+    pthread_cond_signal(&w->cond_not_empty);
+    pthread_mutex_unlock(&w->mutex);
+}
+void cwist_http_pool_destroy(void) {
+    for (int i = 0; i < get_optimal_thread_count(); i++) {
+        pthread_mutex_lock(&g_workers[i].mutex);
+        g_workers[i].shutdown = 1;
+        pthread_cond_broadcast(&g_workers[i].cond_not_empty);
+        pthread_mutex_unlock(&g_workers[i].mutex);
+    }
+    for (int i = 0; i < get_optimal_thread_count(); i++) {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += g_cwist_drain_timeout_sec;
+        int rc = pthread_timedjoin_np(g_workers[i].thread, NULL, &ts);
+        if (rc == ETIMEDOUT) {
+            pthread_cancel(g_workers[i].thread);
+            pthread_join(g_workers[i].thread, NULL);
+        }
+        pthread_mutex_destroy(&g_workers[i].mutex);
+        pthread_cond_destroy(&g_workers[i].cond_not_empty);
+        pthread_cond_destroy(&g_workers[i].cond_not_full);
+        if (g_workers[i].queue) {
+            cwist_free(g_workers[i].queue);
+        }
+    }
+
+    cwist_free(g_workers);
+    g_workers = nullptr;
+    g_http_thread_count = 0;
+}
+/* --- End Thread Pool --- */
 
 /**
  * @file http.c
@@ -69,15 +252,20 @@ const char *cwist_http_method_to_string(cwist_http_method_t method) {
  * @param method_str Raw method token from the request line.
  * @return Parsed enum value, or CWIST_HTTP_UNKNOWN when unsupported.
  */
-cwist_http_method_t cwist_http_string_to_method(const char *method_str) {
-    if (strcmp(method_str, "GET") == 0) return CWIST_HTTP_GET;
-    if (strcmp(method_str, "POST") == 0) return CWIST_HTTP_POST;
-    if (strcmp(method_str, "PUT") == 0) return CWIST_HTTP_PUT;
-    if (strcmp(method_str, "DELETE") == 0) return CWIST_HTTP_DELETE;
-    if (strcmp(method_str, "PATCH") == 0) return CWIST_HTTP_PATCH;
-    if (strcmp(method_str, "HEAD") == 0) return CWIST_HTTP_HEAD;
-    if (strcmp(method_str, "OPTIONS") == 0) return CWIST_HTTP_OPTIONS;
+cwist_http_method_t cwist_http_string_to_method_len(const char *str, size_t len) {
+    if (len == 3 && strncmp(str, "GET", 3) == 0) return CWIST_HTTP_GET;
+    if (len == 4 && strncmp(str, "POST", 4) == 0) return CWIST_HTTP_POST;
+    if (len == 3 && strncmp(str, "PUT", 3) == 0) return CWIST_HTTP_PUT;
+    if (len == 6 && strncmp(str, "DELETE", 6) == 0) return CWIST_HTTP_DELETE;
+    if (len == 5 && strncmp(str, "PATCH", 5) == 0) return CWIST_HTTP_PATCH;
+    if (len == 4 && strncmp(str, "HEAD", 4) == 0) return CWIST_HTTP_HEAD;
+    if (len == 7 && strncmp(str, "OPTIONS", 7) == 0) return CWIST_HTTP_OPTIONS;
     return CWIST_HTTP_UNKNOWN;
+}
+
+cwist_http_method_t cwist_http_string_to_method(const char *method_str) {
+    if (!method_str) return CWIST_HTTP_UNKNOWN;
+    return cwist_http_string_to_method_len(method_str, strlen(method_str));
 }
 
 /* --- Header Manipulation --- */
@@ -129,6 +317,43 @@ char *cwist_http_header_get(cwist_http_header_node *head, const char *key) {
         curr = curr->next;
     }
     return NULL;
+}
+
+/**
+ * @brief Add default security headers to an HTTP response if not already present.
+ * @param res Response object to populate.
+ */
+void cwist_http_response_add_security_headers(cwist_http_response *res) {
+    if (!res) return;
+
+    if (!cwist_http_header_get(res->headers, "X-Frame-Options")) {
+        cwist_http_header_add(&res->headers, "X-Frame-Options", "DENY");
+    }
+    if (!cwist_http_header_get(res->headers, "X-Content-Type-Options")) {
+        cwist_http_header_add(&res->headers, "X-Content-Type-Options", "nosniff");
+    }
+    if (!cwist_http_header_get(res->headers, "Referrer-Policy")) {
+        cwist_http_header_add(&res->headers, "Referrer-Policy", "strict-origin-when-cross-origin");
+    }
+    if (!cwist_http_header_get(res->headers, "Content-Security-Policy")) {
+        cwist_http_header_add(&res->headers, "Content-Security-Policy",
+            "default-src 'self'; "
+            "script-src 'self' https://cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+            "img-src 'self'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
+            "object-src 'none';");
+    }
+    if (!cwist_http_header_get(res->headers, "Cross-Origin-Resource-Policy")) {
+        cwist_http_header_add(&res->headers, "Cross-Origin-Resource-Policy", "same-origin");
+    }
+    if (!cwist_http_header_get(res->headers, "Strict-Transport-Security")) {
+        cwist_http_header_add(&res->headers, "Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
 }
 
 /**
@@ -381,6 +606,8 @@ cwist_http_response *cwist_http_response_create(void) {
     // Defaults
     cwist_sstring_assign(res->version, "HTTP/1.1");
     cwist_sstring_assign(res->status_text, "OK");
+
+    cwist_http_response_add_security_headers(res);
 
     return res;
 }
@@ -668,7 +895,7 @@ cwist_sstring *cwist_http_stringify_response(cwist_http_response *res) {
     if (res->is_ptr_body && res->ptr_body) {
         cwist_sstring_append_len(s, (char*)res->ptr_body, res->ptr_body_len);
     } else if (res->body) {
-        cwist_sstring_append(s, res->body->data);
+        cwist_sstring_append_len(s, res->body->data, res->body->size);
     }
     return s;
 }
@@ -697,85 +924,64 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
         return NULL; 
     }
 
-    // 1. Request Line
-    int request_line_len = line_end - line_start;
-    char *request_line = (char*)cwist_alloc(request_line_len + 1);
-    if (!request_line) {
-        cwist_http_request_destroy(req);
-        return NULL;
-    }
-    strncpy(request_line, line_start, request_line_len);
-    request_line[request_line_len] = '\0';
+    // 1. Request Line (Optimized: No intermediate allocation)
+    const char *sp1 = strchr(line_start, ' ');
+    if (!sp1 || sp1 > line_end) { cwist_http_request_destroy(req); return NULL; }
+    const char *sp2 = strchr(sp1 + 1, ' ');
+    if (!sp2 || sp2 > line_end) { cwist_http_request_destroy(req); return NULL; }
+
+    req->method = cwist_http_string_to_method_len(line_start, sp1 - line_start);
     
-    char *next_ptr;
-    char *method_str = strtok_r(request_line, " ", &next_ptr);
-    char *path_str = strtok_r(NULL, " ", &next_ptr);
-    char *version_str = strtok_r(NULL, " ", &next_ptr);
+    const char *path_start = sp1 + 1;
+    const char *path_end = sp2;
+    const char *query_sep = memchr(path_start, '?', path_end - path_start);
     
-    if (method_str) req->method = cwist_http_string_to_method(method_str);
-    if (path_str) {
-      char *query = strchr(path_str, '?');
-      if(query) {
-        *query = '\0';
-        cwist_sstring_assign(req->path, path_str);
-        cwist_sstring_assign(req->query, query + 1); // exclude ? mark
+    if (query_sep) {
+        cwist_sstring_assign_len(req->path, path_start, query_sep - path_start);
+        cwist_sstring_assign_len(req->query, query_sep + 1, path_end - (query_sep + 1));
         cwist_query_map_parse(req->query_params, req->query->data);
-      } else {
-        cwist_sstring_assign(req->path, path_str);
-        cwist_sstring_assign(req->query, "");
-      }
+    } else {
+        cwist_sstring_assign_len(req->path, path_start, path_end - path_start);
+        cwist_sstring_assign_len(req->query, "", 0);
     }
 
-    if (version_str) {
-        cwist_sstring_assign(req->version, version_str);
-        if (strcmp(version_str, "HTTP/1.1") == 0) {
-            req->keep_alive = true;
-        } else {
-            req->keep_alive = false;
-        }
+    cwist_sstring_assign_len(req->version, sp2 + 1, line_end - (sp2 + 1));
+    if (strncmp(sp2 + 1, "HTTP/1.1", 8) == 0) {
+        req->keep_alive = true;
+    } else {
+        req->keep_alive = false;
     }
-    
-    cwist_free(request_line);
 
-    // 2. Headers
-    line_start = line_end + 2; // Skip \r\n
+    // 2. Headers (Optimized: Minimal copies)
+    line_start = line_end + 2; 
     while (line_start < header_end) {
         line_end = strstr(line_start, "\r\n");
-        if (!line_end) break;
+        if (!line_end || line_end == line_start) break;
 
-        if (line_end == line_start) {
-            // Empty line found
-            line_start += 2;
-            break;
-        }
-        
-        int header_len = line_end - line_start;
-        char *header_line = (char*)cwist_alloc(header_len + 1);
-        if (header_line) {
-            strncpy(header_line, line_start, header_len);
-            header_line[header_len] = '\0';
+        const char *colon = memchr(line_start, ':', line_end - line_start);
+        if (colon) {
+            int key_len = colon - line_start;
+            const char *val_start = colon + 1;
+            while (val_start < line_end && *val_start == ' ') val_start++;
+            int val_len = line_end - val_start;
             
-            char *colon = strchr(header_line, ':');
-            if (colon) {
-                *colon = '\0';
-                char *key = header_line;
-                char *value = colon + 1;
-                while (*value == ' ') value++; // Trim leading space
+            // Temporary NUL termination for legacy header_add
+            char key_tmp[256];
+            char val_tmp[1024];
+            if (key_len < 256 && val_len < 1024) {
+                memcpy(key_tmp, line_start, key_len); key_tmp[key_len] = '\0';
+                memcpy(val_tmp, val_start, val_len); val_tmp[val_len] = '\0';
                 
-                cwist_http_header_add(&req->headers, key, value);
-                if (header_key_is_connection(key)) {
-                    if (header_value_is_close(value)) {
-                        req->keep_alive = false;
-                    } else if (header_value_is_keep_alive(value)) {
-                        req->keep_alive = true;
-                    }
-                } else if (strcasecmp(key, "Content-Length") == 0) {
-                    req->content_length = (size_t)atoll(value);
+                cwist_http_header_add(&req->headers, key_tmp, val_tmp);
+                
+                if (strcasecmp(key_tmp, "Connection") == 0) {
+                    if (strcasecmp(val_tmp, "close") == 0) req->keep_alive = false;
+                    else if (strcasecmp(val_tmp, "keep-alive") == 0) req->keep_alive = true;
+                } else if (strcasecmp(key_tmp, "Content-Length") == 0) {
+                    req->content_length = (size_t)atoll(val_tmp);
                 }
             }
-            cwist_free(header_line);
         }
-        
         line_start = line_end + 2;
     }
 
@@ -790,13 +996,84 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
 
 
 /**
- * @brief Read from a client socket until a complete HTTP request is available.
- * @param client_fd Connected client socket descriptor.
- * @param read_buf Reusable receive buffer supplied by the caller.
- * @param buf_size Total capacity of @p read_buf.
- * @param buf_len In/out length of buffered leftover data.
- * @return Parsed request object, or NULL on timeout, parse failure, or IO failure.
+ * @brief Read and reassemble a chunked transfer-encoded body.
+ * @return 0 on success, -1 on error.
  */
+static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_t buf_cap, cwist_sstring *out) {
+    size_t offset = 0;
+
+    while (1) {
+        char *crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
+        while (!crlf) {
+            if (*avail >= buf_cap - 1) return -1;
+            struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+            int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+            if (ret <= 0) return -1;
+            ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
+            if (bytes <= 0) return -1;
+            *avail += (size_t)bytes;
+            buf[*avail] = '\0';
+            crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
+        }
+
+        *crlf = '\0';
+        char *endptr;
+        unsigned long chunk_size = strtoul(buf + offset, &endptr, 16);
+        if (endptr == buf + offset) return -1;
+
+        size_t line_len = (size_t)(crlf - (buf + offset)) + 2;
+        offset += line_len;
+
+        if (chunk_size == 0) {
+            /* Consume optional trailers until empty line */
+            while (offset + 1 < *avail && !(buf[offset] == '\r' && buf[offset + 1] == '\n')) {
+                char *trailer_crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
+                if (!trailer_crlf) {
+                    if (*avail >= buf_cap - 1) return -1;
+                    struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+                    int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                    if (ret <= 0) return -1;
+                    ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
+                    if (bytes <= 0) return -1;
+                    *avail += (size_t)bytes;
+                    buf[*avail] = '\0';
+                    trailer_crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
+                }
+                if (trailer_crlf) {
+                    offset = (size_t)(trailer_crlf - buf) + 2;
+                }
+            }
+            if (offset + 1 < *avail && buf[offset] == '\r' && buf[offset + 1] == '\n') {
+                offset += 2;
+            }
+            break;
+        }
+
+        if (chunk_size > CWIST_HTTP_MAX_BODY_SIZE || out->size + chunk_size > CWIST_HTTP_MAX_BODY_SIZE) return -1;
+
+        while (*avail - offset < chunk_size + 2) {
+            if (*avail >= buf_cap - 1) return -1;
+            struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+            int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+            if (ret <= 0) return -1;
+            ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
+            if (bytes <= 0) return -1;
+            *avail += (size_t)bytes;
+            buf[*avail] = '\0';
+        }
+
+        cwist_sstring_append_len(out, buf + offset, chunk_size);
+        offset += chunk_size + 2;
+    }
+
+    size_t leftover = *avail - offset;
+    if (leftover > 0) {
+        memmove(buf, buf + offset, leftover);
+    }
+    *avail = leftover;
+    return 0;
+}
+
 cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len) {
     size_t total_received = *buf_len;
     char *header_end = NULL;
@@ -807,7 +1084,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             // Buffer full, but headers not complete
             return NULL;
         }
-        
+
         struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
         int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
         if (ret <= 0) return NULL; // Timeout or error
@@ -821,10 +1098,10 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
     cwist_http_request *req = cwist_http_parse_request(read_buf);
     if (!req) return NULL;
 
-    size_t header_len = (header_end + 4) - read_buf;
+    size_t header_len = (size_t)(header_end + 4 - read_buf);
     size_t body_received = total_received - header_len;
 
-    // 2. Read body based on Content-Length
+    // 2. Read body based on Content-Length or Transfer-Encoding
     if (req->content_length > 0) {
         if (req->content_length > CWIST_HTTP_MAX_BODY_SIZE) {
             cwist_http_request_destroy(req);
@@ -838,11 +1115,11 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             return NULL;
         }
 
-        size_t to_copy = (body_received < req->content_length) ? body_received : req->content_length;
+        size_t to_copy = (body_received < (size_t)req->content_length) ? body_received : (size_t)req->content_length;
         memcpy(body, header_end + 4, to_copy);
         size_t current_body_len = to_copy;
 
-        while (current_body_len < req->content_length) {
+        while (current_body_len < (size_t)req->content_length) {
             struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
             int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
             if (ret <= 0) {
@@ -851,7 +1128,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
                 return NULL;
             }
 
-            ssize_t bytes = recv(client_fd, body + current_body_len, req->content_length - current_body_len, 0);
+            ssize_t bytes = recv(client_fd, body + current_body_len, (size_t)req->content_length - current_body_len, 0);
             if (bytes <= 0) {
                 cwist_free(body);
                 cwist_http_request_destroy(req);
@@ -860,24 +1137,46 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             current_body_len += (size_t)bytes;
         }
         body[req->content_length] = '\0';
-        cwist_sstring_assign_len(req->body, body, req->content_length);
+        cwist_sstring_assign_len(req->body, body, (size_t)req->content_length);
         cwist_free(body);
 
         // Calculate leftovers
-        if (body_received > req->content_length) {
-            size_t leftover_len = body_received - req->content_length;
+        if (body_received > (size_t)req->content_length) {
+            size_t leftover_len = body_received - (size_t)req->content_length;
             memmove(read_buf, header_end + 4 + req->content_length, leftover_len);
             *buf_len = leftover_len;
         } else {
             *buf_len = 0;
         }
     } else {
-        // No body, leftovers are everything after headers
-        if (body_received > 0) {
-            memmove(read_buf, header_end + 4, body_received);
+        const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
+        if (te && strcasecmp(te, "chunked") == 0) {
+            if (body_received > 0) {
+                memmove(read_buf, header_end + 4, body_received);
+            }
             *buf_len = body_received;
+            read_buf[*buf_len] = '\0';
+
+            cwist_sstring *chunked = cwist_sstring_create();
+            if (!chunked) {
+                cwist_http_request_destroy(req);
+                return NULL;
+            }
+            if (http_read_chunked_body(client_fd, read_buf, buf_len, buf_size, chunked) != 0) {
+                cwist_sstring_destroy(chunked);
+                cwist_http_request_destroy(req);
+                return NULL;
+            }
+            cwist_sstring_assign_len(req->body, chunked->data, chunked->size);
+            cwist_sstring_destroy(chunked);
         } else {
-            *buf_len = 0;
+            // No body, leftovers are everything after headers
+            if (body_received > 0) {
+                memmove(read_buf, header_end + 4, body_received);
+                *buf_len = body_received;
+            } else {
+                *buf_len = 0;
+            }
         }
     }
     read_buf[*buf_len] = '\0';
@@ -1083,6 +1382,10 @@ int cwist_make_socket_ipv4(struct sockaddr_in *sockv4, const char *address, uint
     return CWIST_HTTP_SETSOCKOPT_FAILED;  
   }
 
+#ifdef SO_REUSEPORT
+  setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+#endif
+
 #if defined(__APPLE__) || defined(__FreeBSD__)
   int no_sig_pipe = 1;
   setsockopt(server_fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sig_pipe, sizeof(no_sig_pipe));
@@ -1171,22 +1474,6 @@ static void cwist_accept_error_backoff(int err) {
     }
 }
 
-struct thread_payload {
-    int client_fd;
-    void (*handler_func)(int, void *);
-    void *ctx;
-};
-
-static void *thread_handler(void *arg) {
-    struct thread_payload *payload = (struct thread_payload *)arg;
-    int client_fd = payload->client_fd;
-    void (*handler_func)(int, void *) = payload->handler_func;
-    void *ctx = payload->ctx;
-    free(payload);
-    handler_func(client_fd, ctx);
-    return NULL;
-}
-
 /**
  * @brief Service one accepted client in a forked child process.
  * @param client_fd Accepted client socket descriptor.
@@ -1273,6 +1560,10 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
     }
 
     if (config->use_threading) {
+        if (cwist_http_pool_init() != 0) {
+            err.error.err_i16 = -1;
+            return err;
+        }
         while (atomic_load(&g_cwist_running)) {
             int client_fd = accept(server_fd, NULL, NULL);
             if (client_fd < 0) {
@@ -1283,35 +1574,26 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
                     continue;
                 }
                 err.error.err_i16 = -1;
+                cwist_http_pool_destroy();
                 return err;
             }
-            pthread_t thread;
-            struct thread_payload *payload = malloc(sizeof(*payload));
-            if (!payload) {
-                close(client_fd);
-                continue;
-            }
-            payload->client_fd = client_fd;
-            payload->handler_func = handler;
-            payload->ctx = ctx;
-            if (pthread_create(&thread, NULL, thread_handler, payload) == 0) {
-                pthread_detach(thread);
-            } else {
-                free(payload);
-                close(client_fd);
-            }
+            cwist_http_pool_submit(client_fd, handler, ctx);
         }
+        cwist_http_pool_destroy();
     }
 
 #ifdef __linux__
     if (config->use_epoll) {
+        int flags = fcntl(server_fd, F_GETFL, 0);
+        if (flags >= 0) fcntl(server_fd, F_SETFL, flags | O_NONBLOCK);
+
         int epoll_fd = epoll_create1(0);
         if (epoll_fd < 0) {
             err.error.err_i16 = -1;
             return err;
         }
         struct epoll_event event;
-        event.events = EPOLLIN;
+        event.events = EPOLLIN | EPOLLET;
         event.data.fd = server_fd;
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &event) < 0) {
             close(epoll_fd);
@@ -1320,8 +1602,8 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
         }
 
         while (atomic_load(&g_cwist_running)) {
-            struct epoll_event events[16];
-            int count = epoll_wait(epoll_fd, events, 16, -1);
+            struct epoll_event events[1024];
+            int count = epoll_wait(epoll_fd, events, 1024, -1);
             if (count < 0) {
                 if (errno == EINTR) continue;
                 if (errno == EBADF) break;
@@ -1329,36 +1611,44 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
             }
             for (int i = 0; i < count; i++) {
                 if (events[i].data.fd == server_fd) {
-                    int client_fd = accept(server_fd, NULL, NULL);
-                    if (client_fd >= 0) {
-                        handler(client_fd, ctx);
-                    } else {
-                        int accept_err = errno;
-                        if (accept_err == EBADF || accept_err == EINVAL) break;
-                        if (cwist_accept_error_should_retry(accept_err)) {
-                            cwist_accept_error_backoff(accept_err);
-                            continue;
+                    while (1) {
+                        int client_fd = accept(server_fd, NULL, NULL);
+                        if (client_fd >= 0) {
+                            handler(client_fd, ctx);
+                        } else {
+                            int accept_err = errno;
+                            if (accept_err == EAGAIN || accept_err == EWOULDBLOCK) break;
+                            if (accept_err == EBADF || accept_err == EINVAL) goto epoll_exit;
+                            if (accept_err == EINTR) continue;
+                            if (cwist_accept_error_should_retry(accept_err)) {
+                                cwist_accept_error_backoff(accept_err);
+                                continue;
+                            }
+                            err.error.err_i16 = -1;
+                            close(epoll_fd);
+                            return err;
                         }
-                        err.error.err_i16 = -1;
-                        close(epoll_fd);
-                        return err;
                     }
                 }
             }
         }
+epoll_exit:
         close(epoll_fd);
     }
 #endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     if (config->use_epoll) {
+        int flags = fcntl(server_fd, F_GETFL, 0);
+        if (flags >= 0) fcntl(server_fd, F_SETFL, flags | O_NONBLOCK);
+
         int kqueue_fd = kqueue();
         if (kqueue_fd < 0) {
             err.error.err_i16 = -1;
             return err;
         }
         struct kevent change;
-        EV_SET(&change, server_fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+        EV_SET(&change, server_fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
         if (kevent(kqueue_fd, &change, 1, NULL, 0, NULL) < 0) {
             close(kqueue_fd);
             err.error.err_i16 = -1;
@@ -1375,23 +1665,28 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
             }
             for (int i = 0; i < count; i++) {
                 if ((int)events[i].ident == server_fd) {
-                    int client_fd = accept(server_fd, NULL, NULL);
-                    if (client_fd >= 0) {
-                        handler(client_fd, ctx);
-                    } else {
-                        int accept_err = errno;
-                        if (accept_err == EBADF || accept_err == EINVAL) break;
-                        if (cwist_accept_error_should_retry(accept_err)) {
-                            cwist_accept_error_backoff(accept_err);
-                            continue;
+                    while (1) {
+                        int client_fd = accept(server_fd, NULL, NULL);
+                        if (client_fd >= 0) {
+                            handler(client_fd, ctx);
+                        } else {
+                            int accept_err = errno;
+                            if (accept_err == EAGAIN || accept_err == EWOULDBLOCK) break;
+                            if (accept_err == EBADF || accept_err == EINVAL) goto kq_exit;
+                            if (accept_err == EINTR) continue;
+                            if (cwist_accept_error_should_retry(accept_err)) {
+                                cwist_accept_error_backoff(accept_err);
+                                continue;
+                            }
+                            err.error.err_i16 = -1;
+                            close(kqueue_fd);
+                            return err;
                         }
-                        err.error.err_i16 = -1;
-                        close(kqueue_fd);
-                        return err;
                     }
                 }
             }
         }
+kq_exit:
         close(kqueue_fd);
     }
 #endif

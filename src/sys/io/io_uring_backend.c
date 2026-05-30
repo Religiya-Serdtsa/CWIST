@@ -1,16 +1,10 @@
-/**
- * @file io_uring_backend.c
- * @brief Direct io_uring syscall backend for CWIST (no liburing dependency).
- *
- * Uses the Linux UAPI headers directly to set up the ring, manage fixed
- * buffers, and drive SENDMSG/RECVMSG for multi-protocol networking.
- */
-
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
 #include <cwist/sys/io/io_uring_backend.h>
 #include <cwist/core/mem/alloc.h>
+#include <ttak/mem/mem.h>
+#include <ttak/timing/timing.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
 #include <sys/uio.h>
@@ -23,34 +17,25 @@
 #include <stdatomic.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <time.h>
 
-/* -------------------------------------------------------------------------
- * Direct syscall wrappers
- * ---------------------------------------------------------------------- */
+/**
+ * @file io_uring_backend.c
+ * @brief io_uring backend with generation-tagged two-phase demolition protocol.
+ */
 
 static inline int sys_io_uring_setup(unsigned entries, struct io_uring_params *p) {
     return (int)syscall(__NR_io_uring_setup, entries, p);
 }
 
-static inline int sys_io_uring_enter(int ring_fd,
-                                      unsigned to_submit,
-                                      unsigned min_complete,
-                                      unsigned flags,
-                                      sigset_t *sig) {
-    return (int)syscall(__NR_io_uring_enter, ring_fd, to_submit,
-                        min_complete, flags, sig);
+static inline int sys_io_uring_enter(int ring_fd, unsigned to_submit,
+                                      unsigned min_complete, unsigned flags, sigset_t *sig) {
+    return (int)syscall(__NR_io_uring_enter, ring_fd, to_submit, min_complete, flags, sig);
 }
 
-static inline int sys_io_uring_register(int ring_fd,
-                                         unsigned opcode,
-                                         const void *arg,
-                                         unsigned nr_args) {
+static inline int sys_io_uring_register(int ring_fd, unsigned opcode, const void *arg, unsigned nr_args) {
     return (int)syscall(__NR_io_uring_register, ring_fd, opcode, arg, nr_args);
 }
-
-/* -------------------------------------------------------------------------
- * Ring layout helpers
- * ---------------------------------------------------------------------- */
 
 struct cwist_uring_sq_ring {
     uint32_t *head;
@@ -74,10 +59,6 @@ struct cwist_uring_cq_ring {
     size_t ring_sz;
 };
 
-/* -------------------------------------------------------------------------
- * Backend state
- * ---------------------------------------------------------------------- */
-
 struct cwist_uring_backend {
     int ring_fd;
     struct cwist_uring_sq_ring sq;
@@ -85,19 +66,18 @@ struct cwist_uring_backend {
     struct io_uring_params params;
     cwist_uring_config_t cfg;
 
-    cwist_core_stream_t *stream_list;   /**< Active stream doubly-linked list. */
-    atomic_size_t        stream_count;
+    cwist_core_stream_t *streams;
+    uint32_t            *free_stack;
+    atomic_uint          free_top;
+    atomic_uint          global_gen;
     pthread_mutex_t      stream_lock;
 
     cwist_uring_buf_pool_t buf_pool;
-    atomic_uint          pending_sqes;  /**< SQEs not yet flushed. */
+    uint32_t             sq_tail;
+    atomic_uint          pending_sqes;
     atomic_bool          stopped;
     atomic_bool          running;
 };
-
-/* -------------------------------------------------------------------------
- * Memory-map helpers
- * ---------------------------------------------------------------------- */
 
 static void *mmap_ring(int fd, size_t sz, off_t off) {
     void *p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, off);
@@ -112,39 +92,49 @@ static size_t cq_ring_size(struct io_uring_params *p) {
     return p->cq_off.cqes + p->cq_entries * sizeof(struct io_uring_cqe);
 }
 
-/* -------------------------------------------------------------------------
- * Backend lifecycle
- * ---------------------------------------------------------------------- */
+static uint64_t get_time_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
 
 cwist_uring_backend_t *cwist_uring_backend_create(const cwist_uring_config_t *cfg_in) {
-    cwist_uring_backend_t *be = cwist_alloc(sizeof(*be));
+    uint64_t now = ttak_get_tick_count();
+    cwist_uring_backend_t *be = ttak_mem_alloc(sizeof(*be), __TTAK_UNSAFE_MEM_FOREVER__, now);
     if (!be) return NULL;
-    memset(be, 0, sizeof(*be));
 
     be->cfg = cfg_in ? *cfg_in : (cwist_uring_config_t)CWIST_URING_CONFIG_DEFAULT;
     atomic_init(&be->pending_sqes, 0);
     atomic_init(&be->stopped, false);
     atomic_init(&be->running, false);
+    atomic_init(&be->global_gen, 1);
     pthread_mutex_init(&be->stream_lock, NULL);
+
+    size_t streams_sz = be->cfg.max_streams * sizeof(cwist_core_stream_t);
+    be->streams = ttak_mem_alloc(streams_sz, __TTAK_UNSAFE_MEM_FOREVER__, now);
+    if (!be->streams) goto fail;
+
+    size_t stack_sz = be->cfg.max_streams * sizeof(uint32_t);
+    be->free_stack = ttak_mem_alloc(stack_sz, __TTAK_UNSAFE_MEM_FOREVER__, now);
+    if (!be->free_stack) goto fail;
+
+    for (uint32_t i = 0; i < be->cfg.max_streams; ++i) {
+        be->free_stack[i] = (be->cfg.max_streams - 1) - i;
+        be->streams[i].index = i;
+    }
+    atomic_init(&be->free_top, be->cfg.max_streams);
 
     memset(&be->params, 0, sizeof(be->params));
     if (be->cfg.sqpoll) {
         be->params.flags |= IORING_SETUP_SQPOLL;
         be->params.sq_thread_idle = 2000;
     }
-    if (be->cfg.iopoll) {
-        be->params.flags |= IORING_SETUP_IOPOLL;
-    }
+    if (be->cfg.iopoll) be->params.flags |= IORING_SETUP_IOPOLL;
 
     int fd = sys_io_uring_setup(be->cfg.sq_entries, &be->params);
-    if (fd < 0) {
-        fprintf(stderr, "[io_uring] setup failed: %s\n", strerror(-fd));
-        cwist_free(be);
-        return NULL;
-    }
+    if (fd < 0) goto fail;
     be->ring_fd = fd;
 
-    /* Map SQ ring */
     size_t sq_sz = sq_ring_size(&be->params);
     void *sq_ptr = mmap_ring(fd, sq_sz, IORING_OFF_SQ_RING);
     if (!sq_ptr) goto fail;
@@ -152,12 +142,9 @@ cwist_uring_backend_t *cwist_uring_backend_create(const cwist_uring_config_t *cf
     be->sq.tail         = (uint32_t *)((char *)sq_ptr + be->params.sq_off.tail);
     be->sq.ring_mask    = (uint32_t *)((char *)sq_ptr + be->params.sq_off.ring_mask);
     be->sq.ring_entries = (uint32_t *)((char *)sq_ptr + be->params.sq_off.ring_entries);
-    be->sq.flags        = (uint32_t *)((char *)sq_ptr + be->params.sq_off.flags);
-    be->sq.dropped      = (uint32_t *)((char *)sq_ptr + be->params.sq_off.dropped);
     be->sq.array        = (uint32_t *)((char *)sq_ptr + be->params.sq_off.array);
     be->sq.ring_sz      = sq_sz;
 
-    /* Map CQ ring */
     size_t cq_sz = cq_ring_size(&be->params);
     void *cq_ptr = mmap_ring(fd, cq_sz, IORING_OFF_CQ_RING);
     if (!cq_ptr) goto fail;
@@ -168,47 +155,30 @@ cwist_uring_backend_t *cwist_uring_backend_create(const cwist_uring_config_t *cf
     be->cq.cqes         = (struct io_uring_cqe *)((char *)cq_ptr + be->params.cq_off.cqes);
     be->cq.ring_sz      = cq_sz;
 
-    /* Map SQEs */
     size_t sqe_sz = be->params.sq_entries * sizeof(struct io_uring_sqe);
     void *sqe_ptr = mmap_ring(fd, sqe_sz, IORING_OFF_SQES);
     if (!sqe_ptr) goto fail;
     be->sq.sqes = sqe_ptr;
     be->sq.sqe_sz = sqe_sz;
 
-    /* Initialise array indices */
-    for (uint32_t i = 0; i < *be->sq.ring_entries; ++i) {
-        be->sq.array[i] = i;
-    }
+    be->sq_tail = *be->sq.tail;
+    for (uint32_t i = 0; i < *be->sq.ring_entries; ++i) be->sq.array[i] = i;
 
-    /* Fixed buffers */
     if (be->cfg.use_fixed_buf && be->cfg.fixed_buf_count > 0) {
         size_t total = be->cfg.fixed_buf_size * be->cfg.fixed_buf_count;
-        /* Use mmap for huge-page friendly allocation */
-        be->buf_pool.base = mmap(NULL, total, PROT_READ | PROT_WRITE,
-                                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (be->buf_pool.base == MAP_FAILED) {
-            be->buf_pool.base = NULL;
-            goto fail;
-        }
-        be->buf_pool.buf_size  = be->cfg.fixed_buf_size;
-        be->buf_pool.buf_count = be->cfg.fixed_buf_count;
-        be->buf_pool.bid_map   = cwist_alloc_array(be->cfg.fixed_buf_count, sizeof(int));
-        if (!be->buf_pool.bid_map) goto fail;
-        memset(be->buf_pool.bid_map, 0, sizeof(int) * be->cfg.fixed_buf_count);
-        be->buf_pool.free_count = be->cfg.fixed_buf_count;
-
-        struct iovec iov = {
-            .iov_base = be->buf_pool.base,
-            .iov_len  = total
-        };
-        int rc = sys_io_uring_register(fd, IORING_REGISTER_BUFFERS, &iov, 1);
-        if (rc < 0) {
-            fprintf(stderr, "[io_uring] buffer register failed: %s (falling back to dynamic buffers)\n", strerror(-rc));
-            /* Fall back: keep the pool but don't use fixed buffers in SQEs */
-            be->cfg.use_fixed_buf = false;
+        be->buf_pool.base = mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (be->buf_pool.base != MAP_FAILED) {
+            be->buf_pool.buf_size  = be->cfg.fixed_buf_size;
+            be->buf_pool.buf_count = be->cfg.fixed_buf_count;
+            be->buf_pool.bid_map   = ttak_mem_alloc(be->cfg.fixed_buf_count * sizeof(int), __TTAK_UNSAFE_MEM_FOREVER__, now);
+            if (be->buf_pool.bid_map) {
+                memset(be->buf_pool.bid_map, 0, sizeof(int) * be->cfg.fixed_buf_count);
+                be->buf_pool.free_count = be->cfg.fixed_buf_count;
+                struct iovec iov = {.iov_base = be->buf_pool.base, .iov_len = total};
+                if (sys_io_uring_register(fd, IORING_REGISTER_BUFFERS, &iov, 1) < 0) be->cfg.use_fixed_buf = false;
+            }
         }
     }
-
     return be;
 
 fail:
@@ -218,213 +188,143 @@ fail:
 
 void cwist_uring_backend_destroy(cwist_uring_backend_t *be) {
     if (!be) return;
-
     atomic_store_explicit(&be->stopped, true, memory_order_release);
-
-    /* Unregister fixed buffers */
     if (be->buf_pool.base) {
         sys_io_uring_register(be->ring_fd, IORING_UNREGISTER_BUFFERS, NULL, 0);
-        size_t total = be->buf_pool.buf_size * be->buf_pool.buf_count;
-        munmap(be->buf_pool.base, total);
-        cwist_free(be->buf_pool.bid_map);
+        munmap(be->buf_pool.base, be->buf_pool.buf_size * be->buf_pool.buf_count);
+        ttak_mem_free(be->buf_pool.bid_map);
     }
-
-    /* Unmap rings */
     if (be->sq.sqes) munmap(be->sq.sqes, be->sq.sqe_sz);
     if (be->cq.cqes) munmap((char *)be->cq.cqes - be->params.cq_off.cqes, be->cq.ring_sz);
     if (be->sq.array) munmap((char *)be->sq.array - be->params.sq_off.array, be->sq.ring_sz);
-
-    /* Free streams */
-    cwist_core_stream_t *s = be->stream_list;
-    while (s) {
-        cwist_core_stream_t *next = s->next;
-        cwist_free(s);
-        s = next;
-    }
-
+    if (be->streams) ttak_mem_free(be->streams);
+    if (be->free_stack) ttak_mem_free(be->free_stack);
     if (be->ring_fd >= 0) close(be->ring_fd);
     pthread_mutex_destroy(&be->stream_lock);
-    cwist_free(be);
+    ttak_mem_free(be);
 }
 
-/* -------------------------------------------------------------------------
- * Stream management
- * ---------------------------------------------------------------------- */
+static void finalize_stream_destruction(cwist_uring_backend_t *be, cwist_core_stream_t *stream) {
+    if (stream->fd >= 0) {
+        close(stream->fd);
+        stream->fd = -1;
+    }
+    pthread_mutex_lock(&be->stream_lock);
+    uint32_t top = atomic_load_explicit(&be->free_top, memory_order_acquire);
+    be->free_stack[top++] = stream->index;
+    atomic_store_explicit(&be->free_top, top, memory_order_release);
+    pthread_mutex_unlock(&be->stream_lock);
+}
 
-cwist_core_stream_t *cwist_uring_stream_register(cwist_uring_backend_t *be,
-                                                   int fd,
-                                                   uint32_t proto) {
+cwist_core_stream_t *cwist_uring_stream_register(cwist_uring_backend_t *be, int fd, uint32_t proto) {
     if (!be || fd < 0) return NULL;
-    cwist_core_stream_t *s = cwist_alloc(sizeof(*s));
-    if (!s) return NULL;
+    pthread_mutex_lock(&be->stream_lock);
+    uint32_t top = atomic_load_explicit(&be->free_top, memory_order_acquire);
+    if (top == 0) {
+        pthread_mutex_unlock(&be->stream_lock);
+        return NULL;
+    }
+    uint32_t idx = be->free_stack[--top];
+    atomic_store_explicit(&be->free_top, top, memory_order_release);
+    pthread_mutex_unlock(&be->stream_lock);
+
+    cwist_core_stream_t *s = &be->streams[idx];
+    uint32_t index = s->index;
     memset(s, 0, sizeof(*s));
+    s->index = index;
     s->fd = fd;
     s->protocol = proto;
-    s->stream_id = (uint64_t)(uintptr_t)s; /**< simple unique id */
-
-    pthread_mutex_lock(&be->stream_lock);
-    s->next = be->stream_list;
-    if (be->stream_list) be->stream_list->prev = s;
-    be->stream_list = s;
-    atomic_fetch_add_explicit(&be->stream_count, 1, memory_order_relaxed);
-    pthread_mutex_unlock(&be->stream_lock);
+    s->generation = atomic_fetch_add_explicit(&be->global_gen, 1, memory_order_relaxed);
+    atomic_init(&s->pending_io_count, 0);
+    s->deadline_ts = get_time_ms() + 3000;
     return s;
 }
 
-void cwist_uring_stream_unregister(cwist_uring_backend_t *be,
-                                    cwist_core_stream_t *stream) {
+void cwist_uring_stream_unregister(cwist_uring_backend_t *be, cwist_core_stream_t *stream) {
     if (!be || !stream) return;
-    pthread_mutex_lock(&be->stream_lock);
-    if (stream->prev) stream->prev->next = stream->next;
-    else be->stream_list = stream->next;
-    if (stream->next) stream->next->prev = stream->prev;
-    atomic_fetch_sub_explicit(&be->stream_count, 1, memory_order_relaxed);
-    pthread_mutex_unlock(&be->stream_lock);
-    cwist_free(stream);
+    stream->is_dead = true;
+    if (atomic_load_explicit(&stream->pending_io_count, memory_order_acquire) == 0) finalize_stream_destruction(be, stream);
 }
-
-/* -------------------------------------------------------------------------
- * SQE helpers
- * ---------------------------------------------------------------------- */
 
 static struct io_uring_sqe *get_sqe(cwist_uring_backend_t *be) {
     struct cwist_uring_sq_ring *sq = &be->sq;
     uint32_t head = atomic_load_explicit((_Atomic uint32_t *)sq->head, memory_order_acquire);
-    uint32_t next = *sq->tail + 1;
-    if (next - head > *sq->ring_entries) {
-        return NULL; /* SQ full */
-    }
-    struct io_uring_sqe *sqe = &sq->sqes[next & *sq->ring_mask];
+    if (be->sq_tail - head >= *sq->ring_entries) return NULL;
+    struct io_uring_sqe *sqe = &sq->sqes[be->sq_tail & *sq->ring_mask];
     memset(sqe, 0, sizeof(*sqe));
-    sqe->user_data = 0;
-    *sq->tail = next;
+    be->sq_tail++;
     return sqe;
 }
 
 static bool flush_sq_internal(cwist_uring_backend_t *be) {
     struct cwist_uring_sq_ring *sq = &be->sq;
-    if (*sq->tail == *sq->head) return true; /* empty */
-
-    uint32_t tail = *sq->tail;
-    atomic_store_explicit((_Atomic uint32_t *)sq->tail, tail, memory_order_release);
-
-    int ret = sys_io_uring_enter(be->ring_fd, tail - *sq->head, 0,
-                                  IORING_ENTER_GETEVENTS, NULL);
-    if (ret < 0) {
-        fprintf(stderr, "[io_uring] enter submit failed: %s\n", strerror(-ret));
-        return false;
-    }
+    uint32_t kernel_tail = atomic_load_explicit((_Atomic uint32_t *)sq->tail, memory_order_relaxed);
+    if (be->sq_tail == kernel_tail) return true;
+    atomic_store_explicit((_Atomic uint32_t *)sq->tail, be->sq_tail, memory_order_release);
+    if (sys_io_uring_enter(be->ring_fd, be->sq_tail - atomic_load_explicit((_Atomic uint32_t *)sq->head, memory_order_acquire), 0, IORING_ENTER_GETEVENTS, NULL) < 0) return false;
     atomic_store_explicit(&be->pending_sqes, 0, memory_order_release);
     return true;
 }
 
-/* -------------------------------------------------------------------------
- * Submission API
- * ---------------------------------------------------------------------- */
+#define TICKET_SEND_BIT    (1ULL)
+#define ENCODE_TICKET(g, i, s) (((uint64_t)(g) << 32) | ((uint64_t)(i) << 1) | ((s) ? TICKET_SEND_BIT : 0))
+#define DECODE_GEN(t)      ((uint32_t)((t) >> 32))
+#define DECODE_IDX(t)      ((uint32_t)(((t) & 0xFFFFFFFFULL) >> 1))
+#define DECODE_IS_SEND(t)  ((bool)((t) & TICKET_SEND_BIT))
 
-bool cwist_uring_submit_recvmsg(cwist_uring_backend_t *be,
-                                 cwist_core_stream_t *stream,
-                                 struct msghdr *msg) {
-    if (!be || !stream) return false;
+static bool submit_op(cwist_uring_backend_t *be, cwist_core_stream_t *stream, uint8_t opcode, void *addr, uint32_t len, uint64_t off, bool is_send) {
+    if (!be || !stream || stream->is_dead) return false;
     struct io_uring_sqe *sqe = get_sqe(be);
     if (!sqe) {
         if (!flush_sq_internal(be)) return false;
         sqe = get_sqe(be);
         if (!sqe) return false;
     }
-    sqe->opcode = IORING_OP_RECVMSG;
-    sqe->fd     = stream->fd;
-    sqe->addr   = (unsigned long)msg;
-    sqe->user_data = (uintptr_t)stream;
-
-    if (be->cfg.use_fixed_buf) {
-        sqe->flags |= IOSQE_BUFFER_SELECT;
-        sqe->buf_group = 0;
-    }
+    atomic_fetch_add_explicit(&stream->pending_io_count, 1, memory_order_relaxed);
+    sqe->opcode = opcode;
+    sqe->fd = stream->fd;
+    sqe->addr = (unsigned long)addr;
+    sqe->len = len;
+    sqe->off = off;
+    sqe->user_data = ENCODE_TICKET(stream->generation, stream->index, is_send);
     atomic_fetch_add_explicit(&be->pending_sqes, 1, memory_order_relaxed);
     return true;
 }
 
-bool cwist_uring_submit_sendmsg(cwist_uring_backend_t *be,
-                                 cwist_core_stream_t *stream,
-                                 struct msghdr *msg) {
-    if (!be || !stream) return false;
-    struct io_uring_sqe *sqe = get_sqe(be);
-    if (!sqe) {
-        if (!flush_sq_internal(be)) return false;
-        sqe = get_sqe(be);
-        if (!sqe) return false;
-    }
-    sqe->opcode = IORING_OP_SENDMSG;
-    sqe->fd     = stream->fd;
-    sqe->addr   = (unsigned long)msg;
-    sqe->user_data = (uintptr_t)stream | 1ULL; /**< bit-0 marks send side */
-    atomic_fetch_add_explicit(&be->pending_sqes, 1, memory_order_relaxed);
-    return true;
+bool cwist_uring_submit_recvmsg(cwist_uring_backend_t *be, cwist_core_stream_t *stream, struct msghdr *msg) {
+    return submit_op(be, stream, IORING_OP_RECVMSG, msg, 1, 0, false);
 }
 
-bool cwist_uring_submit_read(cwist_uring_backend_t *be,
-                              cwist_core_stream_t *stream,
-                              void *buf,
-                              size_t len,
-                              off_t offset) {
-    if (!be || !stream) return false;
-    struct io_uring_sqe *sqe = get_sqe(be);
-    if (!sqe) {
-        if (!flush_sq_internal(be)) return false;
-        sqe = get_sqe(be);
-        if (!sqe) return false;
-    }
-    sqe->opcode = IORING_OP_READ;
-    sqe->fd     = stream->fd;
-    sqe->addr   = (unsigned long)buf;
-    sqe->len    = (uint32_t)len;
-    sqe->off    = (uint64_t)offset;
-    sqe->user_data = (uintptr_t)stream;
-    atomic_fetch_add_explicit(&be->pending_sqes, 1, memory_order_relaxed);
-    return true;
+bool cwist_uring_submit_sendmsg(cwist_uring_backend_t *be, cwist_core_stream_t *stream, struct msghdr *msg) {
+    return submit_op(be, stream, IORING_OP_SENDMSG, msg, 1, 0, true);
 }
 
-bool cwist_uring_submit_write(cwist_uring_backend_t *be,
-                               cwist_core_stream_t *stream,
-                               const void *buf,
-                               size_t len,
-                               off_t offset) {
-    if (!be || !stream) return false;
-    struct io_uring_sqe *sqe = get_sqe(be);
-    if (!sqe) {
-        if (!flush_sq_internal(be)) return false;
-        sqe = get_sqe(be);
-        if (!sqe) return false;
-    }
-    sqe->opcode = IORING_OP_WRITE;
-    sqe->fd     = stream->fd;
-    sqe->addr   = (unsigned long)buf;
-    sqe->len    = (uint32_t)len;
-    sqe->off    = (uint64_t)offset;
-    sqe->user_data = (uintptr_t)stream | 1ULL;
-    atomic_fetch_add_explicit(&be->pending_sqes, 1, memory_order_relaxed);
-    return true;
+bool cwist_uring_submit_read(cwist_uring_backend_t *be, cwist_core_stream_t *stream, void *buf, size_t len, off_t offset) {
+    return submit_op(be, stream, IORING_OP_READ, buf, (uint32_t)len, (uint64_t)offset, false);
 }
 
-bool cwist_uring_submit_splice(cwist_uring_backend_t *be,
-                                cwist_core_stream_t *stream_in,
-                                cwist_core_stream_t *stream_out,
-                                size_t len) {
-    if (!be || !stream_in || !stream_out) return false;
+bool cwist_uring_submit_write(cwist_uring_backend_t *be, cwist_core_stream_t *stream, const void *buf, size_t len, off_t offset) {
+    return submit_op(be, stream, IORING_OP_WRITE, (void *)buf, (uint32_t)len, (uint64_t)offset, true);
+}
+
+bool cwist_uring_submit_nop(cwist_uring_backend_t *be, cwist_core_stream_t *stream) {
+    return submit_op(be, stream, IORING_OP_NOP, NULL, 0, 0, false);
+}
+
+bool cwist_uring_submit_splice(cwist_uring_backend_t *be, cwist_core_stream_t *stream_in, cwist_core_stream_t *stream_out, size_t len) {
+    if (!be || !stream_in || !stream_out || stream_out->is_dead) return false;
     struct io_uring_sqe *sqe = get_sqe(be);
     if (!sqe) {
         if (!flush_sq_internal(be)) return false;
         sqe = get_sqe(be);
         if (!sqe) return false;
     }
+    atomic_fetch_add_explicit(&stream_out->pending_io_count, 1, memory_order_relaxed);
     sqe->opcode = IORING_OP_SPLICE;
-    sqe->fd     = stream_out->fd;       /* output fd */
-    sqe->len    = (uint32_t)len;
-    sqe->splice_fd_in = stream_in->fd;  /* input fd */
-    sqe->off    = 0;                    /* output offset */
-    sqe->splice_off_in = 0;             /* input offset */
-    sqe->user_data = (uintptr_t)stream_out | 1ULL;
+    sqe->fd = stream_out->fd;
+    sqe->len = (uint32_t)len;
+    sqe->splice_fd_in = stream_in->fd;
+    sqe->user_data = ENCODE_TICKET(stream_out->generation, stream_out->index, true);
     atomic_fetch_add_explicit(&be->pending_sqes, 1, memory_order_relaxed);
     return true;
 }
@@ -438,7 +338,7 @@ bool cwist_uring_submit_close(cwist_uring_backend_t *be, int fd) {
         if (!sqe) return false;
     }
     sqe->opcode = IORING_OP_CLOSE;
-    sqe->fd     = fd;
+    sqe->fd = fd;
     sqe->user_data = 0;
     atomic_fetch_add_explicit(&be->pending_sqes, 1, memory_order_relaxed);
     return true;
@@ -452,57 +352,36 @@ int cwist_uring_flush_sq(cwist_uring_backend_t *be) {
     return (int)pending;
 }
 
-/* -------------------------------------------------------------------------
- * Completion processing
- * ---------------------------------------------------------------------- */
-
 static void process_cqe(cwist_uring_backend_t *be, struct io_uring_cqe *cqe) {
-    (void)be;
     uint64_t ud = cqe->user_data;
-    if (!ud) return; /* anonymous op (e.g., close) */
-
-    bool is_send = (ud & 1ULL);
-    cwist_core_stream_t *stream = (cwist_core_stream_t *)(uintptr_t)(ud & ~1ULL);
-    if (!stream) return;
-
+    if (!ud) return;
+    uint32_t gen = DECODE_GEN(ud), idx = DECODE_IDX(ud);
+    bool is_send = DECODE_IS_SEND(ud);
+    if (idx >= be->cfg.max_streams) return;
+    cwist_core_stream_t *stream = &be->streams[idx];
+    if (stream->generation != gen) return;
+    stream->deadline_ts = get_time_ms() + 3000;
+    if (cqe->res < 0 && cqe->res != -EAGAIN && cqe->res != -EINTR && cqe->res != -ECANCELED) stream->is_dead = true;
     cwist_uring_cqe_cb cb = is_send ? stream->send_cb : stream->recv_cb;
     if (cb) cb(stream, cqe->res, cqe->flags, stream->user_data);
-
-    /* If fixed buffer was used, release it */
-    if (cqe->flags & IORING_CQE_F_BUFFER) {
-        uint16_t bid = cqe->flags >> 16;
-        cwist_uring_buf_release(be, bid);
+    if (cqe->flags & IORING_CQE_F_BUFFER) cwist_uring_buf_release(be, (uint16_t)(cqe->flags >> 16));
+    if (atomic_fetch_sub_explicit(&stream->pending_io_count, 1, memory_order_acq_rel) == 1) {
+        if (stream->is_dead) finalize_stream_destruction(be, stream);
     }
 }
 
-int cwist_uring_poll_cq(cwist_uring_backend_t *be,
-                         unsigned min_wait,
-                         int timeout_ms) {
+int cwist_uring_poll_cq(cwist_uring_backend_t *be, unsigned min_wait, int timeout_ms) {
     (void)timeout_ms;
     if (!be) return -EINVAL;
-
-    /* Ensure submissions are visible to the kernel before waiting */
-    if (atomic_load_explicit(&be->pending_sqes, memory_order_acquire) > 0) {
-        flush_sq_internal(be);
-    }
-
-    unsigned flags = 0;
-    if (min_wait > 0) flags |= IORING_ENTER_GETEVENTS;
-
-    int ret = sys_io_uring_enter(be->ring_fd, 0, min_wait, flags, NULL);
-    if (ret < 0) {
-        if (-ret == EAGAIN || -ret == EINTR) return 0;
-        return ret;
-    }
-
+    if (atomic_load_explicit(&be->pending_sqes, memory_order_acquire) > 0) flush_sq_internal(be);
+    unsigned flags = (min_wait > 0) ? IORING_ENTER_GETEVENTS : 0;
+    if (sys_io_uring_enter(be->ring_fd, 0, min_wait, flags, NULL) < 0) return -errno;
     struct cwist_uring_cq_ring *cq = &be->cq;
     uint32_t head = atomic_load_explicit((_Atomic uint32_t *)cq->head, memory_order_acquire);
     uint32_t tail = atomic_load_explicit((_Atomic uint32_t *)cq->tail, memory_order_acquire);
     int processed = 0;
-
     while (head != tail) {
-        struct io_uring_cqe *cqe = &cq->cqes[head & *cq->ring_mask];
-        process_cqe(be, cqe);
+        process_cqe(be, &cq->cqes[head & *cq->ring_mask]);
         head++;
         processed++;
     }
@@ -513,21 +392,19 @@ int cwist_uring_poll_cq(cwist_uring_backend_t *be,
 void cwist_uring_backend_run(cwist_uring_backend_t *be) {
     if (!be) return;
     atomic_store_explicit(&be->running, true, memory_order_release);
-
+    uint64_t last_sweep = get_time_ms();
     while (!atomic_load_explicit(&be->stopped, memory_order_acquire)) {
-        /* Flush any queued SQEs */
-        if (atomic_load_explicit(&be->pending_sqes, memory_order_acquire) > 0) {
-            flush_sq_internal(be);
-        }
-
-        /* Poll with a short timeout so we can check stopped periodically */
-        int n = cwist_uring_poll_cq(be, 1, 1);
-        if (n < 0 && n != -EAGAIN && n != -EINTR) {
-            fprintf(stderr, "[io_uring] poll error: %d\n", n);
-            break;
+        if (atomic_load_explicit(&be->pending_sqes, memory_order_acquire) > 0) flush_sq_internal(be);
+        if (cwist_uring_poll_cq(be, 1, 100) < 0) break;
+        uint64_t now = get_time_ms();
+        if (now - last_sweep >= 1000) {
+            for (uint32_t i = 0; i < be->cfg.max_streams; ++i) {
+                cwist_core_stream_t *s = &be->streams[i];
+                if (s->fd >= 0 && !s->is_dead && now > s->deadline_ts) cwist_uring_stream_unregister(be, s);
+            }
+            last_sweep = now;
         }
     }
-
     atomic_store_explicit(&be->running, false, memory_order_release);
 }
 
@@ -535,21 +412,14 @@ void cwist_uring_backend_stop(cwist_uring_backend_t *be) {
     if (be) atomic_store_explicit(&be->stopped, true, memory_order_release);
 }
 
-/* -------------------------------------------------------------------------
- * Fixed buffer pool
- * ---------------------------------------------------------------------- */
-
 bool cwist_uring_buf_acquire(cwist_uring_backend_t *be, uint16_t *bid, void **ptr) {
-    if (!be || !bid || !ptr) return false;
-    cwist_uring_buf_pool_t *pool = &be->buf_pool;
-    if (!pool->base || pool->free_count == 0) return false;
-
-    for (size_t i = 0; i < pool->buf_count; ++i) {
-        if (pool->bid_map[i] == 0) {
-            pool->bid_map[i] = 1;
-            pool->free_count--;
+    if (!be || !bid || !ptr || !be->buf_pool.base || be->buf_pool.free_count == 0) return false;
+    for (size_t i = 0; i < be->buf_pool.buf_count; ++i) {
+        if (be->buf_pool.bid_map[i] == 0) {
+            be->buf_pool.bid_map[i] = 1;
+            be->buf_pool.free_count--;
             *bid = (uint16_t)i;
-            *ptr = pool->base + i * pool->buf_size;
+            *ptr = be->buf_pool.base + i * be->buf_pool.buf_size;
             return true;
         }
     }
@@ -557,21 +427,16 @@ bool cwist_uring_buf_acquire(cwist_uring_backend_t *be, uint16_t *bid, void **pt
 }
 
 void cwist_uring_buf_release(cwist_uring_backend_t *be, uint16_t bid) {
-    if (!be) return;
-    cwist_uring_buf_pool_t *pool = &be->buf_pool;
-    if (!pool->base || bid >= pool->buf_count) return;
-    if (pool->bid_map[bid] != 0) {
-        pool->bid_map[bid] = 0;
-        pool->free_count++;
+    if (be && be->buf_pool.base && bid < be->buf_pool.buf_count && be->buf_pool.bid_map[bid] != 0) {
+        be->buf_pool.bid_map[bid] = 0;
+        be->buf_pool.free_count++;
     }
 }
 
 uint32_t cwist_uring_pending_sqes(const cwist_uring_backend_t *be) {
-    if (!be) return 0;
-    return atomic_load_explicit((_Atomic uint32_t *)&be->pending_sqes, memory_order_acquire);
+    return be ? atomic_load_explicit((_Atomic uint32_t *)&be->pending_sqes, memory_order_acquire) : 0;
 }
 
 uint32_t cwist_uring_active_buffers(const cwist_uring_backend_t *be) {
-    if (!be || !be->buf_pool.base) return 0;
-    return (uint32_t)(be->buf_pool.buf_count - be->buf_pool.free_count);
+    return (be && be->buf_pool.base) ? (uint32_t)(be->buf_pool.buf_count - be->buf_pool.free_count) : 0;
 }

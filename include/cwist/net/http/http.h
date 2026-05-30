@@ -15,6 +15,11 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+long get_cpu_cores(void);
+long get_optimal_thread_count(void);
 
 struct cwist_app;
 
@@ -28,6 +33,7 @@ typedef enum cwist_http_method_t {
     CWIST_HTTP_PATCH,
     CWIST_HTTP_HEAD,
     CWIST_HTTP_OPTIONS,
+    CWIST_HTTP_CONNECT,
     CWIST_HTTP_UNKNOWN
 } cwist_http_method_t;
 
@@ -35,11 +41,13 @@ typedef enum cwist_http_status_t {
     CWIST_HTTP_OK = 200,
     CWIST_HTTP_CREATED = 201,
     CWIST_HTTP_NO_CONTENT = 204,
+    CWIST_HTTP_PARTIAL_CONTENT = 206,
     CWIST_HTTP_NOT_MODIFIED = 304,
     CWIST_HTTP_BAD_REQUEST = 400,
     CWIST_HTTP_UNAUTHORIZED = 401,
     CWIST_HTTP_FORBIDDEN = 403,
     CWIST_HTTP_NOT_FOUND = 404,
+    CWIST_HTTP_RANGE_NOT_SATISFIABLE = 416,
     CWIST_HTTP_INTERNAL_ERROR = 500,
     CWIST_HTTP_NOT_IMPLEMENTED = 501,
     CWIST_HTTP_SERVICE_UNAVAILABLE = 503
@@ -169,12 +177,18 @@ cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *k
  */
 char *cwist_http_header_get(cwist_http_header_node *head, const char *key);
 void cwist_http_header_free_all(cwist_http_header_node *head);
+
+/**
+ * @brief Add default security headers (CSP, X-Frame-Options, etc.) if missing.
+ */
+void cwist_http_response_add_security_headers(cwist_http_response *res);
 /** @} */
 
 /** @name Helpers */
 /** @{ */
 const char *cwist_http_method_to_string(cwist_http_method_t method);
 cwist_http_method_t cwist_http_string_to_method(const char *method_str);
+cwist_http_method_t cwist_http_string_to_method_len(const char *str, size_t len);
 /** @} */
 
 /** @name TCP Socket Helpers */
@@ -193,6 +207,10 @@ typedef struct cwist_server_config {
 
 cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config, void (*handler)(int, void *), void *ctx);
 int headers_have_content_length(cwist_http_header_node *headers);
+
+int cwist_http_pool_init(void);
+void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx);
+void cwist_http_pool_destroy(void);
 
 extern const int CWIST_CREATE_SOCKET_FAILED;
 extern const int CWIST_HTTP_UNAVAILABLE_ADDRESS;

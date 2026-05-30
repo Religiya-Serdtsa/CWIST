@@ -16,6 +16,7 @@ void cwist_log_write(cwist_macro_log_level_t level, const char *fmt, ...) {
     switch (level) {
         case CWIST_LOG_LEVEL_INFO:  level_str = "INFO";  break;
         case CWIST_LOG_LEVEL_WARN:  level_str = "WARN";  break;
+        case CWIST_LOG_LEVEL_ERROR: level_str = "ERROR"; break;
         case CWIST_LOG_LEVEL_DEBUG: level_str = "DEBUG"; break;
         default: break;
     }

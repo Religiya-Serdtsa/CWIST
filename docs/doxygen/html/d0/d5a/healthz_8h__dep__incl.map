@@ -1,0 +1,7 @@
+<map id="include/cwist/sys/health/healthz.h" name="include/cwist/sys/health/healthz.h">
+<area shape="rect" id="Node000001" title="Standardised readiness and liveness probing for CWIST." alt="" coords="73,5,251,45"/>
+<area shape="rect" id="Node000002" href="$df/d7f/app_8c.html" title=" " alt="" coords="5,93,140,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="132,56,88,95,84,91,129,52"/>
+<area shape="rect" id="Node000003" href="$da/d6c/healthz_8c.html" title="Health probe registry and JSON endpoint generation." alt="" coords="164,93,339,119"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="195,52,240,91,236,95,192,56"/>
+</map>

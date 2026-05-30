@@ -1,0 +1,13 @@
+<map id="include/cwist/core/orm/orm.h" name="include/cwist/core/orm/orm.h">
+<area shape="rect" id="Node000001" title="Tiny ORM over a SQL socket stream." alt="" coords="85,5,224,45"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,181,88,207"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="124,47,97,68,74,95,58,132,51,168,46,167,53,130,70,92,94,64,121,43"/>
+<area shape="rect" id="Node000003" href="$d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="83,93,226,133"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="157,46,157,79,152,79,152,46"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="209,181,319,207"/>
+<area shape="poly" id="edge6_Node000001_Node000005" title=" " alt="" coords="188,43,216,64,240,92,256,130,264,167,259,168,251,132,235,95,212,68,185,48"/>
+<area shape="poly" id="edge4_Node000003_Node000002" title=" " alt="" coords="130,136,76,175,73,171,127,131"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="114,181,185,207"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="156,134,154,168,148,167,151,133"/>
+<area shape="poly" id="edge5_Node000003_Node000005" title=" " alt="" coords="183,131,238,171,235,175,180,136"/>
+</map>

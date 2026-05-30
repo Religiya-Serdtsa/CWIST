@@ -1,8 +1,8 @@
 var session__manager_8h =
 [
-    [ "session_rc_header", "d7/d9b/structsession__rc__header.html", null ],
-    [ "session_arena", "d4/d6b/structsession__arena.html", null ],
-    [ "session_manager", "de/d64/structsession__manager.html", null ],
+    [ "session_rc_header", "d7/d9b/structsession__rc__header.html", "d7/d9b/structsession__rc__header" ],
+    [ "session_arena", "d4/d6b/structsession__arena.html", "d4/d6b/structsession__arena" ],
+    [ "session_manager", "de/d64/structsession__manager.html", "de/d64/structsession__manager" ],
     [ "session_arena_alloc", "d7/d95/session__manager_8h.html#ac1fe98120d5ebd0cee851ace61a9bce3", null ],
     [ "session_arena_init", "d7/d95/session__manager_8h.html#a2a5d881373cbf7beb360b73523916516", null ],
     [ "session_arena_reset", "d7/d95/session__manager_8h.html#aa64bf27354f38734538f849d5f66f59a", null ],

@@ -192,7 +192,7 @@ static void test_http2_roundtrip(void) {
         uint8_t type = hdr[3];
         uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
                              ((uint32_t)hdr[7] << 8) | hdr[8];
-        unsigned char payload[256] = {0};
+        unsigned char payload[4096] = {0};
         assert(len < sizeof(payload));
         if (len > 0) {
             assert(ssl_read_exact(client, payload, len) == 0);
@@ -360,7 +360,7 @@ static void test_http2_ping(void) {
         uint8_t flags = hdr[4];
         uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
                              ((uint32_t)hdr[7] << 8) | hdr[8];
-        unsigned char payload[256] = {0};
+        unsigned char payload[4096] = {0};
         assert(len < sizeof(payload));
         if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
 
@@ -446,7 +446,7 @@ static void test_http2_multi_stream_concurrent(void) {
         uint8_t type = hdr[3];
         uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
                              ((uint32_t)hdr[7] << 8) | hdr[8];
-        unsigned char payload[256] = {0};
+        unsigned char payload[4096] = {0};
         assert(len < sizeof(payload));
         if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
 
@@ -523,7 +523,7 @@ static void test_http2_continuation(void) {
         uint8_t type = hdr[3];
         uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
                              ((uint32_t)hdr[7] << 8) | hdr[8];
-        unsigned char payload[256] = {0};
+        unsigned char payload[4096] = {0};
         assert(len < sizeof(payload));
         if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
 
@@ -687,7 +687,7 @@ static void test_http2_response_headers(void) {
         uint8_t type = hdr[3];
         uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
                              ((uint32_t)hdr[7] << 8) | hdr[8];
-        unsigned char payload[256] = {0};
+        unsigned char payload[4096] = {0};
         assert(len < sizeof(payload));
         if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
 

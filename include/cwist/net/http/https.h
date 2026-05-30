@@ -11,6 +11,8 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#define HTTPS_THREAD_POOL_SIZE HTTP_THREAD_POOL_SIZE;
+
 /** --- SSL Structures --- */
 
 typedef enum cwist_https_protocol {
@@ -36,6 +38,8 @@ typedef struct cwist_https_connection {
     bool http3_enabled;
 } cwist_https_connection;
 
+typedef struct cwist_app cwist_app;
+
 typedef struct cwist_https_options {
     bool enable_http2;
     bool enable_http3;
@@ -57,7 +61,8 @@ cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *ce
 cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
                                                     const char *cert_path,
                                                     const char *key_path,
-                                                    const cwist_https_options *options);
+                                                    const cwist_https_options *options,
+                                                    cwist_app *app);
 
 /**
  * Destroy the HTTPS context and cleanup OpenSSL.
@@ -102,6 +107,13 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
  * Note: The handler receives a cwist_https_connection pointer, not an int fd.
  */
 cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *conn, void *), void *user_ctx);
+
+/**
+ * Thread pool helpers for hybrid async-accept + threaded-process mode.
+ */
+int https_pool_init(void);
+void https_pool_submit(int client_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx);
+void https_pool_destroy(void);
 
 /** --- Error Codes --- */
 /**

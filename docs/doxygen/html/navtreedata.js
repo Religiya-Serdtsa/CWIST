@@ -29,8 +29,8 @@ var NAVTREE =
       [ "Class List", "annotated.html", "annotated_dup" ],
       [ "Class Index", "classes.html", null ],
       [ "Class Members", "functions.html", [
-        [ "All", "functions.html", null ],
-        [ "Variables", "functions_vars.html", null ]
+        [ "All", "functions.html", "functions_dup" ],
+        [ "Variables", "functions_vars.html", "functions_vars" ]
       ] ]
     ] ],
     [ "Files", "files.html", [
@@ -38,10 +38,11 @@ var NAVTREE =
       [ "File Members", "globals.html", [
         [ "All", "globals.html", "globals_dup" ],
         [ "Functions", "globals_func.html", "globals_func" ],
+        [ "Variables", "globals_vars.html", null ],
         [ "Typedefs", "globals_type.html", null ],
         [ "Enumerations", "globals_enum.html", null ],
         [ "Enumerator", "globals_eval.html", null ],
-        [ "Macros", "globals_defs.html", null ]
+        [ "Macros", "globals_defs.html", "globals_defs" ]
       ] ]
     ] ]
   ] ]
@@ -50,8 +51,15 @@ var NAVTREE =
 var NAVTREEINDEX =
 [
 "annotated.html",
-"d7/d95/session__manager_8h.html#ac1fe98120d5ebd0cee851ace61a9bce3",
-"dd/d43/http_8c.html#adde639ceb53c7811c918fc8ceb0a655b"
+"d1/d8c/logger_8h.html#a5eab471d74c604fefaa9d315979b4f28",
+"d3/d99/reactor_8c.html#a7596f973cbd936b017e527e3ddde5808",
+"d5/df8/json__builder_8h.html",
+"d7/df9/structcwist__uring__config.html#a74fac21d36f20313c87e90e11fe14626",
+"d9/df9/db__crypt_8h.html#aaeb4cdc667984ae486b994c2235d0549",
+"dc/d8c/structcwist__mux__middleware__node.html#ab903577e5a54713fb3e3c9aff5c6461d",
+"dd/d68/structcwist__http__request.html#a302bd47292d045682cebc9f1c97641fa",
+"df/d21/structcwist__bind__field.html#a6c1267f1db8fbe35608602f835fb6b7e",
+"functions_vars_t.html"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronization';

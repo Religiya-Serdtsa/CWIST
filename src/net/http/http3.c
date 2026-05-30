@@ -13,6 +13,7 @@
 #include <cwist/core/mem/alloc.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/sys/app/shutdown.h>
+#include "tls_chain.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -277,6 +278,20 @@ static lsquic_stream_ctx_t *cwist_h3_on_new_stream(void *stream_if_ctx,
     /* Default priority (middle of 1-256 range) */
     lsquic_stream_set_priority(stream, 128);
     lsquic_stream_wantread(stream, 1);
+
+#if LSQUIC_WEBTRANSPORT_SERVER_SUPPORT
+    if (h3_ctx && h3_ctx->wt_handler) {
+        lsquic_stream_id_t sid = lsquic_stream_id(stream);
+        int sid_mod = sid % 4;
+        if (sid_mod == 1 || sid_mod == 3) {
+            /* Server-initiated stream – notify WT layer */
+            if (h3_ctx->wt_new_stream_handler) {
+                h3_ctx->wt_new_stream_handler(stream, h3_ctx->wt_new_stream_ctx);
+            }
+        }
+    }
+#endif
+
     return (lsquic_stream_ctx_t *)st;
 }
 
@@ -375,7 +390,10 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                 if (name && value) {
                     h3_apply_header(st->req, name, value);
                     if (strcmp(name, ":protocol") == 0 && strcmp(value, "webtransport") == 0) {
-                        st->is_webtransport = 1;
+                        /* WebTransport requires CONNECT method per RFC 9114 */
+                        if (st->req && st->req->method == CWIST_HTTP_CONNECT) {
+                            st->is_webtransport = 1;
+                        }
                     }
                 }
             }
@@ -535,12 +553,27 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             .count = (unsigned)hdr_count,
             .headers = headers_arr,
         };
-        if (lsquic_stream_send_headers(stream, &headers, body_len == 0) != 0) {
+        int eos = (body_len == 0);
+#if LSQUIC_WEBTRANSPORT_SERVER_SUPPORT
+        /* WebTransport session stream must remain open after the 2xx response */
+        if (st->is_webtransport) {
+            eos = 0;
+        }
+#endif
+        if (lsquic_stream_send_headers(stream, &headers, eos) != 0) {
             lsquic_stream_close(stream);
             return;
         }
         st->write_state = 1;
         if (body_len == 0) {
+#if LSQUIC_WEBTRANSPORT_SERVER_SUPPORT
+            if (st->is_webtransport) {
+                st->write_state = 3; /* WT_SESSION */
+                lsquic_stream_wantwrite(stream, 0);
+                lsquic_stream_set_webtransport_session(stream);
+                return;
+            }
+#endif
             st->write_state = 2;
             lsquic_stream_wantwrite(stream, 0);
             return;
@@ -693,8 +726,15 @@ cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
 
     cwist_h3_ssl_ctx_init(ssl_ctx, 0);
 
-    if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path, SSL_FILETYPE_PEM) <= 0 ||
+    if (SSL_CTX_use_certificate_chain_file(ssl_ctx, cert_path) <= 0 ||
         SSL_CTX_use_PrivateKey_file(ssl_ctx, key_path, SSL_FILETYPE_PEM) <= 0) {
+        SSL_CTX_free(ssl_ctx);
+        h3_global_cleanup();
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    if (cwist_tls_autoload_intermediates(ssl_ctx) < 0) {
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -855,6 +895,9 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     settings.es_allow_migration = ctx->allow_migration ? ctx->allow_migration : 1;
     settings.es_max_delayed_0rtt_packets = 32;
     settings.es_datagrams = ctx->datagram_enabled;
+#if LSQUIC_WEBTRANSPORT_SERVER_SUPPORT
+    settings.es_webtransport_server = 1; /* Enable WebTransport server support */
+#endif
     settings.es_ecn = 1;
     settings.es_pace_packets = 1;
     settings.es_optimistic_nat = 1;
@@ -1158,6 +1201,47 @@ int cwist_http3_set_stream_priority(cwist_http_request *req, unsigned priority) 
 void cwist_http3_set_webtransport_handler(cwist_http3_context *ctx,
                                           cwist_webtransport_handler_func handler) {
     if (ctx) ctx->wt_handler = handler;
+}
+
+void cwist_webtransport_set_new_stream_handler(cwist_http3_context *ctx,
+                                               void (*handler)(void *stream, void *user_ctx),
+                                               void *user_ctx) {
+    if (ctx) {
+        ctx->wt_new_stream_handler = handler;
+        ctx->wt_new_stream_ctx = user_ctx;
+    }
+}
+
+ssize_t cwist_webtransport_read(void *stream, void *buf, size_t len) {
+    if (!stream || !buf) return -1;
+    return lsquic_stream_read((lsquic_stream_t *)stream, buf, len);
+}
+
+ssize_t cwist_webtransport_write(void *stream, const void *data, size_t len) {
+    if (!stream || !data) return -1;
+    return lsquic_stream_write((lsquic_stream_t *)stream, data, len);
+}
+
+int cwist_webtransport_flush(void *stream) {
+    if (!stream) return -1;
+    return lsquic_stream_flush((lsquic_stream_t *)stream);
+}
+
+int cwist_webtransport_close_stream(void *stream) {
+    if (!stream) return -1;
+    return lsquic_stream_close((lsquic_stream_t *)stream);
+}
+
+int cwist_webtransport_open_bidi_stream(void *conn) {
+    if (!conn) return -1;
+    lsquic_conn_make_stream((lsquic_conn_t *)conn);
+    return 0;
+}
+
+int cwist_webtransport_open_uni_stream(void *conn) {
+    if (!conn) return -1;
+    lsquic_conn_make_stream((lsquic_conn_t *)conn);
+    return 0;
 }
 
 /* ------------------------------------------------------------------ */

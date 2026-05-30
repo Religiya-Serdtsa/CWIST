@@ -1,9 +1,9 @@
 var searchData=
 [
-  ['fd_0',['fd',['../d9/d2c/structcwist__websocket.html#a5ef4b716867f950273e80bd66872ec34',1,'cwist_websocket::fd'],['../db/d95/structcwist__https__connection.html#a6ef4a66de39769c51cf22994f2a200a9',1,'cwist_https_connection::fd']]],
+  ['fd_0',['fd',['../db/d95/structcwist__https__connection.html#a6ef4a66de39769c51cf22994f2a200a9',1,'cwist_https_connection::fd'],['../d9/d2c/structcwist__websocket.html#a5ef4b716867f950273e80bd66872ec34',1,'cwist_websocket::fd'],['../dd/d04/structcwist__core__stream.html#a92e3276a6093e204c3293cb1d0812efc',1,'cwist_core_stream::fd']]],
   ['field_1',['field',['../dc/d5f/structcwist__zod__error.html#ae53c71d64e7b0987caca4679b4d47c64',1,'cwist_zod_error']]],
-  ['field_5fcount_2',['field_count',['../d5/d83/structcwist__schema.html#a51e6244d71e8efb56193620716f45605',1,'cwist_schema']]],
-  ['fields_3',['fields',['../d5/d83/structcwist__schema.html#aacc60dc7b7af094622eaa342c8216740',1,'cwist_schema::fields'],['../d3/dd4/structcwist__multipart__result.html#abff8beab920f2ee9dc2578e75bd449c6',1,'cwist_multipart_result::fields']]],
+  ['field_5fcount_2',['field_count',['../d5/d83/structcwist__schema.html#a51e6244d71e8efb56193620716f45605',1,'cwist_schema::field_count'],['../d4/d79/structcwist__bind__schema.html#a32cfc2f9eb815ec7cccdfe7ac5c83417',1,'cwist_bind_schema::field_count']]],
+  ['fields_3',['fields',['../d5/d83/structcwist__schema.html#aacc60dc7b7af094622eaa342c8216740',1,'cwist_schema::fields'],['../d4/d79/structcwist__bind__schema.html#a1b336cc806949ad669ec073aa81f56dc',1,'cwist_bind_schema::fields'],['../d3/dd4/structcwist__multipart__result.html#abff8beab920f2ee9dc2578e75bd449c6',1,'cwist_multipart_result::fields']]],
   ['file_5fcount_4',['file_count',['../d7/dba/structcwist__fix__server__mem.html#acfd2e162da083d5b11c94002818397b0',1,'cwist_fix_server_mem']]],
   ['file_5fstream_5fauto_5fclose_5',['file_stream_auto_close',['../dd/d22/structcwist__http__response.html#a5befd9047a5a32a9cae81c59cd871576',1,'cwist_http_response']]],
   ['file_5fstream_5ffd_6',['file_stream_fd',['../dd/d22/structcwist__http__response.html#a276851f42d4ef74dc3f2b82f74f770c6',1,'cwist_http_response']]],
@@ -15,7 +15,12 @@ var searchData=
   ['files_5fcapacity_12',['files_capacity',['../d7/dba/structcwist__fix__server__mem.html#a400b5c7499bb14fc1e0cef0a142ea332',1,'cwist_fix_server_mem']]],
   ['fin_13',['fin',['../db/d40/structcwist__ws__frame.html#ab969dbb894d75123619f4785492c1585',1,'cwist_ws_frame']]],
   ['finish_14',['finish',['../d6/deb/structcwist__compress__backend.html#a734d2e9acc792b43984efd158848ce00',1,'cwist_compress_backend']]],
-  ['flash_15',['flash',['../dd/d68/structcwist__http__request.html#a302bd47292d045682cebc9f1c97641fa',1,'cwist_http_request']]],
-  ['fs_5fpath_16',['fs_path',['../d6/de0/structcwist__file__t.html#a57ddfa38195cb94a9f2579b71d24df5f',1,'cwist_file_t']]],
-  ['func_17',['func',['../d8/d41/structcwist__middleware__node.html#afb77358023d8f41a15e20c5c9359aaa5',1,'cwist_middleware_node::func'],['../dc/d8c/structcwist__mux__middleware__node.html#aaeb97838b9c620f0a8e717e37d99feac',1,'cwist_mux_middleware_node::func']]]
+  ['fixed_5fbuf_5fcount_15',['fixed_buf_count',['../d7/df9/structcwist__uring__config.html#a8d5848da25e3a35aa2a9808e0713adf8',1,'cwist_uring_config']]],
+  ['fixed_5fbuf_5fsize_16',['fixed_buf_size',['../d7/df9/structcwist__uring__config.html#a7da91e498be57ec9561dacbeb48865d4',1,'cwist_uring_config']]],
+  ['flags_17',['flags',['../dd/d04/structcwist__core__stream.html#a0009a284529176bc2e6f703fbcb282f4',1,'cwist_core_stream']]],
+  ['flash_18',['flash',['../dd/d68/structcwist__http__request.html#a302bd47292d045682cebc9f1c97641fa',1,'cwist_http_request']]],
+  ['fn_19',['fn',['../de/d25/structcwist__bind__rule.html#ac747b221e9fbd46dec4cf21b64a1c8bd',1,'cwist_bind_rule']]],
+  ['free_5fcount_20',['free_count',['../dc/df8/structcwist__uring__buf__pool.html#aa4383b981f1597d8a3227c9da1db356b',1,'cwist_uring_buf_pool']]],
+  ['fs_5fpath_21',['fs_path',['../d6/de0/structcwist__file__t.html#a57ddfa38195cb94a9f2579b71d24df5f',1,'cwist_file_t']]],
+  ['func_22',['func',['../d8/d41/structcwist__middleware__node.html#afb77358023d8f41a15e20c5c9359aaa5',1,'cwist_middleware_node::func'],['../dc/d8c/structcwist__mux__middleware__node.html#aaeb97838b9c620f0a8e717e37d99feac',1,'cwist_mux_middleware_node::func']]]
 ];

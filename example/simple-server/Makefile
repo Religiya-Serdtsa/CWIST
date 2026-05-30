@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g -I../../include
 LDFLAGS = -L../../
-LIBS = -lcwist -lcjson -lsqlite3 -luriparser -lssl -lcrypto -lpthread
+LIBS = -lcwist -lcjson -lsqlite3 -luriparser -lssl -lcrypto -lpthread -lstdc++ -lm -lz
 
 SRCS = main.c
 TARGET = simple_server

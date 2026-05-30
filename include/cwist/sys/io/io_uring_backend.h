@@ -18,6 +18,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -49,6 +50,13 @@ typedef struct cwist_core_stream {
     struct cwist_core_stream *prev;
     uint32_t                protocol;    ///< 1=H1, 2=H2, 3=H3/QUIC.
     uint32_t                flags;       ///< Internal state flags.
+
+    /* --- 2-Phase Demolition & Generation ID --- */
+    atomic_int              pending_io_count; ///< Number of SQEs in-flight in kernel.
+    uint32_t                generation;       ///< Generation ticket to detect zombie CQEs.
+    uint32_t                index;            ///< Index in the backend's stream pool.
+    bool                    is_dead;          ///< Marked for destruction.
+    uint64_t                deadline_ts;      ///< Absolute time (ms) for forced GC.
 } cwist_core_stream_t;
 
 /** @brief Fixed buffer region used with IORING_OP_PROVIDE_BUFFERS. */
@@ -64,6 +72,7 @@ typedef struct cwist_uring_buf_pool {
 typedef struct cwist_uring_config {
     uint32_t sq_entries;      ///< Submission queue depth (default 4096).
     uint32_t cq_entries;      ///< Completion queue depth (default 8192).
+    uint32_t max_streams;     ///< Maximum concurrent sessions (default 131072).
     bool     sqpoll;          ///< Enable SQPOLL kernel thread (privileged).
     bool     iopoll;          ///< Enable IOPOLL (busy-wait, privileged).
     bool     use_fixed_buf;   ///< Register fixed buffers at init.
@@ -77,6 +86,7 @@ typedef struct cwist_uring_config {
 #define CWIST_URING_CONFIG_DEFAULT { \
     .sq_entries = 4096, \
     .cq_entries = 8192, \
+    .max_streams = 131072, \
     .sqpoll = false, \
     .iopoll = false, \
     .use_fixed_buf = true, \
@@ -180,6 +190,12 @@ bool cwist_uring_submit_splice(cwist_uring_backend_t *be,
                                 cwist_core_stream_t *stream_in,
                                 cwist_core_stream_t *stream_out,
                                 size_t len);
+
+/**
+ * @brief Queue an async NOP operation (useful for testing or signaling).
+ */
+bool cwist_uring_submit_nop(cwist_uring_backend_t *be,
+                             cwist_core_stream_t *stream);
 
 /**
  * @brief Queue an async close of a file descriptor via io_uring.

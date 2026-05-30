@@ -17,9 +17,10 @@ var searchData=
   ['err_5fu64_14',['err_u64',['../d8/dca/struct____prim__cwist__error__t.html#a353915bc7ca09777310250478c5afca4',1,'__prim_cwist_error_t']]],
   ['err_5fu8_15',['err_u8',['../d8/dca/struct____prim__cwist__error__t.html#a654ac79a2c8aa48e0de5f8f2c31cd845',1,'__prim_cwist_error_t']]],
   ['error_16',['error',['../d4/d50/structcwist__error__t.html#acff1b9ee2047a170190bf1aec42dcea5',1,'cwist_error_t']]],
-  ['error_5fcount_17',['error_count',['../dd/d71/structcwist__zod__result.html#aaa53f269f3d526d4f322ca733b0fb730',1,'cwist_zod_result']]],
+  ['error_5fcount_17',['error_count',['../dd/d71/structcwist__zod__result.html#aaa53f269f3d526d4f322ca733b0fb730',1,'cwist_zod_result::error_count'],['../de/ddb/structcwist__bind__result.html#acdd1172f86c085b6b873f5ba032916a3',1,'cwist_bind_result::error_count']]],
   ['error_5fhandler_18',['error_handler',['../dc/da0/structcwist__app.html#a2703e224f695e88ae59307f220af0554',1,'cwist_app']]],
   ['error_5fhandlers_19',['error_handlers',['../dc/da0/structcwist__app.html#a5f3830291c548387cb48c2394eedcc6f',1,'cwist_app']]],
-  ['errors_20',['errors',['../dd/d71/structcwist__zod__result.html#a64957bfbb985f62c2eae22dd084f98a0',1,'cwist_zod_result']]],
-  ['errtype_21',['errtype',['../d4/d50/structcwist__error__t.html#a9d2eb8f5526877f744a642ae0aa04e23',1,'cwist_error_t']]]
+  ['error_5fmessage_20',['error_message',['../de/d25/structcwist__bind__rule.html#a94d7ac638d4f67d80491e691a4925139',1,'cwist_bind_rule']]],
+  ['errors_21',['errors',['../dd/d71/structcwist__zod__result.html#a64957bfbb985f62c2eae22dd084f98a0',1,'cwist_zod_result::errors'],['../de/ddb/structcwist__bind__result.html#a319b44e5fa677cdd406b6e5f4ae71dc3',1,'cwist_bind_result::errors']]],
+  ['errtype_22',['errtype',['../d4/d50/structcwist__error__t.html#a9d2eb8f5526877f744a642ae0aa04e23',1,'cwist_error_t']]]
 ];

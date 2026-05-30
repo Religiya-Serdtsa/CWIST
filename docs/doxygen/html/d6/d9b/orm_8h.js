@@ -1,0 +1,35 @@
+var orm_8h =
+[
+    [ "cwist_orm_insert_r", "d6/d9b/orm_8h.html#a937d55837b61ff2212cd5698e896c906", null ],
+    [ "cwist_orm_select_one", "d6/d9b/orm_8h.html#ae0aaf4e676d5a5df45d58548db7e1d8d", null ],
+    [ "cwist_orm_dialect_t", "d6/d9b/orm_8h.html#a934bf8f6f96b08f20e8c9de0b632fc76", null ],
+    [ "cwist_orm_t", "d6/d9b/orm_8h.html#aeacfe257785ac940ef6c5813dd335a0e", null ],
+    [ "cwist_orm_dialect", "d6/d9b/orm_8h.html#a8a140e98cb138fd4575440dc18836a9a", [
+      [ "CWIST_ORM_SQLITE", "d6/d9b/orm_8h.html#a8a140e98cb138fd4575440dc18836a9aa5d3a84232701ac74aea5adcab4714ddc", null ],
+      [ "CWIST_ORM_POSTGRES", "d6/d9b/orm_8h.html#a8a140e98cb138fd4575440dc18836a9aa9f20c34d7159ed126f571a6953da1a50", null ],
+      [ "CWIST_ORM_MYSQL", "d6/d9b/orm_8h.html#a8a140e98cb138fd4575440dc18836a9aa6d56bfe9db7fa0c89c67a924946a4ffd", null ],
+      [ "CWIST_ORM_MARIADB", "d6/d9b/orm_8h.html#a8a140e98cb138fd4575440dc18836a9aacb4486637508b1de92412b06390f11ef", null ]
+    ] ],
+    [ "cwist_orm_close_socket", "d6/d9b/orm_8h.html#ab8358b56c5396e61785186a6e0895f67", null ],
+    [ "cwist_orm_commit", "d6/d9b/orm_8h.html#adc4a8786c8a4b530dd12c39219734c57", null ],
+    [ "cwist_orm_delete", "d6/d9b/orm_8h.html#a44c4c64eae50d22d4a0da07bb17938a3", null ],
+    [ "cwist_orm_exec", "d6/d9b/orm_8h.html#ab76f4beb5566412be5ade72890ae419e", null ],
+    [ "cwist_orm_immediate_commit", "d6/d9b/orm_8h.html#aa4c3e797acb1a132b1ad1fda614a4130", null ],
+    [ "cwist_orm_insert", "d6/d9b/orm_8h.html#ad29177b199f44f65ef4752e5e46dfd3f", null ],
+    [ "cwist_orm_insert_returning_int", "d6/d9b/orm_8h.html#a4e0900e6da745a30ac05deadac40f160", null ],
+    [ "cwist_orm_insert_returning_json", "d6/d9b/orm_8h.html#a43aaa5a15c9ce87e5f62f566a1bcab4d", null ],
+    [ "cwist_orm_insert_returning_llong", "d6/d9b/orm_8h.html#a6da79c3b09779f44b4c818a30a3d8720", null ],
+    [ "cwist_orm_insert_returning_long", "d6/d9b/orm_8h.html#af57e43a5b4970bc58f1b9b29e0ae94f8", null ],
+    [ "cwist_orm_open_socket", "d6/d9b/orm_8h.html#a8b66672c157219e4fef73126c8993fdd", null ],
+    [ "cwist_orm_query", "d6/d9b/orm_8h.html#a11e221d99d7e127b9402507b67965127", null ],
+    [ "cwist_orm_rollback", "d6/d9b/orm_8h.html#aedac544d6c9a75e8fbf89f8208a1c104", null ],
+    [ "cwist_orm_select", "d6/d9b/orm_8h.html#a3eac029f11400ab2a62198586e6048ce", null ],
+    [ "cwist_orm_select_one_double", "d6/d9b/orm_8h.html#a28fae8a2bc1192e5239430e88029a6f3", null ],
+    [ "cwist_orm_select_one_int", "d6/d9b/orm_8h.html#a08a522841826a633ebe414b8148ca787", null ],
+    [ "cwist_orm_select_one_json", "d6/d9b/orm_8h.html#a214ea2d56811b05e47ebc3db54a556a5", null ],
+    [ "cwist_orm_select_one_llong", "d6/d9b/orm_8h.html#a9d9e67d3bf48e09e8d38a9bc40196c08", null ],
+    [ "cwist_orm_select_one_long", "d6/d9b/orm_8h.html#aff436457073f7391e32a22ee1ba9a947", null ],
+    [ "cwist_orm_select_one_string", "d6/d9b/orm_8h.html#ab6e368f24997a3b439981f72a0261c39", null ],
+    [ "cwist_orm_update", "d6/d9b/orm_8h.html#ae60802ae3dc052ebe5e495bc56a81360", null ],
+    [ "cwist_orm_use_dialect", "d6/d9b/orm_8h.html#a4ad39d370435cbeccb27fda3010ae3f4", null ]
+];

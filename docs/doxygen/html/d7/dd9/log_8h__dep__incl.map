@@ -1,5 +1,9 @@
 <map id="include/cwist/core/log.h" name="include/cwist/core/log.h">
-<area shape="rect" id="Node000001" title="Lightweight macro&#45;based internal logging for CWIST." alt="" coords="5,5,144,45"/>
-<area shape="rect" id="Node000002" href="$d7/df8/log_8c.html" title="Macro&#45;based logging implementation." alt="" coords="9,93,141,119"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="77,59,77,93,72,93,72,59"/>
+<area shape="rect" id="Node000001" title="Lightweight macro&#45;based internal logging for CWIST." alt="" coords="166,5,305,45"/>
+<area shape="rect" id="Node000002" href="$d7/df8/log_8c.html" title="Macro&#45;based logging implementation." alt="" coords="5,101,137,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="189,54,94,103,92,98,186,49"/>
+<area shape="rect" id="Node000003" href="$da/dec/rdbms__auto__mount_8c.html" title="Automatic RDBMS provider detection and runtime mounting." alt="" coords="161,93,309,133"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="238,59,238,93,233,93,233,59"/>
+<area shape="rect" id="Node000004" href="$d6/d18/pqc__layer_8c.html" title="Post&#45;Quantum Cryptography (PQC) TLS layer facade." alt="" coords="334,101,489,126"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="287,49,389,98,387,103,285,54"/>
 </map>
