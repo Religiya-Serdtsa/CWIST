@@ -1,30 +1,40 @@
 [submodule "lib/boringssl"]
 	path = lib/boringssl
 	url = https://github.com/google/boringssl
+	branch = main
 [submodule "lib/cjson"]
 	path = lib/cjson
 	url = https://github.com/DaveGamble/cJSON
+	branch = master
 [submodule "lib/monocypher"]
 	path = lib/monocypher
 	url = https://github.com/LoupVaillant/Monocypher
+	branch = master
 [submodule "lib/libttak"]
 	path = lib/libttak
 	url = https://github.com/religiya-serdtsa/libttak
+	branch = main
 [submodule "lib/uriparser"]
 	path = lib/uriparser
 	url = https://github.com/uriparser/uriparser
+	branch = master
 [submodule "lib/cnats"]
 	path = lib/cnats
 	url = https://github.com/nats-io/nats.c
+	branch = main
 [submodule "lib/lsquic"]
 	path = lib/lsquic
 	url = https://github.com/litespeedtech/lsquic.git
+	branch = master
 [submodule "lib/multipart-parser-c"]
 	path = lib/multipart-parser-c
 	url = https://github.com/iafonov/multipart-parser-c.git
+	branch = main
 [submodule "lib/nghttp3"]
 	path = lib/nghttp3
 	url = https://github.com/ngtcp2/nghttp3.git
+	branch = main
 [submodule "lib/ngtcp2"]
 	path = lib/ngtcp2
 	url = https://github.com/ngtcp2/ngtcp2.git
+	branch = main
