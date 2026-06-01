@@ -23,6 +23,26 @@
 /* Forward declaration: PQC layer applied inside TLS bootstrap */
 bool cwist_tls_apply_pqc_layer(cwist_app *app, SSL_CTX *ctx);
 
+/**
+ * @brief Poll the socket for the direction OpenSSL is waiting on.
+ * @return 0 if the requested event is ready, -1 on timeout/error.
+ */
+static int cwist_ssl_wait(int fd, int ssl_error, int timeout_ms) {
+    struct pollfd pfd = { .fd = fd, .events = 0 };
+    if (ssl_error == SSL_ERROR_WANT_READ) {
+        pfd.events = POLLIN;
+    } else if (ssl_error == SSL_ERROR_WANT_WRITE) {
+        pfd.events = POLLOUT;
+    } else {
+        return -1;
+    }
+
+    int ret = poll(&pfd, 1, timeout_ms);
+    if (ret <= 0) return -1;
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) return -1;
+    return 0;
+}
+
 struct https_thread_payload {
     int client_fd;
     cwist_https_context *ctx;
@@ -372,12 +392,20 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
 
     SSL_set_fd(ssl, client_fd);
 
-    if (SSL_accept(ssl) <= 0) {
-        // Handshake failed
-        // We capture the error before freeing
-        cwist_error_t ssl_err = make_ssl_error("SSL handshake failed");
+    int rc;
+    while ((rc = SSL_accept(ssl)) <= 0) {
+        int ssl_err = SSL_get_error(ssl, rc);
+        if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
+            if (cwist_ssl_wait(client_fd, ssl_err, CWIST_HTTP_TIMEOUT_MS) != 0) {
+                cwist_error_t err_obj = make_ssl_error("SSL handshake timed out or socket error");
+                SSL_free(ssl);
+                return err_obj;
+            }
+            continue;
+        }
+        cwist_error_t err_obj = make_ssl_error("SSL handshake failed");
         SSL_free(ssl);
-        return ssl_err;
+        return err_obj;
     }
 
     *conn = (cwist_https_connection*)cwist_alloc(sizeof(cwist_https_connection));
@@ -469,6 +497,7 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
         if (bytes <= 0) {
             int ssl_err = SSL_get_error(conn->ssl, bytes);
             if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
+                if (cwist_ssl_wait(conn->fd, ssl_err, CWIST_HTTP_TIMEOUT_MS) != 0) return NULL;
                 continue;
             }
             return NULL;
@@ -515,6 +544,11 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
             if (bytes <= 0) {
                 int ssl_err = SSL_get_error(conn->ssl, bytes);
                 if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
+                    if (cwist_ssl_wait(conn->fd, ssl_err, CWIST_HTTP_TIMEOUT_MS) != 0) {
+                        cwist_free(body);
+                        cwist_http_request_destroy(req);
+                        return NULL;
+                    }
                     continue;
                 }
                 cwist_free(body);
@@ -597,6 +631,10 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
         if (sent <= 0) {
             int ssl_err = SSL_get_error(conn->ssl, sent);
             if (ssl_err == SSL_ERROR_WANT_WRITE || ssl_err == SSL_ERROR_WANT_READ) {
+                if (cwist_ssl_wait(conn->fd, ssl_err, CWIST_HTTP_TIMEOUT_MS) != 0) {
+                    err = make_ssl_error("SSL write timed out or socket error");
+                    break;
+                }
                 continue; // Retry
             }
             err = make_ssl_error("SSL write failed");

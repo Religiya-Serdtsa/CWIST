@@ -41,6 +41,7 @@
 #include <openssl/bn.h>
 
 #include <lsquic.h>
+#include <lsquic_wt.h>
 #include <lsxpack_header.h>
 
 /* ------------------------------------------------------------------ */
@@ -86,7 +87,98 @@ typedef struct h3_stream_ctx {
     int write_state; /* 0=headers, 1=body, 2=done */
     size_t body_sent;
     int is_webtransport;
+    int wt_taken;
 } h3_stream_ctx_t;
+
+typedef enum cwist_wt_handle_kind {
+    CWIST_WT_HANDLE_SESSION = 1,
+    CWIST_WT_HANDLE_STREAM = 2,
+} cwist_wt_handle_kind_t;
+
+typedef struct cwist_wt_handle {
+    uint64_t magic;
+    uint16_t version;
+    uint16_t kind;
+    uint32_t flags;
+    void *ptr;
+    struct cwist_wt_handle *parent;
+    struct cwist_wt_handle *first_child;
+    struct cwist_wt_handle *next_sibling;
+} cwist_wt_handle_t;
+
+#define CWIST_WT_HANDLE_MAGIC UINT64_C(0x4357495354575431)
+#define CWIST_WT_HANDLE_VERSION 1
+
+static cwist_wt_handle_t *cwist_wt_handle_new(cwist_wt_handle_kind_t kind,
+                                              void *ptr) {
+    if (!ptr) return NULL;
+    cwist_wt_handle_t *handle = calloc(1, sizeof(*handle));
+    if (!handle) return NULL;
+    handle->magic = CWIST_WT_HANDLE_MAGIC;
+    handle->version = CWIST_WT_HANDLE_VERSION;
+    handle->kind = (uint16_t)kind;
+    handle->ptr = ptr;
+    return handle;
+}
+
+static void cwist_wt_handle_free(cwist_wt_handle_t *handle) {
+    if (!handle) return;
+    while (handle->first_child) {
+        cwist_wt_handle_t *next = handle->first_child;
+        handle->first_child = next->next_sibling;
+        next->magic = 0;
+        next->ptr = NULL;
+        next->parent = NULL;
+        next->first_child = NULL;
+        next->next_sibling = NULL;
+        free(next);
+    }
+    if (handle->parent) {
+        cwist_wt_handle_t **link = &handle->parent->first_child;
+        while (*link) {
+            if (*link == handle) {
+                *link = handle->next_sibling;
+                break;
+            }
+            link = &(*link)->next_sibling;
+        }
+    }
+    handle->magic = 0;
+    handle->ptr = NULL;
+    handle->parent = NULL;
+    handle->first_child = NULL;
+    handle->next_sibling = NULL;
+    free(handle);
+}
+
+static void cwist_wt_handle_attach(cwist_wt_handle_t *parent,
+                                   cwist_wt_handle_t *child) {
+    if (!parent || !child) return;
+    child->parent = parent;
+    child->next_sibling = parent->first_child;
+    parent->first_child = child;
+}
+
+static cwist_wt_handle_t *cwist_wt_handle_cast(void *handle,
+                                               cwist_wt_handle_kind_t kind) {
+    cwist_wt_handle_t *h = (cwist_wt_handle_t *)handle;
+    if (!h || h->magic != CWIST_WT_HANDLE_MAGIC ||
+        h->version != CWIST_WT_HANDLE_VERSION ||
+        h->kind != (uint16_t)kind || !h->ptr) {
+        return NULL;
+    }
+    return h;
+}
+
+static lsquic_stream_t *cwist_wt_handle_stream(void *handle) {
+    cwist_wt_handle_t *h = cwist_wt_handle_cast(handle, CWIST_WT_HANDLE_STREAM);
+    return h ? (lsquic_stream_t *)h->ptr : NULL;
+}
+
+static lsquic_wt_session_t *cwist_wt_handle_session(void *handle) {
+    cwist_wt_handle_t *h = cwist_wt_handle_cast(handle, CWIST_WT_HANDLE_SESSION);
+    return h ? (lsquic_wt_session_t *)h->ptr : NULL;
+}
 
 /* ------------------------------------------------------------------ */
 /* Header-set interface for lsquic (QPACK decode)                     */
@@ -155,6 +247,8 @@ static const struct lsquic_hset_if cwist_h3_hset_if = {
     .hsi_process_header    = cwist_h3_hsi_process_header,
     .hsi_discard_header_set= cwist_h3_hsi_discard,
 };
+
+static const struct lsquic_webtransport_if cwist_h3_wt_if;
 
 /* ------------------------------------------------------------------ */
 /* SSL context callback                                               */
@@ -278,19 +372,6 @@ static lsquic_stream_ctx_t *cwist_h3_on_new_stream(void *stream_if_ctx,
     /* Default priority (middle of 1-256 range) */
     lsquic_stream_set_priority(stream, 128);
     lsquic_stream_wantread(stream, 1);
-
-#if LSQUIC_WEBTRANSPORT_SERVER_SUPPORT
-    if (h3_ctx && h3_ctx->wt_handler) {
-        lsquic_stream_id_t sid = lsquic_stream_id(stream);
-        int sid_mod = sid % 4;
-        if (sid_mod == 1 || sid_mod == 3) {
-            /* Server-initiated stream – notify WT layer */
-            if (h3_ctx->wt_new_stream_handler) {
-                h3_ctx->wt_new_stream_handler(stream, h3_ctx->wt_new_stream_ctx);
-            }
-        }
-    }
-#endif
 
     return (lsquic_stream_ctx_t *)st;
 }
@@ -446,7 +527,28 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             cwist_http3_context *h3_ctx = (cwist_http3_context *)
                 lsquic_conn_get_ctx(lsquic_stream_conn(stream));
             if (st->is_webtransport && h3_ctx && h3_ctx->wt_handler) {
-                h3_ctx->wt_handler(st->req, st->res, stream);
+                char *host = cwist_http_header_get(st->req->headers, "host");
+                char *origin = cwist_http_header_get(st->req->headers, "origin");
+                struct lsquic_wt_connect_info info = {
+                    .wtci_authority = host,
+                    .wtci_path = st->req->path ? st->req->path->data : NULL,
+                    .wtci_origin = origin,
+                    .wtci_protocol = NULL,
+                    .wtci_draft = lsquic_wt_peer_draft(lsquic_stream_conn(stream)),
+                };
+                struct lsquic_wt_accept_params params = {
+                    .wtap_status = LSQUIC_WTAP_STATUS_DEFAULT,
+                    .wtap_wt_if = &cwist_h3_wt_if,
+                    .wtap_wt_if_ctx = st,
+                    .wtap_connect_info = &info,
+                    .wtap_datagram_send_mode = LSQUIC_HTTP_DG_SEND_DEFAULT,
+                };
+                if (lsquic_wt_accept(stream, &params) == 0) {
+                    st->wt_taken = 1;
+                    lsquic_stream_wantread(stream, 0);
+                    lsquic_stream_wantwrite(stream, 0);
+                    return;
+                }
             } else if (h3_ctx && h3_ctx->handler) {
                 h3_ctx->handler(h3_ctx->user_ctx, st->req, st->res);
             }
@@ -554,26 +656,12 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             .headers = headers_arr,
         };
         int eos = (body_len == 0);
-#if LSQUIC_WEBTRANSPORT_SERVER_SUPPORT
-        /* WebTransport session stream must remain open after the 2xx response */
-        if (st->is_webtransport) {
-            eos = 0;
-        }
-#endif
         if (lsquic_stream_send_headers(stream, &headers, eos) != 0) {
             lsquic_stream_close(stream);
             return;
         }
         st->write_state = 1;
         if (body_len == 0) {
-#if LSQUIC_WEBTRANSPORT_SERVER_SUPPORT
-            if (st->is_webtransport) {
-                st->write_state = 3; /* WT_SESSION */
-                lsquic_stream_wantwrite(stream, 0);
-                lsquic_stream_set_webtransport_session(stream);
-                return;
-            }
-#endif
             st->write_state = 2;
             lsquic_stream_wantwrite(stream, 0);
             return;
@@ -675,6 +763,139 @@ static void cwist_h3_on_datagram(lsquic_conn_t *conn, const void *buf, size_t le
         ctx->datagram_cb(buf, len, ctx->datagram_user_ctx);
     }
 }
+
+static lsquic_wt_session_ctx_t *
+cwist_h3_wt_on_session_open(void *ctx, lsquic_wt_session_t *sess,
+                            const struct lsquic_wt_connect_info *info) {
+    (void)info;
+    h3_stream_ctx_t *st = (h3_stream_ctx_t *)ctx;
+    if (st && st->req && st->res) {
+        lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
+        cwist_http3_context *h3_ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+        cwist_wt_handle_t *session_handle =
+            cwist_wt_handle_new(CWIST_WT_HANDLE_SESSION, sess);
+        if (!session_handle) return NULL;
+        if (h3_ctx && h3_ctx->wt_handler) {
+            h3_ctx->wt_handler(st->req, st->res, session_handle);
+        }
+        return (lsquic_wt_session_ctx_t *)session_handle;
+    }
+    return NULL;
+}
+
+static void cwist_h3_wt_on_session_rejected(void *ctx,
+                                            const struct lsquic_wt_connect_info *info,
+                                            unsigned status, const char *reason,
+                                            size_t reason_len) {
+    (void)ctx;
+    (void)info;
+    (void)status;
+    (void)reason;
+    (void)reason_len;
+}
+
+static void cwist_h3_wt_on_session_close(lsquic_wt_session_t *sess,
+                                         lsquic_wt_session_ctx_t *sess_ctx,
+                                         uint64_t code, const char *reason,
+                                         size_t reason_len) {
+    (void)sess;
+    (void)code;
+    (void)reason;
+    (void)reason_len;
+    cwist_wt_handle_free((cwist_wt_handle_t *)sess_ctx);
+}
+
+static lsquic_stream_ctx_t *
+cwist_h3_wt_on_stream(lsquic_wt_session_t *sess, lsquic_stream_t *stream) {
+    cwist_http3_context *ctx = NULL;
+    if (sess) {
+        lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
+        if (conn) {
+            ctx = (cwist_http3_context *)lsquic_conn_get_ctx(conn);
+        }
+    }
+    if (ctx && ctx->wt_new_stream_handler) {
+        cwist_wt_handle_t *stream_handle =
+            cwist_wt_handle_new(CWIST_WT_HANDLE_STREAM, stream);
+        if (!stream_handle) return NULL;
+        ctx->wt_new_stream_handler(stream_handle, ctx->wt_new_stream_ctx);
+        lsquic_stream_wantread(stream, 1);
+        return (lsquic_stream_ctx_t *)stream_handle;
+    }
+    lsquic_stream_wantread(stream, 1);
+    return (lsquic_stream_ctx_t *)cwist_wt_handle_new(CWIST_WT_HANDLE_STREAM, stream);
+}
+
+static lsquic_stream_ctx_t *
+cwist_h3_wt_on_uni_stream(lsquic_wt_session_t *sess, lsquic_stream_t *stream) {
+    return cwist_h3_wt_on_stream(sess, stream);
+}
+
+static lsquic_stream_ctx_t *
+cwist_h3_wt_on_bidi_stream(lsquic_wt_session_t *sess, lsquic_stream_t *stream) {
+    return cwist_h3_wt_on_stream(sess, stream);
+}
+
+static void cwist_h3_wt_on_stream_read(lsquic_stream_t *stream,
+                                       lsquic_stream_ctx_t *st_h) {
+    cwist_wt_handle_t *stream_handle = (cwist_wt_handle_t *)st_h;
+    lsquic_wt_session_t *sess = lsquic_wt_session_from_stream(stream);
+    if (!sess) return;
+    lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
+    cwist_http3_context *ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+    if (ctx && ctx->wt_new_stream_handler) {
+        ctx->wt_new_stream_handler(stream_handle, ctx->wt_new_stream_ctx);
+    }
+}
+
+static void cwist_h3_wt_on_stream_write(lsquic_stream_t *stream,
+                                        lsquic_stream_ctx_t *st_h) {
+    (void)stream;
+    (void)st_h;
+}
+
+static void cwist_h3_wt_on_stream_close(lsquic_stream_t *stream,
+                                        lsquic_stream_ctx_t *st_h) {
+    (void)stream;
+    cwist_wt_handle_free((cwist_wt_handle_t *)st_h);
+}
+
+static uint64_t cwist_h3_wt_on_stream_ss_code(lsquic_stream_t *stream,
+                                              lsquic_stream_ctx_t *st_h) {
+    (void)stream;
+    (void)st_h;
+    return 0;
+}
+
+static void cwist_h3_wt_on_datagram_read(lsquic_wt_session_t *sess,
+                                         const void *buf, size_t len) {
+    lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
+    cwist_http3_context *ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+    if (ctx && ctx->datagram_cb) {
+        ctx->datagram_cb(buf, len, ctx->datagram_user_ctx);
+    }
+}
+
+static int cwist_h3_wt_on_datagram_write(lsquic_wt_session_t *sess,
+                                         size_t max_datagram_size) {
+    (void)sess;
+    (void)max_datagram_size;
+    return 0;
+}
+
+static const struct lsquic_webtransport_if cwist_h3_wt_if = {
+    .wti_on_session_open    = cwist_h3_wt_on_session_open,
+    .wti_on_session_rejected= cwist_h3_wt_on_session_rejected,
+    .wti_on_session_close   = cwist_h3_wt_on_session_close,
+    .wti_on_uni_stream      = cwist_h3_wt_on_uni_stream,
+    .wti_on_bidi_stream     = cwist_h3_wt_on_bidi_stream,
+    .wti_on_stream_read     = cwist_h3_wt_on_stream_read,
+    .wti_on_stream_write    = cwist_h3_wt_on_stream_write,
+    .wti_on_stream_close    = cwist_h3_wt_on_stream_close,
+    .wti_on_stream_ss_code  = cwist_h3_wt_on_stream_ss_code,
+    .wti_on_datagram_read   = cwist_h3_wt_on_datagram_read,
+    .wti_on_datagram_write  = cwist_h3_wt_on_datagram_write,
+};
 
 static const struct lsquic_stream_if cwist_h3_stream_if = {
     .on_new_conn    = cwist_h3_on_new_conn,
@@ -894,10 +1115,13 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     settings.es_support_push = ctx->push_enabled;
     settings.es_allow_migration = ctx->allow_migration ? ctx->allow_migration : 1;
     settings.es_max_delayed_0rtt_packets = 32;
-    settings.es_datagrams = ctx->datagram_enabled;
-#if LSQUIC_WEBTRANSPORT_SERVER_SUPPORT
-    settings.es_webtransport_server = 1; /* Enable WebTransport server support */
-#endif
+    settings.es_datagrams = ctx->datagram_enabled || ctx->wt_handler != NULL;
+    settings.es_http_datagrams = ctx->datagram_enabled || ctx->wt_handler != NULL;
+    settings.es_webtransport = ctx->wt_handler != NULL;
+    if (settings.es_webtransport) {
+        settings.es_max_webtransport_sessions = 1;
+        settings.es_reset_stream_at = 1;
+    }
     settings.es_ecn = 1;
     settings.es_pace_packets = 1;
     settings.es_optimistic_nat = 1;
@@ -1214,33 +1438,77 @@ void cwist_webtransport_set_new_stream_handler(cwist_http3_context *ctx,
 
 ssize_t cwist_webtransport_read(void *stream, void *buf, size_t len) {
     if (!stream || !buf) return -1;
-    return lsquic_stream_read((lsquic_stream_t *)stream, buf, len);
+    lsquic_stream_t *s = cwist_wt_handle_stream(stream);
+    if (!s) return -1;
+    return lsquic_stream_read(s, buf, len);
 }
 
 ssize_t cwist_webtransport_write(void *stream, const void *data, size_t len) {
     if (!stream || !data) return -1;
-    return lsquic_stream_write((lsquic_stream_t *)stream, data, len);
+    lsquic_stream_t *s = cwist_wt_handle_stream(stream);
+    if (!s) return -1;
+    return lsquic_stream_write(s, data, len);
 }
 
 int cwist_webtransport_flush(void *stream) {
     if (!stream) return -1;
-    return lsquic_stream_flush((lsquic_stream_t *)stream);
+    lsquic_stream_t *s = cwist_wt_handle_stream(stream);
+    if (!s) return -1;
+    return lsquic_stream_flush(s);
 }
 
 int cwist_webtransport_close_stream(void *stream) {
     if (!stream) return -1;
-    return lsquic_stream_close((lsquic_stream_t *)stream);
+    lsquic_stream_t *s = cwist_wt_handle_stream(stream);
+    if (!s) return -1;
+    return lsquic_stream_close(s);
 }
 
-int cwist_webtransport_open_bidi_stream(void *conn) {
-    if (!conn) return -1;
-    lsquic_conn_make_stream((lsquic_conn_t *)conn);
+int cwist_webtransport_open_bidi_stream(void *session) {
+    if (!session) return -1;
+    cwist_wt_handle_t *session_handle =
+        cwist_wt_handle_cast(session, CWIST_WT_HANDLE_SESSION);
+    lsquic_wt_session_t *raw_session = session_handle ?
+        (lsquic_wt_session_t *)session_handle->ptr : NULL;
+    if (!raw_session) return -1;
+    lsquic_stream_t *stream = lsquic_wt_open_bidi(raw_session);
+    if (!stream) return -1;
+    lsquic_wt_session_t *sess = lsquic_wt_session_from_stream(stream);
+    if (sess) {
+        lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
+        cwist_http3_context *ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+        if (ctx && ctx->wt_new_stream_handler) {
+            cwist_wt_handle_t *stream_handle =
+                cwist_wt_handle_new(CWIST_WT_HANDLE_STREAM, stream);
+            if (!stream_handle) return -1;
+            cwist_wt_handle_attach(session_handle, stream_handle);
+            ctx->wt_new_stream_handler(stream_handle, ctx->wt_new_stream_ctx);
+        }
+    }
     return 0;
 }
 
-int cwist_webtransport_open_uni_stream(void *conn) {
-    if (!conn) return -1;
-    lsquic_conn_make_stream((lsquic_conn_t *)conn);
+int cwist_webtransport_open_uni_stream(void *session) {
+    if (!session) return -1;
+    cwist_wt_handle_t *session_handle =
+        cwist_wt_handle_cast(session, CWIST_WT_HANDLE_SESSION);
+    lsquic_wt_session_t *raw_session = session_handle ?
+        (lsquic_wt_session_t *)session_handle->ptr : NULL;
+    if (!raw_session) return -1;
+    lsquic_stream_t *stream = lsquic_wt_open_uni(raw_session);
+    if (!stream) return -1;
+    lsquic_wt_session_t *sess = lsquic_wt_session_from_stream(stream);
+    if (sess) {
+        lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
+        cwist_http3_context *ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+        if (ctx && ctx->wt_new_stream_handler) {
+            cwist_wt_handle_t *stream_handle =
+                cwist_wt_handle_new(CWIST_WT_HANDLE_STREAM, stream);
+            if (!stream_handle) return -1;
+            cwist_wt_handle_attach(session_handle, stream_handle);
+            ctx->wt_new_stream_handler(stream_handle, ctx->wt_new_stream_ctx);
+        }
+    }
     return 0;
 }
 
@@ -1292,6 +1560,31 @@ int cwist_http3_send_datagram(void *conn, const void *data, size_t len) {
     g_h3_dgram.len = len;
     lsquic_conn_want_datagram_write(c, 1);
     return 0;
+}
+
+ssize_t cwist_webtransport_send_datagram(void *session,
+                                         const void *data, size_t len) {
+    if (!session || !data || len == 0) return -1;
+    lsquic_wt_session_t *sess = cwist_wt_handle_session(session);
+    if (!sess) return -1;
+    return lsquic_wt_send_datagram(sess, data, len);
+}
+
+size_t cwist_webtransport_max_datagram_size(void *session) {
+    if (!session) return 0;
+    lsquic_wt_session_t *sess = cwist_wt_handle_session(session);
+    if (!sess) return 0;
+    return lsquic_wt_max_datagram_size(sess);
+}
+
+int cwist_webtransport_close_session(void *session,
+                                     uint64_t code,
+                                     const char *reason) {
+    if (!session) return -1;
+    lsquic_wt_session_t *sess = cwist_wt_handle_session(session);
+    if (!sess) return -1;
+    return lsquic_wt_close(sess, code, reason,
+                           reason ? strlen(reason) : 0);
 }
 
 /* ------------------------------------------------------------------ */

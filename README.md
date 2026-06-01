@@ -135,6 +135,8 @@ These variables are read directly by the framework runtime (no prefix required):
 | `CWIST_WORKERS` | integer | `1` | Number of worker processes to fork before entering the event loop. |
 | `CWIST_C1M_MODE` | boolean | `true` | Enables the high-concurrency C1M async server loop. Set to `0` or `false` to fall back to a blocking accept loop. |
 
+**C1M Mode's value is theorically ready for C1M Server loop. However, a benchmark failed with file descriptor exhaution. This is theorically calculated. The real benchmark will handle C300K connections.**
+
 Some example applications (e.g. `example/othello-web`) also read the standard `PORT` variable when no explicit port is given.
 
 ## Nuke DB

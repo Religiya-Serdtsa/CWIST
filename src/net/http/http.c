@@ -749,6 +749,45 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
 #include <sys/uio.h> // For writev and BSD sendfile
 
 /**
+ * @brief Send an entire iovec over a (possibly non-blocking) socket.
+ * Handles EINTR, EAGAIN/EWOULDBLOCK with POLLOUT polling, and partial writes.
+ * @return 0 on success, -1 on fatal error or timeout.
+ */
+static int cwist_http_sendmsg_all(int fd, struct iovec *iov, int iovcnt, int flags) {
+    struct iovec *cur = iov;
+    int curcnt = iovcnt;
+    while (curcnt > 0) {
+        struct msghdr msg = {0};
+        msg.msg_iov = cur;
+        msg.msg_iovlen = (size_t)curcnt;
+        ssize_t n = sendmsg(fd, &msg, flags);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd = { .fd = fd, .events = POLLOUT };
+                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                if (ret <= 0) return -1;
+                if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) return -1;
+                continue;
+            }
+            return -1;
+        }
+        if (n == 0) return -1;
+
+        while (curcnt > 0 && (size_t)n >= cur->iov_len) {
+            n -= (ssize_t)cur->iov_len;
+            cur++;
+            curcnt--;
+        }
+        if (curcnt > 0) {
+            cur->iov_base = (char *)cur->iov_base + n;
+            cur->iov_len -= (size_t)n;
+        }
+    }
+    return 0;
+}
+
+/**
  * @brief Attempt an optimized file-stream send path using platform sendfile support.
  * @param client_fd Connected client socket descriptor.
  * @param res Response object configured for file streaming.
@@ -763,7 +802,13 @@ static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res)
 #if defined(__linux__)
         ssize_t sent = sendfile(client_fd, res->file_stream_fd, &offset, remaining);
         if (sent < 0) {
-            if (errno == EINTR || errno == EAGAIN) continue;
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd = { .fd = client_fd, .events = POLLOUT };
+                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                if (ret <= 0 || (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))) return false;
+                continue;
+            }
             return false;
         }
         if (sent == 0) break;
@@ -772,10 +817,15 @@ static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res)
         off_t chunk = (off_t)remaining;
         int rc = sendfile(res->file_stream_fd, client_fd, offset, &chunk, NULL, 0);
         if (rc == -1) {
-            if (errno == EINTR || errno == EAGAIN) {
-                if (chunk == 0) continue;
-                offset += chunk;
-                remaining -= (size_t)chunk;
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (chunk > 0) {
+                    offset += chunk;
+                    remaining -= (size_t)chunk;
+                }
+                struct pollfd pfd = { .fd = client_fd, .events = POLLOUT };
+                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                if (ret <= 0 || (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))) return false;
                 continue;
             }
             return false;
@@ -788,10 +838,15 @@ static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res)
         size_t chunk = remaining;
         int rc = sendfile(res->file_stream_fd, client_fd, offset, chunk, NULL, &sent, 0);
         if (rc == -1) {
-            if (errno == EINTR || errno == EAGAIN) {
-                if (sent == 0) continue;
-                offset += sent;
-                remaining -= (size_t)sent;
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (sent > 0) {
+                    offset += sent;
+                    remaining -= (size_t)sent;
+                }
+                struct pollfd pfd = { .fd = client_fd, .events = POLLOUT };
+                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                if (ret <= 0 || (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))) return false;
                 continue;
             }
             return false;
@@ -842,7 +897,6 @@ cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) 
     }
 
     // 3. sendmsg (Scatter/Gather + Flags) - Zero Copy Send
-    struct msghdr msg = {0};
     struct iovec iov[2];
     int iov_cnt = 1;
 
@@ -855,16 +909,12 @@ cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) 
         iov_cnt = 2;
     }
 
-    msg.msg_iov = iov;
-    msg.msg_iovlen = iov_cnt;
-
     int flags = 0;
     #if defined(MSG_NOSIGNAL)
     flags = MSG_NOSIGNAL;
     #endif
 
-    ssize_t written = sendmsg(client_fd, &msg, flags);
-    if (written < 0) {
+    if (cwist_http_sendmsg_all(client_fd, iov, iov_cnt, flags) != 0) {
         err.error.err_i16 = -1;
     } else {
         err.error.err_i16 = 0;
@@ -1010,7 +1060,11 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
             int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
             if (ret <= 0) return -1;
             ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
-            if (bytes <= 0) return -1;
+            if (bytes < 0) {
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                return -1;
+            }
+            if (bytes == 0) return -1;
             *avail += (size_t)bytes;
             buf[*avail] = '\0';
             crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
@@ -1034,7 +1088,11 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
                     int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
                     if (ret <= 0) return -1;
                     ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
-                    if (bytes <= 0) return -1;
+                    if (bytes < 0) {
+                        if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                        return -1;
+                    }
+                    if (bytes == 0) return -1;
                     *avail += (size_t)bytes;
                     buf[*avail] = '\0';
                     trailer_crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
@@ -1057,7 +1115,11 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
             int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
             if (ret <= 0) return -1;
             ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
-            if (bytes <= 0) return -1;
+            if (bytes < 0) {
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                return -1;
+            }
+            if (bytes == 0) return -1;
             *avail += (size_t)bytes;
             buf[*avail] = '\0';
         }
@@ -1090,7 +1152,11 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         if (ret <= 0) return NULL; // Timeout or error
 
         ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, 0);
-        if (bytes <= 0) return NULL;
+        if (bytes < 0) {
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            return NULL;
+        }
+        if (bytes == 0) return NULL;
         total_received += (size_t)bytes;
         read_buf[total_received] = '\0';
     }
@@ -1129,7 +1195,13 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             }
 
             ssize_t bytes = recv(client_fd, body + current_body_len, (size_t)req->content_length - current_body_len, 0);
-            if (bytes <= 0) {
+            if (bytes < 0) {
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                cwist_free(body);
+                cwist_http_request_destroy(req);
+                return NULL;
+            }
+            if (bytes == 0) {
                 cwist_free(body);
                 cwist_http_request_destroy(req);
                 return NULL;
