@@ -105,7 +105,18 @@ int main(void) {
     assert(cwist_webtransport_close_stream(NULL) == -1);
     assert(cwist_webtransport_open_bidi_stream(NULL) == -1);
     assert(cwist_webtransport_open_uni_stream(NULL) == -1);
-    printf("[PASS] WebTransport I/O API null-safety.\n");
+    char buf[8];
+    unsigned long long fake_handle = 0;
+    assert(cwist_webtransport_read(&fake_handle, buf, sizeof(buf)) == -1);
+    assert(cwist_webtransport_write(&fake_handle, "x", 1) == -1);
+    assert(cwist_webtransport_flush(&fake_handle) == -1);
+    assert(cwist_webtransport_close_stream(&fake_handle) == -1);
+    assert(cwist_webtransport_open_bidi_stream(&fake_handle) == -1);
+    assert(cwist_webtransport_open_uni_stream(&fake_handle) == -1);
+    assert(cwist_webtransport_send_datagram(&fake_handle, "x", 1) == -1);
+    assert(cwist_webtransport_max_datagram_size(&fake_handle) == 0);
+    assert(cwist_webtransport_close_session(&fake_handle, 0, NULL) == -1);
+    printf("[PASS] WebTransport I/O API null-safety and strict handle validation.\n");
 
     /* --- Test 5: App-level integration with HTTP/3 refresh --- */
     app = cwist_app_create();

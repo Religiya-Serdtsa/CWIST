@@ -42,7 +42,7 @@ typedef void (*cwist_error_handler_func)(cwist_http_request *req, cwist_http_res
  *
  * @param req    Parsed HTTP request object (CONNECT with :protocol=webtransport).
  * @param res    HTTP response object to be populated (e.g., 200 OK to accept).
- * @param stream Opaque lsquic_stream_t pointer for the WebTransport session.
+ * @param stream Opaque CWIST WebTransport session handle.
  */
 typedef void (*cwist_webtransport_handler_func)(cwist_http_request *req,
                                                  cwist_http_response *res,
