@@ -2037,16 +2037,9 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
             size_t cached_len = 0;
             const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
             if (cached_blob) {
-                // BDR Hit! Blast it out robustly (handles non-blocking sockets and short writes).
-                int flags = 0;
-                #if defined(MSG_NOSIGNAL)
-                flags = MSG_NOSIGNAL;
-                #endif
-                if (cwist_http_send_all(client_fd, cached_blob, cached_len, flags) < 0) {
-                    cwist_http_request_destroy(req);
-                    break;
-                }
-
+                // BDR Hit! Blast it out.
+                send(client_fd, cached_blob, cached_len, 0); // Flags handled by socket opt ideally or just 0
+                
                 // Cleanup and Loop
                 bool keep_alive = req->keep_alive;
                 cwist_http_request_destroy(req);

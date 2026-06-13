@@ -27,13 +27,6 @@ static void async_accept_cb(int fd, void *ctx) {
     int client_fd;
 
     while ((client_fd = accept(fd, (struct sockaddr*)&addr, &len)) >= 0) {
-        int fl = fcntl(client_fd, F_GETFL, 0);
-        if (fl < 0 || fcntl(client_fd, F_SETFL, fl | O_NONBLOCK) < 0) {
-            perror("[async] Failed to set client socket non-blocking");
-            close(client_fd);
-            continue;
-        }
-
         if (app_use_https(app)) {
             https_pool_submit(client_fd, app->ssl_ctx, app->https_request_handler, app);
         } else if (app && !app->use_ssl) {
