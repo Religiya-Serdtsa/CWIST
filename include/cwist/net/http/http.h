@@ -165,6 +165,7 @@ void cwist_http_response_set_alt_svc(cwist_http_response *res, const char *alt_s
 
 cwist_sstring *cwist_http_stringify_response(cwist_http_response *res);
 cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res);
+ssize_t cwist_http_send_all(int client_fd, const void *buf, size_t len, int flags);
 cwist_error_t cwist_http_response_send_file(cwist_http_response *res, const char *file_path, const char *content_type_hint, size_t *out_size);
 /** @} */
 
