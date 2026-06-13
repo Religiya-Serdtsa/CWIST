@@ -16,6 +16,10 @@
 
 static cwist_reactor_t *g_reactor = NULL;
 
+static bool app_use_https(const cwist_app *app) {
+    return app && app->use_ssl && app->ssl_ctx && app->https_request_handler;
+}
+
 static void async_accept_cb(int fd, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
     struct sockaddr_in addr;
@@ -23,10 +27,17 @@ static void async_accept_cb(int fd, void *ctx) {
     int client_fd;
 
     while ((client_fd = accept(fd, (struct sockaddr*)&addr, &len)) >= 0) {
-        if (app->use_ssl && app->ssl_ctx && app->https_request_handler) {
+        if (app_use_https(app)) {
             https_pool_submit(client_fd, app->ssl_ctx, app->https_request_handler, app);
-        } else {
+        } else if (app && !app->use_ssl) {
             cwist_http_pool_submit(client_fd, cwist_app_http_handler, app);
+        } else {
+            fprintf(stderr, "[async] SSL request accepted but HTTPS not ready (use_ssl=%d ssl_ctx=%p handler=%p), closing fd=%d\n",
+                    app ? app->use_ssl : -1,
+                    app ? (void*)app->ssl_ctx : NULL,
+                    app ? (void*)app->https_request_handler : NULL,
+                    client_fd);
+            close(client_fd);
         }
     }
 
@@ -42,7 +53,8 @@ cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
     err.errtype = CWIST_ERR_INT16;
     err.error.err_i16 = -1;
 
-    if (app->use_ssl) {
+    bool use_https = app_use_https(app);
+    if (use_https) {
         if (https_pool_init() != 0) {
             fprintf(stderr, "[async] Failed to init HTTPS thread pool\n");
             return err;
@@ -57,7 +69,7 @@ cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
     int flags = fcntl(server_fd, F_GETFL, 0);
     if (flags < 0 || fcntl(server_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
         perror("[async] Failed to set server socket non-blocking");
-        if (app->use_ssl) https_pool_destroy();
+        if (use_https) https_pool_destroy();
         else cwist_http_pool_destroy();
         return err;
     }
@@ -65,7 +77,8 @@ cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
     g_reactor = cwist_reactor_create();
     if (!g_reactor) {
         fprintf(stderr, "[async] Failed to create reactor\n");
-        if (app->use_ssl) https_pool_destroy();
+        if (use_https) https_pool_destroy();
+        else cwist_http_pool_destroy();
         return err;
     }
 
@@ -77,7 +90,7 @@ cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
     cwist_reactor_destroy(g_reactor);
     g_reactor = NULL;
 
-    if (app->use_ssl) {
+    if (use_https) {
         https_pool_destroy();
     } else {
         cwist_http_pool_destroy();

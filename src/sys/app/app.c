@@ -1952,6 +1952,11 @@ static void static_ssl_handler(cwist_https_connection *conn, void *ctx) {
     static_ssl_http1_handler(conn, ctx);
 }
 
+/* Weak hook for applications that need to take ownership of a TLS-upgraded
+ * connection (e.g. reverse-session hijacking). Return true to detach the
+ * fd/ssl from cwist so they are not closed after the response is sent. */
+__attribute__((weak)) bool cwist_https_upgrade_handler(cwist_https_connection *conn, cwist_http_request *req, cwist_http_response *res);
+
 static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
     cwist_http_request *req = cwist_https_receive_request(conn);
@@ -1963,6 +1968,16 @@ static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
     internal_route_handler(app, req, res);
     
     cwist_https_send_response(conn, res);
+    
+    bool detached = false;
+    if (req->upgraded && cwist_https_upgrade_handler) {
+        detached = cwist_https_upgrade_handler(conn, req, res);
+        if (detached) {
+            conn->ssl = NULL;
+            conn->fd = -1;
+        }
+    }
+    
     cwist_http_response_destroy(res);
     cwist_http_request_destroy(req);
 }
