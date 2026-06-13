@@ -70,3 +70,4 @@ example/othello-web/othello.db
 payload.json
 test_sstring_run
 fly.board/
+test_https
