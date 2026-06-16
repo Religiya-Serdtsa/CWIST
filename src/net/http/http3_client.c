@@ -64,6 +64,9 @@ static void h3c_global_cleanup(void) {
 typedef struct h3c_stream_ctx {
     lsquic_stream_t *stream;
     cwist_http_response *res;
+    char *req_path;
+    cwist_http_method_t req_method;
+    cwist_http_header_node *req_headers;
     char *req_body;
     size_t req_body_len;
     size_t req_body_sent;
@@ -192,6 +195,7 @@ static const struct lsquic_hset_if h3c_hset_if = {
 static lsquic_conn_ctx_t *h3c_on_new_conn(void *stream_if_ctx,
                                            lsquic_conn_t *conn) {
     cwist_http3_client *client = stream_if_ctx;
+    (void)conn;
     return (lsquic_conn_ctx_t *)client;
 }
 
@@ -205,6 +209,7 @@ static lsquic_stream_ctx_t *h3c_on_new_stream(void *stream_if_ctx,
     h3c_stream_ctx_t *st = calloc(1, sizeof(*st));
     if (!st) return NULL;
     st->stream = stream;
+    st->req_method = CWIST_HTTP_GET;
     lsquic_stream_wantwrite(stream, 1);
     pthread_mutex_lock(&client->mtx);
     client->active_stream = st;
@@ -276,8 +281,8 @@ static void h3c_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     size_t hdr_count = 0;
 
     /* :method */
-    const char *method_str = cwist_http_method_to_string(CWIST_HTTP_GET);
-    if (st->req_body && st->req_body_len > 0) method_str = "POST";
+    const char *method_str = cwist_http_method_to_string(st->req_method);
+    if (!method_str || !*method_str) method_str = "GET";
     size_t mlen = strlen(method_str);
     if (hbuf_off + 7 + 2 + mlen <= sizeof(hbuf)) {
         memcpy(hbuf + hbuf_off, ":method", 7);
@@ -289,7 +294,7 @@ static void h3c_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     }
 
     /* :path */
-    const char *path = "/";
+    const char *path = st->req_path ? st->req_path : "/";
     size_t plen = strlen(path);
     if (hbuf_off + 5 + 2 + plen <= sizeof(hbuf)) {
         memcpy(hbuf + hbuf_off, ":path", 5);
@@ -323,6 +328,34 @@ static void h3c_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
                                    0, 7, 9, slen);
         hbuf_off += 9 + slen;
         hdr_count++;
+    }
+
+    cwist_http_header_node *node = st->req_headers;
+    while (node && hdr_count < 64) {
+        if (!node->key || !node->key->data || !node->value || !node->value->data) {
+            node = node->next;
+            continue;
+        }
+        const char *name = node->key->data;
+        const char *value = node->value->data;
+        size_t nlen = node->key->size;
+        size_t vlen = node->value->size;
+        if ((nlen == 7 && strncasecmp(name, ":method", nlen) == 0) ||
+            (nlen == 5 && strncasecmp(name, ":path", nlen) == 0) ||
+            (nlen == 10 && strncasecmp(name, ":authority", nlen) == 0) ||
+            (nlen == 7 && strncasecmp(name, ":scheme", nlen) == 0)) {
+            node = node->next;
+            continue;
+        }
+        if (hbuf_off + nlen + 2 + vlen <= sizeof(hbuf)) {
+            memcpy(hbuf + hbuf_off, name, nlen);
+            memcpy(hbuf + hbuf_off + nlen + 2, value, vlen);
+            lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                       0, nlen, nlen + 2, vlen);
+            hbuf_off += nlen + 2 + vlen;
+            hdr_count++;
+        }
+        node = node->next;
     }
 
     lsquic_http_headers_t headers = {
@@ -363,8 +396,12 @@ static void h3c_on_close(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     cwist_http3_client *client = (cwist_http3_client *)lsquic_conn_get_ctx(lsquic_stream_conn(stream));
     pthread_mutex_lock(&client->mtx);
     st->response_ready = 1;
+    if (client->active_stream == st) {
+        client->active_stream = NULL;
+    }
     pthread_cond_broadcast(&client->cond);
     pthread_mutex_unlock(&client->mtx);
+    free(st->req_path);
     free(st->req_body);
     free(st->resp_body);
     free(st);
@@ -388,7 +425,6 @@ static void h3c_process_io(cwist_http3_client *client, int timeout_ms) {
     int diff = timeout_ms * 1000; /* microseconds */
     if (diff <= 0) diff = 1000;
 
-    unsigned flags = 0;
     if (lsquic_engine_earliest_adv_tick(engine, &diff)) {
         if (diff <= 0) diff = 0;
         else if (diff > 1000000) diff = 1000000;
@@ -621,6 +657,9 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
         }
 
         /* Request a new stream */
+        pthread_mutex_lock(&client->mtx);
+        client->active_stream = NULL;
+        pthread_mutex_unlock(&client->mtx);
         lsquic_conn_make_stream(client->conn);
 
         /* I/O loop until stream is created */
@@ -649,6 +688,14 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
             err.error.err_i16 = -1;
             goto retry_backoff;
         }
+
+        st->req_path = strdup(path);
+        if (!st->req_path) {
+            err.error.err_i16 = -1;
+            goto retry_backoff;
+        }
+        st->req_method = method;
+        st->req_headers = headers;
 
         /* Store request body */
         if (body && body_len > 0) {
@@ -698,7 +745,9 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
         client->active_stream = NULL;
         pthread_mutex_unlock(&client->mtx);
         free(st->req_body);
+        free(st->req_path);
         st->req_body = NULL;
+        st->req_path = NULL;
         free(st);
 
     retry_backoff:

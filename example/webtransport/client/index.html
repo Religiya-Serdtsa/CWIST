@@ -1,0 +1,142 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>CWIST WebTransport Client</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    max-width: 760px;
+    margin: 40px auto;
+    line-height: 1.45;
+  }
+  label, input, button, textarea {
+    font: inherit;
+  }
+  input, textarea {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 6px 0 12px;
+    padding: 8px;
+  }
+  button {
+    margin-right: 8px;
+    padding: 8px 12px;
+  }
+  pre {
+    min-height: 220px;
+    padding: 12px;
+    background: #111;
+    color: #eee;
+    overflow: auto;
+  }
+</style>
+
+<h1>CWIST WebTransport Client</h1>
+<label>
+  URL
+  <input id="url" value="https://localhost:9443/wt">
+</label>
+<label>
+  Message
+  <textarea id="message" rows="3">hello from browser WebTransport</textarea>
+</label>
+<button id="connect">Connect</button>
+<button id="stream" disabled>Send Bidirectional Stream</button>
+<button id="datagram" disabled>Send Datagram</button>
+<button id="close" disabled>Close</button>
+<pre id="log"></pre>
+
+<script>
+const logEl = document.querySelector("#log");
+const buttons = {
+  connect: document.querySelector("#connect"),
+  stream: document.querySelector("#stream"),
+  datagram: document.querySelector("#datagram"),
+  close: document.querySelector("#close"),
+};
+let transport;
+
+function log(line) {
+  logEl.textContent += `${new Date().toLocaleTimeString()} ${line}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setConnected(connected) {
+  buttons.connect.disabled = connected;
+  buttons.stream.disabled = !connected;
+  buttons.datagram.disabled = !connected || !transport?.datagrams?.writable;
+  buttons.close.disabled = !connected;
+}
+
+buttons.connect.onclick = async () => {
+  if (!("WebTransport" in window)) {
+    log("WebTransport is not available in this browser.");
+    return;
+  }
+
+  transport = new WebTransport(document.querySelector("#url").value);
+  try {
+    await transport.ready;
+    setConnected(true);
+    log("connected");
+
+    transport.closed
+      .then(() => log("closed"))
+      .catch((err) => log(`closed with error: ${err}`))
+      .finally(() => setConnected(false));
+
+    readDatagrams();
+  } catch (err) {
+    log(`connect failed: ${err}`);
+    transport = undefined;
+  }
+};
+
+buttons.stream.onclick = async () => {
+  const stream = await transport.createBidirectionalStream();
+  const writer = stream.writable.getWriter();
+  const reader = stream.readable.getReader();
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const message = document.querySelector("#message").value;
+  await writer.write(encoder.encode(message));
+  await writer.close();
+  log(`stream sent: ${message}`);
+
+  let reply = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    reply += decoder.decode(value, { stream: true });
+  }
+  reply += decoder.decode();
+  log(`stream received: ${reply}`);
+};
+
+buttons.datagram.onclick = async () => {
+  const writer = transport.datagrams.writable.getWriter();
+  const message = document.querySelector("#message").value;
+  await writer.write(new TextEncoder().encode(message));
+  writer.releaseLock();
+  log(`datagram sent: ${message}`);
+};
+
+buttons.close.onclick = () => {
+  transport?.close({ closeCode: 0, reason: "client closed" });
+};
+
+async function readDatagrams() {
+  if (!transport?.datagrams?.readable) return;
+  const reader = transport.datagrams.readable.getReader();
+  const decoder = new TextDecoder();
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      log(`datagram received: ${decoder.decode(value)}`);
+    }
+  } catch (err) {
+    log(`datagram read failed: ${err}`);
+  }
+}
+</script>
