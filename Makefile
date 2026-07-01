@@ -241,8 +241,7 @@ $(LSQUIC_LIB): $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB)
 		-DBORINGSSL_LIB_ssl=$(abspath $(BORINGSSL_SSL_LIB)) \
 		-DBORINGSSL_LIB_crypto=$(abspath $(BORINGSSL_CRYPTO_LIB)) \
 		-DBORINGSSL_INCLUDE=$(abspath $(BORINGSSL_DIR)/include) \
-		-DBUILD_SHARED_LIBS=OFF \
-		-DLSQUIC_WEBTRANSPORT=ON
+		-DBUILD_SHARED_LIBS=OFF
 	cmake --build $(LSQUIC_BUILD_DIR) --target lsquic
 
 $(CNATS_LIB):
@@ -273,7 +272,6 @@ TEST_TARGETS = test_sstring \
                test_https \
                test_http2 \
                test_http3 \
-               test_webtransport \
                test_shutdown \
                test_compress \
                test_log \
@@ -336,10 +334,6 @@ test_http2: $(LIB_NAME) tests/test_http2.c
 test_http3: $(LIB_NAME) tests/test_http3.c
 	$(CC) $(CFLAGS) -o test_http3 tests/test_http3.c $(LIB_NAME) $(LIBS)
 	./test_http3
-
-test_webtransport: $(LIB_NAME) tests/test_webtransport.c
-	$(CC) $(CFLAGS) -o test_webtransport tests/test_webtransport.c $(LIB_NAME) $(LIBS)
-	./test_webtransport
 
 test_rdbms_auto_mount: $(LIB_NAME) tests/test_rdbms_auto_mount.c
 	$(CC) $(CFLAGS) -o test_rdbms_auto_mount tests/test_rdbms_auto_mount.c $(LIB_NAME) $(LIBS)
@@ -456,7 +450,6 @@ EXAMPLE_BINS = example/simple-server/simple-server \
                example/db/step-1-open-query/open-query \
                example/db/step-2-migrations/migrations \
                example/db/step-4-json-insert/json-insert \
-               example/webtransport/server/webtransport-server \
                example/rps-showcase/rps-showcase
 
 examples: $(EXAMPLE_BINS)
@@ -490,9 +483,6 @@ example/db/step-2-migrations/migrations: $(LIB_NAME) example/db/step-2-migration
 
 example/db/step-4-json-insert/json-insert: $(LIB_NAME) example/db/step-4-json-insert/main.c
 	$(CC) $(CFLAGS) -o $@ example/db/step-4-json-insert/main.c $(LIB_NAME) $(LIBS)
-
-example/webtransport/server/webtransport-server: $(LIB_NAME) example/webtransport/server/main.c
-	$(CC) $(CFLAGS) -o $@ example/webtransport/server/main.c $(LIB_NAME) $(LIBS)
 
 example/rps-showcase/rps-showcase: $(LIB_NAME) example/rps-showcase/main.c
 	$(CC) $(CFLAGS) -o $@ example/rps-showcase/main.c $(LIB_NAME) $(LIBS)

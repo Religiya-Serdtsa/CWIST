@@ -41,7 +41,9 @@
 #include <openssl/bn.h>
 
 #include <lsquic.h>
+#ifdef CWIST_WEBTRANSPORT
 #include <lsquic_wt.h>
+#endif
 #include <lsxpack_header.h>
 
 /* ------------------------------------------------------------------ */
@@ -86,9 +88,13 @@ typedef struct h3_stream_ctx {
     int response_ready;
     int write_state; /* 0=headers, 1=body, 2=done */
     size_t body_sent;
+#ifdef CWIST_WEBTRANSPORT
     int is_webtransport;
     int wt_taken;
+#endif
 } h3_stream_ctx_t;
+
+#ifdef CWIST_WEBTRANSPORT
 
 typedef enum cwist_wt_handle_kind {
     CWIST_WT_HANDLE_SESSION = 1,
@@ -180,6 +186,8 @@ static lsquic_wt_session_t *cwist_wt_handle_session(void *handle) {
     return h ? (lsquic_wt_session_t *)h->ptr : NULL;
 }
 
+#endif /* CWIST_WEBTRANSPORT */
+
 /* ------------------------------------------------------------------ */
 /* Header-set interface for lsquic (QPACK decode)                     */
 /* ------------------------------------------------------------------ */
@@ -248,7 +256,9 @@ static const struct lsquic_hset_if cwist_h3_hset_if = {
     .hsi_discard_header_set= cwist_h3_hsi_discard,
 };
 
+#ifdef CWIST_WEBTRANSPORT
 static const struct lsquic_webtransport_if cwist_h3_wt_if;
+#endif
 
 /* ------------------------------------------------------------------ */
 /* SSL context callback                                               */
@@ -359,7 +369,9 @@ static lsquic_stream_ctx_t *cwist_h3_on_new_stream(void *stream_if_ctx,
     }
     cwist_sstring_assign(st->req->version, "HTTP/3");
     st->req->private_data = stream;
+#ifdef CWIST_WEBTRANSPORT
     st->is_webtransport = 0;
+#endif
 
     /* Handle server-pushed streams */
     if (h3_ctx && h3_ctx->push_enabled && lsquic_stream_is_pushed(stream)) {
@@ -470,12 +482,14 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                 const char *value = lsxpack_header_get_value(&hs->headers[i]);
                 if (name && value) {
                     h3_apply_header(st->req, name, value);
+#ifdef CWIST_WEBTRANSPORT
                     if (strcmp(name, ":protocol") == 0 && strcmp(value, "webtransport") == 0) {
                         /* WebTransport requires CONNECT method per RFC 9114 */
                         if (st->req && st->req->method == CWIST_HTTP_CONNECT) {
                             st->is_webtransport = 1;
                         }
                     }
+#endif
                 }
             }
             st->headers_done = 1;
@@ -526,6 +540,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         if (st->res && st->req) {
             cwist_http3_context *h3_ctx = (cwist_http3_context *)
                 lsquic_conn_get_ctx(lsquic_stream_conn(stream));
+#ifdef CWIST_WEBTRANSPORT
             if (st->is_webtransport && h3_ctx && h3_ctx->wt_handler) {
                 char *host = cwist_http_header_get(st->req->headers, "host");
                 char *origin = cwist_http_header_get(st->req->headers, "origin");
@@ -549,7 +564,9 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                     lsquic_stream_wantwrite(stream, 0);
                     return;
                 }
-            } else if (h3_ctx && h3_ctx->handler) {
+            } else
+#endif
+            if (h3_ctx && h3_ctx->handler) {
                 h3_ctx->handler(h3_ctx->user_ctx, st->req, st->res);
             }
         }
@@ -764,6 +781,8 @@ static void cwist_h3_on_datagram(lsquic_conn_t *conn, const void *buf, size_t le
     }
 }
 
+#ifdef CWIST_WEBTRANSPORT
+
 static lsquic_wt_session_ctx_t *
 cwist_h3_wt_on_session_open(void *ctx, lsquic_wt_session_t *sess,
                             const struct lsquic_wt_connect_info *info) {
@@ -896,6 +915,8 @@ static const struct lsquic_webtransport_if cwist_h3_wt_if = {
     .wti_on_datagram_read   = cwist_h3_wt_on_datagram_read,
     .wti_on_datagram_write  = cwist_h3_wt_on_datagram_write,
 };
+
+#endif /* CWIST_WEBTRANSPORT */
 
 static const struct lsquic_stream_if cwist_h3_stream_if = {
     .on_new_conn    = cwist_h3_on_new_conn,
@@ -1115,13 +1136,15 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     settings.es_support_push = ctx->push_enabled;
     settings.es_allow_migration = ctx->allow_migration ? ctx->allow_migration : 1;
     settings.es_max_delayed_0rtt_packets = 32;
-    settings.es_datagrams = ctx->datagram_enabled || ctx->wt_handler != NULL;
+    settings.es_datagrams = ctx->datagram_enabled;
+#ifdef CWIST_WEBTRANSPORT
     settings.es_http_datagrams = ctx->datagram_enabled || ctx->wt_handler != NULL;
     settings.es_webtransport = ctx->wt_handler != NULL;
     if (settings.es_webtransport) {
         settings.es_max_webtransport_sessions = 1;
         settings.es_reset_stream_at = 1;
     }
+#endif
     settings.es_ecn = 1;
     settings.es_pace_packets = 1;
     settings.es_optimistic_nat = 1;
@@ -1436,6 +1459,8 @@ void cwist_webtransport_set_new_stream_handler(cwist_http3_context *ctx,
     }
 }
 
+#ifdef CWIST_WEBTRANSPORT
+
 ssize_t cwist_webtransport_read(void *stream, void *buf, size_t len) {
     if (!stream || !buf) return -1;
     lsquic_stream_t *s = cwist_wt_handle_stream(stream);
@@ -1512,6 +1537,44 @@ int cwist_webtransport_open_uni_stream(void *session) {
     return 0;
 }
 
+#else /* CWIST_WEBTRANSPORT */
+
+ssize_t cwist_webtransport_read(void *stream, void *buf, size_t len) {
+    (void)stream;
+    (void)buf;
+    (void)len;
+    return -1;
+}
+
+ssize_t cwist_webtransport_write(void *stream, const void *data, size_t len) {
+    (void)stream;
+    (void)data;
+    (void)len;
+    return -1;
+}
+
+int cwist_webtransport_flush(void *stream) {
+    (void)stream;
+    return -1;
+}
+
+int cwist_webtransport_close_stream(void *stream) {
+    (void)stream;
+    return -1;
+}
+
+int cwist_webtransport_open_bidi_stream(void *session) {
+    (void)session;
+    return -1;
+}
+
+int cwist_webtransport_open_uni_stream(void *session) {
+    (void)session;
+    return -1;
+}
+
+#endif /* CWIST_WEBTRANSPORT */
+
 /* ------------------------------------------------------------------ */
 /* Resilience knobs                                                   */
 /* ------------------------------------------------------------------ */
@@ -1562,6 +1625,8 @@ int cwist_http3_send_datagram(void *conn, const void *data, size_t len) {
     return 0;
 }
 
+#ifdef CWIST_WEBTRANSPORT
+
 ssize_t cwist_webtransport_send_datagram(void *session,
                                          const void *data, size_t len) {
     if (!session || !data || len == 0) return -1;
@@ -1586,6 +1651,32 @@ int cwist_webtransport_close_session(void *session,
     return lsquic_wt_close(sess, code, reason,
                            reason ? strlen(reason) : 0);
 }
+
+#else /* CWIST_WEBTRANSPORT */
+
+ssize_t cwist_webtransport_send_datagram(void *session,
+                                         const void *data, size_t len) {
+    (void)session;
+    (void)data;
+    (void)len;
+    return -1;
+}
+
+size_t cwist_webtransport_max_datagram_size(void *session) {
+    (void)session;
+    return 0;
+}
+
+int cwist_webtransport_close_session(void *session,
+                                     uint64_t code,
+                                     const char *reason) {
+    (void)session;
+    (void)code;
+    (void)reason;
+    return -1;
+}
+
+#endif /* CWIST_WEBTRANSPORT */
 
 /* ------------------------------------------------------------------ */
 /* Serve connection (kept for API compat)                             */
