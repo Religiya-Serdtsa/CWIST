@@ -1,11 +1,16 @@
 # Compiler and Flags
 CC ?= gcc
+FUZZ_CC ?= clang
 
 CURL_CFLAGS := $(shell pkg-config --cflags libcurl 2>/dev/null)
 NGHTTP2_CFLAGS := $(shell pkg-config --cflags libnghttp2 2>/dev/null)
+BROTLI_CFLAGS := $(shell pkg-config --cflags libbrotlienc libbrotlicommon libbrotlidec 2>/dev/null)
 
-INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src -I./lib/boringssl/include -I./lib/lsquic/include -I./lib/multipart-parser-c $(CURL_CFLAGS) $(NGHTTP2_CFLAGS)
-COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
+INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src -I./lib/boringssl/include -I./lib/lsquic/include -I./lib/multipart-parser-c $(CURL_CFLAGS) $(NGHTTP2_CFLAGS) $(BROTLI_CFLAGS)
+# LSQUIC WebTransport is supplied by the pinned proposal branch (PR #629).
+# Keep the CWIST adapter and the dependency enabled together so a build cannot
+# expose headers for a feature that the linked static library omitted.
+COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE -DCWIST_WEBTRANSPORT
 COMMON_WARNINGS = -std=c2x -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
 
@@ -55,13 +60,15 @@ LSQUIC_LIB = $(LSQUIC_BUILD_DIR)/src/liblsquic/liblsquic.a
 
 CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null)
 NGHTTP2_LIBS := $(shell pkg-config --libs libnghttp2 2>/dev/null)
+BROTLI_LIBS := $(shell pkg-config --libs libbrotlienc libbrotlicommon libbrotlidec 2>/dev/null)
 
-LIBS = -pthread -ldl -lm -lstdc++ -lz \
+LIBS = -pthread -ldl -lm -lstdc++ -lz -lzstd \
        $(LSQUIC_LIB) \
        $(BORINGSSL_SSL_LIB) \
        $(BORINGSSL_CRYPTO_LIB) \
        $(CURL_LIBS) \
-       $(NGHTTP2_LIBS)
+       $(NGHTTP2_LIBS) \
+       $(BROTLI_LIBS)
 
 # SQLite Automation
 SQLITE_YEAR = 2024
@@ -90,8 +97,12 @@ endif
 
 # Source Files
 SRCS = src/core/sstring/sstring.c \
+       src/core/seq/seq.c \
+       src/core/seq/seq_auth.c \
        src/sys/err/error.c \
        src/net/http/http.c \
+       src/net/http/sse.c \
+       src/net/graphql/graphql.c \
        src/net/http/http2.c \
        src/net/http/http3.c \
        src/net/http/curl_global.c \
@@ -99,15 +110,22 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/http3_client.c \
        src/net/http/https.c \
        src/net/http/tls_chain.c \
+       src/net/grpc/grpc.c \
+       src/net/grpc/protobuf.c \
        src/https/pqc_layer.c \
        src/net/http/mux.c \
        src/net/http/multipart.c \
        src/net/http/async_server.c \
-       lib/multipart-parser-c/multipart_parser.c \
+       src/net/http/cookie.c \
+       src/net/http/session.c \
        src/net/http/query.c \
+       lib/multipart-parser-c/multipart_parser.c \
        src/sys/session/session_manager.c \
+       src/sys/app/csrf.c \
+       src/sys/app/waf.c \
        src/core/siphash/siphash.c \
        src/core/db/db.c \
+       src/core/db/pool.c \
        src/core/db/nuke_db.c \
        src/core/db/migrate.c \
        src/core/orm/orm.c \
@@ -140,9 +158,11 @@ SRCS = src/core/sstring/sstring.c \
        src/security/tls/ech.c \
        src/net/db_sync/db_sync.c \
        src/net/nats/cwist_nats.c \
+       src/net/redis/cwist_redis.c \
        src/core/validation/bind.c \
        src/sys/io/io_uring_backend.c \
        src/sys/io/reactor.c \
+       src/sys/job/scheduler.c \
        src/sys/metrics/metrics.c \
        src/sys/health/healthz.c \
        $(IO_SRC)
@@ -241,8 +261,8 @@ $(LSQUIC_LIB): $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB)
 		-DBORINGSSL_LIB_ssl=$(abspath $(BORINGSSL_SSL_LIB)) \
 		-DBORINGSSL_LIB_crypto=$(abspath $(BORINGSSL_CRYPTO_LIB)) \
 		-DBORINGSSL_INCLUDE=$(abspath $(BORINGSSL_DIR)/include) \
-		-DBUILD_SHARED_LIBS=OFF \
-		-DLSQUIC_WEBTRANSPORT=ON
+		-DLSQUIC_WEBTRANSPORT=ON \
+		-DBUILD_SHARED_LIBS=OFF
 	cmake --build $(LSQUIC_BUILD_DIR) --target lsquic
 
 $(CNATS_LIB):
@@ -259,6 +279,8 @@ $(CNATS_LIB):
 # --- Test Targets ---
 
 TEST_TARGETS = test_sstring \
+               test_seq \
+               test_seq_auth \
                test_http \
                test_siphash \
                test_mux \
@@ -273,7 +295,6 @@ TEST_TARGETS = test_sstring \
                test_https \
                test_http2 \
                test_http3 \
-               test_webtransport \
                test_shutdown \
                test_compress \
                test_log \
@@ -285,17 +306,49 @@ TEST_TARGETS = test_sstring \
                test_access_log \
                test_rate_limit \
                test_cache \
+               test_bdr \
                test_secure_headers \
                test_http_chunked \
-               test_static_and_range
+               test_static_and_range \
+               test_session \
+               test_csrf \
+               test_waf \
+               test_db_pool \
+               test_redis \
+               test_scheduler \
+               test_test_client \
+               test_multiport \
+               test_grpc
 
-.PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild examples clean-examples
+.PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall clean rebuild examples clean-examples
+
+# Run with e.g. `make fuzz_seq FUZZ_RUNS=100000`.  The target intentionally
+# uses a dedicated clang/libFuzzer toolchain and is not part of `make test`.
+FUZZ_RUNS ?= 10000
+fuzz_seq: $(LIBTTAK_LIB) $(CJSON_LIB) tests/fuzz_seq.c src/core/seq/seq.c src/core/seq/seq_auth.c src/core/mem/alloc.c
+	$(FUZZ_CC) $(INCLUDE_PATHS) $(COMMON_DEFINES) -std=c2x -g -O1 \
+		-fsanitize=fuzzer,address,undefined -o $@ tests/fuzz_seq.c \
+		src/core/seq/seq.c src/core/seq/seq_auth.c src/core/mem/alloc.c \
+		$(LIBTTAK_LIB) $(CJSON_LIB) $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB) -pthread
+	./$@ -runs=$(FUZZ_RUNS)
+
+bench_security_pool: $(LIB_NAME) tests/bench_security_pool.c
+	$(CC) $(CFLAGS) -o bench_security_pool tests/bench_security_pool.c $(LIB_NAME) $(LIBS)
+	./bench_security_pool
 
 test: $(TEST_TARGETS)
 
 test_sstring: $(LIB_NAME) tests/test_sstring.c
 	$(CC) $(CFLAGS) -o test_sstring tests/test_sstring.c $(LIB_NAME) $(LIBS)
 	./test_sstring
+
+test_seq: $(LIB_NAME) tests/test_seq.c
+	$(CC) $(CFLAGS) -o test_seq tests/test_seq.c $(LIB_NAME) $(LIBS)
+	./test_seq
+
+test_seq_auth: $(LIB_NAME) tests/test_seq_auth.c
+	$(CC) $(CFLAGS) -o test_seq_auth tests/test_seq_auth.c $(LIB_NAME) $(LIBS)
+	./test_seq_auth
 
 test_http: $(LIB_NAME) tests/test_http.c
 	$(CC) $(CFLAGS) -o test_http tests/test_http.c $(LIB_NAME) $(LIBS)
@@ -336,10 +389,6 @@ test_http2: $(LIB_NAME) tests/test_http2.c
 test_http3: $(LIB_NAME) tests/test_http3.c
 	$(CC) $(CFLAGS) -o test_http3 tests/test_http3.c $(LIB_NAME) $(LIBS)
 	./test_http3
-
-test_webtransport: $(LIB_NAME) tests/test_webtransport.c
-	$(CC) $(CFLAGS) -o test_webtransport tests/test_webtransport.c $(LIB_NAME) $(LIBS)
-	./test_webtransport
 
 test_rdbms_auto_mount: $(LIB_NAME) tests/test_rdbms_auto_mount.c
 	$(CC) $(CFLAGS) -o test_rdbms_auto_mount tests/test_rdbms_auto_mount.c $(LIB_NAME) $(LIBS)
@@ -405,6 +454,10 @@ test_cache: $(LIB_NAME) tests/test_cache.c
 	$(CC) $(CFLAGS) -o test_cache tests/test_cache.c $(LIB_NAME) $(LIBS)
 	./test_cache
 
+test_bdr: $(LIB_NAME) tests/test_bdr.c
+	$(CC) $(CFLAGS) -o test_bdr tests/test_bdr.c $(LIB_NAME) $(LIBS)
+	./test_bdr
+
 install: $(LIB_NAME)
 	@echo "Installing library to $(LIBDIR)..."
 	install -d $(LIBDIR)
@@ -456,7 +509,6 @@ EXAMPLE_BINS = example/simple-server/simple-server \
                example/db/step-1-open-query/open-query \
                example/db/step-2-migrations/migrations \
                example/db/step-4-json-insert/json-insert \
-               example/webtransport/server/webtransport-server \
                example/rps-showcase/rps-showcase
 
 examples: $(EXAMPLE_BINS)
@@ -490,9 +542,6 @@ example/db/step-2-migrations/migrations: $(LIB_NAME) example/db/step-2-migration
 
 example/db/step-4-json-insert/json-insert: $(LIB_NAME) example/db/step-4-json-insert/main.c
 	$(CC) $(CFLAGS) -o $@ example/db/step-4-json-insert/main.c $(LIB_NAME) $(LIBS)
-
-example/webtransport/server/webtransport-server: $(LIB_NAME) example/webtransport/server/main.c
-	$(CC) $(CFLAGS) -o $@ example/webtransport/server/main.c $(LIB_NAME) $(LIBS)
 
 example/rps-showcase/rps-showcase: $(LIB_NAME) example/rps-showcase/main.c
 	$(CC) $(CFLAGS) -o $@ example/rps-showcase/main.c $(LIB_NAME) $(LIBS)
@@ -579,3 +628,51 @@ test_http_chunked: $(LIB_NAME) tests/test_http_chunked.c
 test_static_and_range: $(LIB_NAME) tests/test_static_and_range.c
 	$(CC) $(CFLAGS) -o test_static_and_range tests/test_static_and_range.c $(LIB_NAME) $(LIBS)
 	./test_static_and_range
+
+test_session: $(LIB_NAME) tests/test_session.c
+	$(CC) $(CFLAGS) -o test_session tests/test_session.c $(LIB_NAME) $(LIBS)
+	./test_session
+
+test_csrf: $(LIB_NAME) tests/test_csrf.c
+	$(CC) $(CFLAGS) -o test_csrf tests/test_csrf.c $(LIB_NAME) $(LIBS)
+	./test_csrf
+
+test_waf: $(LIB_NAME) tests/test_waf.c
+	$(CC) $(CFLAGS) -o test_waf tests/test_waf.c $(LIB_NAME) $(LIBS)
+	./test_waf
+
+test_db_pool: $(LIB_NAME) tests/test_db_pool.c
+	$(CC) $(CFLAGS) -o test_db_pool tests/test_db_pool.c $(LIB_NAME) $(LIBS)
+	./test_db_pool
+
+test_redis: $(LIB_NAME) tests/test_redis.c
+	$(CC) $(CFLAGS) -o test_redis tests/test_redis.c $(LIB_NAME) $(LIBS)
+	./test_redis
+
+test_sse: $(LIB_NAME) tests/test_sse.c
+	$(CC) $(CFLAGS) -o test_sse tests/test_sse.c $(LIB_NAME) $(LIBS)
+	./test_sse
+
+test_graphql: $(LIB_NAME) tests/test_graphql.c
+	$(CC) $(CFLAGS) -o test_graphql tests/test_graphql.c $(LIB_NAME) $(LIBS)
+	./test_graphql
+
+cli:
+	chmod +x tools/cli/cwist
+	@echo "CLI ready: ./tools/cli/cwist"
+
+test_scheduler: $(LIB_NAME) tests/test_scheduler.c
+	$(CC) $(CFLAGS) -o test_scheduler tests/test_scheduler.c $(LIB_NAME) $(LIBS)
+	./test_scheduler
+
+test_test_client: $(LIB_NAME) tests/test_test_client.c
+	$(CC) $(CFLAGS) -o test_test_client tests/test_test_client.c $(LIB_NAME) $(LIBS)
+	./test_test_client
+
+test_multiport: $(LIB_NAME) tests/test_multiport.c
+	$(CC) $(CFLAGS) -o test_multiport tests/test_multiport.c $(LIB_NAME) $(LIBS)
+	./test_multiport
+
+test_grpc: $(LIB_NAME) tests/test_grpc.c
+	$(CC) $(CFLAGS) -o test_grpc tests/test_grpc.c $(LIB_NAME) $(LIBS)
+	./test_grpc

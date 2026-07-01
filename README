@@ -15,6 +15,12 @@ A high-performance, C17 web framework that brings modern ergonomics
 to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
+<!-- BENCHMARKS:START -->
+Latest automated benchmark: **Linux** — 2.72 M leases/s, 184.01% CPU, 42476 KiB RSS.
+
+![CWIST benchmark trends](docs/benchmark-trends.svg)
+<!-- BENCHMARKS:END -->
+
 ~~~HEAVY BENCHMARK ON CWIST APP~~~ ==> https://github.com/gg582/fly.board/blob/main/README.md
 
 ==================================================================
@@ -113,6 +119,39 @@ Rendering       HTML builder, CSS composer, template engine,
 
   gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
   ./server
+
+==================================================================
+ CLI, PROJECT MANIFESTS, AND OPENAPI
+==================================================================
+
+Prepare the in-tree CLI with `make cli`, then create a project with:
+
+    ./tools/cli/cwist new project my_api
+
+Each generated project contains `my_api.cwpro`, a JSON manifest describing its
+entry point, build output, dependencies, and OpenAPI settings.  Inspect it with
+`cwist describe` and generate documentation with `cwist openapi src`.
+
+OpenAPI routes remain ordinary CWIST routes.  Put Doxygen tags immediately
+before a `CWIST_OPENAPI_*` declaration:
+
+    /** @openapi.summary List users
+     * @openapi.tags users
+     * @openapi.response 200 application/json User collection. */
+    CWIST_OPENAPI_GET(app, "/users/:id", get_user);
+
+This produces an OpenAPI 3.1 operation, including a required `id` path
+parameter.  Supported tags are `summary`, `description`, `operation_id`,
+`tags`, and `response`.
+
+Run `cwist watcher` from a project directory to watch C and header files.  It
+builds a reverse graph of quoted includes, reports affected translation units,
+and invokes the project build command (normally `make`, which performs the
+actual incremental/partial recompilation).  Use `--once` for CI diagnostics.
+
+Tutorials: [CRUD blog](docs/tutorials/blog-crud.md),
+[WebTransport server](docs/tutorials/webtransport-server.md), and
+[NATS integration](docs/tutorials/nats-integration.md).
 
 ==================================================================
  NUKE DB

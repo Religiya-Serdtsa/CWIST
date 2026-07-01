@@ -48,6 +48,7 @@ var sys_2app_2app_8h =
     [ "cwist_app_get_db", "d0/d77/sys_2app_2app_8h.html#af87347ebdea5e8226c86ae8965fa23e1", null ],
     [ "cwist_app_get_named", "d0/d77/sys_2app_2app_8h.html#a8c20ea5506a10ba110b5509e48392844", null ],
     [ "cwist_app_get_opt", "d0/d77/sys_2app_2app_8h.html#a6138ea6fbd0a6c5dac3c3c331bb3e2c3", null ],
+    [ "cwist_app_http_handler", "d0/d77/sys_2app_2app_8h.html#a325fd348f45902dee5b10c6e7aaba6df", null ],
     [ "cwist_app_listen", "d0/d77/sys_2app_2app_8h.html#a05f9a10f4d2ab307c211dd56d54fe7c3", null ],
     [ "cwist_app_multiport", "d0/d77/sys_2app_2app_8h.html#af417e8a4adedf99834351f8a4fcaacad", null ],
     [ "cwist_app_post", "d0/d77/sys_2app_2app_8h.html#a556c24cde3276a70fb9772a727f7e66e", null ],

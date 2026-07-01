@@ -7,6 +7,7 @@
 #define __CWIST_SQL_H__
 
 #include <sqlite3.h>
+#include <stddef.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cjson/cJSON.h>
 #include <cwist/core/utils/json_heal.h>
@@ -19,6 +20,7 @@
 
 typedef struct cwist_db {
     sqlite3 *conn;
+    size_t pool_slot; /* Set by cwist_db_pool; ignored by standalone connections. */
 } cwist_db;
 
 /** @name API */

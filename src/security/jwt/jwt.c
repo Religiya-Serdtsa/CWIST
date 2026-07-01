@@ -1,5 +1,7 @@
 #include <cwist/security/jwt/jwt.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/sstring/sstring.h>
+#include <cwist/core/seq/seq.h>
 
 #include <cjson/cJSON.h>
 #include <openssl/hmac.h>
@@ -198,55 +200,60 @@ char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seco
 
     b64url_encode((const unsigned char *)HEADER_JSON, strlen(HEADER_JSON), hdr_enc);
     b64url_encode((const unsigned char *)final_payload_json, strlen(final_payload_json), pay_enc);
-    free(final_payload_json);
+    cwist_free(final_payload_json);
 
-    /* --- Build "header.payload" signing input ----------------------------- */
-    size_t signing_input_len = strlen(hdr_enc) + 1 + strlen(pay_enc);
-    char *signing_input = (char *)cwist_alloc(signing_input_len + 1);
+    /* --- Build "header.payload" signing input using sstring --------------- */
+    cwist_sstring *signing_input = cwist_sstring_create();
     if (!signing_input) {
         cwist_free(hdr_enc);
         cwist_free(pay_enc);
         return NULL;
     }
-    snprintf(signing_input, signing_input_len + 1, "%s.%s", hdr_enc, pay_enc);
+    cwist_sstring_append(signing_input, hdr_enc);
+    cwist_sstring_append(signing_input, ".");
+    cwist_sstring_append(signing_input, pay_enc);
 
     /* --- Compute HMAC-SHA256 signature ------------------------------------ */
     unsigned char sig_raw[32];
-    if (!hmac_sha256(secret, strlen(secret), signing_input, signing_input_len, sig_raw)) {
+    if (!hmac_sha256(secret, strlen(secret), signing_input->data, signing_input->size, sig_raw)) {
+        cwist_sstring_destroy(signing_input);
         cwist_free(hdr_enc);
         cwist_free(pay_enc);
-        cwist_free(signing_input);
         return NULL;
     }
 
     size_t sig_enc_len = b64url_encoded_len(32);
     char *sig_enc = (char *)cwist_alloc(sig_enc_len);
     if (!sig_enc) {
+        cwist_sstring_destroy(signing_input);
         cwist_free(hdr_enc);
         cwist_free(pay_enc);
-        cwist_free(signing_input);
         return NULL;
     }
     b64url_encode(sig_raw, 32, sig_enc);
 
-    /* --- Assemble final token --------------------------------------------- */
-    size_t token_len = signing_input_len + 1 + strlen(sig_enc);
-    char *token = (char *)cwist_alloc(token_len + 1);
+    /* --- Assemble final token using sstring ------------------------------- */
+    cwist_sstring *token = cwist_sstring_create();
     if (!token) {
+        cwist_sstring_destroy(signing_input);
         cwist_free(hdr_enc);
         cwist_free(pay_enc);
-        cwist_free(signing_input);
         cwist_free(sig_enc);
         return NULL;
     }
-    snprintf(token, token_len + 1, "%s.%s", signing_input, sig_enc);
+    cwist_sstring_append(token, signing_input->data);
+    cwist_sstring_append(token, ".");
+    cwist_sstring_append(token, sig_enc);
 
+    char *result = cwist_strdup(token->data);
+
+    cwist_sstring_destroy(token);
+    cwist_sstring_destroy(signing_input);
     cwist_free(hdr_enc);
     cwist_free(pay_enc);
-    cwist_free(signing_input);
     cwist_free(sig_enc);
 
-    return token;
+    return result;
 }
 
 /**
@@ -278,19 +285,18 @@ cwist_jwt_claims *cwist_jwt_verify(const char *token, const char *secret) {
     /* signing_input = original "hdr_enc.pay_enc" (up to the second dot) */
     size_t first_two_len = (size_t)(dot2 - tok_copy);
     /* dot2 points inside tok_copy which is already modified; use original */
-    char *signing_input = (char *)cwist_alloc(first_two_len + 1);
+    cwist_sstring *signing_input = cwist_sstring_create();
     if (!signing_input) { cwist_free(tok_copy); return NULL; }
-    memcpy(signing_input, token, first_two_len);
-    signing_input[first_two_len] = '\0';
+    cwist_sstring_assign_len(signing_input, token, first_two_len);
 
     /* --- Recompute expected signature ------------------------------------- */
     unsigned char expected_sig[32];
-    if (!hmac_sha256(secret, strlen(secret), signing_input, first_two_len, expected_sig)) {
+    if (!hmac_sha256(secret, strlen(secret), signing_input->data, signing_input->size, expected_sig)) {
+        cwist_sstring_destroy(signing_input);
         cwist_free(tok_copy);
-        cwist_free(signing_input);
         return NULL;
     }
-    cwist_free(signing_input);
+    cwist_sstring_destroy(signing_input);
 
     /* --- Decode the provided signature ------------------------------------ */
     size_t provided_sig_len = 0;
@@ -368,4 +374,103 @@ void cwist_jwt_claims_destroy(cwist_jwt_claims *claims) {
     if (!claims) return;
     cJSON_Delete(claims->json);
     cwist_free(claims);
+}
+
+/* --------------------------------------------------------------------------
+ * Sequenced JWT transport helpers
+ * -------------------------------------------------------------------------- */
+
+cwist_jwt_chunk_t *cwist_jwt_split_chunks(const char *token,
+                                          uint16_t chunk_payload_size,
+                                          size_t *out_count) {
+    if (!token || chunk_payload_size == 0 || !out_count) return NULL;
+    *out_count = 0;
+
+    size_t token_len = strlen(token);
+    if (token_len == 0) return NULL;
+
+    cwist_seq_message_t msg;
+    if (!cwist_seq_split((const uint8_t *)token, token_len, chunk_payload_size, &msg)) {
+        return NULL;
+    }
+
+    cwist_jwt_chunk_t *chunks = (cwist_jwt_chunk_t *)cwist_alloc_array(msg.count, sizeof(cwist_jwt_chunk_t));
+    if (!chunks) {
+        cwist_seq_message_free(&msg);
+        return NULL;
+    }
+
+    for (size_t i = 0; i < msg.count; i++) {
+        chunks[i].data = msg.chunks[i];
+        chunks[i].len = msg.chunk_lens[i];
+        msg.chunks[i] = NULL; /* ownership transferred */
+    }
+
+    cwist_seq_message_free(&msg);
+    *out_count = msg.count;
+    return chunks;
+}
+
+void cwist_jwt_chunks_free(cwist_jwt_chunk_t *chunks, size_t count) {
+    if (!chunks) return;
+    for (size_t i = 0; i < count; i++) cwist_free(chunks[i].data);
+    cwist_free(chunks);
+}
+
+char *cwist_jwt_join_chunks(const cwist_jwt_chunk_t *chunks, size_t count) {
+    if (!chunks || count == 0) return NULL;
+
+    cwist_seq_assembler_t *a = cwist_seq_assembler_create();
+    if (!a) return NULL;
+
+    for (size_t i = 0; i < count; i++) {
+        cwist_seq_chunk_t chunk;
+        if (!cwist_seq_chunk_parse(chunks[i].data, chunks[i].len, &chunk)) {
+            cwist_seq_assembler_destroy(a);
+            return NULL;
+        }
+        cwist_seq_assembler_feed(a, &chunk);
+    }
+
+    const uint8_t *data = NULL;
+    size_t len = 0;
+    bool ok = cwist_seq_assembler_get_data(a, &data, &len);
+    char *token = NULL;
+    if (ok && len > 0) {
+        token = (char *)cwist_alloc(len + 1);
+        if (token) {
+            memcpy(token, data, len);
+            token[len] = '\0';
+        }
+    }
+
+    cwist_seq_assembler_destroy(a);
+    return token;
+}
+
+cwist_jwt_chunk_t *cwist_jwt_sign_chunks(const char *payload_json,
+                                         const char *secret,
+                                         long exp_seconds,
+                                         uint16_t chunk_payload_size,
+                                         size_t *out_count) {
+    if (!payload_json || !secret || chunk_payload_size == 0 || !out_count) return NULL;
+    *out_count = 0;
+
+    char *token = cwist_jwt_sign(payload_json, secret, exp_seconds);
+    if (!token) return NULL;
+
+    cwist_jwt_chunk_t *chunks = cwist_jwt_split_chunks(token, chunk_payload_size, out_count);
+    cwist_free(token);
+    return chunks;
+}
+
+cwist_jwt_claims *cwist_jwt_verify_chunks(const cwist_jwt_chunk_t *chunks,
+                                          size_t count,
+                                          const char *secret) {
+    if (!chunks || count == 0 || !secret) return NULL;
+    char *token = cwist_jwt_join_chunks(chunks, count);
+    if (!token) return NULL;
+    cwist_jwt_claims *claims = cwist_jwt_verify(token, secret);
+    cwist_free(token);
+    return claims;
 }

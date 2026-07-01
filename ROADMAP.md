@@ -19,14 +19,16 @@
 
 ```
 [P0: Critical]      ████████████████████ 100% (Completed)
-[P1: Production]     ████████████████░░░░  80% (Multiport hardening in progress)
-[P2: DevEx]          ██░░░░░░░░░░░░░░░░░░  20% (Config loader done; test tooling WIP)
-[P3: Deep Protocols] ████████████░░░░░░░░  60% (HTTP/3 extension specs done; io_uring WIP)
+[P1: Production]     ████████████████████ 100% (Multiport hardening complete)
+[P2: DevEx]          ████████░░░░░░░░░░░░  40% (Config loader, test tooling, and wire helpers done)
+[P3: Deep Protocols] ███████████████░░░░░  75% (HTTP/3 extension specs and io_uring backend done)
+[P4: Ecosystem]      ████████████░░░░░░░░  60% (gRPC framing, health, reflection, and proto codegen done)
 ```
 
 ### 1) Transport Layer
 
-* **Native protocols ready**: HTTP/1.1 through HTTP/3 (QUIC via `lsquic`), WebTransport, and WebSocket are all implemented in-tree. Low-level socket controls (ECN, 0-RTT, connection migration) are complete.
+* **Native protocols ready**: HTTP/1.1 through HTTP/3 (QUIC via `lsquic`), WebTransport server support, WebSocket, SSE, and a bounded GraphQL query layer are implemented in-tree. Low-level socket controls (ECN, 0-RTT, connection migration) are complete.
+* **HTTP/3 browser hardening**: Response header emission now normalizes field names to lowercase and rejects CR/LF-bearing values, covering login/logout cookie and redirect paths in strict browsers such as Firefox.
 * **Async I/O optimization (`io_uring`)**: `io_uring_backend.c` and test code have been added; currently prototyping to reduce context-switching overhead in high-volume UDP send/receive loops (`🔄`).
 * **Multiport HTTP/3 fan-out**: The `cwist_multiport_t` facade that isolates multiple ports is being refactored. Future work will split independent UDP contexts per port (`⏳`).
 
@@ -34,22 +36,26 @@
 
 * **High-performance router & middleware**: Deterministic resource management with parameterized routes (`/user/:id`), compression (Gzip via zlib), CORS, and rate limiting (libttak token bucket) are integrated.
 * **Observability**: Prometheus `/metrics` and a probe-registry health-check system are operational.
-* **Per-port sub-applications (`🔄`)**: Hardening the lifecycle and exception handling of `cwist_multiport_get_app(&app, port)` logic, which detaches a port into a separately tunable sub-application.
+* **Per-port sub-applications**: Lifecycle and exception handling for `cwist_multiport_get_app(&app, port)` are hardened; detached ports are separately tunable sub-applications.
+* **gRPC services**: Applications can register unary and streaming handlers, incrementally decode arbitrarily split gRPC frames, attach transport output sinks, expose standard health/reflection services, and generate C models/method paths with `cwist proto`.
 
 ### 3) Security & Data Layer
 
-* **Security specs**: BoringSSL-based TLS 1.3 and hybrid post-quantum KEM (`X25519MLKEM768`) are implemented ahead of time. CSRF and automatic secure-header injection remain planned (`⏳`).
-* **Data-layer integrity**: SQLite3 embedded integration, migration system, and a `_Generic` macro-based type-dispatched ORM/query builder are in the build stream. A lock-free work queue (`cwist_io_queue`) is partially implemented (`🔄`).
+* **Security specs**: BoringSSL-based TLS 1.3 and hybrid post-quantum KEM (`X25519MLKEM768`) are implemented ahead of time. CSRF uses a 256-bit double-submit token with constant-time validation; WAF-lite uses bounded linear scans and HTML output escaping.
+* **Data-layer integrity**: SQLite3 embedded integration, migration system, and a `_Generic` macro-based type-dispatched ORM/query builder are in the build stream. The lock-free work queue (`cwist_io_queue`) and scheduler-backed background jobs are implemented.
+* **Protobuf wire helpers**: A lightweight Protobuf runtime supports varint keys, unsigned/signed/bool fields, length-delimited bytes/strings, reader iteration, and ZigZag helpers for hand-written services.
 
 ---
 
 ## Current Snapshot
 
+<!-- CI-BENCHMARKS:START -->
+Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Latest platform: **Linux**.
+<!-- CI-BENCHMARKS:END -->
+
 - Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are already implemented in-tree.
 - **P0 (must-have) is 100 % complete**: the framework’s core architecture and protocol stack are locked.
-- We are now in the **P1–P3 hardening phase**, focusing on structural completeness and extreme performance:
-  * Refining the **multiport facade** (`cwist_multiport_t`) so the root app retains ownership of the default port while counted descriptors and per-port sub-app lifecycle validation are proved by tests.
-  * Hardening the **`io_uring` packet loop** for HTTP/3 UDP workloads: synchronizing SQE submission and CQE consumption, and minimizing memory copies between the `lsquic` async stream callbacks and the kernel ring buffer.
+- We are now in the **P2–P4 tooling and ecosystem phase**. Completed multiport, scheduler, test-client, `io_uring`, unary/buffered streaming gRPC, and Protobuf wire-format work remain covered by focused regression tests.
 
 ---
 
@@ -59,22 +65,22 @@
 |---------|--------|-------|
 | HTTP/1.1 Server (epoll, threading, forking) | ✅ | Zero-copy sendfile, keep-alive |
 | HTTP/2 Server | ✅ | h2 with ALPN |
-| HTTP/3 Server (QUIC) | ✅ | lsquic + BoringSSL, QPACK, 0-RTT, migration, push, resilience timeout knobs |
+| HTTP/3 Server (QUIC) | ✅ | lsquic + BoringSSL, QPACK, 0-RTT, migration, push, resilience timeout knobs, lowercase/CRLF-safe response headers |
 | HTTP/1.1 + HTTP/2 Client | ✅ | libcurl based, sync & async APIs |
 | HTTP/3 Client | ✅ | lsquic based, async stream callbacks, auto-retry with exponential backoff, conn timeout knobs |
 | WebSocket Server | ✅ | Upgrade, frame parsing, ping/pong |
 | TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH support |
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
-| **io_uring Backend** | 🔄 | Initial implementation added (`io_uring_backend.c`, `test_io_uring.c`); SQE/CQE timing synchronization and copy-minimization with `lsquic` callbacks being hardened |
-| **kqueue Backend** | ⏳ | BSD/macOS; blocked on non-Linux test environment |
+| **io_uring Backend** | ✅ | `io_uring_backend.c`, focused smoke tests, demolition tests, SQE/CQE synchronization, and fixed-buffer fallback |
+| **kqueue Backend** | 🔄 | macOS GitHub Actions gate builds the kqueue-selected backend and runs focused regressions |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
-| **WebTransport** | ✅ | Basic server handler (`:protocol=webtransport` detection via HTTP/3 CONNECT) |
+| **WebTransport** | 🧪 | Server sessions, streams, and datagrams are implemented; `dev` adds an experimental native C client on LSQUIC PR #629, with Extended CONNECT, session streams, datagrams, and explicit I/O polling |
 | HTTP/3 Datagram Extension | ✅ | `send_datagram`, callbacks, `es_datagrams` enabled |
 | ECN (Explicit Congestion Notification) | ✅ | UDP socket with `IP_RECVTOS` / `IPV6_RECVTCLASS` |
 | Connection Migration | ✅ | `es_allow_migration` enabled |
 | 0-RTT Early Data | ✅ | `SSL_CTX_set_early_data_enabled` |
-| **Multiport TCP Facade** | 🔄 | Counted `cwist_multiport_t` descriptor and shared accept loop implemented; duplicate/default-port validation and per-port smoke tests in progress |
-| **Multiport HTTP/3 Fan-out** | ⏳ | Needs one UDP socket/context per bound port, with global settings copied unless the port is detached into a sub-app |
+| **Multiport TCP Facade** | ✅ | Counted `cwist_multiport_t` descriptor, shared accept loop, duplicate/default-port validation, and per-port smoke tests |
+| **Multiport HTTP/3 Fan-out** | ✅ | One UDP socket/context per bound port, with global settings copied unless the port is detached into a sub-app |
 
 ---
 
@@ -94,7 +100,7 @@
 | **Caching Layer** | ✅ | ETag, Last-Modified, Cache-Control, 304 Not Modified for static files |
 | **Rate Limiting** | ✅ | Per-IP token bucket via libttak; parameter respected |
 | **CORS** | ✅ | Permissive CORS + preflight handler implemented |
-| **SSE (Server-Sent Events)** | ⏳ | No structured SSE stream API |
+| **SSE (Server-Sent Events)** | ✅ | Buffered and live structured events, IDs, retry directives, multiline data, comments, and convenience macros |
 | **Access Logging** | ✅ | Common, Combined, and JSON formats implemented |
 | **Request ID / Tracing** | ✅ | X-Request-Id middleware injects and propagates request IDs |
 | Graceful Shutdown | ✅ | Unified atomic `running` flag + SIGTERM/SIGINT handlers across HTTP/1.1, HTTP/2, HTTP/3 loops |
@@ -103,7 +109,7 @@
 | **Per-Status Error Handlers** | ✅ | `cwist_app_register_error_handler` for custom 404, 500, etc. |
 | **URL Reverse Routing** | ✅ | `cwist_app_get_named` + `cwist_url_for` with param substitution |
 | **Flash Messages** | ✅ | One-time session-scoped messages via `cwist_flash_get/set` |
-| **Per-Port Sub-Applications** | 🔄 | `cwist_multiport_get_app(&app, port)` detaches additional ports for independent tuning; public/default port must remain owned by root app; lifecycle & exception hardening ongoing |
+| **Per-Port Sub-Applications** | ✅ | `cwist_multiport_get_app(&app, port)` detaches additional ports for independent tuning; public/default port remains owned by root app |
 
 ---
 
@@ -115,11 +121,11 @@
 | Database Encryption | ✅ | `db_crypt` layer |
 | ECH (Encrypted Client Hello) | ✅ | BoringSSL ECH |
 | **PQC Hybrid KEM (TLS)** | ✅ | `cwist_app_use_pqc_layer` forces `X25519MLKEM768:X25519:P-256`, TLS 1.3 only |
-| **CSRF Protection** | ⏳ | No double-submit cookie or synchronizer token |
+| **CSRF Protection** | ✅ | 256-bit double-submit cookie, constant-time comparison, strict SameSite, header and URL-encoded form support |
 | **Secure Headers** | ✅ | Automatic injection of HSTS, CSP, X-Frame-Options, Referrer-Policy, CORP via `cwist_http_response_add_security_headers()` |
 | **Request Size Limits** | ✅ | HTTP/1.1/2/3 body limits audited and enforced (`CWIST_HTTP_MAX_BODY_SIZE`) |
 | **Input Validation** | ✅ | Bind validator added (`bind.c`, `bind.h`, `test_bind.c`) |
-| **WAF-lite / Sanitization** | ⏳ | No XSS/SQLi sanitizer middleware |
+| **WAF-lite / Sanitization** | ✅ | Linear-time request signature checks plus `cwist_sanitize_html()` output escaping; parameterized SQL remains required |
 
 ---
 
@@ -129,11 +135,11 @@
 |---------|--------|-------|
 | SQLite Integration | ✅ | `sqlite3` embedded |
 | Database Migration | ✅ | `migrate` system |
-| **Connection Pool** | ⏳ | SQLite is direct; no generic connection pool abstraction |
+| **Connection Pool** | ✅ | Bounded SQLite pool with shared `:memory:` URI mode, O(1) leasing, timeout acquisition, and graceful drain on destroy |
 | **ORM / Query Builder** | ✅ | Socket-backed ORM with dialect-aware query builder, `_Generic` type-dispatched RETURNING / scalar helpers |
-| **Redis / Key-Value Cache** | ⏳ | No Redis client integration |
+| **Redis / Key-Value Cache** | ✅ | RESP2 client/pool, binary-safe argv commands, AUTH/SELECT, pub/sub, and app-level pool integration |
 | NATS Integration | ✅ | `cwist_nats` wrapper |
-| **Message Queue (Job Queue)** | 🔄 | `cwist_io_queue` is lock-free job queue; no persistent queue backend |
+| **Message Queue (Job Queue)** | ✅ | `cwist_io_queue` lock-free job queue plus scheduler-backed immediate and delayed jobs |
 
 ---
 
@@ -144,12 +150,12 @@
 | Doxygen Docs | ✅ | Generated HTML docs |
 | README / API Reference | ✅ | Markdown docs in `docs/` |
 | **Tutorial & Examples** | ⏳ | Few examples; no step-by-step tutorial |
-| **CLI Scaffolding** | ⏳ | No `cwist new project` CLI tool |
-| **Hot Reload (Dev Mode)** | ⏳ | No file watcher + auto-recompile |
+| **CLI Scaffolding** | ✅ | `cwist new project`, `.cwpro` manifests, OpenAPI generation, and include-aware incremental watcher |
+| **Hot Reload (Dev Mode)** | ✅ | `cwist watcher` uses inotify/kqueue with snapshot/poll fallback, debounces changes, exports include-graph recompilation scope, preserves the prior process on build failure, and gracefully restarts successful builds |
 | **Configuration Management** | ✅ | `.env` file + environment variable loader via `cwist_config` |
-| **Testing Utilities** | 🔄 | In-process test client (`cwist_test_client_get/post`) added; `test_io_uring_demolition` target wired in Makefile; harness WIP |
-| **Benchmark Suite** | ⏳ | No `wrk`/`oha`/`h2load` benchmark automation |
-| **Fuzzing / Hardening** | ⏳ | No AFL/libFuzzer targets for HTTP parser or QUIC path |
+| **Testing Utilities** | ✅ | In-process test client (`cwist_test_client_get/post/request_ex`), cookie jar, multipart helper, and regression targets wired in Makefile |
+| **Benchmark Suite** | ✅ | GitHub Actions Linux/macOS measurements publish CPU, throughput, RSS, memory-recovery drift, and context-switch SVG trends |
+| **Fuzzing / Hardening** | ✅ | Stateful sequence/auth libFuzzer coverage plus bounded reassembly and strict HTTP chunk framing checks |
 
 ---
 
@@ -157,29 +163,60 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **gRPC over HTTP/2** | ⏳ | No protobuf / gRPC server or client |
-| **GraphQL** | ⏳ | No GraphQL parser or executor |
-| **OpenAPI / Swagger Generation** | ⏳ | No automatic spec generation from route definitions |
-| **Background Jobs / Scheduler** | ⏳ | No cron-like scheduler or deferred job system |
+| **gRPC over HTTP/2** | ✅ | Unary/stream registration, split-frame incremental decoder and output sink, standard health/reflection service registration, gRPC metadata, and test-client coverage |
+| **Protobuf Runtime Helpers** | ✅ | Wire-format reader/writer for varint, bool, bytes/string, signed integer casting, and ZigZag helpers |
+| **GraphQL** | ✅ | Bounded top-level Query executor, resolver registry, variables, error envelope, and HTTP adapter |
+| **OpenAPI / Swagger Generation** | ✅ | OpenAPI 3.1 JSON generated from Doxygen `@openapi.*` annotations on route declarations |
+| **Background Jobs / Scheduler** | ✅ | `cwist_scheduler` worker pool with immediate and delayed job execution |
 | **WebRTC** | 🔮 | Real-time media; requires separate data channel stack |
 | **Serverless / WASM Runtime** | 🔮 | Edge deployment target |
 
 ---
 
-## Current Focus (P1 – P3 Core Hardening)
+## Current Focus (P2 – P4 Tooling and Ecosystem)
 
-The top priority is blocking side effects in internal implementations and locking down stable interfaces.
+The completed P1-P3 hardening work is now under regression coverage. Current priorities are developer workflow and ecosystem integrations.
 
-### Multiport Facade Hardening (`cwist_multiport_t`)
+### Developer Workflow
 
-* Convert normal port arrays into counted descriptors while ensuring the **root application retains ownership of the default port**.
-* Add lifecycle validation so detaching a port into a sub-app does not accidentally release the primary listener.
-* Detect duplicate bindings and prove isolation / global-settings copy-share mechanics with focused tests.
+* Add hot reload and project scaffolding.
+* Expand benchmark automation and fuzz targets.
+* Keep test-client, scheduler, multiport, and `io_uring` coverage in the default test harness.
 
-### `io_uring` Packet Loop Hardening
+### Ecosystem
 
-* Guarantee SQE (Submission Queue Entry) submission and CQE (Completion Queue Entry) consumption timing consistency under HTTP/3 UDP workloads.
-* Refine control logic to minimize memory copies between the `lsquic` engine’s async stream callbacks and the kernel ring buffer.
+* Wire the incremental gRPC output sink directly to HTTP/2 DATA-frame flushing and dedicated trailers.
+* Extend `cwist proto` beyond scalar proto3 models to repeated, nested, enum, and descriptor-set bindings.
+* Add gRPC deadlines, cancellation propagation, metadata normalization, retry policy, and load balancing.
+* Extend the GraphQL subset with schema validation, mutations, nested selections, and subscriptions.
+* Stabilize the experimental native C WebTransport client after LSQUIC PR #629 merges upstream.
+* Evaluate persistent job backends separately from the in-process queue/scheduler.
+
+### gRPC / Protobuf Status
+
+Completed:
+
+* `cwist_app_grpc_unary(app, service, method, handler, user_ctx)` registers `POST /Service/Method` routes for HTTP/2 gRPC unary calls.
+* `cwist_app_grpc_stream(app, service, method, handler, user_ctx)` registers buffered streaming handlers that can consume multiple request messages and append multiple response messages in order.
+* `cwist_grpc_decode_message()` and `cwist_grpc_encode_message()` implement the gRPC 5-byte message envelope (`compressed` flag + big-endian payload length).
+* `cwist_grpc_decode_next_message()` iterates concatenated gRPC message envelopes for client-streaming and bidi-style buffered request bodies.
+* `cwist_grpc_stream_send()` and `cwist_grpc_stream_close()` build ordered multi-message gRPC responses with final status metadata.
+* `cwist_grpc_decoder_feed()` recovers gRPC envelopes split across arbitrary DATA payload boundaries; `cwist_grpc_stream_set_writer()` permits immediate transport-frame output.
+* `cwist_app_grpc_health()` and `cwist_app_grpc_health_set_status()` register and control `grpc.health.v1.Health`; `cwist_app_grpc_reflection()` registers the v1alpha reflection stream.
+* `cwist proto input.proto` generates scalar proto3 C models, encoder helpers, and gRPC method-path constants.
+* `cwist_grpc_set_response()` and `cwist_grpc_set_error()` produce `application/grpc` responses and explicit `grpc-status` / `grpc-message` metadata.
+* `cwist_pb_writer` supports varint keys, uint64/int64/bool fields, bytes fields, string fields, and dynamic buffer growth.
+* `cwist_pb_reader` iterates Protobuf fields and exposes wire type, field number, varint value, and length-delimited payload slices.
+* `cwist_pb_zigzag_encode()` / `cwist_pb_zigzag_decode()` cover signed integer mappings used by `sint32` / `sint64` style fields.
+* `test_grpc` verifies Protobuf request construction, gRPC frame handling, unary dispatch, buffered streaming dispatch, multi-message response parsing, invalid content type handling, and malformed frame rejection.
+
+Known limits:
+
+* The incremental decoder and output sink are available now; the current HTTP/2 dispatcher still buffers inbound bodies and needs direct DATA-frame sink wiring for end-to-end low-latency flushing.
+* Compressed gRPC messages are rejected with `UNIMPLEMENTED`; compression negotiation is not wired yet.
+* The proto generator currently supports scalar proto3 model encoders and service paths, not repeated/nested/enum/descriptor-set bindings.
+* HTTP/2 response trailers are represented as gRPC metadata headers for now; dedicated trailer-frame emission is a follow-up.
+* No gRPC client, deadline propagation, retry policy, or load-balancing policy exists yet.
 
 ---
 
@@ -200,28 +237,30 @@ The top priority is blocking side effects in internal implementations and lockin
 10. ~~**Health Check** endpoints~~ ✅
 11. ~~**Secure Headers** (HSTS, CSP, X-Frame-Options, etc.)~~ ✅
 12. ~~**Request Size Limits** (HTTP/1.1/2/3 body limit audit)~~ ✅
-13. **Multiport facade hardening** 🔄: counted port descriptor, per-port sub-app lifecycle, duplicate/default-port validation, and smoke tests
+13. ~~**Multiport facade hardening**: counted port descriptor, per-port sub-app lifecycle, duplicate/default-port validation, and smoke tests~~ ✅
 
 ### P2 — Developer Velocity
 14. **Hot Reload** for development
-15. **CLI Tooling** (project scaffold, route generator)
+15. ~~**CLI Tooling** (project scaffold, route generator, watcher)~~ ✅
 16. ~~**Configuration** loader (`.env`, `.toml`)~~ ✅
-17. **Test Harness** with HTTP mock client 🔄
+17. ~~**Test Harness** with HTTP mock client~~ ✅
 
 ### P3 — Advanced Protocols
-18. ~~**WebTransport** server + client~~ ✅ (basic server handler)
+18. **Native C WebTransport client stabilization** (experimental `dev` implementation available)
 19. ~~**HTTP/2 Server Push**~~ ✅
-20. **io_uring** UDP packet loop for HTTP/3 🔄
+20. ~~**io_uring** UDP packet loop for HTTP/3~~ ✅
 21. **kqueue** backend for macOS/BSD
-22. **Multiport HTTP/3 parity** ⏳: per-port UDP contexts and global setting propagation to non-detached ports
+22. ~~**Multiport HTTP/3 parity**: per-port UDP contexts and global setting propagation to non-detached ports~~ ✅
 
 ### P4 — Ecosystem
-23. **gRPC** support
-24. **GraphQL** executor
-25. **OpenAPI** generator
+23. ~~**gRPC unary and buffered streaming server support**~~ ✅
+24. ~~**GraphQL** bounded Query executor~~ ✅
+25. ~~**OpenAPI** generator~~ ✅
+26. ~~**Background Jobs / Scheduler**~~ ✅
+27. ~~**Incremental gRPC framing, reflection, health checks, and `.proto` codegen**~~ ✅
 
 ---
 
 ## Contributing
 
-If you want to pick up an item, open an issue referencing this roadmap and the specific feature number. Items marked 🔄 have partial code in-tree and may only need polish or integration.
+If you want to pick up an item, open an issue referencing this roadmap and the specific feature number.

@@ -88,6 +88,8 @@ typedef struct cwist_http_request {
     size_t content_length;
     cwist_endpoint_opt_t endpoint_opts; ///< Behavior hints for the active endpoint.
     cwist_query_map *flash; ///< Flash messages for this request (one-time read).
+    void *session;          ///< cwist_session_t pointer set by session middleware.
+    char *csrf_token;       ///< CSRF token populated by csrf middleware.
 } cwist_http_request;
 
 typedef void (*cwist_http_body_cleanup_fn)(const void *ptr, size_t len, void *ctx);

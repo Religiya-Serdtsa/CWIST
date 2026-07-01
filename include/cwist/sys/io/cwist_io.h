@@ -45,6 +45,16 @@ bool cwist_io_queue_submit(cwist_io_queue *q, cwist_job_func func, void *arg);
 void cwist_io_queue_run(cwist_io_queue *q);
 
 /**
+ * @brief Request that all runners stop processing without freeing the queue.
+ *
+ * This is useful when the queue is shared by worker threads: callers can stop
+ * the runners, join the threads, and then destroy the queue safely.
+ *
+ * @param q Queue handle.
+ */
+void cwist_io_queue_stop(cwist_io_queue *q);
+
+/**
  * @brief Destroy the queue and free resources.
  * @param q Queue handle.
  */

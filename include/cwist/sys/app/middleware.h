@@ -7,6 +7,7 @@
 #define __CWIST_MIDDLEWARE_H__
 
 #include <cwist/sys/app/app.h>
+#include <cwist/sys/app/waf.h>
 #include <cwist/security/jwt/jwt.h>
 
 /**

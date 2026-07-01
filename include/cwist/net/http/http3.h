@@ -54,16 +54,6 @@ struct cwist_http3_context {
 };
 
 /**
- * @brief Represents an active HTTP/3 connection via QUIC.
- */
-typedef struct cwist_http3_connection {
-    void *conn;                          /**< Opaque lsquic_conn_t pointer */
-    int udp_fd;                          /**< Shared UDP socket descriptor */
-    struct sockaddr_storage peer_addr;   /**< Client's IP address and port */
-    socklen_t peer_addr_len;             /**< Length of the peer address structure */
-} cwist_http3_connection;
-
-/**
  * @brief Callback function type for handling HTTP/3 requests.
  *
  * @param user_ctx Opaque pointer for user context.
@@ -99,13 +89,6 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx);
  * @brief Destroy an HTTP/3 context.
  */
 void cwist_http3_destroy_context(cwist_http3_context *ctx);
-
-/**
- * @brief Serve a single HTTP/3 connection.
- */
-cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
-                                           void *user_ctx,
-                                           cwist_http3_request_handler_func handler);
 
 /**
  * @brief Run the HTTP/3 server event loop.

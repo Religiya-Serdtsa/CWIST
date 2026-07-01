@@ -165,8 +165,17 @@ static void bdr_guardrails(cwist_bdr_t *bdr) {
 cwist_bdr_t *cwist_bdr_create(void) {
     cwist_bdr_t *bdr = cwist_alloc(sizeof(cwist_bdr_t));
     if (!bdr) return NULL;
+    if (pthread_mutex_init(&bdr->lock, NULL) != 0) {
+        cwist_free(bdr);
+        return NULL;
+    }
     bdr->bucket_count = BDR_BUCKETS;
     bdr->buckets = cwist_alloc_array(BDR_BUCKETS, sizeof(bdr_entry_t *));
+    if (!bdr->buckets) {
+        pthread_mutex_destroy(&bdr->lock);
+        cwist_free(bdr);
+        return NULL;
+    }
     bdr->latency_threshold_ms = 10; 
     bdr->current_bytes = 0;
     bdr->max_bytes = BDR_DEFAULT_MAX_BYTES;
@@ -184,6 +193,7 @@ cwist_bdr_t *cwist_bdr_create(void) {
  */
 void cwist_bdr_destroy(cwist_bdr_t *bdr) {
     if (!bdr) return;
+    pthread_mutex_lock(&bdr->lock);
     for (size_t i = 0; i < bdr->bucket_count; i++) {
         bdr_entry_t *curr = bdr->buckets[i];
         while (curr) {
@@ -198,6 +208,8 @@ void cwist_bdr_destroy(cwist_bdr_t *bdr) {
         sqlite3_close(bdr->disk_db);
         remove("cwist_bdr_fallback.db"); // Cleanup temp db
     }
+    pthread_mutex_unlock(&bdr->lock);
+    pthread_mutex_destroy(&bdr->lock);
     cwist_free(bdr);
 }
 
@@ -279,7 +291,7 @@ static uint64_t bdr_hash_data(const void *data, size_t len) {
  * @param out_len Optional output pointer that receives the blob length.
  * @return Cached response blob, or NULL when absent/unstable/invalidated.
  */
-const void *cwist_bdr_get(cwist_bdr_t *bdr, const char *method, const char *path, size_t *out_len) {
+static const void *bdr_get_locked(cwist_bdr_t *bdr, const char *method, const char *path, size_t *out_len) {
 
     if (!bdr || !method || !path) return NULL;
 
@@ -344,6 +356,31 @@ const void *cwist_bdr_get(cwist_bdr_t *bdr, const char *method, const char *path
 
 }
 
+const void *cwist_bdr_get(cwist_bdr_t *bdr, const char *method, const char *path, size_t *out_len) {
+    if (!bdr) return NULL;
+    pthread_mutex_lock(&bdr->lock);
+    const void *blob = bdr_get_locked(bdr, method, path, out_len);
+    pthread_mutex_unlock(&bdr->lock);
+    return blob;
+}
+
+void *cwist_bdr_copy_get(cwist_bdr_t *bdr, const char *method, const char *path, size_t *out_len) {
+    if (!bdr) return NULL;
+    pthread_mutex_lock(&bdr->lock);
+    size_t len = 0;
+    const void *blob = bdr_get_locked(bdr, method, path, &len);
+    void *copy = NULL;
+    if (blob && len > 0) {
+        copy = cwist_alloc(len);
+        if (copy) {
+            memcpy(copy, blob, len);
+            if (out_len) *out_len = len;
+        }
+    }
+    pthread_mutex_unlock(&bdr->lock);
+    return copy;
+}
+
 
 
 /**
@@ -359,6 +396,8 @@ void cwist_bdr_put(cwist_bdr_t *bdr, const char *method, const char *path, const
     if (!bdr || !method || !path || !data || len == 0) return;
 
     if (strcmp(method, "GET") != 0) return;
+
+    pthread_mutex_lock(&bdr->lock);
 
 
 
@@ -398,6 +437,7 @@ void cwist_bdr_put(cwist_bdr_t *bdr, const char *method, const char *path, const
 
          bdr_guardrails(bdr);
 
+         pthread_mutex_unlock(&bdr->lock);
          return;
 
     }
@@ -494,6 +534,7 @@ void cwist_bdr_put(cwist_bdr_t *bdr, const char *method, const char *path, const
 
             }
 
+            pthread_mutex_unlock(&bdr->lock);
             return;
 
         }
@@ -508,7 +549,10 @@ void cwist_bdr_put(cwist_bdr_t *bdr, const char *method, const char *path, const
 
     bdr_entry_t *entry = cwist_alloc(sizeof(bdr_entry_t));
 
-    if (!entry) return;
+    if (!entry) {
+        pthread_mutex_unlock(&bdr->lock);
+        return;
+    }
 
 
 
@@ -534,11 +578,15 @@ void cwist_bdr_put(cwist_bdr_t *bdr, const char *method, const char *path, const
 
     bdr_guardrails(bdr);
 
+    pthread_mutex_unlock(&bdr->lock);
+
 }
 
 void cwist_bdr_set_limits(cwist_bdr_t *bdr, size_t max_bytes, time_t max_entry_age_sec, uint64_t revalidate_hits) {
 
     if (!bdr) return;
+
+    pthread_mutex_lock(&bdr->lock);
 
     if (max_bytes > 0) {
 
@@ -559,5 +607,7 @@ void cwist_bdr_set_limits(cwist_bdr_t *bdr, size_t max_bytes, time_t max_entry_a
     }
 
     bdr_guardrails(bdr);
+
+    pthread_mutex_unlock(&bdr->lock);
 
 }

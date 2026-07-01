@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <cwist/net/http/http.h>
+#include <cwist/net/http/session.h>
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/mem/alloc.h>
@@ -84,9 +85,20 @@ long get_cpu_cores(void) {
 }
 
 long get_optimal_thread_count(void) {
-    /* Pure native scheduling policy: strictly enforce "nproc * 32" boundary */
-    /* thread count should be enough as HTTP/3 is using QUIC */
-    return get_cpu_cores() * 32;
+    /* Scale with cores but cap at a sane default.  C1M mode historically
+     * used cores*32, which exhausts resources on modest hardware and adds
+     * scheduling overhead without improving throughput.  Allow explicit
+     * override via CWIST_WORKER_THREADS. */
+    const char *env = getenv("CWIST_WORKER_THREADS");
+    if (env && env[0]) {
+        long override = atol(env);
+        if (override > 0) return override;
+    }
+    long cores = get_cpu_cores();
+    long count = cores * 4;
+    if (count < 16) count = 16;
+    if (count > 128) count = 128;
+    return count;
 }
 
 #define HTTP_TASKS_PER_THREAD 32768
@@ -381,25 +393,6 @@ static bool header_key_is_connection(const char *key) {
     return strcasecmp(key, "connection") == 0;
 }
 
-/**
- * @brief Check whether a Connection header requests socket closure.
- * @param value Header value to inspect.
- * @return true when the value equals "close" ignoring case.
- */
-static bool header_value_is_close(const char *value) {
-    if (!value) return false;
-    return strcasecmp(value, "close") == 0;
-}
-
-/**
- * @brief Check whether a Connection header requests persistent keep-alive.
- * @param value Header value to inspect.
- * @return true when the value equals "keep-alive" ignoring case.
- */
-static bool header_value_is_keep_alive(const char *value) {
-    if (!value) return false;
-    return strcasecmp(value, "keep-alive") == 0;
-}
 
 /**
  * @brief Detect whether the current header list already contains a Connection header.
@@ -538,6 +531,8 @@ void cwist_http_request_destroy(cwist_http_request *req) {
         cwist_sstring_destroy(req->version);
         cwist_sstring_destroy(req->body);
         cwist_query_map_destroy(req->flash);
+        cwist_session_destroy(req->session);
+        cwist_free(req->csrf_token);
         cwist_http_header_free_all(req->headers);
         cwist_free(req);
     }
@@ -709,40 +704,75 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
     } else if (res->body) {
         body_len = res->body->size;
     }
-    int offset = 0;
+    size_t offset = 0;
     
     // Status Line
-    offset += snprintf(buf + offset, buf_size - offset, "%s %d %s\r\n",
-             res->version->data ? res->version->data : "HTTP/1.1",
-             res->status_code,
-             res->status_text->data ? res->status_text->data : "OK");
+    const char *status_txt = (res->status_text && res->status_text->data) 
+                             ? res->status_text->data 
+                             : "OK";
+    if (offset < buf_size) {
+        int n = snprintf(buf + offset, buf_size - offset, "%s %d %s\r\n",
+                 res->version->data ? res->version->data : "HTTP/1.1",
+                 res->status_code,
+                 status_txt);
+        if (n > 0) {
+            offset += n;
+            if (offset > buf_size) offset = buf_size;
+        }
+    }
 
     // Headers
     cwist_http_header_node *curr = res->headers;
     while (curr) {
         if (curr->key->data && curr->value->data) {
-             offset += snprintf(buf + offset, buf_size - offset, "%s: %s\r\n", curr->key->data, curr->value->data);
+            if (offset < buf_size) {
+                int n = snprintf(buf + offset, buf_size - offset, "%s: %s\r\n", curr->key->data, curr->value->data);
+                if (n > 0) {
+                    offset += n;
+                    if (offset > buf_size) offset = buf_size;
+                }
+            }
         }
         curr = curr->next;
     }
 
     if (!headers_have_content_length(res->headers)) {
-        offset += snprintf(buf + offset, buf_size - offset, "Content-Length: %zu\r\n", body_len);
+        if (offset < buf_size) {
+            int n = snprintf(buf + offset, buf_size - offset, "Content-Length: %zu\r\n", body_len);
+            if (n > 0) {
+                offset += n;
+                if (offset > buf_size) offset = buf_size;
+            }
+        }
     }
 
     if (!headers_have_connection(res->headers)) {
-        if (res->keep_alive) {
-            offset += snprintf(buf + offset, buf_size - offset, "Connection: keep-alive\r\n");
-        } else {
-            offset += snprintf(buf + offset, buf_size - offset, "Connection: close\r\n");
+        if (offset < buf_size) {
+            int n = snprintf(buf + offset, buf_size - offset, "Connection: %s\r\n", res->keep_alive ? "keep-alive" : "close");
+            if (n > 0) {
+                offset += n;
+                if (offset > buf_size) offset = buf_size;
+            }
         }
     }
 
     if (res->alt_svc) {
-        offset += snprintf(buf + offset, buf_size - offset, "Alt-Svc: %s\r\n", res->alt_svc);
+        if (offset < buf_size) {
+            int n = snprintf(buf + offset, buf_size - offset, "Alt-Svc: %s\r\n", res->alt_svc);
+            if (n > 0) {
+                offset += n;
+                if (offset > buf_size) offset = buf_size;
+            }
+        }
     }
 
-    offset += snprintf(buf + offset, buf_size - offset, "\r\n");
+    if (offset < buf_size) {
+        int n = snprintf(buf + offset, buf_size - offset, "\r\n");
+        if (n > 0) {
+            offset += n;
+            if (offset > buf_size) offset = buf_size;
+        }
+    }
     return offset;
 }
 
@@ -1049,6 +1079,24 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
  * @brief Read and reassemble a chunked transfer-encoded body.
  * @return 0 on success, -1 on error.
  */
+static int http_parse_chunk_size(const char *line, size_t len, size_t *out_size) {
+    size_t value = 0, digits = 0;
+    for (size_t i = 0; i < len && line[i] != ';'; ++i) {
+        unsigned char c = (unsigned char)line[i];
+        unsigned int digit;
+        if (c >= '0' && c <= '9') digit = c - '0';
+        else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
+        else return -1;
+        if (value > (CWIST_HTTP_MAX_BODY_SIZE - digit) / 16) return -1;
+        value = value * 16 + digit;
+        ++digits;
+    }
+    if (!digits) return -1;
+    *out_size = value;
+    return 0;
+}
+
 static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_t buf_cap, cwist_sstring *out) {
     size_t offset = 0;
 
@@ -1070,12 +1118,11 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
             crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
         }
 
-        *crlf = '\0';
-        char *endptr;
-        unsigned long chunk_size = strtoul(buf + offset, &endptr, 16);
-        if (endptr == buf + offset) return -1;
-
         size_t line_len = (size_t)(crlf - (buf + offset)) + 2;
+        size_t chunk_size = 0;
+        /* Strict hexadecimal parsing prevents accepting contaminated framing
+         * such as `4junk` or signed/overflowed chunk lengths. */
+        if (http_parse_chunk_size(buf + offset, line_len - 2, &chunk_size) != 0) return -1;
         offset += line_len;
 
         if (chunk_size == 0) {
@@ -1124,7 +1171,8 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
             buf[*avail] = '\0';
         }
 
-        cwist_sstring_append_len(out, buf + offset, chunk_size);
+        if (buf[offset + chunk_size] != '\r' || buf[offset + chunk_size + 1] != '\n') return -1;
+        if (cwist_sstring_append_len(out, buf + offset, chunk_size).error.err_i8 != 0) return -1;
         offset += chunk_size + 2;
     }
 

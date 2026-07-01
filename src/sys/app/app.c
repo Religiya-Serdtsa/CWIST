@@ -26,6 +26,7 @@
 #include <ctype.h>
 #include <strings.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <signal.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1104,8 +1105,17 @@ cwist_app *cwist_app_create(void) {
     app->pqc_layer_enabled = false;
     app->tls_groups = NULL;
     app->wt_handler = NULL;
+
+    app->session_secret = NULL;
+    app->session_name = NULL;
+    app->session_max_age = 0;
+    app->db_pool = NULL;
+    app->redis_pool = NULL;
+    app->scheduler = NULL;
+    app->grpc_routes = NULL;
+
     cwist_app_refresh_https_request_handler(app);
-    
+
     return app;
 }
 
@@ -1287,7 +1297,21 @@ void cwist_app_destroy(cwist_app *app) {
     if (app->db_path) {
         cwist_free(app->db_path);
     }
-    
+
+    if (app->session_secret) cwist_free(app->session_secret);
+    if (app->session_name) cwist_free(app->session_name);
+
+    if (app->db_pool) {
+        cwist_db_pool_destroy((cwist_db_pool_t *)app->db_pool);
+    }
+    if (app->redis_pool) {
+        cwist_redis_pool_destroy((cwist_redis_pool_t *)app->redis_pool);
+    }
+    if (app->scheduler) {
+        cwist_scheduler_destroy((cwist_scheduler_t *)app->scheduler);
+    }
+    cwist_grpc_routes_destroy(app);
+
     cwist_free(app);
 }
 
@@ -1549,6 +1573,75 @@ cwist_db *cwist_app_get_db(cwist_app *app) {
     return app->db;
 }
 
+cwist_error_t cwist_app_use_db_pool(cwist_app *app, const char *db_path, size_t max_conns) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app || !db_path || max_conns == 0) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+    if (app->db_pool) {
+        cwist_db_pool_destroy((cwist_db_pool_t *)app->db_pool);
+    }
+    app->db_pool = cwist_db_pool_create(db_path, max_conns);
+    if (!app->db_pool) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+    err.error.err_i16 = 0;
+    return err;
+}
+
+cwist_db_pool_t *cwist_app_get_db_pool(cwist_app *app) {
+    if (!app) return NULL;
+    return (cwist_db_pool_t *)app->db_pool;
+}
+
+cwist_error_t cwist_app_use_redis(cwist_app *app, const char *host, int port, size_t max_conns) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app || !host || port <= 0 || max_conns == 0) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+    if (app->redis_pool) {
+        cwist_redis_pool_destroy((cwist_redis_pool_t *)app->redis_pool);
+    }
+    app->redis_pool = cwist_redis_pool_create(host, port, max_conns);
+    if (!app->redis_pool) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+    err.error.err_i16 = 0;
+    return err;
+}
+
+cwist_redis_pool_t *cwist_app_get_redis_pool(cwist_app *app) {
+    if (!app) return NULL;
+    return (cwist_redis_pool_t *)app->redis_pool;
+}
+
+cwist_error_t cwist_app_use_scheduler(cwist_app *app, size_t worker_count, size_t queue_capacity) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!app || worker_count == 0) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+    if (app->scheduler) {
+        cwist_scheduler_destroy((cwist_scheduler_t *)app->scheduler);
+    }
+    app->scheduler = cwist_scheduler_create(worker_count, queue_capacity);
+    if (!app->scheduler) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+    err.error.err_i16 = 0;
+    return err;
+}
+
+cwist_scheduler_t *cwist_app_get_scheduler(cwist_app *app) {
+    if (!app) return NULL;
+    return (cwist_scheduler_t *)app->scheduler;
+}
+
 /**
  * @brief Register a filesystem directory to be served beneath a URL prefix.
  * @param app Application being configured.
@@ -1724,8 +1817,32 @@ void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler
     add_route(app, path, CWIST_HTTP_POST, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
+void cwist_app_put(cwist_app *app, const char *path, cwist_handler_func handler) {
+    add_route(app, path, CWIST_HTTP_PUT, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
+void cwist_app_delete(cwist_app *app, const char *path, cwist_handler_func handler) {
+    add_route(app, path, CWIST_HTTP_DELETE, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
+void cwist_app_patch(cwist_app *app, const char *path, cwist_handler_func handler) {
+    add_route(app, path, CWIST_HTTP_PATCH, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
 void cwist_app_post_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler) {
     add_route_named(app, path, name, CWIST_HTTP_POST, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
+void cwist_app_put_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler) {
+    add_route_named(app, path, name, CWIST_HTTP_PUT, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
+void cwist_app_delete_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler) {
+    add_route_named(app, path, name, CWIST_HTTP_DELETE, handler, CWIST_ENDPOINT_DEFAULT);
+}
+
+void cwist_app_patch_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler) {
+    add_route_named(app, path, name, CWIST_HTTP_PATCH, handler, CWIST_ENDPOINT_DEFAULT);
 }
 
 /**
@@ -1759,6 +1876,18 @@ void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func hand
  */
 void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts) {
     add_route(app, path, CWIST_HTTP_POST, handler, opts);
+}
+
+void cwist_app_put_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts) {
+    add_route(app, path, CWIST_HTTP_PUT, handler, opts);
+}
+
+void cwist_app_delete_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts) {
+    add_route(app, path, CWIST_HTTP_DELETE, handler, opts);
+}
+
+void cwist_app_patch_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts) {
+    add_route(app, path, CWIST_HTTP_PATCH, handler, opts);
 }
 
 /**
@@ -2035,10 +2164,11 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
         // --- Big Dumb Reply (Read) ---
         if (app->bdr_ctx && req->method == CWIST_HTTP_GET) {
             size_t cached_len = 0;
-            const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
+            void *cached_blob = cwist_bdr_copy_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
             if (cached_blob) {
                 // BDR Hit! Blast it out.
                 send(client_fd, cached_blob, cached_len, 0); // Flags handled by socket opt ideally or just 0
+                cwist_free(cached_blob);
                 
                 // Cleanup and Loop
                 bool keep_alive = req->keep_alive;
@@ -2431,6 +2561,10 @@ static cwist_app *cwist_app_clone_for_multiport(cwist_app *src) {
     dst->middlewares = cwist_middleware_clone(src->middlewares);
     dst->error_handlers = cwist_error_handlers_clone(src->error_handlers);
     dst->static_dirs = cwist_static_dirs_clone(src->static_dirs);
+    if (cwist_grpc_routes_clone(dst, src) != 0) {
+        cwist_app_destroy(dst);
+        return NULL;
+    }
 
     if (src->use_ssl && src->cert_path && src->key_path) {
         dst->use_https2 = src->use_https2;
@@ -3000,15 +3134,27 @@ int cwist_app_listen(cwist_app *app, int port) {
         abort();
     }
 
-    // Initialize Memory Manager
+    // Initialize Memory Manager (structure only; thread is started per-process after fork)
     cwist_mem_init(app);
-    if (app->mem_manager) {
-        app->mem_manager->watcher_running = true;
-        pthread_create(&app->mem_manager->watcher_thread, NULL, cwist_mem_watcher, app);
-    }
 
+    /* Create the shared TCP listen socket before forking workers.
+     * With SO_REUSEPORT each worker process gets its own accept queue and the
+     * kernel load-balances incoming connections.  Creating it here avoids the
+     * previous anti-pattern where workers forked before binding and inherited
+     * threads that do not exist in the child. */
+    struct sockaddr_in addr;
+    int server_fd = cwist_make_socket_ipv4(&addr, "0.0.0.0", port, 32768);
+    if (server_fd < 0) {
+        perror("Failed to bind port");
+        return -1;
+    }
+    g_cwist_listen_fd = server_fd;
+
+    /* Bind the HTTP/3 UDP socket before forking as well.  The thread that
+     * services it is started per-process after the fork. */
+    int udp_fd = -1;
     if (app->h3_ctx && (app->use_http3 || app->use_https3)) {
-        int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+        udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (udp_fd >= 0) {
             struct sockaddr_in udp_addr;
             memset(&udp_addr, 0, sizeof(udp_addr));
@@ -3026,48 +3172,62 @@ int cwist_app_listen(cwist_app *app, int port) {
             setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
             setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
 
-            if (bind(udp_fd, (struct sockaddr *)&udp_addr, sizeof(udp_addr)) == 0) {
-                struct h3_thread_payload *h3_p = malloc(sizeof(*h3_p));
-                if (h3_p) {
-                    h3_p->udp_fd = udp_fd;
-                    h3_p->app = app;
-                    pthread_t h3_tid;
-                    if (pthread_create(&h3_tid, NULL, h3_server_thread_func, h3_p) == 0) {
-                        pthread_detach(h3_tid);
-                        g_cwist_udp_fd = udp_fd;
-                        printf("HTTP/3 (QUIC) enabled on UDP port %d\n", port);
-                    } else {
-                        free(h3_p);
-                        close(udp_fd);
-                    }
-                } else {
-                    close(udp_fd);
-                }
-            } else {
+            if (bind(udp_fd, (struct sockaddr *)&udp_addr, sizeof(udp_addr)) != 0) {
                 perror("Failed to bind UDP port for HTTP/3");
                 close(udp_fd);
+                udp_fd = -1;
             }
         }
     }
 
+    // Fork worker processes before any threads are created.
     int workers = 1;
     const char *workers_env = getenv("CWIST_WORKERS");
     if (workers_env) workers = atoi(workers_env);
     if (workers < 1) workers = 1;
+    pid_t parent_pid = getpid();
+    bool is_worker_child = false;
     for (int i = 1; i < workers; i++) {
-        if (fork() == 0) break;
+        pid_t pid = fork();
+        if (pid == 0) {
+            is_worker_child = true;
+            break;
+        } else if (pid < 0) {
+            perror("fork worker failed");
+            break;
+        }
     }
 
-    struct sockaddr_in addr;
-    int server_fd = cwist_make_socket_ipv4(&addr, "0.0.0.0", port, 32768);
-
-    if (server_fd < 0) {
-        perror("Failed to bind port");
-        return -1;
+    // Per-process threads start here.  Each worker gets its own watcher and
+    // HTTP/3 thread, so fork-after-thread deadlock is avoided.
+    if (app->mem_manager) {
+        app->mem_manager->watcher_running = true;
+        pthread_create(&app->mem_manager->watcher_thread, NULL, cwist_mem_watcher, app);
     }
-    g_cwist_listen_fd = server_fd;
-    
-    printf("CWIST App running on port %d (SSL: %s) [Event-driven]\n", port, app->use_ssl ? "On" : "Off");
+
+    if (udp_fd >= 0) {
+        struct h3_thread_payload *h3_p = malloc(sizeof(*h3_p));
+        if (h3_p) {
+            h3_p->udp_fd = udp_fd;
+            h3_p->app = app;
+            pthread_t h3_tid;
+            if (pthread_create(&h3_tid, NULL, h3_server_thread_func, h3_p) == 0) {
+                pthread_detach(h3_tid);
+                g_cwist_udp_fd = udp_fd;
+                printf("HTTP/3 (QUIC) enabled on UDP port %d\n", port);
+            } else {
+                free(h3_p);
+                close(udp_fd);
+                udp_fd = -1;
+            }
+        } else {
+            close(udp_fd);
+            udp_fd = -1;
+        }
+    }
+
+    printf("CWIST App running on port %d (SSL: %s) [Event-driven, workers=%d, pid=%d]\n",
+           port, app->use_ssl ? "On" : "Off", workers, (int)getpid());
     
     // Check config for non-blocking scale mode (default enabled)
     const char *c1m = getenv("CWIST_C1M_MODE");
@@ -3107,7 +3267,16 @@ int cwist_app_listen(cwist_app *app, int port) {
 
     printf("[CWIST] Draining connections for %d seconds...\n", g_cwist_drain_timeout_sec);
     sleep(g_cwist_drain_timeout_sec);
+
+    /* Parent process reaps worker children so they do not become zombies. */
+    if (!is_worker_child && workers > 1) {
+        for (int i = 1; i < workers; i++) {
+            int status;
+            wait(&status);
+        }
+    }
+
     printf("[CWIST] Shutdown complete.\n");
-    
+
     return 0;
 }

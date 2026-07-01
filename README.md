@@ -20,8 +20,8 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 Most C web frameworks stop at HTTP/1.1 and leave TLS, protocol upgrades, and memory
 management as exercises for the user. CWIST ships with the entire stack:
 
-- **HTTP/3 & WebTransport Server** powered by lsquic (server-side WebTransport sessions
-  over QUIC with bidirectional/unidirectional streams).
+- **HTTP/3 & WebTransport** powered by lsquic (server-side sessions plus an experimental
+  native C client on `dev`, backed by LSQUIC PR #629).
 - **Post-Quantum TLS** via a single API call: `cwist_app_use_pqc_layer(app, true)`
   forces hybrid X25519MLKEM768 and disables legacy TLS < 1.3. No OpenSSL knowledge required.
 - **Server-side zero-copy I/O & C100K Reactor** backed by io_uring / epoll / kqueue with lock-free
@@ -40,6 +40,7 @@ management as exercises for the user. CWIST ships with the entire stack:
 | **Routing** | Express-style `:param` routes, Mux router, chainable middleware |
 | **Performance** | Zero-copy I/O, generational arenas, EBR GC, lock-free queues, Big Dumb Reply cache |
 | **Observability** | Structured access logs, metrics endpoint, healthz, rate limiting |
+| **gRPC / Protobuf** | Unary and streaming routes, incremental framing, health/reflection services, and `cwist proto` scalar-model generation |
 | **Rendering** | HTML builder, CSS composer, template engine, JSON builder / heal |
 
 ## Quick Start
@@ -84,9 +85,85 @@ int main(void) {
 ```
 
 ```sh
-gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
+gcc -o server main.c \
+    -lcwist \
+    -lssl -lcrypto \
+    -lz -lzstd -lbrotlienc -lbrotlicommon \
+    -luriparser -lcjson \
+    -ldl -lpthread -lm
 ./server
 ```
+
+## Development hot reload
+
+New projects include a self-describing `.cwpro` development command. Run the
+watcher from the project directory to calculate the affected translation units,
+incrementally invoke the build, and restart the app only after a successful
+build. It uses Linux `inotify` or BSD/macOS `kqueue` for low-latency wakeups,
+with an mtime snapshot and polling fallback to prevent missed rebuilds. The
+previous process remains available if a build fails.
+
+```sh
+cwist watcher
+```
+
+Use `cwist watcher --no-run` for CI or rebuild-only use, or `--poll` to force
+portable polling. `dev.debounce_ms` and
+`dev.stop_timeout_ms` in the manifest control atomic-save coalescing and
+graceful process shutdown.
+
+## Linking
+
+When you link against `libcwist.a`, you must supply the following flags.
+Because CWIST is a **static** archive, the linker needs all transitive
+dependencies to be listed explicitly by the application.
+
+### Required flags (always needed)
+
+| Flag | Provides |
+|------|----------|
+| `-lcwist` | The framework itself |
+| `-lssl -lcrypto` | TLS (BoringSSL or OpenSSL) |
+| `-lz` | zlib — gzip/deflate compression and internal use |
+| `-lzstd` | Zstandard — payload compression (preferred algorithm) |
+| `-lbrotlienc -lbrotlicommon` | Brotli — payload compression |
+| `-luriparser` | URI parsing |
+| `-lcjson` | JSON handling |
+| `-ldl` | Dynamic loading (RDBMS auto-mount) |
+| `-lpthread` | POSIX threads |
+| `-lm` | Math (used by libttak) |
+
+### Optional flags (feature-dependent)
+
+| Flag | When required |
+|------|---------------|
+| `-lnghttp2` | HTTP/2 support |
+| `-lngtcp2 -lngtcp2_crypto_quictls` | HTTP/3 / QUIC |
+| `-lnghttp3` | HTTP/3 QPACK |
+| `-lcurl` | RDBMS auto-mount wire probing |
+
+### pkg-config snippet for Makefile
+
+```makefile
+CWIST_LIBS := -lcwist \
+              -lssl -lcrypto \
+              -lz -lzstd -lbrotlienc -lbrotlicommon \
+              -luriparser -lcjson \
+              -ldl -lpthread -lm
+
+# Append optional libs if present on the build host
+CWIST_LIBS += $(shell pkg-config --libs libnghttp2  2>/dev/null)
+CWIST_LIBS += $(shell pkg-config --libs libngtcp2   2>/dev/null)
+CWIST_LIBS += $(shell pkg-config --libs libnghttp3  2>/dev/null)
+CWIST_LIBS += $(shell pkg-config --libs libcurl     2>/dev/null || echo -lcurl)
+
+your_target: your_source.c
+	$(CC) -o $@ $< $(CWIST_LIBS)
+```
+
+> **Note** — `brotlienc` and `brotlicommon` ship as **`libbrotli-dev`** on
+> Debian/Ubuntu and **`brotli-devel`** on Fedora/RHEL. `zstd` ships as
+> **`libzstd-dev`** / **`libzstd-devel`**.
 
 ## Configuration
 
@@ -222,6 +299,9 @@ See `BENCHMARK.txt` for the full transcript and reproducible workflow.
 - cJSON
 - uriparser
 - Monocypher
+- zlib
+- Brotli (`libbrotlienc`, `libbrotlicommon`)
+- Zstandard (`libzstd`)
 
 ## Documentation
 

@@ -1,0 +1,441 @@
+#!/usr/bin/env python3
+"""CWIST project and source-documentation command line tool."""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import json
+import os
+import re
+import select
+import shlex
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+FORMAT = "cwist-project/v1"
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"cwist: {message}")
+
+
+def write_new_project(name: str, directory: Path | None) -> None:
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
+        fail("project name must start with a letter and contain only letters, digits, _ or -")
+    root = (directory or Path.cwd()) / name
+    if root.exists():
+        fail(f"destination already exists: {root}")
+    root.mkdir(parents=True)
+    project = {
+        "format": FORMAT,
+        "name": name,
+        "version": "0.1.0",
+        "language": "c",
+        "entrypoint": "src/main.c",
+        "build": {"command": "make", "binary": f"bin/{name}"},
+        "dev": {"command": f"./bin/{name}", "debounce_ms": 150, "stop_timeout_ms": 5000},
+        "dependencies": {"cwist": ">=0.1.0"},
+        "openapi": {"source": "src", "output": "openapi.json", "title": name, "version": "0.1.0"},
+    }
+    (root / f"{name}.cwpro").write_text(json.dumps(project, indent=2) + "\n", encoding="utf-8")
+    (root / "src").mkdir()
+    (root / "bin").mkdir()
+    (root / ".gitignore").write_text("bin/\nopenapi.json\n", encoding="utf-8")
+    (root / "Makefile").write_text(
+        f"CC ?= cc\nCFLAGS ?= -std=c2x -Wall -Wextra\nTARGET = bin/{name}\n\n"
+        "$(TARGET): src/main.c\n\tmkdir -p bin\n\t$(CC) $(CFLAGS) -o $@ $< -lcwist -lpthread\n\n"
+        "openapi:\n\tcwist openapi src --project *.cwpro\n\nclean:\n\trm -f $(TARGET)\n",
+        encoding="utf-8",
+    )
+    (root / "src" / "main.c").write_text(
+        "#include <cwist/sys/app/app.h>\n#include <cwist/openapi.h>\n\n"
+        "static void health(cwist_http_request *req, cwist_http_response *res) {\n"
+        "    (void)req;\n    cwist_sstring_assign(res->body, \"{\\\"status\\\":\\\"ok\\\"}\");\n"
+        "    cwist_http_header_add(&res->headers, \"Content-Type\", \"application/json\");\n}\n\n"
+        "int main(void) {\n    cwist_app *app = cwist_app_create();\n"
+        "    /** @openapi.summary Service health\n     * @openapi.tags system\n     * @openapi.response 200 application/json Service status. */\n"
+        "    CWIST_OPENAPI_GET(app, \"/health\", health);\n"
+        "    int rc = cwist_app_listen(app, 8080);\n    cwist_app_destroy(app);\n    return rc;\n}\n",
+        encoding="utf-8",
+    )
+    print(f"created {root}")
+
+
+def clean_comment(text: str) -> list[str]:
+    body = re.sub(r"^/\*\*?|\*/$", "", text.strip(), flags=re.S)
+    return [re.sub(r"^\s*\*?\s?", "", line).strip() for line in body.splitlines()]
+
+
+def operation_from_comment(comment: str) -> dict:
+    operation: dict = {"responses": {"200": {"description": "Success"}}}
+    for line in clean_comment(comment):
+        match = re.match(r"@openapi\.([a-z_]+)\s+(.+)$", line)
+        if not match:
+            continue
+        key, value = match.groups()
+        if key == "summary": operation["summary"] = value
+        elif key == "description": operation["description"] = value
+        elif key == "operation_id": operation["operationId"] = value
+        elif key == "tags": operation["tags"] = [tag.strip() for tag in value.split(",") if tag.strip()]
+        elif key == "response":
+            parts = value.split(None, 2)
+            if not parts or not parts[0].isdigit():
+                fail(f"invalid @openapi.response: {value}")
+            response = {"description": parts[2] if len(parts) == 3 else "Response"}
+            if len(parts) >= 2 and "/" in parts[1]: response["content"] = {parts[1]: {"schema": {"type": "object"}}}
+            operation["responses"][parts[0]] = response
+    return operation
+
+
+def source_files(source: Path) -> list[Path]:
+    return [source] if source.is_file() else sorted(source.rglob("*.c"))
+
+
+def generate_openapi(source: Path, output: Path, title: str, version: str) -> None:
+    route_re = re.compile(r"CWIST_OPENAPI_(GET|POST|PUT|DELETE|PATCH)\s*\(\s*[^,]+,\s*\"([^\"]+)\"")
+    comment_re = re.compile(r"/\*\*.*?\*/", re.S)
+    paths: dict = {}
+    for file in source_files(source):
+        text = file.read_text(encoding="utf-8")
+        comments = list(comment_re.finditer(text))
+        for route in route_re.finditer(text):
+            preceding = [comment for comment in comments if comment.end() <= route.start()]
+            doc = preceding[-1].group(0) if preceding else ""
+            operation = operation_from_comment(doc) if "@openapi." in doc else {"responses": {"200": {"description": "Success"}}}
+            method, raw_path = route.groups()
+            path = re.sub(r":([A-Za-z_][A-Za-z0-9_]*)", r"{\1}", raw_path)
+            params = re.findall(r"\{([^}]+)\}", path)
+            if params:
+                operation["parameters"] = [{"name": p, "in": "path", "required": True, "schema": {"type": "string"}} for p in params]
+            paths.setdefault(path, {})[method.lower()] = operation
+    document = {"openapi": "3.1.0", "info": {"title": title, "version": version}, "paths": paths}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {output} ({len(paths)} paths)")
+
+
+def generate_proto(source: Path, output: Path) -> None:
+    """Generate a small, dependency-free C model/encoder from a proto3 file.
+
+    This intentionally covers scalar proto3 fields and service method paths;
+    advanced constructs stay visible as comments instead of silently producing
+    incorrect wire encoders.
+    """
+    text = source.read_text(encoding="utf-8")
+    package = re.search(r"\bpackage\s+([A-Za-z_][\w.]*)\s*;", text)
+    package_name = package.group(1) if package else "proto"
+    prefix = re.sub(r"\W+", "_", package_name)
+    lines = ["/* Generated by cwist proto; do not edit. */", "#pragma once",
+             "#include <cwist/net/grpc/protobuf.h>", "#include <stdint.h>", "#include <stddef.h>", ""]
+    scalar = {
+        "bool": ("int", "cwist_pb_write_bool_field"),
+        "int32": ("int64_t", "cwist_pb_write_int64_field"), "int64": ("int64_t", "cwist_pb_write_int64_field"),
+        "uint32": ("uint64_t", "cwist_pb_write_uint64_field"), "uint64": ("uint64_t", "cwist_pb_write_uint64_field"),
+        "sint32": ("int64_t", "cwist_pb_write_int64_field"), "sint64": ("int64_t", "cwist_pb_write_int64_field"),
+        "string": ("const char *", "cwist_pb_write_string_field"),
+    }
+    for match in re.finditer(r"\bmessage\s+(\w+)\s*\{(.*?)\}", text, re.S):
+        name, body = match.groups()
+        fields = re.findall(r"(?:repeated\s+)?(\w+)\s+(\w+)\s*=\s*(\d+)\s*;", body)
+        cname = f"{prefix}_{name}"
+        lines.extend([f"typedef struct {cname} {{"])
+        for typ, field, _ in fields:
+            lines.append(f"    {scalar.get(typ, ('/* unsupported */ void *', ''))[0]} {field};")
+        lines.extend([f"}} {cname};", f"static inline int {cname}_encode(cwist_pb_writer *w, const {cname} *m) {{", "    if (!w || !m) return -1;"])
+        for typ, field, number in fields:
+            if typ in scalar:
+                lines.append(f"    if ({scalar[typ][1]}(w, {number}, m->{field}) != 0) return -1;")
+            else:
+                lines.append(f"    /* {field}: unsupported proto field type {typ}; supply a custom encoder. */")
+        lines.extend(["    return 0;", "}", ""])
+    for match in re.finditer(r"\bservice\s+(\w+)\s*\{(.*?)\}", text, re.S):
+        service, body = match.groups()
+        for request, method, response in re.findall(r"rpc\s+(\w+)\s*\(\s*(?:stream\s+)?([\w.]+)\s*\)\s+returns\s*\(\s*(?:stream\s+)?([\w.]+)\s*\)", body):
+            lines.append(f'#define {prefix}_{service}_{request}_PATH "/{package_name}.{service}/{request}"')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"wrote {output}")
+
+
+def project_file(value: str | None) -> Path:
+    if value:
+        matches = list(Path.cwd().glob(value))
+        if len(matches) != 1: fail("--project must identify exactly one .cwpro file")
+        return matches[0]
+    matches = list(Path.cwd().glob("*.cwpro"))
+    if len(matches) != 1: fail("run in a project directory or pass --project")
+    return matches[0]
+
+
+def watched_files(root: Path) -> dict[Path, int]:
+    """Return source and build-description mtimes, excluding generated output."""
+    names = {"Makefile", "makefile", "GNUmakefile"}
+    return {path: path.stat().st_mtime_ns for path in root.rglob("*")
+            if path.is_file() and (path.suffix in {".c", ".h", ".cwpro"} or path.name in names)
+            and ".cwist-build" not in path.parts and "bin" not in path.parts}
+
+
+def impacted_sources(root: Path, changed: set[Path]) -> set[Path]:
+    """Return C translation units affected through local quoted includes."""
+    files = watched_files(root)
+    reverse: dict[Path, set[Path]] = {}
+    include = re.compile(r'^\s*#\s*include\s+"([^"]+)"')
+    for path in files:
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            found = include.match(line)
+            if found:
+                target = (path.parent / found.group(1)).resolve()
+                reverse.setdefault(target, set()).add(path.resolve())
+    queue = [path.resolve() for path in changed]
+    affected = set(queue)
+    while queue:
+        current = queue.pop()
+        for parent in reverse.get(current, set()):
+            if parent not in affected: affected.add(parent); queue.append(parent)
+    return {path for path in affected if path.suffix == ".c"}
+
+
+class FileEventSource:
+    """Event-first watcher with an mtime snapshot fallback.
+
+    The snapshot remains authoritative: kernel events are only a low-latency
+    wake-up signal, so overflow, dropped events, and newly-created directories
+    cannot cause a missed rebuild.
+    """
+    _IN_MASK = 0x00000002 | 0x00000008 | 0x00000040 | 0x00000080 | 0x00000100 | 0x00000200
+    _SKIP = {".git", "bin", "build", ".cwist-build", "node_modules", "__pycache__"}
+
+    def __init__(self, root: Path, force_poll: bool = False) -> None:
+        self.root = root
+        self.fd = -1
+        self.kq = None
+        self.open_fds: list[int] = []
+        self.backend = "poll"
+        if not force_poll and sys.platform.startswith("linux"):
+            self._open_inotify()
+        elif not force_poll and hasattr(select, "kqueue"):
+            self._open_kqueue()
+
+    def _directories(self) -> list[Path]:
+        dirs = []
+        for path in self.root.rglob("*"):
+            if path.is_dir() and not any(part in self._SKIP for part in path.parts):
+                dirs.append(path)
+        return [self.root, *dirs]
+
+    def _open_inotify(self) -> None:
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            init = libc.inotify_init1
+            init.argtypes, init.restype = [ctypes.c_int], ctypes.c_int
+            self.fd = init(os.O_NONBLOCK | os.O_CLOEXEC)
+            if self.fd < 0:
+                return
+            add = libc.inotify_add_watch
+            add.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
+            add.restype = ctypes.c_int
+            for directory in self._directories():
+                add(self.fd, os.fsencode(directory), self._IN_MASK)
+            self.backend = "inotify"
+        except (AttributeError, OSError):
+            self.close()
+
+    def _open_kqueue(self) -> None:
+        try:
+            self.kq = select.kqueue()
+            events = []
+            flags = select.KQ_NOTE_WRITE | select.KQ_NOTE_DELETE | select.KQ_NOTE_RENAME | select.KQ_NOTE_EXTEND
+            for directory in self._directories():
+                fd = os.open(directory, os.O_RDONLY)
+                self.open_fds.append(fd)
+                events.append(select.kevent(fd, filter=select.KQ_FILTER_VNODE,
+                                            flags=select.KQ_EV_ADD | select.KQ_EV_ENABLE | select.KQ_EV_CLEAR,
+                                            fflags=flags))
+            self.kq.control(events, 0, 0)
+            self.backend = "kqueue"
+        except (AttributeError, OSError):
+            self.close()
+
+    def wait(self, timeout: float) -> bool:
+        if self.backend == "inotify" and self.fd >= 0:
+            readable, _, _ = select.select([self.fd], [], [], timeout)
+            if not readable:
+                return False
+            try:
+                while os.read(self.fd, 65536):
+                    pass
+            except BlockingIOError:
+                pass
+            return True
+        elif self.backend == "kqueue" and self.kq:
+            return bool(self.kq.control(None, 1, timeout))
+        else:
+            time.sleep(timeout)
+            return False
+
+    def refresh(self) -> None:
+        """Pick up recursively created source directories after a tree event."""
+        backend = self.backend
+        if backend == "poll":
+            return
+        self.close()
+        if backend == "inotify":
+            self._open_inotify()
+        else:
+            self._open_kqueue()
+
+    def close(self) -> None:
+        if self.fd >= 0:
+            os.close(self.fd)
+            self.fd = -1
+        for fd in self.open_fds:
+            os.close(fd)
+        self.open_fds = []
+        if self.kq:
+            self.kq.close()
+            self.kq = None
+        self.backend = "poll"
+
+
+class ProcessSupervisor:
+    """Own the development child in a process group for reliable restarts."""
+
+    def __init__(self, root: Path, command: str, timeout_ms: int) -> None:
+        self.root, self.command = root, command
+        self.timeout = max(timeout_ms, 100) / 1000
+        self.child: subprocess.Popen | None = None
+
+    def start(self) -> bool:
+        if not self.command:
+            return True
+        try:
+            self.child = subprocess.Popen(shlex.split(self.command), cwd=self.root,
+                                          start_new_session=True)
+            print(f"started: {self.command} (pid {self.child.pid})")
+            return True
+        except OSError as exc:
+            print(f"could not start development process: {exc}", file=sys.stderr)
+            self.child = None
+            return False
+
+    def stop(self) -> None:
+        if not self.child or self.child.poll() is not None:
+            return
+        try:
+            import os
+            os.killpg(self.child.pid, signal.SIGTERM)
+            self.child.wait(timeout=self.timeout)
+        except subprocess.TimeoutExpired:
+            import os
+            os.killpg(self.child.pid, signal.SIGKILL)
+            self.child.wait()
+        finally:
+            self.child = None
+
+    def restart(self) -> bool:
+        self.stop()
+        return self.start()
+
+
+def watcher(project_arg: str | None, interval: float, once: bool, run: bool, force_poll: bool) -> bool:
+    manifest_path = project_file(project_arg).resolve()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("format") != FORMAT: fail("unsupported .cwpro format")
+    root = manifest_path.parent
+    source_root = root / manifest.get("openapi", {}).get("source", "src")
+    previous = watched_files(root)
+    dev = manifest.get("dev", {})
+    command = dev.get("command") or f"./{manifest.get('build', {}).get('binary', '')}"
+    supervisor = ProcessSupervisor(root, command, int(dev.get("stop_timeout_ms", 5000)))
+    events = FileEventSource(root, force_poll)
+    debounce = max(int(dev.get("debounce_ms", 150)), 0) / 1000
+    print(f"watching {source_root} ({events.backend}, interval {interval:.2f}s, hot reload {'on' if run else 'off'})")
+    last_build_ok = True
+    try:
+        if run and not once and not supervisor.start():
+            return False
+        while True:
+            if once:
+                changed = {path for path in previous if path.suffix == ".c"}
+            else:
+                event_changed = events.wait(interval)
+                current = watched_files(root)
+                changed = {path for path in set(previous) | set(current) if previous.get(path) != current.get(path)}
+                previous = current
+                if event_changed:
+                    events.refresh()
+            if changed:
+                # Coalesce editor atomic-save bursts before calculating the impact graph.
+                if debounce and not once:
+                    time.sleep(debounce)
+                    current = watched_files(root)
+                    changed |= {path for path in set(previous) | set(current)
+                                if previous.get(path) != current.get(path)}
+                    previous = current
+                source_changes = {path for path in changed if path.suffix in {".c", ".h"}}
+                scope = impacted_sources(root, source_changes) if source_changes else set()
+                print("changed:", ", ".join(str(path.relative_to(root)) for path in sorted(changed)))
+                print("recompile scope:", ", ".join(str(path.relative_to(root)) for path in sorted(scope)) or "build metadata")
+                env = dict(__import__("os").environ)
+                env["CWIST_CHANGED_SOURCES"] = ":".join(str(path.relative_to(root)) for path in sorted(scope))
+                result = subprocess.run(shlex.split(manifest.get("build", {}).get("command", "make")),
+                                        cwd=root, env=env)
+                last_build_ok = result.returncode == 0
+                if last_build_ok and run and not once:
+                    supervisor.restart()
+                elif not last_build_ok:
+                    print(f"build failed ({result.returncode}); keeping the previous process", file=sys.stderr)
+            if once: return last_build_ok
+    except KeyboardInterrupt:
+        print("stopping watcher")
+        return last_build_ok
+    finally:
+        supervisor.stop()
+        events.close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="cwist")
+    sub = parser.add_subparsers(dest="command", required=True)
+    new = sub.add_parser("new", help="create a self-describing CWIST project")
+    new.add_argument("kind", choices=["project"])
+    new.add_argument("name")
+    new.add_argument("--directory", type=Path)
+    api = sub.add_parser("openapi", help="generate OpenAPI 3.1 from Doxygen route annotations")
+    api.add_argument("source", type=Path)
+    api.add_argument("--output", type=Path)
+    api.add_argument("--project")
+    api.add_argument("--title")
+    api.add_argument("--version")
+    proto = sub.add_parser("proto", help="generate C protobuf models and gRPC method paths from proto3")
+    proto.add_argument("source", type=Path)
+    proto.add_argument("--output", type=Path)
+    describe = sub.add_parser("describe", help="print a .cwpro manifest")
+    describe.add_argument("--project")
+    watch = sub.add_parser("watcher", help="watch, incrementally rebuild, and hot-restart the development process")
+    watch.add_argument("--project")
+    watch.add_argument("--interval", type=float, default=0.5)
+    watch.add_argument("--once", action="store_true")
+    watch.add_argument("--no-run", action="store_true", help="rebuild only; do not start or restart the app")
+    watch.add_argument("--poll", action="store_true", help="force polling instead of inotify/kqueue")
+    args = parser.parse_args()
+    if args.command == "new": write_new_project(args.name, args.directory)
+    elif args.command == "proto":
+        output = args.output or args.source.with_suffix(".cwist.pb.h")
+        generate_proto(args.source, output)
+    elif args.command == "describe": print(json.dumps(json.loads(project_file(args.project).read_text()), indent=2))
+    elif args.command == "watcher":
+        if args.interval <= 0: fail("--interval must be positive")
+        if not watcher(args.project, args.interval, args.once, not args.no_run, args.poll): raise SystemExit(1)
+    else:
+        config = {}
+        if args.project or list(Path.cwd().glob("*.cwpro")):
+            config = json.loads(project_file(args.project).read_text()).get("openapi", {})
+        generate_openapi(args.source, args.output or Path(config.get("output", "openapi.json")),
+                         args.title or config.get("title", "CWIST API"), args.version or config.get("version", "0.1.0"))
+
+
+if __name__ == "__main__": main()

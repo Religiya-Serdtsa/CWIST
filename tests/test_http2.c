@@ -1,6 +1,7 @@
 #include <cwist/net/http/http2.h>
 #include <cwist/net/http/https.h>
 #include <cwist/core/sstring/sstring.h>
+#include <cwist/core/seq/seq.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -42,6 +43,27 @@ static int ssl_write_all(SSL *ssl, const void *buf, size_t len) {
         off += (size_t)n;
     }
     return 0;
+}
+
+/**
+ * @brief Extract the body payload from a CWIST-sequenced HTTP/2 DATA frame.
+ *
+ * The server now wraps every DATA frame payload in an 8-byte sequence chunk.
+ * Tests that inspect body content use this helper instead of reading the raw
+ * frame bytes.
+ */
+static bool http2_read_seq_payload(const unsigned char *payload,
+                                   uint32_t len,
+                                   char *out_buf,
+                                   size_t out_cap,
+                                   size_t *out_len) {
+    cwist_seq_chunk_t chunk;
+    if (!cwist_seq_chunk_parse(payload, len, &chunk)) return false;
+    if (chunk.payload_len >= out_cap) return false;
+    memcpy(out_buf, chunk.payload, chunk.payload_len);
+    out_buf[chunk.payload_len] = '\0';
+    *out_len = chunk.payload_len;
+    return true;
 }
 
 static void http2_test_handler(void *user_ctx, cwist_http_request *req, cwist_http_response *res) {
@@ -94,7 +116,8 @@ static void *http2_server_thread(void *arg) {
         .read_buf = NULL,
         .buf_len = 0,
         .negotiated_http2 = true,
-        .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2
+        .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2,
+        .http2_sequenced_data = true
     };
     ctx->result = cwist_http2_serve_connection(&conn, NULL, http2_test_handler);
 
@@ -123,7 +146,8 @@ static void *http2_big_server_thread(void *arg) {
         .read_buf = NULL,
         .buf_len = 0,
         .negotiated_http2 = true,
-        .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2
+        .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2,
+        .http2_sequenced_data = true
     };
     ctx->result = cwist_http2_serve_connection(&conn, NULL, http2_big_handler);
 
@@ -198,13 +222,12 @@ static void test_http2_roundtrip(void) {
             assert(ssl_read_exact(client, payload, len) == 0);
         }
         if (type == 0x0) {
+            size_t body_len = 0;
             if (stream_id == 1) {
-                memcpy(data_buf1, payload, len);
-                data_buf1[len] = '\0';
+                assert(http2_read_seq_payload(payload, len, data_buf1, sizeof(data_buf1), &body_len));
                 saw_stream1 = true;
             } else if (stream_id == 3) {
-                memcpy(data_buf3, payload, len);
-                data_buf3[len] = '\0';
+                assert(http2_read_seq_payload(payload, len, data_buf3, sizeof(data_buf3), &body_len));
                 saw_stream3 = true;
             }
         }
@@ -285,10 +308,16 @@ static void test_http2_large_body_interleave(void) {
         if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
 
         if (type == 0x0) {
+            size_t chunk_len = 0;
+            char chunk_body[17000];
+            if (!http2_read_seq_payload(payload, len, chunk_body, sizeof(chunk_body), &chunk_len)) {
+                /* Should not happen with the sequenced DATA extension. */
+                assert(false);
+            }
             if (first_data_stream == 0) first_data_stream = (int)stream_id;
             else if (second_data_stream == 0 && (int)stream_id != first_data_stream) second_data_stream = (int)stream_id;
-            if (stream_id == 1) body1 += len;
-            if (stream_id == 3) body3 += len;
+            if (stream_id == 1) body1 += chunk_len;
+            if (stream_id == 3) body3 += chunk_len;
             if (first_data_stream != 0 && second_data_stream != 0) saw_both = true;
         }
         if (saw_both && body1 > 0 && body3 > 0) break;
@@ -370,7 +399,11 @@ static void test_http2_ping(void) {
             saw_ping_ack = true;
         }
         if (type == 0x0 && stream_id == 1) {
-            assert(memcmp(payload, "h2 ok", 5) == 0);
+            char data_body[64];
+            size_t body_len = 0;
+            assert(http2_read_seq_payload(payload, len, data_body, sizeof(data_body), &body_len));
+            assert(body_len == 5);
+            assert(memcmp(data_body, "h2 ok", 5) == 0);
             saw_data = true;
         }
         if (saw_ping_ack && saw_data) break;
@@ -451,11 +484,19 @@ static void test_http2_multi_stream_concurrent(void) {
         if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
 
         if (type == 0x0 && stream_id == 1) {
-            assert(memcmp(payload, "h2 ok", 5) == 0);
+            char data_body[64];
+            size_t body_len = 0;
+            assert(http2_read_seq_payload(payload, len, data_body, sizeof(data_body), &body_len));
+            assert(body_len == 5);
+            assert(memcmp(data_body, "h2 ok", 5) == 0);
             saw_stream1 = true;
         }
         if (type == 0x0 && stream_id == 3) {
-            assert(memcmp(payload, "h2 two", 6) == 0);
+            char data_body[64];
+            size_t body_len = 0;
+            assert(http2_read_seq_payload(payload, len, data_body, sizeof(data_body), &body_len));
+            assert(body_len == 6);
+            assert(memcmp(data_body, "h2 two", 6) == 0);
             saw_stream3 = true;
         }
         if (saw_stream1 && saw_stream3) break;
@@ -528,7 +569,11 @@ static void test_http2_continuation(void) {
         if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
 
         if (type == 0x0 && stream_id == 1) {
-            assert(memcmp(payload, "h2 ok", 5) == 0);
+            char data_body[64];
+            size_t body_len = 0;
+            assert(http2_read_seq_payload(payload, len, data_body, sizeof(data_body), &body_len));
+            assert(body_len == 5);
+            assert(memcmp(data_body, "h2 ok", 5) == 0);
             saw_data = true;
             break;
         }
@@ -627,7 +672,11 @@ static void test_http2_flow_control(void) {
         if (flen > 0) assert(ssl_read_exact(client, payload, flen) == 0);
 
         if (type == 0x0 && stream_id == 1) {
-            total_body += flen;
+            char chunk_body[17000];
+            size_t chunk_len = 0;
+            if (http2_read_seq_payload(payload, flen, chunk_body, sizeof(chunk_body), &chunk_len)) {
+                total_body += chunk_len;
+            }
             if (flags & 0x01) got_end_stream = true;
         }
     }
@@ -698,7 +747,11 @@ static void test_http2_response_headers(void) {
             saw_headers = true;
         }
         if (type == 0x0 && stream_id == 1) {
-            assert(memcmp(payload, "h2 ok", 5) == 0);
+            char data_body[64];
+            size_t body_len = 0;
+            assert(http2_read_seq_payload(payload, len, data_body, sizeof(data_body), &body_len));
+            assert(body_len == 5);
+            assert(memcmp(data_body, "h2 ok", 5) == 0);
             saw_data = true;
         }
         if (saw_headers && saw_data) break;

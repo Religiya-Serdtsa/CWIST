@@ -22,11 +22,14 @@ var http3_8h =
     [ "cwist_http3_set_push_enabled", "dd/dff/http3_8h.html#ad3ca65b797048ad91a8a62eaf329c6cd", null ],
     [ "cwist_http3_set_stream_priority", "dd/dff/http3_8h.html#af2f0b7cd7be74f6592ce2e2f99968242", null ],
     [ "cwist_http3_set_webtransport_handler", "dd/dff/http3_8h.html#a31931b2dca829d51ff9112ad76c27ce7", null ],
+    [ "cwist_webtransport_close_session", "dd/dff/http3_8h.html#a698c07295ab057e148fe6744f21c2adf", null ],
     [ "cwist_webtransport_close_stream", "dd/dff/http3_8h.html#afcb37b5d853d39a6a2af74c1291ac89a", null ],
     [ "cwist_webtransport_flush", "dd/dff/http3_8h.html#a9a695f75adeebd16dc32da914364a27e", null ],
-    [ "cwist_webtransport_open_bidi_stream", "dd/dff/http3_8h.html#aa674c0b18a34e91a4d19e9c48143ce77", null ],
-    [ "cwist_webtransport_open_uni_stream", "dd/dff/http3_8h.html#a81a9605d68c89460f12b904756cd012e", null ],
+    [ "cwist_webtransport_max_datagram_size", "dd/dff/http3_8h.html#a535445b5d0dc3d199ee6e738e4e34cd2", null ],
+    [ "cwist_webtransport_open_bidi_stream", "dd/dff/http3_8h.html#a8c28e16978b028a0e4bfa3f1b35bedfd", null ],
+    [ "cwist_webtransport_open_uni_stream", "dd/dff/http3_8h.html#a7903979d1019695b9bc5e4c4c8032103", null ],
     [ "cwist_webtransport_read", "dd/dff/http3_8h.html#a816bc34002d19798559c68c62e2ea165", null ],
+    [ "cwist_webtransport_send_datagram", "dd/dff/http3_8h.html#a670f4019afc7ea341715fb04bd7e4031", null ],
     [ "cwist_webtransport_set_new_stream_handler", "dd/dff/http3_8h.html#a9697f0d33235574c1819abd2f90c5f72", null ],
     [ "cwist_webtransport_write", "dd/dff/http3_8h.html#aaa33ab3d022975e27d5e9e3f22b2b385", null ]
 ];

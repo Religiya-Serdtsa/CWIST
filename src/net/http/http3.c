@@ -11,6 +11,7 @@
 #include <cwist/net/http/http3.h>
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/seq/seq.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/sys/app/shutdown.h>
 #include "tls_chain.h"
@@ -41,7 +42,9 @@
 #include <openssl/bn.h>
 
 #include <lsquic.h>
+#ifdef CWIST_WEBTRANSPORT
 #include <lsquic_wt.h>
+#endif
 #include <lsxpack_header.h>
 
 /* ------------------------------------------------------------------ */
@@ -86,9 +89,20 @@ typedef struct h3_stream_ctx {
     int response_ready;
     int write_state; /* 0=headers, 1=body, 2=done */
     size_t body_sent;
+    uint8_t recv_xor; /* running XOR of received body bytes */
+    uint8_t send_xor; /* running XOR of sent body bytes */
+    int sequenced_data; /* X-CWIST-Sequenced-Data: 1 request body */
+    unsigned char *seq_buf;
+    size_t seq_len;
+    size_t seq_cap;
+    cwist_seq_assembler_t *body_assembler;
+#ifdef CWIST_WEBTRANSPORT
     int is_webtransport;
     int wt_taken;
+#endif
 } h3_stream_ctx_t;
+
+#ifdef CWIST_WEBTRANSPORT
 
 typedef enum cwist_wt_handle_kind {
     CWIST_WT_HANDLE_SESSION = 1,
@@ -180,12 +194,19 @@ static lsquic_wt_session_t *cwist_wt_handle_session(void *handle) {
     return h ? (lsquic_wt_session_t *)h->ptr : NULL;
 }
 
+#endif /* CWIST_WEBTRANSPORT */
+
 /* ------------------------------------------------------------------ */
 /* Header-set interface for lsquic (QPACK decode)                     */
 /* ------------------------------------------------------------------ */
 
-#define H3_MAX_HEADERS 64
+/* Browsers routinely send more than 64 HTTP/3 headers once Client Hints,
+ * security metadata and cookies are included.  Keep a firm per-stream cap,
+ * but leave enough headroom that a late Cookie or :path is never discarded. */
+#define H3_MAX_HEADERS 128
 #define H3_DECODE_BUF_SIZE 65536
+#define H3_MAX_RESPONSE_HEADERS 128
+#define H3_RESPONSE_HEADER_BUF_SIZE 16384
 
 typedef struct cwist_h3_hset {
     lsquic_stream_t *stream;
@@ -197,6 +218,7 @@ typedef struct cwist_h3_hset {
 
 static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
                                  int is_push_promise) {
+    (void)hsi_ctx;
     (void)is_push_promise;
     cwist_h3_hset_t *hset = calloc(1, sizeof(*hset));
     if (!hset) return NULL;
@@ -207,20 +229,23 @@ static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
 static struct lsxpack_header *
 cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
     cwist_h3_hset_t *hset = hset_p;
+    if (!hset) return NULL;
+
+    /* lsquic calls us again with the same header when its initial output
+     * buffer was too small.  Preserve the decoded name and grow only the
+     * value capacity; reinitializing the slot here loses :path/Cookie. */
     if (xhdr) {
-        /* Previous header now has its final size known; advance offset. */
-        size_t name_len  = xhdr->buf + xhdr->name_offset  - (hset->decode_buf + hset->decode_off);
-        size_t value_len = xhdr->buf + xhdr->val_offset   - (hset->decode_buf + hset->decode_off);
-        /* The header structure itself was prepared at decode_off. After
-         * decoding finishes lsquic tells us the used space via xhdr.
-         * We bump decode_off by the total occupied bytes. */
-        size_t total = name_len + value_len + 2; /* +2 for separator/padding */
-        if (total > sizeof(hset->decode_buf) - hset->decode_off)
-            total = sizeof(hset->decode_buf) - hset->decode_off;
-        hset->decode_off += total;
-        if (hset->count < H3_MAX_HEADERS)
-            hset->count++;
+        if (req_space > LSXPACK_MAX_STRLEN || xhdr->name_offset < 0 ||
+            (size_t)xhdr->name_offset >= sizeof(hset->decode_buf) ||
+            req_space > sizeof(hset->decode_buf) - (size_t)xhdr->name_offset) {
+            fprintf(stderr, "[HTTP/3] Rejecting oversized QPACK header resize (space=%zu, offset=%d)\n",
+                    req_space, (int)xhdr->name_offset);
+            return NULL;
+        }
+        xhdr->val_len = (lsxpack_strlen_t)req_space;
+        return xhdr;
     }
+
     if (hset->count >= H3_MAX_HEADERS)
         return NULL;
     if (req_space > sizeof(hset->decode_buf) - hset->decode_off)
@@ -232,9 +257,24 @@ cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space
 }
 
 static int cwist_h3_hsi_process_header(void *hset_p, struct lsxpack_header *xhdr) {
-    (void)hset_p;
-    (void)xhdr;
-    return 0; /* success */
+    cwist_h3_hset_t *hset = hset_p;
+    /* A NULL header marks the end of a header block. */
+    if (!hset || !xhdr)
+        return 0;
+
+    /* The QPACK decoder exposes the exact storage used by this completed
+     * header.  Do not derive it from offsets: val_offset is relative to the
+     * shared buffer, and the old subtraction underflowed after :method,
+     * exhausting the buffer and silently losing :path and Cookie. */
+    size_t total = lsxpack_header_get_dec_size(xhdr);
+    if (total == 0 || total > sizeof(hset->decode_buf) - hset->decode_off) {
+        fprintf(stderr, "[HTTP/3] Rejecting malformed QPACK header (size=%zu, used=%zu)\n",
+                total, hset->decode_off);
+        return -1;
+    }
+    hset->decode_off += total;
+    hset->count++;
+    return 0;
 }
 
 static void cwist_h3_hsi_discard(void *hset_p) {
@@ -248,7 +288,9 @@ static const struct lsquic_hset_if cwist_h3_hset_if = {
     .hsi_discard_header_set= cwist_h3_hsi_discard,
 };
 
+#ifdef CWIST_WEBTRANSPORT
 static const struct lsquic_webtransport_if cwist_h3_wt_if;
+#endif
 
 /* ------------------------------------------------------------------ */
 /* SSL context callback                                               */
@@ -359,7 +401,9 @@ static lsquic_stream_ctx_t *cwist_h3_on_new_stream(void *stream_if_ctx,
     }
     cwist_sstring_assign(st->req->version, "HTTP/3");
     st->req->private_data = stream;
+#ifdef CWIST_WEBTRANSPORT
     st->is_webtransport = 0;
+#endif
 
     /* Handle server-pushed streams */
     if (h3_ctx && h3_ctx->push_enabled && lsquic_stream_is_pushed(stream)) {
@@ -392,6 +436,48 @@ static void h3_parse_path(cwist_http_request *req, const char *path) {
     } else {
         cwist_sstring_assign(req->path, (char *)path);
     }
+}
+
+/* Lightweight XOR checksum over a byte buffer. */
+static uint8_t h3_xor_bytes(const unsigned char *buf, size_t len) {
+    uint8_t x = 0;
+    for (size_t i = 0; i < len; i++) x ^= buf[i];
+    return x;
+}
+
+static int h3_header_name_char_is_valid(unsigned char c) {
+    return (c >= 'a' && c <= 'z') ||
+           (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') ||
+           c == '!' || c == '#' || c == '$' || c == '%' ||
+           c == '&' || c == '\'' || c == '*' || c == '+' ||
+           c == '-' || c == '.' || c == '^' || c == '_' ||
+           c == '`' || c == '|' || c == '~';
+}
+
+int cwist_http3_normalize_response_header_name(const char *name,
+                                               char *out,
+                                               size_t out_len) {
+    if (!name || !out || out_len == 0) return -1;
+
+    size_t len = strlen(name);
+    if (len == 0 || len >= out_len || name[0] == ':') return -1;
+
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)name[i];
+        if (!h3_header_name_char_is_valid(c)) return -1;
+        out[i] = (char)tolower(c);
+    }
+    out[len] = '\0';
+    return 0;
+}
+
+int cwist_http3_response_header_value_is_safe(const char *value) {
+    if (!value) return 0;
+    for (const unsigned char *p = (const unsigned char *)value; *p; p++) {
+        if (*p == '\r' || *p == '\n') return 0;
+    }
+    return 1;
 }
 
 static void h3_apply_header(cwist_http_request *req,
@@ -453,6 +539,49 @@ static void h3_apply_header(cwist_http_request *req,
     }
 }
 
+/* HTTP/3 delivers an ordered QUIC byte stream, but an application-level
+ * sequenced body can be split at arbitrary read boundaries.  Buffer just one
+ * wire chunk, then hand complete chunks to the common TASFA-style ARQ
+ * assembler. */
+static int h3_seq_append_and_feed(h3_stream_ctx_t *st,
+                                  const unsigned char *data, size_t len) {
+    if (len > SIZE_MAX - st->seq_len) return -1;
+    size_t need = st->seq_len + len;
+    if (need > st->seq_cap) {
+        size_t cap = st->seq_cap ? st->seq_cap : 4096;
+        while (cap < need) {
+            if (cap > (CWIST_SEQ_HEADER_SIZE + UINT16_MAX) / 2) {
+                cap = CWIST_SEQ_HEADER_SIZE + UINT16_MAX;
+                break;
+            }
+            cap *= 2;
+        }
+        if (cap < need || cap > CWIST_SEQ_HEADER_SIZE + UINT16_MAX) return -1;
+        unsigned char *tmp = realloc(st->seq_buf, cap);
+        if (!tmp) return -1;
+        st->seq_buf = tmp;
+        st->seq_cap = cap;
+    }
+    memcpy(st->seq_buf + st->seq_len, data, len);
+    st->seq_len += len;
+
+    while (st->seq_len >= CWIST_SEQ_HEADER_SIZE) {
+        size_t payload_len = ((size_t)st->seq_buf[4] << 8) | st->seq_buf[5];
+        size_t chunk_len = CWIST_SEQ_HEADER_SIZE + payload_len;
+        if (payload_len == 0 || st->seq_len < chunk_len) break;
+        cwist_seq_chunk_t chunk;
+        if (!cwist_seq_chunk_parse(st->seq_buf, chunk_len, &chunk)) return -1;
+        if (!st->body_assembler) {
+            st->body_assembler = cwist_seq_assembler_create_limited(CWIST_HTTP_MAX_BODY_SIZE);
+            if (!st->body_assembler) return -1;
+        }
+        if (!cwist_seq_assembler_feed(st->body_assembler, &chunk)) return -1;
+        memmove(st->seq_buf, st->seq_buf + chunk_len, st->seq_len - chunk_len);
+        st->seq_len -= chunk_len;
+    }
+    return 0;
+}
+
 static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     h3_stream_ctx_t *st = (h3_stream_ctx_t *)st_h;
     if (!st) return;
@@ -466,23 +595,58 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             cwist_h3_hset_t *hs = hset;
             size_t i;
             for (i = 0; i < hs->count; ++i) {
-                const char *name  = lsxpack_header_get_name(&hs->headers[i]);
-                const char *value = lsxpack_header_get_value(&hs->headers[i]);
-                if (name && value) {
+                const struct lsxpack_header *xhdr = &hs->headers[i];
+                const char *raw_name  = lsxpack_header_get_name(xhdr);
+                const char *raw_value = lsxpack_header_get_value(xhdr);
+                size_t name_len = xhdr->name_len;
+                size_t value_len = xhdr->val_len;
+                if (raw_name && raw_value && name_len > 0 &&
+                    name_len <= 1024 && value_len <= H3_DECODE_BUF_SIZE - 1) {
+                    /* lsxpack exposes counted slices, not C strings.  A later
+                     * header may immediately follow either slice in the shared
+                     * QPACK output buffer, so strcmp()/header storage must never
+                     * consume them directly. */
+                    char *name = malloc(name_len + 1);
+                    char *value = malloc(value_len + 1);
+                    if (!name || !value) {
+                        free(name);
+                        free(value);
+                        lsquic_stream_close(stream);
+                        return;
+                    }
+                    memcpy(name, raw_name, name_len);
+                    name[name_len] = '\0';
+                    memcpy(value, raw_value, value_len);
+                    value[value_len] = '\0';
                     h3_apply_header(st->req, name, value);
+#ifdef CWIST_WEBTRANSPORT
                     if (strcmp(name, ":protocol") == 0 && strcmp(value, "webtransport") == 0) {
                         /* WebTransport requires CONNECT method per RFC 9114 */
                         if (st->req && st->req->method == CWIST_HTTP_CONNECT) {
                             st->is_webtransport = 1;
                         }
                     }
+#endif
+                    free(value);
+                    free(name);
                 }
             }
             st->headers_done = 1;
+            char *seq_header = cwist_http_header_get(st->req->headers,
+                                                      "x-cwist-sequenced-data");
+            st->sequenced_data = seq_header &&
+                (strcmp(seq_header, "1") == 0 || strcasecmp(seq_header, "true") == 0);
         }
     }
 
     while ((nread = lsquic_stream_read(stream, buf, sizeof(buf))) > 0) {
+        if (st->sequenced_data) {
+            if (h3_seq_append_and_feed(st, buf, (size_t)nread) != 0) {
+                lsquic_stream_close(stream);
+                return;
+            }
+            continue;
+        }
         size_t need = st->body_len + (size_t)nread;
         if (need > CWIST_HTTP_MAX_BODY_SIZE) {
             /* Body too large: abort stream */
@@ -501,6 +665,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             st->body_cap = new_cap;
         }
         memcpy(st->body + st->body_len, buf, (size_t)nread);
+        st->recv_xor ^= h3_xor_bytes((const unsigned char *)buf, (size_t)nread);
         st->body_len += (size_t)nread;
     }
 
@@ -518,6 +683,34 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             return;
         }
 
+        if (st->sequenced_data) {
+            const uint8_t *assembled = NULL;
+            size_t assembled_len = 0;
+            if (st->seq_len != 0 || !st->body_assembler ||
+                !cwist_seq_assembler_get_data(st->body_assembler, &assembled, &assembled_len)) {
+                /* Do not dispatch a partial request.  QUIC already repairs
+                 * transport loss; this catches application fragmentation loss
+                 * and lets the client resend the idempotent request. */
+                st->res = cwist_http_response_create();
+                if (st->res) {
+                    st->res->status_code = CWIST_HTTP_BAD_REQUEST;
+                    cwist_http_header_add(&st->res->headers, "x-cwist-retry", "1");
+                }
+                st->response_ready = 1;
+                lsquic_stream_wantread(stream, 0);
+                lsquic_stream_wantwrite(stream, 1);
+                return;
+            }
+            st->body = realloc(st->body, assembled_len);
+            if (!st->body) {
+                lsquic_stream_close(stream);
+                return;
+            }
+            memcpy(st->body, assembled, assembled_len);
+            st->body_len = assembled_len;
+            st->body_cap = assembled_len;
+        }
+
         if (st->body_len > 0 && st->req && st->req->body) {
             cwist_sstring_assign_len(st->req->body, st->body, st->body_len);
         }
@@ -526,6 +719,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         if (st->res && st->req) {
             cwist_http3_context *h3_ctx = (cwist_http3_context *)
                 lsquic_conn_get_ctx(lsquic_stream_conn(stream));
+#ifdef CWIST_WEBTRANSPORT
             if (st->is_webtransport && h3_ctx && h3_ctx->wt_handler) {
                 char *host = cwist_http_header_get(st->req->headers, "host");
                 char *origin = cwist_http_header_get(st->req->headers, "origin");
@@ -549,7 +743,9 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                     lsquic_stream_wantwrite(stream, 0);
                     return;
                 }
-            } else if (h3_ctx && h3_ctx->handler) {
+            } else
+#endif
+            if (h3_ctx && h3_ctx->handler) {
                 h3_ctx->handler(h3_ctx->user_ctx, st->req, st->res);
             }
         }
@@ -566,8 +762,8 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
     if (!st || !st->response_ready) return;
 
     if (st->write_state == 0) {
-        struct lsxpack_header headers_arr[64];
-        char hbuf[8192];
+        struct lsxpack_header headers_arr[H3_MAX_RESPONSE_HEADERS];
+        char hbuf[H3_RESPONSE_HEADER_BUF_SIZE];
         size_t hbuf_off = 0;
         size_t hdr_count = 0;
 
@@ -575,7 +771,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         char status_str[16];
         snprintf(status_str, sizeof(status_str), "%d", st->res->status_code);
         size_t slen = strlen(status_str);
-        if (hdr_count < 64 && hbuf_off + 7 + 2 + slen <= sizeof(hbuf)) {
+        if (hdr_count < H3_MAX_RESPONSE_HEADERS && hbuf_off + 7 + 2 + slen <= sizeof(hbuf)) {
             memcpy(hbuf + hbuf_off, ":status", 7);
             memcpy(hbuf + hbuf_off + 9, status_str, slen);
             lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
@@ -590,7 +786,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         else if (st->res->is_ptr_body) body_len = st->res->ptr_body_len;
         else if (st->res->body) body_len = st->res->body->size;
 
-        if (body_len > 0 && hdr_count < 64) {
+        if (body_len > 0 && hdr_count < H3_MAX_RESPONSE_HEADERS) {
             char cl_str[32];
             snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
             size_t cl_name_len = strlen("content-length");
@@ -609,7 +805,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         /* content-type (if present) */
         if (st->res->headers) {
             char *ct = cwist_http_header_get(st->res->headers, "content-type");
-            if (ct && hdr_count < 64) {
+            if (ct && hdr_count < H3_MAX_RESPONSE_HEADERS) {
                 size_t klen = strlen("content-type");
                 size_t vlen = strlen(ct);
                 if (hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
@@ -625,22 +821,27 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
 
         /* user headers (skip content-length/content-type already handled) */
         cwist_http_header_node *node = st->res->headers;
-        while (node && hdr_count < 64) {
+        while (node && hdr_count < H3_MAX_RESPONSE_HEADERS) {
             if (node->key && node->key->data && node->value && node->value->data) {
-                /* Skip pseudo-headers and duplicates we already sent */
-                if (node->key->data[0] == ':') {
+                char h3_name[256];
+                if (cwist_http3_normalize_response_header_name(node->key->data,
+                                                               h3_name,
+                                                               sizeof(h3_name)) != 0 ||
+                    !cwist_http3_response_header_value_is_safe(node->value->data)) {
                     node = node->next;
                     continue;
                 }
-                if (strncasecmp(node->key->data, "content-length", node->key->size) == 0 ||
-                    strncasecmp(node->key->data, "content-type",   node->key->size) == 0) {
+
+                if (strcmp(h3_name, "content-length") == 0 ||
+                    strcmp(h3_name, "content-type") == 0) {
                     node = node->next;
                     continue;
                 }
-                size_t klen = node->key->size;
+
+                size_t klen = strlen(h3_name);
                 size_t vlen = node->value->size;
                 if (hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
-                    memcpy(hbuf + hbuf_off, node->key->data, klen);
+                    memcpy(hbuf + hbuf_off, h3_name, klen);
                     memcpy(hbuf + hbuf_off + klen + 2, node->value->data, vlen);
                     lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
                                                0, klen, klen + 2, vlen);
@@ -657,6 +858,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         };
         int eos = (body_len == 0);
         if (lsquic_stream_send_headers(stream, &headers, eos) != 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                lsquic_stream_wantwrite(stream, 1);
+                return;
+            }
             lsquic_stream_close(stream);
             return;
         }
@@ -683,9 +888,14 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 if (nr > 0) {
                     ssize_t nw = lsquic_stream_write(stream, file_buf, (size_t)nr);
                     if (nw < 0) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            lsquic_stream_wantwrite(stream, 1);
+                            return;
+                        }
                         lsquic_stream_close(stream);
                         return;
                     }
+                    st->send_xor ^= h3_xor_bytes((const unsigned char *)file_buf, (size_t)nw);
                     st->body_sent += (size_t)nw;
                 } else if (nr == 0) {
                     /* EOF: mark everything as sent */
@@ -712,9 +922,14 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             ssize_t n = lsquic_stream_write(stream, body_data + st->body_sent,
                                             body_len - st->body_sent);
             if (n < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    lsquic_stream_wantwrite(stream, 1);
+                    return;
+                }
                 lsquic_stream_close(stream);
                 return;
             }
+            st->send_xor ^= h3_xor_bytes((const unsigned char *)(body_data + st->body_sent), (size_t)n);
             st->body_sent += (size_t)n;
         }
 
@@ -732,6 +947,8 @@ static void cwist_h3_on_close(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         cwist_http_request_destroy(st->req);
         cwist_http_response_destroy(st->res);
         free(st->body);
+        cwist_seq_assembler_destroy(st->body_assembler);
+        free(st->seq_buf);
         free(st);
     }
     (void)stream;
@@ -763,6 +980,8 @@ static void cwist_h3_on_datagram(lsquic_conn_t *conn, const void *buf, size_t le
         ctx->datagram_cb(buf, len, ctx->datagram_user_ctx);
     }
 }
+
+#ifdef CWIST_WEBTRANSPORT
 
 static lsquic_wt_session_ctx_t *
 cwist_h3_wt_on_session_open(void *ctx, lsquic_wt_session_t *sess,
@@ -896,6 +1115,8 @@ static const struct lsquic_webtransport_if cwist_h3_wt_if = {
     .wti_on_datagram_read   = cwist_h3_wt_on_datagram_read,
     .wti_on_datagram_write  = cwist_h3_wt_on_datagram_write,
 };
+
+#endif /* CWIST_WEBTRANSPORT */
 
 static const struct lsquic_stream_if cwist_h3_stream_if = {
     .on_new_conn    = cwist_h3_on_new_conn,
@@ -1115,13 +1336,15 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     settings.es_support_push = ctx->push_enabled;
     settings.es_allow_migration = ctx->allow_migration ? ctx->allow_migration : 1;
     settings.es_max_delayed_0rtt_packets = 32;
-    settings.es_datagrams = ctx->datagram_enabled || ctx->wt_handler != NULL;
+    settings.es_datagrams = ctx->datagram_enabled;
+#ifdef CWIST_WEBTRANSPORT
     settings.es_http_datagrams = ctx->datagram_enabled || ctx->wt_handler != NULL;
     settings.es_webtransport = ctx->wt_handler != NULL;
     if (settings.es_webtransport) {
         settings.es_max_webtransport_sessions = 1;
         settings.es_reset_stream_at = 1;
     }
+#endif
     settings.es_ecn = 1;
     settings.es_pace_packets = 1;
     settings.es_optimistic_nat = 1;
@@ -1218,8 +1441,10 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     while (ctx && ctx->running && atomic_load(&g_cwist_running)) {
         int diff = 1000; /* default 1 ms; let earliest_adv_tick drive it */
         if (lsquic_engine_earliest_adv_tick(engine, &diff)) {
-            if (diff <= 0)
-                diff = 0;
+            /* Enforce a small floor so pacing timers or back-to-back zero
+             * ticks cannot turn this loop into a busy-wait. */
+            if (diff < 1000)
+                diff = 1000;
             else if (diff > 1000000)
                 diff = 1000000;
         }
@@ -1264,7 +1489,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                 struct msghdr msg = {0};
                 struct iovec iov = { pkt_buf, 65535 };
                 msg.msg_name = &peer_addr;
-                msg.msg_namelen = sizeof(peer_addr);
+                msg.msg_namelen = peer_addr_len;
                 msg.msg_iov = &iov;
                 msg.msg_iovlen = 1;
 
@@ -1327,10 +1552,6 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     err.error.err_i16 = 0;
     return err;
 }
-
-/* ------------------------------------------------------------------ */
-/* Serve connection (kept for API compat)                             */
-/* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
 /* Push, Priority, and 0-RTT APIs                                     */
@@ -1436,6 +1657,8 @@ void cwist_webtransport_set_new_stream_handler(cwist_http3_context *ctx,
     }
 }
 
+#ifdef CWIST_WEBTRANSPORT
+
 ssize_t cwist_webtransport_read(void *stream, void *buf, size_t len) {
     if (!stream || !buf) return -1;
     lsquic_stream_t *s = cwist_wt_handle_stream(stream);
@@ -1512,6 +1735,44 @@ int cwist_webtransport_open_uni_stream(void *session) {
     return 0;
 }
 
+#else /* CWIST_WEBTRANSPORT */
+
+ssize_t cwist_webtransport_read(void *stream, void *buf, size_t len) {
+    (void)stream;
+    (void)buf;
+    (void)len;
+    return -1;
+}
+
+ssize_t cwist_webtransport_write(void *stream, const void *data, size_t len) {
+    (void)stream;
+    (void)data;
+    (void)len;
+    return -1;
+}
+
+int cwist_webtransport_flush(void *stream) {
+    (void)stream;
+    return -1;
+}
+
+int cwist_webtransport_close_stream(void *stream) {
+    (void)stream;
+    return -1;
+}
+
+int cwist_webtransport_open_bidi_stream(void *session) {
+    (void)session;
+    return -1;
+}
+
+int cwist_webtransport_open_uni_stream(void *session) {
+    (void)session;
+    return -1;
+}
+
+#endif /* CWIST_WEBTRANSPORT */
+
 /* ------------------------------------------------------------------ */
 /* Resilience knobs                                                   */
 /* ------------------------------------------------------------------ */
@@ -1562,6 +1823,8 @@ int cwist_http3_send_datagram(void *conn, const void *data, size_t len) {
     return 0;
 }
 
+#ifdef CWIST_WEBTRANSPORT
+
 ssize_t cwist_webtransport_send_datagram(void *session,
                                          const void *data, size_t len) {
     if (!session || !data || len == 0) return -1;
@@ -1587,17 +1850,28 @@ int cwist_webtransport_close_session(void *session,
                            reason ? strlen(reason) : 0);
 }
 
-/* ------------------------------------------------------------------ */
-/* Serve connection (kept for API compat)                             */
-/* ------------------------------------------------------------------ */
+#else /* CWIST_WEBTRANSPORT */
 
-cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
-                                           void *user_ctx,
-                                           cwist_http3_request_handler_func handler) {
-    cwist_error_t err = make_error(CWIST_ERR_INT16);
-    (void)conn;
-    (void)user_ctx;
-    (void)handler;
-    err.error.err_i16 = -1;
-    return err;
+ssize_t cwist_webtransport_send_datagram(void *session,
+                                         const void *data, size_t len) {
+    (void)session;
+    (void)data;
+    (void)len;
+    return -1;
 }
+
+size_t cwist_webtransport_max_datagram_size(void *session) {
+    (void)session;
+    return 0;
+}
+
+int cwist_webtransport_close_session(void *session,
+                                     uint64_t code,
+                                     const char *reason) {
+    (void)session;
+    (void)code;
+    (void)reason;
+    return -1;
+}
+
+#endif /* CWIST_WEBTRANSPORT */

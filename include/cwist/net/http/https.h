@@ -36,6 +36,7 @@ typedef struct cwist_https_connection {
     bool negotiated_http2;
     cwist_https_protocol negotiated_protocol;
     bool http3_enabled;
+    bool http2_sequenced_data; /*< Enable CWIST-specific sequenced DATA frames. */
 } cwist_https_connection;
 
 typedef struct cwist_app cwist_app;

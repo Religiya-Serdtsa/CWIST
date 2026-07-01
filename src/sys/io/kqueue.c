@@ -97,12 +97,30 @@ void cwist_io_queue_run(cwist_io_queue *q) {
 }
 
 /**
+ * @brief Request that runners stop without freeing the queue.
+ *
+ * On kqueue this closes the descriptor, causing kevent() to return an error
+ * and the runner loop to exit.
+ *
+ * @param q Queue handle to stop.
+ */
+void cwist_io_queue_stop(cwist_io_queue *q) {
+    if (!q) return;
+    if (q->kq_fd >= 0) {
+        close(q->kq_fd);
+        q->kq_fd = -1;
+    }
+}
+
+/**
  * @brief Close the underlying kqueue descriptor and free the queue wrapper.
  * @param q Queue handle to destroy.
  */
 void cwist_io_queue_destroy(cwist_io_queue *q) {
     if (q) {
-        close(q->kq_fd);
+        if (q->kq_fd >= 0) {
+            close(q->kq_fd);
+        }
         cwist_free(q);
     }
 }

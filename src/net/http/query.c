@@ -117,6 +117,42 @@ const char *cwist_query_map_get(cwist_query_map *map, const char *key) {
     return NULL;
 }
 
+void cwist_query_map_delete(cwist_query_map *map, const char *key) {
+    if (!map || !key) return;
+
+    uint64_t hash = siphash24(key, strlen(key), map->seed);
+    size_t index = hash % map->size;
+
+    cwist_query_bucket *curr = map->buckets[index];
+    cwist_query_bucket *prev = NULL;
+    while (curr) {
+        if (strcmp(curr->key, key) == 0) {
+            if (prev) {
+                prev->next = curr->next;
+            } else {
+                map->buckets[index] = curr->next;
+            }
+            cwist_free(curr->key);
+            cwist_free(curr->value);
+            cwist_free(curr);
+            return;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+}
+
+void cwist_query_map_foreach(cwist_query_map *map, cwist_query_map_iter_func cb, void *ctx) {
+    if (!map || !cb) return;
+    for (size_t i = 0; i < map->size; i++) {
+        cwist_query_bucket *curr = map->buckets[i];
+        while (curr) {
+            cb(curr->key, curr->value, ctx);
+            curr = curr->next;
+        }
+    }
+}
+
 /**
  * @brief Decode a URL-encoded component with '+' → space semantics.
  *        '+' → 0x20, '%XY' → hex byte (strict), everything else passthrough.
