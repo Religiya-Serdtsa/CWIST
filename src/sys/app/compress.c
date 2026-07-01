@@ -8,6 +8,7 @@
 #include <cwist/core/mem/alloc.h>
 #include <cwist/net/http/http.h>
 #include <zlib.h>
+#include <brotli/encode.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,6 +107,138 @@ const cwist_compress_backend *cwist_compress_backend_gzip(void) {
 
 const cwist_compress_backend *cwist_compress_backend_deflate(void) {
     return &cwist_backend_deflate;
+}
+
+/* --- Brotli backend --- */
+
+typedef struct {
+    char *accum;       /**< Input accumulated across non-flush calls. */
+    size_t accum_len;
+    size_t accum_cap;
+    char *out;         /**< Compressed output buffer. */
+    size_t out_len;
+    size_t out_pos;
+} cwist_brotli_state_t;
+
+static int brotli_init(void **state) {
+    cwist_brotli_state_t *bs = (cwist_brotli_state_t *)calloc(1, sizeof(*bs));
+    if (!bs) return -1;
+    *state = bs;
+    return 0;
+}
+
+static int brotli_ensure_accum(cwist_brotli_state_t *bs, size_t need) {
+    if (!bs) return -1;
+    size_t required = bs->accum_len + need;
+    if (required > bs->accum_cap) {
+        size_t new_cap = bs->accum_cap ? bs->accum_cap * 2 : 4096;
+        while (new_cap < required) new_cap *= 2;
+        char *tmp = (char *)realloc(bs->accum, new_cap);
+        if (!tmp) return -1;
+        bs->accum = tmp;
+        bs->accum_cap = new_cap;
+    }
+    return 0;
+}
+
+static int brotli_compress(void *state, const char *in, size_t in_len,
+                           char *out, size_t *out_len, int flush) {
+    cwist_brotli_state_t *bs = (cwist_brotli_state_t *)state;
+    if (!bs || !out || !out_len) return -1;
+
+    if (!flush) {
+        if (in_len == 0) {
+            *out_len = 0;
+            return 0;
+        }
+        if (brotli_ensure_accum(bs, in_len) != 0) return -1;
+        memcpy(bs->accum + bs->accum_len, in, in_len);
+        bs->accum_len += in_len;
+        *out_len = 0;
+        return 0;
+    }
+
+    /* On flush, compress accumulated input plus the final chunk. */
+    size_t total_in_len = bs->accum_len + in_len;
+    const uint8_t *total_in = NULL;
+    uint8_t *merged = NULL;
+    if (bs->accum_len > 0) {
+        merged = (uint8_t *)malloc(total_in_len);
+        if (!merged) return -1;
+        if (bs->accum_len > 0) memcpy(merged, bs->accum, bs->accum_len);
+        if (in_len > 0) memcpy(merged + bs->accum_len, in, in_len);
+        total_in = merged;
+    } else {
+        total_in = (const uint8_t *)in;
+    }
+
+    size_t encoded_size = BrotliEncoderMaxCompressedSize(total_in_len);
+    if (encoded_size == 0) {
+        free(merged);
+        return -1;
+    }
+
+    uint8_t *encoded = (uint8_t *)malloc(encoded_size);
+    if (!encoded) {
+        free(merged);
+        return -1;
+    }
+
+    if (!BrotliEncoderCompress(BROTLI_DEFAULT_QUALITY, BROTLI_DEFAULT_WINDOW,
+                               BROTLI_DEFAULT_MODE, total_in_len, total_in,
+                               &encoded_size, encoded)) {
+        free(encoded);
+        free(merged);
+        return -1;
+    }
+
+    free(merged);
+    bs->accum_len = 0;
+
+    /* Replace any previous output buffer with the new one. */
+    free(bs->out);
+    bs->out = (char *)encoded;
+    bs->out_len = encoded_size;
+    bs->out_pos = 0;
+
+    size_t to_copy = encoded_size;
+    if (to_copy > *out_len) to_copy = *out_len;
+    if (to_copy > 0 && out) memcpy(out, encoded, to_copy);
+    bs->out_pos = to_copy;
+    *out_len = to_copy;
+    return 0;
+}
+
+static int brotli_finish(void *state, char *out, size_t *out_len) {
+    cwist_brotli_state_t *bs = (cwist_brotli_state_t *)state;
+    if (!bs || !out || !out_len) return -1;
+    size_t remaining = bs->out_len - bs->out_pos;
+    size_t to_copy = remaining;
+    if (to_copy > *out_len) to_copy = *out_len;
+    if (to_copy > 0) memcpy(out, bs->out + bs->out_pos, to_copy);
+    bs->out_pos += to_copy;
+    *out_len = to_copy;
+    return 0;
+}
+
+static void brotli_cleanup(void *state) {
+    cwist_brotli_state_t *bs = (cwist_brotli_state_t *)state;
+    if (!bs) return;
+    free(bs->accum);
+    free(bs->out);
+    free(bs);
+}
+
+static const cwist_compress_backend cwist_backend_brotli = {
+    .encoding_name = "br",
+    .init = brotli_init,
+    .compress = brotli_compress,
+    .finish = brotli_finish,
+    .cleanup = brotli_cleanup,
+};
+
+const cwist_compress_backend *cwist_compress_backend_brotli(void) {
+    return &cwist_backend_brotli;
 }
 
 /* --- Middleware helpers --- */
