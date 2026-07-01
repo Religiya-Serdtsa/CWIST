@@ -74,6 +74,11 @@ const cwist_compress_backend *cwist_compress_backend_gzip(void);
 const cwist_compress_backend *cwist_compress_backend_deflate(void);
 
 /**
+ * @brief Returns the built-in Brotli backend.
+ */
+const cwist_compress_backend *cwist_compress_backend_brotli(void);
+
+/**
  * @brief Compression middleware factory.
  *
  * Chooses a registered backend based on the request's Accept-Encoding header,
