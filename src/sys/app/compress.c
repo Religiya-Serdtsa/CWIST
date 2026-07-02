@@ -1,6 +1,6 @@
 /**
  * @file compress.c
- * @brief Compression middleware and built-in zlib backends.
+ * @brief Compression middleware and built-in zlib/brotli/zstd backends.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -9,11 +9,12 @@
 #include <cwist/net/http/http.h>
 #include <zlib.h>
 #include <brotli/encode.h>
+#include <zstd.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define CWIST_MAX_BACKENDS 4
+#define CWIST_MAX_BACKENDS 8
 
 static const cwist_compress_backend *g_backends[CWIST_MAX_BACKENDS];
 static int g_backend_count = 0;
@@ -239,6 +240,76 @@ static const cwist_compress_backend cwist_backend_brotli = {
 
 const cwist_compress_backend *cwist_compress_backend_brotli(void) {
     return &cwist_backend_brotli;
+}
+
+/* --- Zstandard (zstd) backend --- */
+
+typedef struct {
+    ZSTD_CStream *cstream;
+    char         *out_buf;  /**< Intermediate output ring buffer. */
+    size_t        out_cap;
+    size_t        out_len;
+    size_t        out_pos;
+} cwist_zstd_state_t;
+
+static int zstd_init(void **state) {
+    cwist_zstd_state_t *zs = (cwist_zstd_state_t *)calloc(1, sizeof(*zs));
+    if (!zs) return -1;
+    zs->cstream = ZSTD_createCStream();
+    if (!zs->cstream) { free(zs); return -1; }
+    size_t rc = ZSTD_initCStream(zs->cstream, ZSTD_CLEVEL_DEFAULT);
+    if (ZSTD_isError(rc)) { ZSTD_freeCStream(zs->cstream); free(zs); return -1; }
+    *state = zs;
+    return 0;
+}
+
+static int zstd_compress(void *state, const char *in, size_t in_len,
+                         char *out, size_t *out_len, int flush) {
+    cwist_zstd_state_t *zs = (cwist_zstd_state_t *)state;
+    if (!zs || !out || !out_len) return -1;
+
+    ZSTD_inBuffer  ib = { in, in_len, 0 };
+    ZSTD_outBuffer ob = { out, *out_len, 0 };
+
+    size_t rc;
+    if (flush) {
+        /* Finalize the frame on the last chunk. */
+        rc = ZSTD_compressStream2(zs->cstream, &ob, &ib, ZSTD_e_end);
+    } else {
+        rc = ZSTD_compressStream2(zs->cstream, &ob, &ib, ZSTD_e_continue);
+    }
+    if (ZSTD_isError(rc)) return -1;
+    *out_len = ob.pos;
+    return 0;
+}
+
+static int zstd_finish(void *state, char *out, size_t *out_len) {
+    /* ZSTD_e_end already fully flushes the frame in zstd_compress(flush=1),
+       so there are no trailing bytes left to emit here. */
+    (void)state;
+    (void)out;
+    *out_len = 0;
+    return 0;
+}
+
+static void zstd_cleanup(void *state) {
+    cwist_zstd_state_t *zs = (cwist_zstd_state_t *)state;
+    if (!zs) return;
+    if (zs->cstream) ZSTD_freeCStream(zs->cstream);
+    free(zs->out_buf);
+    free(zs);
+}
+
+static const cwist_compress_backend cwist_backend_zstd = {
+    .encoding_name = "zstd",
+    .init     = zstd_init,
+    .compress = zstd_compress,
+    .finish   = zstd_finish,
+    .cleanup  = zstd_cleanup,
+};
+
+const cwist_compress_backend *cwist_compress_backend_zstd(void) {
+    return &cwist_backend_zstd;
 }
 
 /* --- Middleware helpers --- */
