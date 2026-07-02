@@ -84,9 +84,67 @@ int main(void) {
 ```
 
 ```sh
-gcc -o server main.c -lcwist -lssl -lcrypto -luriparser -lcjson -ldl -lpthread
+gcc -o server main.c \
+    -lcwist \
+    -lssl -lcrypto \
+    -lz -lzstd -lbrotlienc -lbrotlicommon \
+    -luriparser -lcjson \
+    -ldl -lpthread -lm
 ./server
 ```
+
+## Linking
+
+When you link against `libcwist.a`, you must supply the following flags.
+Because CWIST is a **static** archive, the linker needs all transitive
+dependencies to be listed explicitly by the application.
+
+### Required flags (always needed)
+
+| Flag | Provides |
+|------|----------|
+| `-lcwist` | The framework itself |
+| `-lssl -lcrypto` | TLS (BoringSSL or OpenSSL) |
+| `-lz` | zlib — gzip/deflate compression and internal use |
+| `-lzstd` | Zstandard — payload compression (preferred algorithm) |
+| `-lbrotlienc -lbrotlicommon` | Brotli — payload compression |
+| `-luriparser` | URI parsing |
+| `-lcjson` | JSON handling |
+| `-ldl` | Dynamic loading (RDBMS auto-mount) |
+| `-lpthread` | POSIX threads |
+| `-lm` | Math (used by libttak) |
+
+### Optional flags (feature-dependent)
+
+| Flag | When required |
+|------|---------------|
+| `-lnghttp2` | HTTP/2 support |
+| `-lngtcp2 -lngtcp2_crypto_quictls` | HTTP/3 / QUIC |
+| `-lnghttp3` | HTTP/3 QPACK |
+| `-lcurl` | RDBMS auto-mount wire probing |
+
+### pkg-config snippet for Makefile
+
+```makefile
+CWIST_LIBS := -lcwist \
+              -lssl -lcrypto \
+              -lz -lzstd -lbrotlienc -lbrotlicommon \
+              -luriparser -lcjson \
+              -ldl -lpthread -lm
+
+# Append optional libs if present on the build host
+CWIST_LIBS += $(shell pkg-config --libs libnghttp2  2>/dev/null)
+CWIST_LIBS += $(shell pkg-config --libs libngtcp2   2>/dev/null)
+CWIST_LIBS += $(shell pkg-config --libs libnghttp3  2>/dev/null)
+CWIST_LIBS += $(shell pkg-config --libs libcurl     2>/dev/null || echo -lcurl)
+
+your_target: your_source.c
+	$(CC) -o $@ $< $(CWIST_LIBS)
+```
+
+> **Note** — `brotlienc` and `brotlicommon` ship as **`libbrotli-dev`** on
+> Debian/Ubuntu and **`brotli-devel`** on Fedora/RHEL. `zstd` ships as
+> **`libzstd-dev`** / **`libzstd-devel`**.
 
 ## Configuration
 
@@ -220,6 +278,9 @@ See `BENCHMARK.txt` for the full transcript and reproducible workflow.
 - cJSON
 - uriparser
 - Monocypher
+- zlib
+- Brotli (`libbrotlienc`, `libbrotlicommon`)
+- Zstandard (`libzstd`)
 
 ## Documentation
 
