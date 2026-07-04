@@ -205,6 +205,7 @@ typedef struct cwist_h3_hset {
 
 static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
                                  int is_push_promise) {
+    (void)hsi_ctx;
     (void)is_push_promise;
     cwist_h3_hset_t *hset = calloc(1, sizeof(*hset));
     if (!hset) return NULL;
@@ -1283,7 +1284,6 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
             if (pfd.revents & POLLIN) {
 #endif
                 struct sockaddr_storage peer_addr;
-                socklen_t peer_addr_len = sizeof(peer_addr);
                 struct msghdr msg = {0};
                 struct iovec iov = { pkt_buf, 65535 };
                 msg.msg_name = &peer_addr;
