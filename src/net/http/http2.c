@@ -234,7 +234,7 @@ static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t le
             if (n < 0) {
                 if (conn->ssl) {
                     int err = SSL_get_error(conn->ssl, n);
-                    if (err == SSL_ERROR_WANT_WRITE || err == SSL_ERROR_WANT_READ) {
+                    if (err == SSL_ERROR_WANT_WRITE) {
                         struct timespec ts = {0, 1000000}; // 1ms sleep
                         nanosleep(&ts, NULL);
                         continue;
