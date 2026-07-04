@@ -18,6 +18,7 @@
 #include <stdatomic.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
@@ -229,7 +230,23 @@ static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t le
     const unsigned char *p = (const unsigned char *)buf;
     while (len > 0) {
         int n = h2_write(conn, p, (int)len);
-        if (n <= 0) return -1;
+        if (n <= 0) {
+            if (conn->ssl) {
+                int err = SSL_get_error(conn->ssl, n);
+                if (err == SSL_ERROR_WANT_WRITE || err == SSL_ERROR_WANT_READ) {
+                    struct timespec ts = {0, 1000000}; // 1ms sleep
+                    nanosleep(&ts, NULL);
+                    continue;
+                }
+            } else {
+                if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                    struct timespec ts = {0, 1000000}; // 1ms sleep
+                    nanosleep(&ts, NULL);
+                    continue;
+                }
+            }
+            return -1;
+        }
         p += n;
         len -= (size_t)n;
     }
