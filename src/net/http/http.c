@@ -381,25 +381,6 @@ static bool header_key_is_connection(const char *key) {
     return strcasecmp(key, "connection") == 0;
 }
 
-/**
- * @brief Check whether a Connection header requests socket closure.
- * @param value Header value to inspect.
- * @return true when the value equals "close" ignoring case.
- */
-static bool header_value_is_close(const char *value) {
-    if (!value) return false;
-    return strcasecmp(value, "close") == 0;
-}
-
-/**
- * @brief Check whether a Connection header requests persistent keep-alive.
- * @param value Header value to inspect.
- * @return true when the value equals "keep-alive" ignoring case.
- */
-static bool header_value_is_keep_alive(const char *value) {
-    if (!value) return false;
-    return strcasecmp(value, "keep-alive") == 0;
-}
 
 /**
  * @brief Detect whether the current header list already contains a Connection header.
@@ -712,9 +693,9 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
     size_t offset = 0;
     
     // Status Line
-    const char *status_txt = (res->status_text && res->status_text->data && strcmp(res->status_text->data, "OK") != 0) 
+    const char *status_txt = (res->status_text && res->status_text->data) 
                              ? res->status_text->data 
-                             : get_default_status_text(res->status_code);
+                             : "OK";
     if (offset < buf_size) {
         int n = snprintf(buf + offset, buf_size - offset, "%s %d %s\r\n",
                  res->version->data ? res->version->data : "HTTP/1.1",
