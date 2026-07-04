@@ -1019,6 +1019,80 @@ static int h2_send_response(cwist_https_connection *conn, uint32_t stream_id, cw
     return h2_send_response_raw(conn, stream_id, res, CWIST_HTTP2_MAX_FRAME_SIZE);
 }
 
+static int h2_read_all(cwist_https_connection *conn, void *buf, int len) {
+    int total = 0;
+    while (total < len) {
+        int n = h2_read(conn, (char *)buf + total, len - total);
+        if (n < 0) return -1;
+        if (n == 0) {
+            struct timespec ts = {0, 1000000}; // 1ms
+            nanosleep(&ts, NULL);
+            continue;
+        }
+        total += n;
+    }
+    return total;
+}
+
+static void h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
+    struct pollfd pfd;
+    pfd.fd = hc->conn->fd;
+    pfd.events = POLLIN;
+
+    while (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN)) {
+        unsigned char hdr[9];
+        int n = h2_read_all(hc->conn, hdr, 9);
+        if (n != 9) break;
+
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | hdr[2];
+        uint8_t type = hdr[3];
+        uint8_t flags = hdr[4];
+        uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) |
+                             ((uint32_t)hdr[6] << 16) |
+                             ((uint32_t)hdr[7] << 8) |
+                             hdr[8];
+
+        unsigned char *payload = NULL;
+        if (len > 0) {
+            payload = (unsigned char *)cwist_alloc(len);
+            if (!payload) break;
+            int r = h2_read_all(hc->conn, payload, len);
+            if (r != (int)len) {
+                cwist_free(payload);
+                break;
+            }
+        }
+
+        if (type == 0x08) { // WINDOW_UPDATE
+            if (len == 4) {
+                int32_t increment = (((int32_t)payload[0] & 0x7f) << 24) |
+                                    ((int32_t)payload[1] << 16) |
+                                    ((int32_t)payload[2] << 8) |
+                                    (int32_t)payload[3];
+                if (increment > 0) {
+                    if (stream_id == 0) {
+                        hc->conn_send_window += increment;
+                    } else if (s && stream_id == s->stream_id) {
+                        s->send_window += increment;
+                    } else {
+                        h2_stream *other = h2_stream_find(hc, stream_id);
+                        if (other) other->send_window += increment;
+                    }
+                }
+            }
+        } else if (type == 0x06) { // PING
+            if ((flags & 0x01) == 0 && len == 8) { // ACK flag is 0x01
+                h2_write_frame(hc->conn, 0x06, 0x01, 0, payload, 8);
+            }
+        } else if (type == 0x03) { // RST_STREAM
+            if (s && stream_id == s->stream_id) {
+                s->send_window = -999; // abort code
+            }
+        }
+        cwist_free(payload);
+    }
+}
+
 static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_response *res) {
     unsigned char header_block[8192];
     size_t block_len = h2_encode_response_headers(res, header_block, sizeof(header_block));
@@ -1053,8 +1127,19 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
         off_t offset = res->file_stream_offset;
         size_t remaining = res->file_stream_len;
         while (remaining > 0) {
+            while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                h2_process_incoming_frames_nonblocking(hc, s);
+                if (s && s->send_window == -999) return -1; // stream reset
+                if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                    struct timespec ts = {0, 2000000}; // 2ms sleep
+                    nanosleep(&ts, NULL);
+                }
+            }
+
             uint32_t chunk = (uint32_t)(remaining > max_frame ? max_frame : remaining);
             uint32_t allowed = chunk;
+            if ((int32_t)allowed > hc->conn_send_window) allowed = (uint32_t)hc->conn_send_window;
+            if (s && (int32_t)allowed > s->send_window) allowed = (uint32_t)s->send_window;
 
             unsigned char *chunk_buf = (unsigned char *)cwist_alloc(allowed);
             if (!chunk_buf) return -1;
@@ -1073,9 +1158,20 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
     } else {
         size_t sent = 0;
         while (sent < body_len) {
+            while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                h2_process_incoming_frames_nonblocking(hc, s);
+                if (s && s->send_window == -999) return -1; // stream reset
+                if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                    struct timespec ts = {0, 2000000}; // 2ms sleep
+                    nanosleep(&ts, NULL);
+                }
+            }
+
             size_t remaining = body_len - sent;
             uint32_t chunk = (uint32_t)(remaining > max_frame ? max_frame : remaining);
             uint32_t allowed = chunk;
+            if ((int32_t)allowed > hc->conn_send_window) allowed = (uint32_t)hc->conn_send_window;
+            if (s && (int32_t)allowed > s->send_window) allowed = (uint32_t)s->send_window;
 
             uint8_t flags = (sent + allowed == body_len) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
             if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
