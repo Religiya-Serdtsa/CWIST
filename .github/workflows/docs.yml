@@ -1,4 +1,5 @@
 name: Deploy Documentation to GitHub Pages
+# Trigger rebuild to redeploy Pages after Doxygen regeneration
 
 on:
   push:
