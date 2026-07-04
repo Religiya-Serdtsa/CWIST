@@ -709,40 +709,75 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
     } else if (res->body) {
         body_len = res->body->size;
     }
-    int offset = 0;
+    size_t offset = 0;
     
     // Status Line
-    offset += snprintf(buf + offset, buf_size - offset, "%s %d %s\r\n",
-             res->version->data ? res->version->data : "HTTP/1.1",
-             res->status_code,
-             res->status_text->data ? res->status_text->data : "OK");
+    const char *status_txt = (res->status_text && res->status_text->data && strcmp(res->status_text->data, "OK") != 0) 
+                             ? res->status_text->data 
+                             : get_default_status_text(res->status_code);
+    if (offset < buf_size) {
+        int n = snprintf(buf + offset, buf_size - offset, "%s %d %s\r\n",
+                 res->version->data ? res->version->data : "HTTP/1.1",
+                 res->status_code,
+                 status_txt);
+        if (n > 0) {
+            offset += n;
+            if (offset > buf_size) offset = buf_size;
+        }
+    }
 
     // Headers
     cwist_http_header_node *curr = res->headers;
     while (curr) {
         if (curr->key->data && curr->value->data) {
-             offset += snprintf(buf + offset, buf_size - offset, "%s: %s\r\n", curr->key->data, curr->value->data);
+            if (offset < buf_size) {
+                int n = snprintf(buf + offset, buf_size - offset, "%s: %s\r\n", curr->key->data, curr->value->data);
+                if (n > 0) {
+                    offset += n;
+                    if (offset > buf_size) offset = buf_size;
+                }
+            }
         }
         curr = curr->next;
     }
 
     if (!headers_have_content_length(res->headers)) {
-        offset += snprintf(buf + offset, buf_size - offset, "Content-Length: %zu\r\n", body_len);
+        if (offset < buf_size) {
+            int n = snprintf(buf + offset, buf_size - offset, "Content-Length: %zu\r\n", body_len);
+            if (n > 0) {
+                offset += n;
+                if (offset > buf_size) offset = buf_size;
+            }
+        }
     }
 
     if (!headers_have_connection(res->headers)) {
-        if (res->keep_alive) {
-            offset += snprintf(buf + offset, buf_size - offset, "Connection: keep-alive\r\n");
-        } else {
-            offset += snprintf(buf + offset, buf_size - offset, "Connection: close\r\n");
+        if (offset < buf_size) {
+            int n = snprintf(buf + offset, buf_size - offset, "Connection: %s\r\n", res->keep_alive ? "keep-alive" : "close");
+            if (n > 0) {
+                offset += n;
+                if (offset > buf_size) offset = buf_size;
+            }
         }
     }
 
     if (res->alt_svc) {
-        offset += snprintf(buf + offset, buf_size - offset, "Alt-Svc: %s\r\n", res->alt_svc);
+        if (offset < buf_size) {
+            int n = snprintf(buf + offset, buf_size - offset, "Alt-Svc: %s\r\n", res->alt_svc);
+            if (n > 0) {
+                offset += n;
+                if (offset > buf_size) offset = buf_size;
+            }
+        }
     }
 
-    offset += snprintf(buf + offset, buf_size - offset, "\r\n");
+    if (offset < buf_size) {
+        int n = snprintf(buf + offset, buf_size - offset, "\r\n");
+        if (n > 0) {
+            offset += n;
+            if (offset > buf_size) offset = buf_size;
+        }
+    }
     return offset;
 }
 
