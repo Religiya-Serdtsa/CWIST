@@ -1328,13 +1328,19 @@ cwist_error_t cwist_http2_serve_connection(
     h2_conn hc;
     h2_conn_init(&hc, conn);
 
-    unsigned char settings[6] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x00};
+    unsigned char settings[12] = {
+        0x00, 0x01, 0x00, 0x00, 0x10, 0x00, // SETTINGS_HEADER_TABLE_SIZE = 4096
+        0x00, 0x04, 0x7f, 0xff, 0xff, 0xff  // SETTINGS_INITIAL_WINDOW_SIZE = 2147483647 (2GB)
+    };
     if (h2_write_frame(conn, CWIST_HTTP2_FRAME_SETTINGS, 0, 0, settings, sizeof(settings)) != 0) {
         h2_conn_destroy(&hc);
         result = make_error(CWIST_ERR_INT16);
         result.error.err_i16 = -1;
         return result;
     }
+
+    /* Upgrade connection flow control window to 2GB */
+    h2_send_window_update(&hc, 0, 2147483647 - 65535);
 
     bool connected = true;
     bool sent_goaway = false;
