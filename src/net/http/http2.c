@@ -231,18 +231,20 @@ static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t le
     while (len > 0) {
         int n = h2_write(conn, p, (int)len);
         if (n <= 0) {
-            if (conn->ssl) {
-                int err = SSL_get_error(conn->ssl, n);
-                if (err == SSL_ERROR_WANT_WRITE || err == SSL_ERROR_WANT_READ) {
-                    struct timespec ts = {0, 1000000}; // 1ms sleep
-                    nanosleep(&ts, NULL);
-                    continue;
-                }
-            } else {
-                if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-                    struct timespec ts = {0, 1000000}; // 1ms sleep
-                    nanosleep(&ts, NULL);
-                    continue;
+            if (n < 0) {
+                if (conn->ssl) {
+                    int err = SSL_get_error(conn->ssl, n);
+                    if (err == SSL_ERROR_WANT_WRITE || err == SSL_ERROR_WANT_READ) {
+                        struct timespec ts = {0, 1000000}; // 1ms sleep
+                        nanosleep(&ts, NULL);
+                        continue;
+                    }
+                } else {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                        struct timespec ts = {0, 1000000}; // 1ms sleep
+                        nanosleep(&ts, NULL);
+                        continue;
+                    }
                 }
             }
             return -1;
