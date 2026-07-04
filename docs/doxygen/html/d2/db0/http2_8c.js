@@ -25,6 +25,7 @@ var http2_8c =
     [ "H2_ERR_FRAME_SIZE_ERROR", "d2/db0/http2_8c.html#a1663591694477f207e5b0fe4faf30018", null ],
     [ "H2_ERR_NO_ERROR", "d2/db0/http2_8c.html#a22a017fc7875f9f468b7416d8ab8ebf0", null ],
     [ "H2_ERR_PROTOCOL_ERROR", "d2/db0/http2_8c.html#adf70da742697f4cb45d64a3fa287c303", null ],
+    [ "H2_ERR_REFUSED_STREAM", "d2/db0/http2_8c.html#aedb3090ec799862a3fb21efc6cb27e3a", null ],
     [ "H2_ERR_SETTINGS_TIMEOUT", "d2/db0/http2_8c.html#a3ee11404022960b1faf0b91ff21ddf46", null ],
     [ "H2_ERR_STREAM_CLOSED", "d2/db0/http2_8c.html#a97b931c7f8809b55174e588b6b52efbc", null ],
     [ "h2_huffman_node", "d2/db0/http2_8c.html#aa964bb9aa40aa6b9d57b0ad049c665ea", null ],

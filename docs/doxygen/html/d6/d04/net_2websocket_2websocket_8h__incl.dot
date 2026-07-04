@@ -55,6 +55,9 @@ digraph "include/cwist/net/websocket/websocket.h"
   Node18 [id="Node000018",label="sys/socket.h",height=0.2,width=0.4,color="grey60", fillcolor="#E0E0E0", style="filled",tooltip=" "];
   Node2 -> Node19 [id="edge32_Node000002_Node000019",color="steelblue1",style="solid",tooltip=" "];
   Node19 [id="Node000019",label="sys/types.h",height=0.2,width=0.4,color="grey60", fillcolor="#E0E0E0", style="filled",tooltip=" "];
-  Node1 -> Node8 [id="edge33_Node000001_Node000008",color="steelblue1",style="solid",tooltip=" "];
-  Node1 -> Node6 [id="edge34_Node000001_Node000006",color="steelblue1",style="solid",tooltip=" "];
+  Node2 -> Node20 [id="edge33_Node000002_Node000020",color="steelblue1",style="solid",tooltip=" "];
+  Node20 [id="Node000020",label="stdio.h",height=0.2,width=0.4,color="grey60", fillcolor="#E0E0E0", style="filled",tooltip=" "];
+  Node2 -> Node5 [id="edge34_Node000002_Node000005",color="steelblue1",style="solid",tooltip=" "];
+  Node1 -> Node8 [id="edge35_Node000001_Node000008",color="steelblue1",style="solid",tooltip=" "];
+  Node1 -> Node6 [id="edge36_Node000001_Node000006",color="steelblue1",style="solid",tooltip=" "];
 }

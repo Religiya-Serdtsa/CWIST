@@ -3,6 +3,7 @@ var net_2http_2https_8h =
     [ "cwist_https_context", "dd/dcc/structcwist__https__context.html", "dd/dcc/structcwist__https__context" ],
     [ "cwist_https_connection", "db/d95/structcwist__https__connection.html", "db/d95/structcwist__https__connection" ],
     [ "cwist_https_options", "d9/d1f/structcwist__https__options.html", "d9/d1f/structcwist__https__options" ],
+    [ "HTTPS_THREAD_POOL_SIZE", "d7/d67/net_2http_2https_8h.html#aded948326f120c613ad017251ae2dd37", null ],
     [ "cwist_https_connection", "d7/d67/net_2http_2https_8h.html#a57036d3716d46234778fd71ea953da6f", null ],
     [ "cwist_https_context", "d7/d67/net_2http_2https_8h.html#ad0e22ac9c5d5988de90f087ddbe13328", null ],
     [ "cwist_https_options", "d7/d67/net_2http_2https_8h.html#a592fab5eca30b93e74a5c8a938839afd", null ],

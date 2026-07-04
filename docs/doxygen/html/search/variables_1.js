@@ -3,13 +3,12 @@ var searchData=
   ['b_0',['b',['../d1/db9/structcwist__color__rgb.html#a49e063a64e6e1b1d7262b5cde3ece0ae',1,'cwist_color_rgb']]],
   ['base_1',['base',['../dc/df8/structcwist__uring__buf__pool.html#ac7567fd868bd92926ce8e74bae8574d6',1,'cwist_uring_buf_pool']]],
   ['bdr_5fctx_2',['bdr_ctx',['../dc/da0/structcwist__app.html#a7478192ae027eeb0783d4d254499ea05',1,'cwist_app']]],
-  ['bid_5fmap_3',['bid_map',['../dc/df8/structcwist__uring__buf__pool.html#a62375fd7fd93cb314c54dc4650d462fe',1,'cwist_uring_buf_pool']]],
-  ['body_4',['body',['../dd/d68/structcwist__http__request.html#a91ec3900626efc7889a2a2ff2d52adf1',1,'cwist_http_request::body'],['../dd/d22/structcwist__http__response.html#a342acf59fe7ce906f6d80a01bfdc1e6e',1,'cwist_http_response::body']]],
-  ['bucket_5fcount_5',['bucket_count',['../d0/d0c/structcwist__mux__router.html#a196b8a62cae0bb2bea8d857216d76862',1,'cwist_mux_router::bucket_count'],['../d9/d90/structcwist__bdr__t.html#a4f1aa5843af0997611b11cc20982253f',1,'cwist_bdr_t::bucket_count'],['../db/dcb/structcwist__config.html#a70ab087bf211e583844f52e6c31fe598',1,'cwist_config::bucket_count']]],
-  ['bucket_5fnext_6',['bucket_next',['../dc/d91/structcwist__mux__route.html#ab7addefd2f3fd44753eecc866af67801',1,'cwist_mux_route']]],
-  ['buckets_7',['buckets',['../d0/d0c/structcwist__mux__router.html#a5b3095e133e59fb2451f6d747fb65e83',1,'cwist_mux_router::buckets'],['../dd/d72/structcwist__query__map.html#ac1e3dd84d9be78003eb40ef9118db817',1,'cwist_query_map::buckets'],['../d9/d90/structcwist__bdr__t.html#aee6107246c89f5428d713a864af0911d',1,'cwist_bdr_t::buckets'],['../db/dcb/structcwist__config.html#abba4cac1c44315aad94eaa3fd249c880',1,'cwist_config::buckets']]],
-  ['buf_5fcount_8',['buf_count',['../dc/df8/structcwist__uring__buf__pool.html#a788a0714ad620d4be5f8e6f115a511f6',1,'cwist_uring_buf_pool']]],
-  ['buf_5flen_9',['buf_len',['../db/d95/structcwist__https__connection.html#a6eb0bf7e34e18b3c3e6392e43d1a5d48',1,'cwist_https_connection']]],
-  ['buf_5fsize_10',['buf_size',['../dc/df8/structcwist__uring__buf__pool.html#a120af3d988e3973de5630b045d214502',1,'cwist_uring_buf_pool']]],
-  ['buffer_11',['buffer',['../d7/ddf/structcwist__json__builder.html#a344bf2fc97ae0d2ea75d1f67300af8ce',1,'cwist_json_builder::buffer'],['../d4/d6b/structsession__arena.html#a96936de672d7549d4c9ce5f9dd850b5b',1,'session_arena::buffer']]]
+  ['body_3',['body',['../dd/d68/structcwist__http__request.html#a91ec3900626efc7889a2a2ff2d52adf1',1,'cwist_http_request::body'],['../dd/d22/structcwist__http__response.html#a342acf59fe7ce906f6d80a01bfdc1e6e',1,'cwist_http_response::body']]],
+  ['bucket_5fcount_4',['bucket_count',['../d0/d0c/structcwist__mux__router.html#a196b8a62cae0bb2bea8d857216d76862',1,'cwist_mux_router::bucket_count'],['../d9/d90/structcwist__bdr__t.html#a4f1aa5843af0997611b11cc20982253f',1,'cwist_bdr_t::bucket_count'],['../db/dcb/structcwist__config.html#a70ab087bf211e583844f52e6c31fe598',1,'cwist_config::bucket_count']]],
+  ['bucket_5fnext_5',['bucket_next',['../dc/d91/structcwist__mux__route.html#ab7addefd2f3fd44753eecc866af67801',1,'cwist_mux_route']]],
+  ['buckets_6',['buckets',['../d0/d0c/structcwist__mux__router.html#a5b3095e133e59fb2451f6d747fb65e83',1,'cwist_mux_router::buckets'],['../dd/d72/structcwist__query__map.html#ac1e3dd84d9be78003eb40ef9118db817',1,'cwist_query_map::buckets'],['../d9/d90/structcwist__bdr__t.html#aee6107246c89f5428d713a864af0911d',1,'cwist_bdr_t::buckets'],['../db/dcb/structcwist__config.html#abba4cac1c44315aad94eaa3fd249c880',1,'cwist_config::buckets']]],
+  ['buf_5fcount_7',['buf_count',['../dc/df8/structcwist__uring__buf__pool.html#a788a0714ad620d4be5f8e6f115a511f6',1,'cwist_uring_buf_pool']]],
+  ['buf_5flen_8',['buf_len',['../db/d95/structcwist__https__connection.html#a6eb0bf7e34e18b3c3e6392e43d1a5d48',1,'cwist_https_connection']]],
+  ['buf_5fsize_9',['buf_size',['../dc/df8/structcwist__uring__buf__pool.html#a120af3d988e3973de5630b045d214502',1,'cwist_uring_buf_pool']]],
+  ['buffer_10',['buffer',['../d7/ddf/structcwist__json__builder.html#a344bf2fc97ae0d2ea75d1f67300af8ce',1,'cwist_json_builder::buffer'],['../d4/d6b/structsession__arena.html#a96936de672d7549d4c9ce5f9dd850b5b',1,'session_arena::buffer']]]
 ];

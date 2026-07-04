@@ -54,7 +54,7 @@ digraph "include/cwist/core/utils/json_heal.h"
   Node17 -> Node23 [id="edge26_Node000017_Node000023",dir="back",color="steelblue1",style="solid",tooltip=" "];
   Node23 [id="Node000023",label="include/cwist/sys/app\l/compress.h",height=0.2,width=0.4,color="grey40", fillcolor="white", style="filled",URL="$df/d4c/compress_8h.html",tooltip="Compression middleware with swappable backend interface."];
   Node23 -> Node24 [id="edge27_Node000023_Node000024",dir="back",color="steelblue1",style="solid",tooltip=" "];
-  Node24 [id="Node000024",label="src/sys/app/compress.c",height=0.2,width=0.4,color="grey40", fillcolor="white", style="filled",URL="$d0/d6b/compress_8c.html",tooltip="Compression middleware and built-in zlib backends."];
+  Node24 [id="Node000024",label="src/sys/app/compress.c",height=0.2,width=0.4,color="grey40", fillcolor="white", style="filled",URL="$d0/d6b/compress_8c.html",tooltip="Compression middleware and built-in zlib/brotli/zstd backends."];
   Node17 -> Node25 [id="edge28_Node000017_Node000025",dir="back",color="steelblue1",style="solid",tooltip=" "];
   Node25 [id="Node000025",label="include/cwist/sys/app\l/middleware.h",height=0.2,width=0.4,color="grey40", fillcolor="white", style="filled",URL="$d3/d30/sys_2app_2middleware_8h.html",tooltip="Built-in middleware factories."];
   Node25 -> Node26 [id="edge29_Node000025_Node000026",dir="back",color="steelblue1",style="solid",tooltip=" "];

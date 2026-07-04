@@ -5,14 +5,14 @@ var searchData=
   ['h2_5ferr_5fframe_5fsize_5ferror_2',['H2_ERR_FRAME_SIZE_ERROR',['../d2/db0/http2_8c.html#a1663591694477f207e5b0fe4faf30018',1,'http2.c']]],
   ['h2_5ferr_5fno_5ferror_3',['H2_ERR_NO_ERROR',['../d2/db0/http2_8c.html#a22a017fc7875f9f468b7416d8ab8ebf0',1,'http2.c']]],
   ['h2_5ferr_5fprotocol_5ferror_4',['H2_ERR_PROTOCOL_ERROR',['../d2/db0/http2_8c.html#adf70da742697f4cb45d64a3fa287c303',1,'http2.c']]],
-  ['h2_5ferr_5fsettings_5ftimeout_5',['H2_ERR_SETTINGS_TIMEOUT',['../d2/db0/http2_8c.html#a3ee11404022960b1faf0b91ff21ddf46',1,'http2.c']]],
-  ['h2_5ferr_5fstream_5fclosed_6',['H2_ERR_STREAM_CLOSED',['../d2/db0/http2_8c.html#a97b931c7f8809b55174e588b6b52efbc',1,'http2.c']]],
-  ['h3_5fdecode_5fbuf_5fsize_7',['H3_DECODE_BUF_SIZE',['../de/daf/http3_8c.html#aa80fe318a84397a0e364a3fdc854996d',1,'http3.c']]],
-  ['h3_5fmax_5fheaders_8',['H3_MAX_HEADERS',['../de/daf/http3_8c.html#ad986a0c33898d323004c8b5cc81120b4',1,'http3.c']]],
-  ['h3c_5fdecode_5fbuf_5fsize_9',['H3C_DECODE_BUF_SIZE',['../d1/d88/http3__client_8c.html#a8ea871fd705b062c103809ee494f21f6',1,'http3_client.c']]],
-  ['h3c_5fmax_5fheaders_10',['H3C_MAX_HEADERS',['../d1/d88/http3__client_8c.html#a208ac5a7c624b5a693c19340fe7dcbf9',1,'http3_client.c']]],
-  ['http_5ftasks_5fper_5fthread_11',['HTTP_TASKS_PER_THREAD',['../dd/d43/http_8c.html#a44411035765c6ef5c13daea4390f95be',1,'http.c']]],
-  ['http_5fthread_5fpool_5fsize_12',['HTTP_THREAD_POOL_SIZE',['../dd/d43/http_8c.html#af58c968e48fcb2259c646033a5ca2a6f',1,'http.c']]],
+  ['h2_5ferr_5frefused_5fstream_5',['H2_ERR_REFUSED_STREAM',['../d2/db0/http2_8c.html#aedb3090ec799862a3fb21efc6cb27e3a',1,'http2.c']]],
+  ['h2_5ferr_5fsettings_5ftimeout_6',['H2_ERR_SETTINGS_TIMEOUT',['../d2/db0/http2_8c.html#a3ee11404022960b1faf0b91ff21ddf46',1,'http2.c']]],
+  ['h2_5ferr_5fstream_5fclosed_7',['H2_ERR_STREAM_CLOSED',['../d2/db0/http2_8c.html#a97b931c7f8809b55174e588b6b52efbc',1,'http2.c']]],
+  ['h3_5fdecode_5fbuf_5fsize_8',['H3_DECODE_BUF_SIZE',['../de/daf/http3_8c.html#aa80fe318a84397a0e364a3fdc854996d',1,'http3.c']]],
+  ['h3_5fmax_5fheaders_9',['H3_MAX_HEADERS',['../de/daf/http3_8c.html#ad986a0c33898d323004c8b5cc81120b4',1,'http3.c']]],
+  ['h3c_5fdecode_5fbuf_5fsize_10',['H3C_DECODE_BUF_SIZE',['../d1/d88/http3__client_8c.html#a8ea871fd705b062c103809ee494f21f6',1,'http3_client.c']]],
+  ['h3c_5fmax_5fheaders_11',['H3C_MAX_HEADERS',['../d1/d88/http3__client_8c.html#a208ac5a7c624b5a693c19340fe7dcbf9',1,'http3_client.c']]],
+  ['http_5ftasks_5fper_5fthread_12',['HTTP_TASKS_PER_THREAD',['../dd/d43/http_8c.html#a44411035765c6ef5c13daea4390f95be',1,'http.c']]],
   ['https_5ftask_5fqueue_5fsize_13',['HTTPS_TASK_QUEUE_SIZE',['../d2/db2/https_8c.html#a8f1634ab90d75c164f0d27d5ae436ea5',1,'https.c']]],
-  ['https_5fthread_5fpool_5fsize_14',['HTTPS_THREAD_POOL_SIZE',['../d2/db2/https_8c.html#aded948326f120c613ad017251ae2dd37',1,'https.c']]]
+  ['https_5fthread_5fpool_5fsize_14',['HTTPS_THREAD_POOL_SIZE',['../d7/d67/net_2http_2https_8h.html#aded948326f120c613ad017251ae2dd37',1,'https.h']]]
 ];
