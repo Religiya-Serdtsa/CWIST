@@ -1053,11 +1053,8 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
         off_t offset = res->file_stream_offset;
         size_t remaining = res->file_stream_len;
         while (remaining > 0) {
-            if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) return -1;
             uint32_t chunk = (uint32_t)(remaining > max_frame ? max_frame : remaining);
             uint32_t allowed = chunk;
-            if ((int32_t)allowed > hc->conn_send_window) allowed = (uint32_t)hc->conn_send_window;
-            if (s && (int32_t)allowed > s->send_window) allowed = (uint32_t)s->send_window;
 
             unsigned char *chunk_buf = (unsigned char *)cwist_alloc(allowed);
             if (!chunk_buf) return -1;
@@ -1076,12 +1073,9 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
     } else {
         size_t sent = 0;
         while (sent < body_len) {
-            if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) return -1;
             size_t remaining = body_len - sent;
             uint32_t chunk = (uint32_t)(remaining > max_frame ? max_frame : remaining);
             uint32_t allowed = chunk;
-            if ((int32_t)allowed > hc->conn_send_window) allowed = (uint32_t)hc->conn_send_window;
-            if (s && (int32_t)allowed > s->send_window) allowed = (uint32_t)s->send_window;
 
             uint8_t flags = (sent + allowed == body_len) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
             if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,

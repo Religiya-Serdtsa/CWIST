@@ -79,6 +79,11 @@ const cwist_compress_backend *cwist_compress_backend_deflate(void);
 const cwist_compress_backend *cwist_compress_backend_brotli(void);
 
 /**
+ * @brief Returns the built-in Zstandard (zstd) backend.
+ */
+const cwist_compress_backend *cwist_compress_backend_zstd(void);
+
+/**
  * @brief Compression middleware factory.
  *
  * Chooses a registered backend based on the request's Accept-Encoding header,
