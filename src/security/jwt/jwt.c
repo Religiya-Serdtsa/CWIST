@@ -16,12 +16,6 @@
  * @brief HS256 JWT signing, verification, and decoded-claims access helpers.
  */
 
-/* Allow a small clock-skew window so tokens are not rejected on clients/servers
- * whose clocks differ by a few seconds. */
-#ifndef CWIST_JWT_EXP_LEEWAY_SECONDS
-#define CWIST_JWT_EXP_LEEWAY_SECONDS 60
-#endif
-
 /* --------------------------------------------------------------------------
  * Internal: Base64URL helpers
  * -------------------------------------------------------------------------- */
@@ -335,7 +329,7 @@ cwist_jwt_claims *cwist_jwt_verify(const char *token, const char *secret) {
     cJSON *exp_item = cJSON_GetObjectItemCaseSensitive(json, "exp");
     if (exp_item && cJSON_IsNumber(exp_item)) {
         time_t now = time(NULL);
-        if ((time_t)exp_item->valuedouble + CWIST_JWT_EXP_LEEWAY_SECONDS < now) {
+        if ((time_t)exp_item->valuedouble < now) {
             cJSON_Delete(json);
             return NULL; /* token expired */
         }
