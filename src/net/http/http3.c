@@ -675,6 +675,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         };
         int eos = (body_len == 0);
         if (lsquic_stream_send_headers(stream, &headers, eos) != 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                lsquic_stream_wantwrite(stream, 1);
+                return;
+            }
             lsquic_stream_close(stream);
             return;
         }
@@ -701,6 +705,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 if (nr > 0) {
                     ssize_t nw = lsquic_stream_write(stream, file_buf, (size_t)nr);
                     if (nw < 0) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            lsquic_stream_wantwrite(stream, 1);
+                            return;
+                        }
                         lsquic_stream_close(stream);
                         return;
                     }
@@ -730,6 +738,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             ssize_t n = lsquic_stream_write(stream, body_data + st->body_sent,
                                             body_len - st->body_sent);
             if (n < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    lsquic_stream_wantwrite(stream, 1);
+                    return;
+                }
                 lsquic_stream_close(stream);
                 return;
             }
