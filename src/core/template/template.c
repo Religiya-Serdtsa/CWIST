@@ -335,8 +335,8 @@ cwist_sstring* cwist_template_render_file(const char *file_path, const cJSON *co
         return NULL;
     }
 
-    fread(template_str, 1, len, f);
-    template_str[len] = '\0';
+    size_t read_len = fread(template_str, 1, (size_t)len, f);
+    template_str[read_len] = '\0';
     fclose(f);
 
     cwist_sstring *result = cwist_template_render(template_str, context);
