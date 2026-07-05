@@ -226,29 +226,52 @@ static int h2_write(cwist_https_connection *conn, const void *buf, int len) {
     return write(conn->fd, buf, len);
 }
 
+/* Poll the socket for the direction OpenSSL is waiting on, or for plain
+ * socket writability. Returns 0 when ready, -1 on timeout/error. */
+static int h2_wait_socket(cwist_https_connection *conn, int ssl_error, int timeout_ms) {
+    struct pollfd pfd = { .fd = conn->fd, .events = 0 };
+    if (conn->ssl) {
+        if (ssl_error == SSL_ERROR_WANT_READ) {
+            pfd.events = POLLIN;
+        } else if (ssl_error == SSL_ERROR_WANT_WRITE) {
+            pfd.events = POLLOUT;
+        } else {
+            return -1;
+        }
+    } else {
+        pfd.events = POLLOUT;
+    }
+    int ret = poll(&pfd, 1, timeout_ms);
+    if (ret <= 0) return -1;
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) return -1;
+    return 0;
+}
+
 static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t len) {
     const unsigned char *p = (const unsigned char *)buf;
+    int retries = 0;
     while (len > 0) {
         int n = h2_write(conn, p, (int)len);
         if (n <= 0) {
             if (n < 0) {
                 if (conn->ssl) {
                     int err = SSL_get_error(conn->ssl, n);
-                    if (err == SSL_ERROR_WANT_WRITE) {
-                        struct timespec ts = {0, 1000000}; // 1ms sleep
-                        nanosleep(&ts, NULL);
+                    if (err == SSL_ERROR_WANT_WRITE || err == SSL_ERROR_WANT_READ) {
+                        if (++retries > 1000) return -1; /* ~overall timeout guard */
+                        if (h2_wait_socket(conn, err, 100) != 0) return -1;
                         continue;
                     }
                 } else {
                     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-                        struct timespec ts = {0, 1000000}; // 1ms sleep
-                        nanosleep(&ts, NULL);
+                        if (++retries > 1000) return -1;
+                        if (h2_wait_socket(conn, 0, 100) != 0) return -1;
                         continue;
                     }
                 }
             }
             return -1;
         }
+        retries = 0;
         p += n;
         len -= (size_t)n;
     }
