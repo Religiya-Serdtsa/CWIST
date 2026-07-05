@@ -88,6 +88,8 @@ typedef struct h3_stream_ctx {
     int response_ready;
     int write_state; /* 0=headers, 1=body, 2=done */
     size_t body_sent;
+    uint8_t recv_xor; /* running XOR of received body bytes */
+    uint8_t send_xor; /* running XOR of sent body bytes */
 #ifdef CWIST_WEBTRANSPORT
     int is_webtransport;
     int wt_taken;
@@ -407,6 +409,13 @@ static void h3_parse_path(cwist_http_request *req, const char *path) {
     }
 }
 
+/* Lightweight XOR checksum over a byte buffer. */
+static uint8_t h3_xor_bytes(const unsigned char *buf, size_t len) {
+    uint8_t x = 0;
+    for (size_t i = 0; i < len; i++) x ^= buf[i];
+    return x;
+}
+
 static void h3_apply_header(cwist_http_request *req,
                             const char *name, const char *value) {
     if (strcmp(name, ":method") == 0) {
@@ -516,6 +525,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             st->body_cap = new_cap;
         }
         memcpy(st->body + st->body_len, buf, (size_t)nread);
+        st->recv_xor ^= h3_xor_bytes((const unsigned char *)buf, (size_t)nread);
         st->body_len += (size_t)nread;
     }
 
@@ -712,6 +722,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                         lsquic_stream_close(stream);
                         return;
                     }
+                    st->send_xor ^= h3_xor_bytes((const unsigned char *)file_buf, (size_t)nw);
                     st->body_sent += (size_t)nw;
                 } else if (nr == 0) {
                     /* EOF: mark everything as sent */
@@ -745,6 +756,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 lsquic_stream_close(stream);
                 return;
             }
+            st->send_xor ^= h3_xor_bytes((const unsigned char *)(body_data + st->body_sent), (size_t)n);
             st->body_sent += (size_t)n;
         }
 
