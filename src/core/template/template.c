@@ -18,26 +18,91 @@ static cwist_sstring* render_internal(const char **template_str, const cJSON *co
 #define CWIST_TEMPLATE_MAX_DEPTH 32
 
 /**
+ * @brief HTML-escape a string into an output buffer.
+ */
+static void html_escape(const char *value, char *out, size_t out_len) {
+    if (!value || out_len == 0) return;
+    size_t i, j;
+    for (i = 0, j = 0; value[i] && j < out_len - 1; i++) {
+        const char *repl = NULL;
+        switch (value[i]) {
+            case '&': repl = "&amp;"; break;
+            case '<': repl = "&lt;"; break;
+            case '>': repl = "&gt;"; break;
+            case '"': repl = "&quot;"; break;
+            case '\'': repl = "&#39;"; break;
+            default: break;
+        }
+        if (repl) {
+            size_t rlen = strlen(repl);
+            if (j + rlen >= out_len) break;
+            memcpy(out + j, repl, rlen);
+            j += rlen;
+        } else {
+            out[j++] = value[i];
+        }
+    }
+    out[j] = '\0';
+}
+
+/**
  * @brief Apply a simple filter to a string value in-place into a fixed buffer.
- * Supported filters: upper, lower.
+ * Supported filters: upper, lower, escape, trim, length, default(arg).
  * @param value Input string.
- * @param filter Filter name.
+ * @param filter Filter name (may include an argument, e.g. "default(n/a)").
  * @param out Output buffer.
  * @param out_len Output buffer size.
  */
 static void apply_filter(const char *value, const char *filter, char *out, size_t out_len) {
-    if (!value || !filter || out_len == 0) return;
-    size_t i;
-    for (i = 0; i < out_len - 1 && value[i]; i++) {
-        if (strcmp(filter, "upper") == 0) {
+    if (!filter || out_len == 0) return;
+    if (strcmp(filter, "upper") == 0) {
+        size_t i;
+        for (i = 0; i < out_len - 1 && value && value[i]; i++)
             out[i] = (char)toupper((unsigned char)value[i]);
-        } else if (strcmp(filter, "lower") == 0) {
+        out[i] = '\0';
+    } else if (strcmp(filter, "lower") == 0) {
+        size_t i;
+        for (i = 0; i < out_len - 1 && value && value[i]; i++)
             out[i] = (char)tolower((unsigned char)value[i]);
+        out[i] = '\0';
+    } else if (strcmp(filter, "escape") == 0 || strcmp(filter, "e") == 0) {
+        html_escape(value, out, out_len);
+    } else if (strcmp(filter, "trim") == 0) {
+        if (!value) { out[0] = '\0'; return; }
+        const char *s = value;
+        while (isspace((unsigned char)*s)) s++;
+        const char *e = value + strlen(value) - 1;
+        while (e > s && isspace((unsigned char)*e)) e--;
+        size_t len = (size_t)(e - s + 1);
+        if (len >= out_len) len = out_len - 1;
+        memcpy(out, s, len);
+        out[len] = '\0';
+    } else if (strcmp(filter, "length") == 0 || strcmp(filter, "len") == 0) {
+        snprintf(out, out_len, "%zu", value ? strlen(value) : 0);
+    } else if (strncmp(filter, "default", 7) == 0) {
+        const char *arg = NULL;
+        const char *lp = strchr(filter, '(');
+        const char *rp = strrchr(filter, ')');
+        if (lp && rp && rp > lp) {
+            arg = lp + 1;
+        }
+        if (value && value[0]) {
+            snprintf(out, out_len, "%s", value);
+        } else if (arg) {
+            size_t arg_len = (size_t)(rp - arg);
+            if (arg_len >= out_len) arg_len = out_len - 1;
+            memcpy(out, arg, arg_len);
+            out[arg_len] = '\0';
         } else {
-            out[i] = value[i];
+            out[0] = '\0';
+        }
+    } else {
+        if (value) {
+            snprintf(out, out_len, "%s", value);
+        } else {
+            out[0] = '\0';
         }
     }
-    out[i] = '\0';
 }
 
 /**
@@ -89,6 +154,15 @@ static cwist_sstring* render_internal(const char **template_str, const cJSON *co
     const char *start = p;
 
     while (*p) {
+        if (p[0] == '{' && p[1] == '#') {
+            /* Comment: {# ... #} -- skip silently. */
+            cwist_sstring_append_len(output, start, p - start);
+            p += 2;
+            while (*p && !(p[0] == '#' && p[1] == '}')) p++;
+            if (p[0] == '#' && p[1] == '}') p += 2;
+            start = p;
+            continue;
+        }
         if (p[0] == '{' && (p[1] == '{' || p[1] == '%')) {
             /* Append text since last tag */
             cwist_sstring_append_len(output, start, p - start);

@@ -84,9 +84,20 @@ long get_cpu_cores(void) {
 }
 
 long get_optimal_thread_count(void) {
-    /* Pure native scheduling policy: strictly enforce "nproc * 32" boundary */
-    /* thread count should be enough as HTTP/3 is using QUIC */
-    return get_cpu_cores() * 32;
+    /* Scale with cores but cap at a sane default.  C1M mode historically
+     * used cores*32, which exhausts resources on modest hardware and adds
+     * scheduling overhead without improving throughput.  Allow explicit
+     * override via CWIST_WORKER_THREADS. */
+    const char *env = getenv("CWIST_WORKER_THREADS");
+    if (env && env[0]) {
+        long override = atol(env);
+        if (override > 0) return override;
+    }
+    long cores = get_cpu_cores();
+    long count = cores * 4;
+    if (count < 16) count = 16;
+    if (count > 128) count = 128;
+    return count;
 }
 
 #define HTTP_TASKS_PER_THREAD 32768

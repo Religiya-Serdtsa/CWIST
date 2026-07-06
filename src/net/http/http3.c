@@ -207,7 +207,6 @@ typedef struct cwist_h3_hset {
 
 static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
                                  int is_push_promise) {
-    (void)hsi_ctx;
     (void)is_push_promise;
     cwist_h3_hset_t *hset = calloc(1, sizeof(*hset));
     if (!hset) return NULL;
@@ -219,13 +218,11 @@ static struct lsxpack_header *
 cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
     cwist_h3_hset_t *hset = hset_p;
     if (xhdr) {
-        /* Previous header now has its final size known; advance offset. */
-        size_t name_len  = xhdr->buf + xhdr->name_offset  - (hset->decode_buf + hset->decode_off);
-        size_t value_len = xhdr->buf + xhdr->val_offset   - (hset->decode_buf + hset->decode_off);
-        /* The header structure itself was prepared at decode_off. After
-         * decoding finishes lsquic tells us the used space via xhdr.
-         * We bump decode_off by the total occupied bytes. */
-        size_t total = name_len + value_len + 2; /* +2 for separator/padding */
+        /* Advance by the exact decoded size lsquic reports
+         * (name_len + val_len + dec_overhead).  The old pointer-offset
+         * arithmetic computed the wrong length and corrupted headers
+         * when multiple Cookie values arrived in separate QPACK entries. */
+        size_t total = lsxpack_header_get_dec_size(xhdr);
         if (total > sizeof(hset->decode_buf) - hset->decode_off)
             total = sizeof(hset->decode_buf) - hset->decode_off;
         hset->decode_off += total;
@@ -1266,8 +1263,10 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     while (ctx && ctx->running && atomic_load(&g_cwist_running)) {
         int diff = 1000; /* default 1 ms; let earliest_adv_tick drive it */
         if (lsquic_engine_earliest_adv_tick(engine, &diff)) {
-            if (diff <= 0)
-                diff = 0;
+            /* Enforce a small floor so pacing timers or back-to-back zero
+             * ticks cannot turn this loop into a busy-wait. */
+            if (diff < 1000)
+                diff = 1000;
             else if (diff > 1000000)
                 diff = 1000000;
         }
@@ -1308,6 +1307,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
             if (pfd.revents & POLLIN) {
 #endif
                 struct sockaddr_storage peer_addr;
+                socklen_t peer_addr_len = sizeof(peer_addr);
                 struct msghdr msg = {0};
                 struct iovec iov = { pkt_buf, 65535 };
                 msg.msg_name = &peer_addr;

@@ -17,12 +17,14 @@
  *
  * It supports:
  * - Variable replacement: {{ key }}
- * - Variable filters: {{ key | upper }}, {{ key | lower }}
+ * - Variable filters: {{ key | upper }}, {{ key | lower }}, {{ key | escape }},
+ *                     {{ key | trim }}, {{ key | length }}, {{ key | default("n/a") }}
  * - Simple conditionals: {% if key %}...{% endif %}
  * - Negated conditionals: {% if not key %}...{% endif %}
  * - Else branches: {% if key %}...{% else %}...{% endif %}
  * - Looping over arrays: {% for item in array %}...{{ item.key }}...{% endfor %}
  * - File includes: {% include "partial.html" %}
+ * - Comments: {# ignored #}
  *
  * @param template_str The template string to render.
  * @param context The cJSON object containing the data for the template.

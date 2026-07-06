@@ -152,9 +152,9 @@ static struct lsxpack_header *
 h3c_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
     h3c_hset_t *hset = hset_p;
     if (xhdr) {
-        size_t name_len  = xhdr->buf + xhdr->name_offset  - (hset->decode_buf + hset->decode_off);
-        size_t value_len = xhdr->buf + xhdr->val_offset   - (hset->decode_buf + hset->decode_off);
-        size_t total = name_len + value_len + 2;
+        /* Advance by the exact decoded size lsquic reports
+         * (name_len + val_len + dec_overhead). */
+        size_t total = lsxpack_header_get_dec_size(xhdr);
         if (total > sizeof(hset->decode_buf) - hset->decode_off)
             total = sizeof(hset->decode_buf) - hset->decode_off;
         hset->decode_off += total;

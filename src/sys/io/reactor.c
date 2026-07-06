@@ -263,7 +263,9 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
             uint32_t head = __atomic_load_n(reactor->impl.cq_head, __ATOMIC_ACQUIRE);
             uint32_t tail = *reactor->impl.cq_tail;
             if (head == tail) {
-                usleep(100);
+                /* Spurious wakeup or no event ready. Sleep briefly instead of
+                 * tight-looping back into the syscall. */
+                usleep(1000);
                 continue;
             }
             while (head != tail) {
