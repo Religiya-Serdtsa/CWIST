@@ -1,5 +1,6 @@
 #include <cwist/security/jwt/jwt.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/sstring/sstring.h>
 
 #include <cjson/cJSON.h>
 #include <openssl/hmac.h>
@@ -198,55 +199,60 @@ char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seco
 
     b64url_encode((const unsigned char *)HEADER_JSON, strlen(HEADER_JSON), hdr_enc);
     b64url_encode((const unsigned char *)final_payload_json, strlen(final_payload_json), pay_enc);
-    free(final_payload_json);
+    cwist_free(final_payload_json);
 
-    /* --- Build "header.payload" signing input ----------------------------- */
-    size_t signing_input_len = strlen(hdr_enc) + 1 + strlen(pay_enc);
-    char *signing_input = (char *)cwist_alloc(signing_input_len + 1);
+    /* --- Build "header.payload" signing input using sstring --------------- */
+    cwist_sstring *signing_input = cwist_sstring_create();
     if (!signing_input) {
         cwist_free(hdr_enc);
         cwist_free(pay_enc);
         return NULL;
     }
-    snprintf(signing_input, signing_input_len + 1, "%s.%s", hdr_enc, pay_enc);
+    cwist_sstring_append(signing_input, hdr_enc);
+    cwist_sstring_append(signing_input, ".");
+    cwist_sstring_append(signing_input, pay_enc);
 
     /* --- Compute HMAC-SHA256 signature ------------------------------------ */
     unsigned char sig_raw[32];
-    if (!hmac_sha256(secret, strlen(secret), signing_input, signing_input_len, sig_raw)) {
+    if (!hmac_sha256(secret, strlen(secret), signing_input->data, signing_input->size, sig_raw)) {
+        cwist_sstring_destroy(signing_input);
         cwist_free(hdr_enc);
         cwist_free(pay_enc);
-        cwist_free(signing_input);
         return NULL;
     }
 
     size_t sig_enc_len = b64url_encoded_len(32);
     char *sig_enc = (char *)cwist_alloc(sig_enc_len);
     if (!sig_enc) {
+        cwist_sstring_destroy(signing_input);
         cwist_free(hdr_enc);
         cwist_free(pay_enc);
-        cwist_free(signing_input);
         return NULL;
     }
     b64url_encode(sig_raw, 32, sig_enc);
 
-    /* --- Assemble final token --------------------------------------------- */
-    size_t token_len = signing_input_len + 1 + strlen(sig_enc);
-    char *token = (char *)cwist_alloc(token_len + 1);
+    /* --- Assemble final token using sstring ------------------------------- */
+    cwist_sstring *token = cwist_sstring_create();
     if (!token) {
+        cwist_sstring_destroy(signing_input);
         cwist_free(hdr_enc);
         cwist_free(pay_enc);
-        cwist_free(signing_input);
         cwist_free(sig_enc);
         return NULL;
     }
-    snprintf(token, token_len + 1, "%s.%s", signing_input, sig_enc);
+    cwist_sstring_append(token, signing_input->data);
+    cwist_sstring_append(token, ".");
+    cwist_sstring_append(token, sig_enc);
 
+    char *result = cwist_strdup(token->data);
+
+    cwist_sstring_destroy(token);
+    cwist_sstring_destroy(signing_input);
     cwist_free(hdr_enc);
     cwist_free(pay_enc);
-    cwist_free(signing_input);
     cwist_free(sig_enc);
 
-    return token;
+    return result;
 }
 
 /**
@@ -278,19 +284,18 @@ cwist_jwt_claims *cwist_jwt_verify(const char *token, const char *secret) {
     /* signing_input = original "hdr_enc.pay_enc" (up to the second dot) */
     size_t first_two_len = (size_t)(dot2 - tok_copy);
     /* dot2 points inside tok_copy which is already modified; use original */
-    char *signing_input = (char *)cwist_alloc(first_two_len + 1);
+    cwist_sstring *signing_input = cwist_sstring_create();
     if (!signing_input) { cwist_free(tok_copy); return NULL; }
-    memcpy(signing_input, token, first_two_len);
-    signing_input[first_two_len] = '\0';
+    cwist_sstring_assign_len(signing_input, token, first_two_len);
 
     /* --- Recompute expected signature ------------------------------------- */
     unsigned char expected_sig[32];
-    if (!hmac_sha256(secret, strlen(secret), signing_input, first_two_len, expected_sig)) {
+    if (!hmac_sha256(secret, strlen(secret), signing_input->data, signing_input->size, expected_sig)) {
+        cwist_sstring_destroy(signing_input);
         cwist_free(tok_copy);
-        cwist_free(signing_input);
         return NULL;
     }
-    cwist_free(signing_input);
+    cwist_sstring_destroy(signing_input);
 
     /* --- Decode the provided signature ------------------------------------ */
     size_t provided_sig_len = 0;
