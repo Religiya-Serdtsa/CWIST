@@ -1239,8 +1239,10 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     while (ctx && ctx->running && atomic_load(&g_cwist_running)) {
         int diff = 1000; /* default 1 ms; let earliest_adv_tick drive it */
         if (lsquic_engine_earliest_adv_tick(engine, &diff)) {
-            if (diff <= 0)
-                diff = 0;
+            /* Enforce a small floor so pacing timers or back-to-back zero
+             * ticks cannot turn this loop into a busy-wait. */
+            if (diff < 1000)
+                diff = 1000;
             else if (diff > 1000000)
                 diff = 1000000;
         }
