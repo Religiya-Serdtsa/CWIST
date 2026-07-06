@@ -87,8 +87,7 @@ static void apply_filter(const char *value, const char *filter, char *out, size_
             arg = lp + 1;
         }
         if (value && value[0]) {
-            strncpy(out, value, out_len - 1);
-            out[out_len - 1] = '\0';
+            snprintf(out, out_len, "%s", value);
         } else if (arg) {
             size_t arg_len = (size_t)(rp - arg);
             if (arg_len >= out_len) arg_len = out_len - 1;
@@ -99,8 +98,7 @@ static void apply_filter(const char *value, const char *filter, char *out, size_
         }
     } else {
         if (value) {
-            strncpy(out, value, out_len - 1);
-            out[out_len - 1] = '\0';
+            snprintf(out, out_len, "%s", value);
         } else {
             out[0] = '\0';
         }
