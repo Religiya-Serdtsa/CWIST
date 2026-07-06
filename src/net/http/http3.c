@@ -219,13 +219,13 @@ static struct lsxpack_header *
 cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
     cwist_h3_hset_t *hset = hset_p;
     if (xhdr) {
-        /* Previous header now has its final size known; advance offset. */
-        size_t name_len  = xhdr->buf + xhdr->name_offset  - (hset->decode_buf + hset->decode_off);
-        size_t value_len = xhdr->buf + xhdr->val_offset   - (hset->decode_buf + hset->decode_off);
-        /* The header structure itself was prepared at decode_off. After
-         * decoding finishes lsquic tells us the used space via xhdr.
-         * We bump decode_off by the total occupied bytes. */
-        size_t total = name_len + value_len + 2; /* +2 for separator/padding */
+        /* Previous header now has its final size known; advance offset.
+         * lsquic stores the decoded name/value back-to-back in decode_buf
+         * plus any QPACK/HPACK overhead.  Use the helper that accounts for
+         * name_len + val_len + dec_overhead so the next header does not
+         * overwrite the previous one and multi-value Cookie headers are
+         * preserved intact. */
+        size_t total = lsxpack_header_get_dec_size(xhdr);
         if (total > sizeof(hset->decode_buf) - hset->decode_off)
             total = sizeof(hset->decode_buf) - hset->decode_off;
         hset->decode_off += total;
@@ -283,6 +283,7 @@ static int cwist_h3_packets_out(void *ctx,
                                   unsigned n_specs) {
     int udp_fd = *(int *)ctx;
     unsigned i;
+    int transient_errors = 0;
     for (i = 0; i < n_specs; ++i) {
         const struct lsquic_out_spec *spec = &specs[i];
         struct msghdr msg = {0};
@@ -296,12 +297,26 @@ static int cwist_h3_packets_out(void *ctx,
         if (nw < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
-            /* Non-fatal errors: log and continue if possible */
+            /* UDP is connectionless: ICMP errors and local socket hiccups
+             * should not tear down the whole QUIC connection.  Keep the
+             * stream alive and let lsquic's loss recovery retransmit.
+             * EPIPE/ECONNRESET are treated as transient because the next
+             * datagram may still reach the peer through a different path. */
             if (errno == ECONNREFUSED || errno == ENETUNREACH ||
-                errno == EHOSTUNREACH || errno == EMSGSIZE)
+                errno == EHOSTUNREACH || errno == EMSGSIZE ||
+                errno == EPIPE || errno == ECONNRESET ||
+                errno == ENOENT /* routing transient */) {
+                transient_errors++;
                 continue;
+            }
+            fprintf(stderr, "[HTTP/3] sendmsg fatal error %d\n", errno);
             return -1;
         }
+    }
+    if (transient_errors > 0 && i > 0) {
+        /* We delivered at least some packets; report the count so lsquic
+         * can schedule retransmission for the rest instead of aborting. */
+        return (int)i;
     }
     return (int)i;
 }
@@ -614,9 +629,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
 
         /* content-length */
         size_t body_len = 0;
+        const char *body_ptr = NULL;
         if (st->res->use_file_stream) body_len = st->res->file_stream_len;
-        else if (st->res->is_ptr_body) body_len = st->res->ptr_body_len;
-        else if (st->res->body) body_len = st->res->body->size;
+        else if (st->res->is_ptr_body) { body_len = st->res->ptr_body_len; body_ptr = (const char *)st->res->ptr_body; }
+        else if (st->res->body) { body_len = st->res->body->size; body_ptr = st->res->body->data; }
 
         if (body_len > 0 && hdr_count < 64) {
             char cl_str[32];
@@ -630,6 +646,25 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
                                            0, cl_name_len, cl_name_len + 2, cl_val_len);
                 hbuf_off += total;
+                hdr_count++;
+            }
+        }
+
+        /* Lightweight XOR integrity tag for in-memory bodies.
+         * This lets compliant peers detect truncated/corrupted streams
+         * and retry/fallback instead of trusting silently broken payloads. */
+        if (body_ptr && body_len > 0 && hdr_count < 64) {
+            uint8_t xor_val = h3_xor_bytes((const unsigned char *)body_ptr, body_len);
+            char xor_str[8];
+            snprintf(xor_str, sizeof(xor_str), "%02x", xor_val);
+            size_t xk = strlen("x-cwist-body-xor");
+            size_t xv = strlen(xor_str);
+            if (hbuf_off + xk + 2 + xv <= sizeof(hbuf)) {
+                memcpy(hbuf + hbuf_off, "x-cwist-body-xor", xk);
+                memcpy(hbuf + hbuf_off + xk + 2, xor_str, xv);
+                lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                           0, xk, xk + 2, xv);
+                hbuf_off += xk + 2 + xv;
                 hdr_count++;
             }
         }
