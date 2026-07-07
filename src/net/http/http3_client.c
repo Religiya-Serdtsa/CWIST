@@ -96,6 +96,18 @@ struct cwist_http3_client {
     pthread_mutex_t mtx;
     pthread_cond_t cond;
     h3c_stream_ctx_t *active_stream;
+
+    pthread_mutex_t dgram_mtx;
+    struct {
+        void *data;
+        size_t len;
+        int pending;
+    } out_dgram;
+    struct {
+        void *data;
+        size_t len;
+        int ready;
+    } in_dgram;
 };
 
 /* ------------------------------------------------------------------ */
@@ -407,6 +419,38 @@ static void h3c_on_close(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     free(st);
 }
 
+static ssize_t h3c_on_dg_write(lsquic_conn_t *conn, void *buf, size_t len) {
+    cwist_http3_client *client = (cwist_http3_client *)lsquic_conn_get_ctx(conn);
+    if (!client) return 0;
+    pthread_mutex_lock(&client->dgram_mtx);
+    if (client->out_dgram.pending && client->out_dgram.data && client->out_dgram.len > 0) {
+        size_t to_copy = client->out_dgram.len < len ? client->out_dgram.len : len;
+        memcpy(buf, client->out_dgram.data, to_copy);
+        free(client->out_dgram.data);
+        client->out_dgram.data = NULL;
+        client->out_dgram.len = 0;
+        client->out_dgram.pending = 0;
+        pthread_mutex_unlock(&client->dgram_mtx);
+        return (ssize_t)to_copy;
+    }
+    pthread_mutex_unlock(&client->dgram_mtx);
+    return 0;
+}
+
+static void h3c_on_datagram(lsquic_conn_t *conn, const void *buf, size_t len) {
+    cwist_http3_client *client = (cwist_http3_client *)lsquic_conn_get_ctx(conn);
+    if (!client || !buf || len == 0) return;
+    pthread_mutex_lock(&client->dgram_mtx);
+    if (client->in_dgram.data) free(client->in_dgram.data);
+    client->in_dgram.data = malloc(len);
+    if (client->in_dgram.data) {
+        memcpy(client->in_dgram.data, buf, len);
+        client->in_dgram.len = len;
+        client->in_dgram.ready = 1;
+    }
+    pthread_mutex_unlock(&client->dgram_mtx);
+}
+
 static const struct lsquic_stream_if h3c_stream_if = {
     .on_new_conn    = h3c_on_new_conn,
     .on_conn_closed = h3c_on_conn_closed,
@@ -414,6 +458,8 @@ static const struct lsquic_stream_if h3c_stream_if = {
     .on_read        = h3c_on_read,
     .on_write       = h3c_on_write,
     .on_close       = h3c_on_close,
+    .on_dg_write    = h3c_on_dg_write,
+    .on_datagram    = h3c_on_datagram,
 };
 
 /* ------------------------------------------------------------------ */
@@ -469,6 +515,7 @@ cwist_http3_client *cwist_http3_client_create(void) {
     client->conn_timeout_ms = 5000;
     pthread_mutex_init(&client->mtx, NULL);
     pthread_cond_init(&client->cond, NULL);
+    pthread_mutex_init(&client->dgram_mtx, NULL);
 
     const SSL_METHOD *method = TLS_method();
     client->ssl_ctx = SSL_CTX_new(method);
@@ -490,6 +537,7 @@ cwist_http3_client *cwist_http3_client_create(void) {
     settings.es_ecn = 1;
     settings.es_pace_packets = 1;
     settings.es_optimistic_nat = 1;
+    settings.es_datagrams = client->datagram_enabled ? 1 : 0;
 
     char err_buf[256];
     if (lsquic_engine_check_settings(&settings, LSENG_HTTP,
@@ -539,6 +587,9 @@ void cwist_http3_client_destroy(cwist_http3_client *client) {
         close(client->udp_fd);
     }
     free(client->host);
+    free(client->out_dgram.data);
+    free(client->in_dgram.data);
+    pthread_mutex_destroy(&client->dgram_mtx);
     pthread_mutex_destroy(&client->mtx);
     pthread_cond_destroy(&client->cond);
     free(client);
@@ -763,8 +814,51 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
 }
 
 /* ------------------------------------------------------------------ */
-/* Datagram stubs (RFC 9221)                                          */
+/* Datagram API (RFC 9221)                                            */
 /* ------------------------------------------------------------------ */
+
+int cwist_http3_client_send_datagram(cwist_http3_client *client,
+                                     const void *data, size_t len) {
+    if (!client || !client->conn || !data || len == 0) return -1;
+    if (!client->datagram_enabled) return -1;
+
+    pthread_mutex_lock(&client->dgram_mtx);
+    if (client->out_dgram.pending) {
+        pthread_mutex_unlock(&client->dgram_mtx);
+        return -1;
+    }
+    client->out_dgram.data = malloc(len);
+    if (!client->out_dgram.data) {
+        pthread_mutex_unlock(&client->dgram_mtx);
+        return -1;
+    }
+    memcpy(client->out_dgram.data, data, len);
+    client->out_dgram.len = len;
+    client->out_dgram.pending = 1;
+    pthread_mutex_unlock(&client->dgram_mtx);
+
+    lsquic_conn_want_datagram_write(client->conn, 1);
+    return 0;
+}
+
+ssize_t cwist_http3_client_recv_datagram(cwist_http3_client *client,
+                                         void *buf, size_t len) {
+    if (!client || !buf || len == 0) return -1;
+
+    pthread_mutex_lock(&client->dgram_mtx);
+    if (!client->in_dgram.ready || !client->in_dgram.data) {
+        pthread_mutex_unlock(&client->dgram_mtx);
+        return -1;
+    }
+    size_t to_copy = client->in_dgram.len < len ? client->in_dgram.len : len;
+    memcpy(buf, client->in_dgram.data, to_copy);
+    free(client->in_dgram.data);
+    client->in_dgram.data = NULL;
+    client->in_dgram.len = 0;
+    client->in_dgram.ready = 0;
+    pthread_mutex_unlock(&client->dgram_mtx);
+    return (ssize_t)to_copy;
+}
 
 /* ------------------------------------------------------------------ */
 /* Resilience knobs                                                   */
@@ -783,20 +877,4 @@ void cwist_http3_client_set_retry_delay_ms(cwist_http3_client *client,
 void cwist_http3_client_set_conn_timeout_ms(cwist_http3_client *client,
                                             int timeout_ms) {
     if (client) client->conn_timeout_ms = timeout_ms > 0 ? timeout_ms : 5000;
-}
-
-int cwist_http3_client_send_datagram(cwist_http3_client *client,
-                                     const void *data, size_t len) {
-    (void)client;
-    (void)data;
-    (void)len;
-    return -1; /* Not yet implemented: requires lsquic datagram API */
-}
-
-ssize_t cwist_http3_client_recv_datagram(cwist_http3_client *client,
-                                         void *buf, size_t len) {
-    (void)client;
-    (void)buf;
-    (void)len;
-    return -1; /* Not yet implemented: requires lsquic datagram API */
 }

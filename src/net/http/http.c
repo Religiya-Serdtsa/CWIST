@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <cwist/net/http/http.h>
+#include <cwist/net/http/session.h>
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/mem/alloc.h>
@@ -530,6 +531,8 @@ void cwist_http_request_destroy(cwist_http_request *req) {
         cwist_sstring_destroy(req->version);
         cwist_sstring_destroy(req->body);
         cwist_query_map_destroy(req->flash);
+        cwist_session_destroy(req->session);
+        cwist_free(req->csrf_token);
         cwist_http_header_free_all(req->headers);
         cwist_free(req);
     }

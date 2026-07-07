@@ -207,6 +207,7 @@ typedef struct cwist_h3_hset {
 
 static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
                                  int is_push_promise) {
+    (void)hsi_ctx;
     (void)is_push_promise;
     cwist_h3_hset_t *hset = calloc(1, sizeof(*hset));
     if (!hset) return NULL;
@@ -1311,7 +1312,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                 struct msghdr msg = {0};
                 struct iovec iov = { pkt_buf, 65535 };
                 msg.msg_name = &peer_addr;
-                msg.msg_namelen = sizeof(peer_addr);
+                msg.msg_namelen = peer_addr_len;
                 msg.msg_iov = &iov;
                 msg.msg_iovlen = 1;
 
@@ -1374,10 +1375,6 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     err.error.err_i16 = 0;
     return err;
 }
-
-/* ------------------------------------------------------------------ */
-/* Serve connection (kept for API compat)                             */
-/* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
 /* Push, Priority, and 0-RTT APIs                                     */
@@ -1702,17 +1699,4 @@ int cwist_webtransport_close_session(void *session,
 
 #endif /* CWIST_WEBTRANSPORT */
 
-/* ------------------------------------------------------------------ */
-/* Serve connection (kept for API compat)                             */
-/* ------------------------------------------------------------------ */
 
-cwist_error_t cwist_http3_serve_connection(cwist_http3_connection *conn,
-                                           void *user_ctx,
-                                           cwist_http3_request_handler_func handler) {
-    cwist_error_t err = make_error(CWIST_ERR_INT16);
-    (void)conn;
-    (void)user_ctx;
-    (void)handler;
-    err.error.err_i16 = -1;
-    return err;
-}

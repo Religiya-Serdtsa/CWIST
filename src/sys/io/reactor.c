@@ -243,9 +243,40 @@ bool cwist_reactor_mod(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, 
 }
 
 bool cwist_reactor_del(cwist_reactor_t *reactor, int fd) {
-    (void)reactor;
-    (void)fd;
-    return true;
+    if (!reactor || fd < 0) return false;
+
+#ifdef __linux__
+    if (!reactor->impl.use_epoll) {
+        /* Cancel any pending poll request for this fd.  The original
+         * request's CQE (with -ECANCELED) will free the ev_ctx. */
+        uint32_t tail = *reactor->impl.sq_tail;
+        uint32_t head = __atomic_load_n(reactor->impl.sq_head, __ATOMIC_ACQUIRE);
+        if (tail - head >= reactor->impl.sq_entries) return false;
+        uint32_t index = tail & *reactor->impl.sq_ring_mask;
+        struct io_uring_sqe *sqe = &reactor->impl.sqes[index];
+        memset(sqe, 0, sizeof(*sqe));
+        sqe->opcode = IORING_OP_ASYNC_CANCEL;
+        sqe->addr = (unsigned long)fd;
+        sqe->cancel_flags = IORING_ASYNC_CANCEL_FD | IORING_ASYNC_CANCEL_ALL;
+        sqe->user_data = 0;
+        reactor->impl.sq_array[index] = index;
+        __atomic_store_n(reactor->impl.sq_tail, tail + 1, __ATOMIC_RELEASE);
+        if (sys_io_uring_enter(reactor->impl.ring_fd, 1, 0, 0, NULL) < 0) {
+            __atomic_store_n(reactor->impl.sq_tail, tail, __ATOMIC_RELEASE);
+            return false;
+        }
+        return true;
+    } else {
+        struct epoll_event ev;
+        return epoll_ctl(reactor->impl.epoll_fd, EPOLL_CTL_DEL, fd, &ev) == 0;
+    }
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+    struct kevent change;
+    EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+    return kevent(reactor->impl.kq_fd, &change, 1, NULL, 0, NULL) == 0;
+#else
+    return false;
+#endif
 }
 
 void cwist_reactor_run(cwist_reactor_t *reactor) {

@@ -217,6 +217,18 @@ void cwist_io_queue_run(cwist_io_queue *q) {
 }
 
 /**
+ * @brief Request that runners stop without freeing the queue.
+ * @param q Queue instance to stop.
+ */
+void cwist_io_queue_stop(cwist_io_queue *q) {
+    if (!q) return;
+    atomic_store_explicit(&q->running, false, memory_order_release);
+    pthread_mutex_lock(&q->sleep_lock);
+    pthread_cond_broadcast(&q->sleep_cond);
+    pthread_mutex_unlock(&q->sleep_lock);
+}
+
+/**
  * @brief Stop the queue, wake sleepers, and free all remaining nodes.
  * @param q Queue instance to destroy.
  */

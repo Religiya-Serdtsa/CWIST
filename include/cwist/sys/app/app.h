@@ -9,6 +9,9 @@
 #include <cwist/net/http/http.h>
 #include <cwist/net/http/https.h>
 #include <cwist/core/db/sql.h>
+#include <cwist/core/db/pool.h>
+#include <cwist/net/redis/cwist_redis.h>
+#include <cwist/sys/job/scheduler.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/macros.h>
 #include <cwist/sys/app/big_dumb_reply.h>
@@ -157,6 +160,22 @@ typedef struct cwist_app {
 
     /** @brief WebTransport session handler */
     cwist_webtransport_handler_func wt_handler;
+
+    /** @brief Session signing secret (HMAC-SHA256). */
+    char *session_secret;
+    /** @brief Session cookie name. */
+    char *session_name;
+    /** @brief Session cookie max-age in seconds. */
+    int session_max_age;
+
+    /** @brief Database connection pool (when enabled). */
+    void *db_pool;
+
+    /** @brief Redis connection pool (when enabled). */
+    void *redis_pool;
+
+    /** @brief Background job scheduler (when enabled). */
+    void *scheduler;
 } cwist_app;
 
 /** --- Memory Management --- */
@@ -290,6 +309,46 @@ cwist_error_t cwist_app_use_nuke_db(cwist_app *app, const char *db_path, int syn
 cwist_db *cwist_app_get_db(cwist_app *app);
 
 /**
+ * @brief Open a SQLite connection pool and attach it to the application.
+ * @param app       Application context.
+ * @param db_path   SQLite database path (or ":memory:").
+ * @param max_conns Maximum number of connections in the pool (>= 1).
+ */
+cwist_error_t cwist_app_use_db_pool(cwist_app *app, const char *db_path, size_t max_conns);
+
+/**
+ * @brief Return the application's database connection pool.
+ */
+cwist_db_pool_t *cwist_app_get_db_pool(cwist_app *app);
+
+/**
+ * @brief Configure a Redis connection pool for the application.
+ * @param app       Application context.
+ * @param host      Redis server host.
+ * @param port      Redis server port.
+ * @param max_conns Maximum number of pooled connections (>= 1).
+ */
+cwist_error_t cwist_app_use_redis(cwist_app *app, const char *host, int port, size_t max_conns);
+
+/**
+ * @brief Return the application's Redis connection pool.
+ */
+cwist_redis_pool_t *cwist_app_get_redis_pool(cwist_app *app);
+
+/**
+ * @brief Configure a background job scheduler for the application.
+ * @param app           Application context.
+ * @param worker_count  Number of background worker threads (>= 1).
+ * @param queue_capacity Capacity hint for the underlying job queue.
+ */
+cwist_error_t cwist_app_use_scheduler(cwist_app *app, size_t worker_count, size_t queue_capacity);
+
+/**
+ * @brief Return the application's background job scheduler.
+ */
+cwist_scheduler_t *cwist_app_get_scheduler(cwist_app *app);
+
+/**
  * @brief Auto-detect and mount an RDBMS runtime by probing a TCP port.
  *
  * Connects to 127.0.0.1:@p port, probes the wire protocol, detects the
@@ -313,9 +372,15 @@ bool cwist_app_auto_rdbms(cwist_app *app, int port);
  */
 void cwist_app_get(cwist_app *app, const char *path, cwist_handler_func handler);
 void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler);
+void cwist_app_put(cwist_app *app, const char *path, cwist_handler_func handler);
+void cwist_app_delete(cwist_app *app, const char *path, cwist_handler_func handler);
+void cwist_app_patch(cwist_app *app, const char *path, cwist_handler_func handler);
 void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handler);
 void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
 void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+void cwist_app_put_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+void cwist_app_delete_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+void cwist_app_patch_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
 void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func handler, cwist_endpoint_opt_t opts);
 
 void cwist_app_enable_metrics(cwist_app *app);
@@ -323,6 +388,9 @@ void cwist_app_enable_healthz(cwist_app *app);
 
 void cwist_app_get_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
 void cwist_app_post_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
+void cwist_app_put_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
+void cwist_app_delete_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
+void cwist_app_patch_named(cwist_app *app, const char *path, const char *name, cwist_handler_func handler);
 char *cwist_url_for(cwist_app *app, const char *name, cwist_query_map *params);
 
 /**

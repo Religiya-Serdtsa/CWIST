@@ -1064,12 +1064,6 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
     return 0;
 }
 
-/* Kept for external compatibility if any caller relies on the old signature */
-__attribute__((unused))
-static int h2_send_response(cwist_https_connection *conn, uint32_t stream_id, cwist_http_response *res) {
-    return h2_send_response_raw(conn, stream_id, res, CWIST_HTTP2_MAX_FRAME_SIZE);
-}
-
 static int h2_read_all(cwist_https_connection *conn, void *buf, int len) {
     int total = 0;
     while (total < len) {

@@ -27,8 +27,14 @@ typedef struct {
     cwist_multipart_result *result;
 } mp_parse_ctx;
 
+static void mp_parse_headers(mp_parse_ctx *ctx);
+
 static int mp_on_header_field(multipart_parser *p, const char *at, size_t len) {
     mp_parse_ctx *ctx = (mp_parse_ctx *)multipart_parser_get_data(p);
+    if (ctx->header_value_len > 0) {
+        /* Previous header value is complete, parse it before moving to next field. */
+        mp_parse_headers(ctx);
+    }
     if (ctx->header_field_len + len < sizeof(ctx->header_field)) {
         memcpy(ctx->header_field + ctx->header_field_len, at, len);
         ctx->header_field_len += len;
@@ -97,6 +103,9 @@ static int mp_on_headers_complete(multipart_parser *p) {
 
 static int mp_on_part_data_begin(multipart_parser *p) {
     mp_parse_ctx *ctx = (mp_parse_ctx *)multipart_parser_get_data(p);
+    if (ctx->header_value_len > 0) {
+        mp_parse_headers(ctx);
+    }
     ctx->header_field_len = 0;
     ctx->header_value_len = 0;
     ctx->name[0] = '\0';
@@ -179,7 +188,19 @@ cwist_multipart_result *cwist_multipart_parse(const char *body, size_t body_len,
         .on_part_data_end   = mp_on_part_data_end,
     };
 
-    multipart_parser *parser = multipart_parser_init(boundary, &settings);
+    /* multipart-parser-c expects the leading dashes in the boundary. */
+    size_t blen = strlen(boundary);
+    char *parser_boundary = (char *)cwist_alloc(blen + 3);
+    if (!parser_boundary) {
+        cwist_free(result);
+        return NULL;
+    }
+    memcpy(parser_boundary, "--", 2);
+    memcpy(parser_boundary + 2, boundary, blen);
+    parser_boundary[blen + 2] = '\0';
+
+    multipart_parser *parser = multipart_parser_init(parser_boundary, &settings);
+    cwist_free(parser_boundary);
     if (!parser) {
         cwist_free(result);
         return NULL;
