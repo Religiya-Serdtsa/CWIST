@@ -218,18 +218,7 @@ static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
 static struct lsxpack_header *
 cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
     cwist_h3_hset_t *hset = hset_p;
-    if (xhdr) {
-        /* Advance by the exact decoded size lsquic reports
-         * (name_len + val_len + dec_overhead).  The old pointer-offset
-         * arithmetic computed the wrong length and corrupted headers
-         * when multiple Cookie values arrived in separate QPACK entries. */
-        size_t total = lsxpack_header_get_dec_size(xhdr);
-        if (total > sizeof(hset->decode_buf) - hset->decode_off)
-            total = sizeof(hset->decode_buf) - hset->decode_off;
-        hset->decode_off += total;
-        if (hset->count < H3_MAX_HEADERS)
-            hset->count++;
-    }
+    (void)xhdr;
     if (hset->count >= H3_MAX_HEADERS)
         return NULL;
     if (req_space > sizeof(hset->decode_buf) - hset->decode_off)
@@ -241,9 +230,17 @@ cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space
 }
 
 static int cwist_h3_hsi_process_header(void *hset_p, struct lsxpack_header *xhdr) {
-    (void)hset_p;
-    (void)xhdr;
-    return 0; /* success */
+    cwist_h3_hset_t *hset = hset_p;
+    if (!hset || !xhdr)
+        return 0;
+    size_t total = (xhdr->val_offset + xhdr->val_len + xhdr->dec_overhead)
+                   - (size_t)hset->decode_off;
+    if (total > sizeof(hset->decode_buf) - hset->decode_off)
+        total = sizeof(hset->decode_buf) - hset->decode_off;
+    hset->decode_off += total;
+    if (hset->count < H3_MAX_HEADERS)
+        hset->count++;
+    return 0;
 }
 
 static void cwist_h3_hsi_discard(void *hset_p) {
