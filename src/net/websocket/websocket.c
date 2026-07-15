@@ -2,6 +2,7 @@
 #include <cwist/net/websocket/websocket.h>
 #include <cwist/net/http/http.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/seq/seq.h>
 #include "ws_utils.h"
 
 #include <stdio.h>
@@ -220,6 +221,72 @@ void cwist_websocket_frame_destroy(cwist_ws_frame *frame) {
         if (frame->payload) cwist_free(frame->payload);
         cwist_free(frame);
     }
+}
+
+/**
+ * @brief Send a large payload as sequenced binary frames.
+ */
+int cwist_websocket_send_sequenced(cwist_websocket *ws,
+                                   const uint8_t *data,
+                                   size_t len,
+                                   uint16_t chunk_payload_size) {
+    if (!ws || ws->is_closed || !data || len == 0 || chunk_payload_size == 0) return -1;
+
+    cwist_seq_message_t msg;
+    if (!cwist_seq_split(data, len, chunk_payload_size, &msg)) return -1;
+
+    int rc = 0;
+    for (size_t i = 0; i < msg.count && rc == 0; i++) {
+        if (cwist_websocket_send(ws, CWIST_WS_FRAME_BINARY, msg.chunks[i], msg.chunk_lens[i]) != 0) {
+            rc = -1;
+        }
+    }
+
+    cwist_seq_message_free(&msg);
+    return rc;
+}
+
+/**
+ * @brief Receive and reassemble a sequenced binary message.
+ */
+uint8_t *cwist_websocket_receive_sequenced(cwist_websocket *ws, size_t *out_len) {
+    if (!out_len) return NULL;
+    *out_len = 0;
+    if (!ws || ws->is_closed) return NULL;
+
+    cwist_seq_assembler_t *a = cwist_seq_assembler_create();
+    if (!a) return NULL;
+
+    uint8_t *result = NULL;
+    while (!cwist_seq_assembler_is_complete(a)) {
+        cwist_ws_frame *frame = cwist_websocket_receive(ws);
+        if (!frame) break;
+
+        if (frame->opcode == CWIST_WS_FRAME_BINARY && frame->payload && frame->payload_len > 0) {
+            cwist_seq_chunk_t chunk;
+            if (cwist_seq_chunk_parse(frame->payload, frame->payload_len, &chunk)) {
+                cwist_seq_assembler_feed(a, &chunk);
+            }
+        }
+
+        bool is_close = (frame->opcode == CWIST_WS_FRAME_CLOSE);
+        cwist_websocket_frame_destroy(frame);
+        if (is_close) break;
+    }
+
+    const uint8_t *assembled = NULL;
+    size_t assembled_len = 0;
+    if (cwist_seq_assembler_get_data(a, &assembled, &assembled_len) && assembled_len > 0) {
+        result = (uint8_t *)cwist_alloc(assembled_len + 1);
+        if (result) {
+            memcpy(result, assembled, assembled_len);
+            result[assembled_len] = '\0';
+            *out_len = assembled_len;
+        }
+    }
+
+    cwist_seq_assembler_destroy(a);
+    return result;
 }
 
 /**

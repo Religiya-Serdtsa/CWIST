@@ -1,6 +1,7 @@
 #include <cwist/security/jwt/jwt.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/core/sstring/sstring.h>
+#include <cwist/core/seq/seq.h>
 
 #include <cjson/cJSON.h>
 #include <openssl/hmac.h>
@@ -373,4 +374,103 @@ void cwist_jwt_claims_destroy(cwist_jwt_claims *claims) {
     if (!claims) return;
     cJSON_Delete(claims->json);
     cwist_free(claims);
+}
+
+/* --------------------------------------------------------------------------
+ * Sequenced JWT transport helpers
+ * -------------------------------------------------------------------------- */
+
+cwist_jwt_chunk_t *cwist_jwt_split_chunks(const char *token,
+                                          uint16_t chunk_payload_size,
+                                          size_t *out_count) {
+    if (!token || chunk_payload_size == 0 || !out_count) return NULL;
+    *out_count = 0;
+
+    size_t token_len = strlen(token);
+    if (token_len == 0) return NULL;
+
+    cwist_seq_message_t msg;
+    if (!cwist_seq_split((const uint8_t *)token, token_len, chunk_payload_size, &msg)) {
+        return NULL;
+    }
+
+    cwist_jwt_chunk_t *chunks = (cwist_jwt_chunk_t *)cwist_alloc_array(msg.count, sizeof(cwist_jwt_chunk_t));
+    if (!chunks) {
+        cwist_seq_message_free(&msg);
+        return NULL;
+    }
+
+    for (size_t i = 0; i < msg.count; i++) {
+        chunks[i].data = msg.chunks[i];
+        chunks[i].len = msg.chunk_lens[i];
+        msg.chunks[i] = NULL; /* ownership transferred */
+    }
+
+    cwist_seq_message_free(&msg);
+    *out_count = msg.count;
+    return chunks;
+}
+
+void cwist_jwt_chunks_free(cwist_jwt_chunk_t *chunks, size_t count) {
+    if (!chunks) return;
+    for (size_t i = 0; i < count; i++) cwist_free(chunks[i].data);
+    cwist_free(chunks);
+}
+
+char *cwist_jwt_join_chunks(const cwist_jwt_chunk_t *chunks, size_t count) {
+    if (!chunks || count == 0) return NULL;
+
+    cwist_seq_assembler_t *a = cwist_seq_assembler_create();
+    if (!a) return NULL;
+
+    for (size_t i = 0; i < count; i++) {
+        cwist_seq_chunk_t chunk;
+        if (!cwist_seq_chunk_parse(chunks[i].data, chunks[i].len, &chunk)) {
+            cwist_seq_assembler_destroy(a);
+            return NULL;
+        }
+        cwist_seq_assembler_feed(a, &chunk);
+    }
+
+    const uint8_t *data = NULL;
+    size_t len = 0;
+    bool ok = cwist_seq_assembler_get_data(a, &data, &len);
+    char *token = NULL;
+    if (ok && len > 0) {
+        token = (char *)cwist_alloc(len + 1);
+        if (token) {
+            memcpy(token, data, len);
+            token[len] = '\0';
+        }
+    }
+
+    cwist_seq_assembler_destroy(a);
+    return token;
+}
+
+cwist_jwt_chunk_t *cwist_jwt_sign_chunks(const char *payload_json,
+                                         const char *secret,
+                                         long exp_seconds,
+                                         uint16_t chunk_payload_size,
+                                         size_t *out_count) {
+    if (!payload_json || !secret || chunk_payload_size == 0 || !out_count) return NULL;
+    *out_count = 0;
+
+    char *token = cwist_jwt_sign(payload_json, secret, exp_seconds);
+    if (!token) return NULL;
+
+    cwist_jwt_chunk_t *chunks = cwist_jwt_split_chunks(token, chunk_payload_size, out_count);
+    cwist_free(token);
+    return chunks;
+}
+
+cwist_jwt_claims *cwist_jwt_verify_chunks(const cwist_jwt_chunk_t *chunks,
+                                          size_t count,
+                                          const char *secret) {
+    if (!chunks || count == 0 || !secret) return NULL;
+    char *token = cwist_jwt_join_chunks(chunks, count);
+    if (!token) return NULL;
+    cwist_jwt_claims *claims = cwist_jwt_verify(token, secret);
+    cwist_free(token);
+    return claims;
 }

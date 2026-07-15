@@ -22,6 +22,7 @@
 
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/seq/seq.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/sys/app/shutdown.h>
 
@@ -51,6 +52,11 @@
 #define CWIST_HTTP2_FRAME_CONTINUATION 0x09
 #define CWIST_HTTP2_FRAME_PUSH_PROMISE 0x05
 
+/* CWIST sequenced DATA extension: each DATA frame carries one seq chunk. */
+#define CWIST_HTTP2_USE_SEQUENCED_DATA 1
+#define CWIST_HTTP2_SEQ_CHUNK_PAYLOAD(max_frame) \
+    ((uint16_t)((max_frame) > CWIST_SEQ_HEADER_SIZE ? (max_frame) - CWIST_SEQ_HEADER_SIZE : 0))
+
 #define H2_ERR_NO_ERROR           0x0
 #define H2_ERR_PROTOCOL_ERROR     0x1
 #define H2_ERR_FLOW_CONTROL_ERROR 0x3
@@ -69,6 +75,7 @@ typedef struct h2_stream {
     int32_t recv_window;   /* our window; bytes peer may send */
     uint8_t recv_xor;      /* running XOR of received DATA payload bytes */
     uint8_t send_xor;      /* running XOR of sent DATA payload bytes */
+    cwist_seq_assembler_t *body_assembler; /* reorders sequenced DATA chunks */
     struct h2_stream *next;
 } h2_stream;
 
@@ -86,6 +93,7 @@ typedef struct {
     uint32_t cont_stream_id;
     bool expecting_continuation;
     bool cont_end_stream;
+    bool sequenced_data;   /* CWIST extension: DATA frames carry seq chunks */
     uint32_t last_processed_stream_id;
 } h2_conn;
 
@@ -97,6 +105,7 @@ static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
     hc->conn_send_window = 65535;
     hc->conn_recv_window = 65535;
     hc->cont_end_stream = false;
+    hc->sequenced_data = CWIST_HTTP2_USE_SEQUENCED_DATA != 0;
 }
 
 static void h2_conn_destroy(h2_conn *hc) {
@@ -104,6 +113,7 @@ static void h2_conn_destroy(h2_conn *hc) {
     while (s) {
         h2_stream *next = s->next;
         if (s->req) cwist_http_request_destroy(s->req);
+        cwist_seq_assembler_destroy(s->body_assembler);
         cwist_free(s);
         s = next;
     }
@@ -122,6 +132,7 @@ static h2_stream *h2_stream_find(h2_conn *hc, uint32_t stream_id) {
 static h2_stream *h2_stream_create(h2_conn *hc, uint32_t stream_id) {
     h2_stream *s = (h2_stream *)cwist_alloc(sizeof(*s));
     if (!s) return NULL;
+    memset(s, 0, sizeof(*s));
     s->stream_id = stream_id;
     s->send_window = (int32_t)hc->peer_initial_window_size;
     s->recv_window = 65535;
@@ -137,6 +148,7 @@ static void h2_stream_remove(h2_conn *hc, uint32_t stream_id) {
         if (s->stream_id == stream_id) {
             *pp = s->next;
             if (s->req) cwist_http_request_destroy(s->req);
+            cwist_seq_assembler_destroy(s->body_assembler);
             cwist_free(s);
             return;
         }
@@ -1004,6 +1016,38 @@ static size_t h2_encode_response_headers(cwist_http_response *res,
 
 /* --- Response Senders --- */
 
+/**
+ * @brief Send a memory body as sequenced DATA frames.
+ *
+ * Used by the CWIST HTTP/2 DATA extension: every DATA frame carries one
+ * sequence chunk so the receiver can reorder and discard duplicates.
+ */
+static int h2_send_seq_data_frames(cwist_https_connection *conn,
+                                   uint32_t stream_id,
+                                   const uint8_t *body_data,
+                                   size_t body_len,
+                                   uint32_t max_frame_size,
+                                   uint8_t *send_xor) {
+    uint16_t chunk_payload = CWIST_HTTP2_SEQ_CHUNK_PAYLOAD(max_frame_size);
+    if (chunk_payload == 0) return -1;
+
+    cwist_seq_message_t msg;
+    if (!cwist_seq_split(body_data, body_len, chunk_payload, &msg)) return -1;
+
+    for (size_t i = 0; i < msg.count; i++) {
+        uint8_t flags = (i + 1 == msg.count) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
+        if (h2_write_frame(conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
+                           msg.chunks[i], (uint32_t)msg.chunk_lens[i]) != 0) {
+            cwist_seq_message_free(&msg);
+            return -1;
+        }
+        if (send_xor) *send_xor ^= h2_xor_bytes(msg.chunks[i], msg.chunk_lens[i]);
+    }
+
+    cwist_seq_message_free(&msg);
+    return 0;
+}
+
 static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id,
                                  cwist_http_response *res, uint32_t max_frame_size) {
     unsigned char header_block[8192];
@@ -1031,37 +1075,21 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
         return -1;
     }
 
+    if (body_len == 0) return 0;
+
     if (res->use_file_stream && res->file_stream_fd >= 0) {
-        off_t offset = res->file_stream_offset;
-        size_t remaining = res->file_stream_len;
-        while (remaining > 0) {
-            uint32_t chunk = (uint32_t)(remaining > max_frame_size ? max_frame_size : remaining);
-            unsigned char *chunk_buf = (unsigned char *)cwist_alloc(chunk);
-            if (!chunk_buf) return -1;
-            ssize_t r = pread(res->file_stream_fd, chunk_buf, chunk, offset);
-            if (r <= 0) { cwist_free(chunk_buf); return -1; }
-            uint8_t flags = (remaining == (size_t)r) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
-            if (h2_write_frame(conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id, chunk_buf, (uint32_t)r) != 0) {
-                cwist_free(chunk_buf); return -1;
-            }
-            cwist_free(chunk_buf);
-            offset += r;
-            remaining -= (size_t)r;
-        }
-    } else {
-        size_t sent = 0;
-        while (sent < body_len) {
-            size_t remaining = body_len - sent;
-            uint32_t chunk = (uint32_t)(remaining > max_frame_size ? max_frame_size : remaining);
-            uint8_t flags = (sent + chunk == body_len) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
-            if (h2_write_frame(conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
-                               body_data + sent, chunk) != 0) {
-                return -1;
-            }
-            sent += chunk;
-        }
+        /* Load file contents and sequence them.  Server push rarely streams
+         * huge files, so a single read is acceptable here. */
+        unsigned char *file_buf = (unsigned char *)cwist_alloc(body_len);
+        if (!file_buf) return -1;
+        ssize_t r = pread(res->file_stream_fd, file_buf, body_len, res->file_stream_offset);
+        if (r <= 0 || (size_t)r != body_len) { cwist_free(file_buf); return -1; }
+        int rc = h2_send_seq_data_frames(conn, stream_id, file_buf, body_len, max_frame_size, NULL);
+        cwist_free(file_buf);
+        return rc;
     }
-    return 0;
+
+    return h2_send_seq_data_frames(conn, stream_id, body_data, body_len, max_frame_size, NULL);
 }
 
 static int h2_read_all(cwist_https_connection *conn, void *buf, int len) {
@@ -1138,6 +1166,119 @@ static void h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
     }
 }
 
+/**
+ * @brief Compute a sequenced chunk payload size that fits the current window.
+ */
+static uint16_t h2_seq_chunk_payload(h2_conn *hc, h2_stream *s, uint32_t max_frame_size) {
+    uint16_t max_payload = CWIST_HTTP2_SEQ_CHUNK_PAYLOAD(max_frame_size);
+    int32_t eff_window = hc->conn_send_window;
+    if (s && s->send_window < eff_window) eff_window = s->send_window;
+    if (eff_window <= (int32_t)CWIST_SEQ_HEADER_SIZE) return 0;
+    uint32_t allowed_payload = (uint32_t)(eff_window - (int32_t)CWIST_SEQ_HEADER_SIZE);
+    return (allowed_payload < (uint32_t)max_payload) ? (uint16_t)allowed_payload : max_payload;
+}
+
+/**
+ * @brief Send a file body as sequenced DATA frames with flow-control waits.
+ */
+static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
+                                 int fd, off_t offset, size_t body_len,
+                                 uint32_t max_frame_size) {
+    uint16_t chunk_payload = h2_seq_chunk_payload(hc, s, max_frame_size);
+    if (chunk_payload == 0 || body_len == 0) return -1;
+
+    uint32_t total_chunks = (uint32_t)((body_len + chunk_payload - 1) / chunk_payload);
+    size_t remaining = body_len;
+    off_t cur_offset = offset;
+
+    for (uint32_t i = 0; i < total_chunks && remaining > 0; i++) {
+        while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+            h2_process_incoming_frames_nonblocking(hc, s);
+            if (s && s->send_window == -999) return -1;
+            if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                struct timespec ts = {0, 2000000};
+                nanosleep(&ts, NULL);
+            }
+        }
+
+        size_t plen = remaining > chunk_payload ? chunk_payload : remaining;
+        size_t chunk_len = CWIST_SEQ_HEADER_SIZE + plen;
+        if ((int32_t)chunk_len > hc->conn_send_window ||
+            (s && (int32_t)chunk_len > s->send_window)) {
+            /* Window too small for a full sequenced chunk; wait for update. */
+            struct timespec ts = {0, 2000000};
+            nanosleep(&ts, NULL);
+            i--;
+            continue;
+        }
+
+        unsigned char *chunk = (unsigned char *)cwist_alloc(chunk_len);
+        if (!chunk) return -1;
+        ssize_t r = pread(fd, chunk + CWIST_SEQ_HEADER_SIZE, plen, cur_offset);
+        if (r <= 0 || (size_t)r != plen) { cwist_free(chunk); return -1; }
+        cwist_seq_chunk_build_header(chunk, i + 1, (uint16_t)total_chunks,
+                                     (uint16_t)plen, chunk_payload);
+        uint8_t flags = (i + 1 == total_chunks) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
+        if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
+                           chunk, (uint32_t)chunk_len) != 0) {
+            cwist_free(chunk); return -1;
+        }
+        if (s) s->send_xor ^= h2_xor_bytes(chunk, chunk_len);
+        cwist_free(chunk);
+        hc->conn_send_window -= (int32_t)chunk_len;
+        if (s) s->send_window -= (int32_t)chunk_len;
+        cur_offset += (off_t)plen;
+        remaining -= plen;
+    }
+    return 0;
+}
+
+/**
+ * @brief Send a memory body as sequenced DATA frames with flow-control waits.
+ */
+static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
+                                   const uint8_t *body_data, size_t body_len,
+                                   uint32_t max_frame_size) {
+    uint16_t chunk_payload = h2_seq_chunk_payload(hc, s, max_frame_size);
+    if (chunk_payload == 0) return -1;
+
+    cwist_seq_message_t msg;
+    if (!cwist_seq_split(body_data, body_len, chunk_payload, &msg)) return -1;
+
+    for (size_t i = 0; i < msg.count; i++) {
+        while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+            h2_process_incoming_frames_nonblocking(hc, s);
+            if (s && s->send_window == -999) return -1;
+            if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                struct timespec ts = {0, 2000000};
+                nanosleep(&ts, NULL);
+            }
+        }
+
+        size_t chunk_len = msg.chunk_lens[i];
+        if ((int32_t)chunk_len > hc->conn_send_window ||
+            (s && (int32_t)chunk_len > s->send_window)) {
+            struct timespec ts = {0, 2000000};
+            nanosleep(&ts, NULL);
+            i--;
+            continue;
+        }
+
+        uint8_t flags = (i + 1 == msg.count) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
+        if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
+                           msg.chunks[i], (uint32_t)chunk_len) != 0) {
+            cwist_seq_message_free(&msg);
+            return -1;
+        }
+        if (s) s->send_xor ^= h2_xor_bytes(msg.chunks[i], chunk_len);
+        hc->conn_send_window -= (int32_t)chunk_len;
+        if (s) s->send_window -= (int32_t)chunk_len;
+    }
+
+    cwist_seq_message_free(&msg);
+    return 0;
+}
+
 static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_response *res) {
     unsigned char header_block[8192];
     size_t block_len = h2_encode_response_headers(res, header_block, sizeof(header_block));
@@ -1168,15 +1309,26 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
     uint32_t max_frame = hc->peer_max_frame_size;
     if (max_frame == 0) max_frame = CWIST_HTTP2_MAX_FRAME_SIZE;
 
+    if (body_len == 0) return 0;
+
+    if (hc->sequenced_data) {
+        if (res->use_file_stream && res->file_stream_fd >= 0) {
+            return h2_send_seq_file_body(hc, s, stream_id, res->file_stream_fd,
+                                         res->file_stream_offset, body_len, max_frame);
+        }
+        return h2_send_seq_memory_body(hc, s, stream_id, body_data, body_len, max_frame);
+    }
+
+    /* Fallback: standard HTTP/2 DATA frames without sequence headers. */
     if (res->use_file_stream && res->file_stream_fd >= 0) {
         off_t offset = res->file_stream_offset;
         size_t remaining = res->file_stream_len;
         while (remaining > 0) {
             while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
                 h2_process_incoming_frames_nonblocking(hc, s);
-                if (s && s->send_window == -999) return -1; // stream reset
+                if (s && s->send_window == -999) return -1;
                 if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
-                    struct timespec ts = {0, 2000000}; // 2ms sleep
+                    struct timespec ts = {0, 2000000};
                     nanosleep(&ts, NULL);
                 }
             }
@@ -1206,9 +1358,9 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
         while (sent < body_len) {
             while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
                 h2_process_incoming_frames_nonblocking(hc, s);
-                if (s && s->send_window == -999) return -1; // stream reset
+                if (s && s->send_window == -999) return -1;
                 if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
-                    struct timespec ts = {0, 2000000}; // 2ms sleep
+                    struct timespec ts = {0, 2000000};
                     nanosleep(&ts, NULL);
                 }
             }
@@ -1648,16 +1800,41 @@ cwist_error_t cwist_http2_serve_connection(
                     }
                 }
                 if (payload && len > 0) {
-                    if (s->req->body->size + len > CWIST_HTTP_MAX_BODY_SIZE) {
-                        uint8_t rst[4] = {0, 0, 0, H2_ERR_REFUSED_STREAM};
-                        h2_write_frame(hc.conn, CWIST_HTTP2_FRAME_RST_STREAM, 0, stream_id, rst, 4);
-                        h2_stream_remove(&hc, stream_id);
-                        break;
+                    if (hc.sequenced_data && len >= CWIST_SEQ_HEADER_SIZE) {
+                        cwist_seq_chunk_t chunk;
+                        if (cwist_seq_chunk_parse(payload, len, &chunk)) {
+                            if (!s->body_assembler) {
+                                s->body_assembler = cwist_seq_assembler_create();
+                                if (!s->body_assembler) {
+                                    connected = false;
+                                    break;
+                                }
+                            }
+                            cwist_seq_assembler_feed(s->body_assembler, &chunk);
+                        }
+                        /* Malformed sequence chunks are ignored (discarded). */
+                    } else if (!hc.sequenced_data) {
+                        if (s->req->body->size + len > CWIST_HTTP_MAX_BODY_SIZE) {
+                            uint8_t rst[4] = {0, 0, 0, H2_ERR_REFUSED_STREAM};
+                            h2_write_frame(hc.conn, CWIST_HTTP2_FRAME_RST_STREAM, 0, stream_id, rst, 4);
+                            h2_stream_remove(&hc, stream_id);
+                            break;
+                        }
+                        s->recv_xor ^= h2_xor_bytes(payload, len);
+                        cwist_sstring_append_len(s->req->body, (const char *)payload, len);
                     }
-                    s->recv_xor ^= h2_xor_bytes(payload, len);
-                    cwist_sstring_append_len(s->req->body, (const char *)payload, len);
                 }
                 if (flags & CWIST_HTTP2_FLAG_END_STREAM) {
+                    if (hc.sequenced_data && s->body_assembler) {
+                        const uint8_t *assembled = NULL;
+                        size_t assembled_len = 0;
+                        if (cwist_seq_assembler_get_data(s->body_assembler, &assembled, &assembled_len)) {
+                            if (s->req->body->size + assembled_len <= CWIST_HTTP_MAX_BODY_SIZE) {
+                                s->recv_xor ^= h2_xor_bytes(assembled, assembled_len);
+                                cwist_sstring_append_len(s->req->body, (const char *)assembled, assembled_len);
+                            }
+                        }
+                    }
                     cwist_http_response *res = cwist_http_response_create();
                     if (res) {
                         handler(user_ctx, s->req, res);
