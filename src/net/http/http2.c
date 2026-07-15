@@ -52,8 +52,11 @@
 #define CWIST_HTTP2_FRAME_CONTINUATION 0x09
 #define CWIST_HTTP2_FRAME_PUSH_PROMISE 0x05
 
-/* CWIST sequenced DATA extension: each DATA frame carries one seq chunk. */
-#define CWIST_HTTP2_USE_SEQUENCED_DATA 1
+/* CWIST sequenced DATA extension: each DATA frame carries one seq chunk.
+ * Disabled by default so that standard HTTP/2 clients receive plain DATA
+ * payloads.  Applications that want the CWIST-specific sequenced stream can
+ * enable it per-connection via cwist_https_connection.http2_sequenced_data. */
+#define CWIST_HTTP2_USE_SEQUENCED_DATA 0
 #define CWIST_HTTP2_SEQ_CHUNK_PAYLOAD(max_frame) \
     ((uint16_t)((max_frame) > CWIST_SEQ_HEADER_SIZE ? (max_frame) - CWIST_SEQ_HEADER_SIZE : 0))
 
@@ -105,7 +108,7 @@ static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
     hc->conn_send_window = 65535;
     hc->conn_recv_window = 65535;
     hc->cont_end_stream = false;
-    hc->sequenced_data = CWIST_HTTP2_USE_SEQUENCED_DATA != 0;
+    hc->sequenced_data = conn && conn->http2_sequenced_data;
 }
 
 static void h2_conn_destroy(h2_conn *hc) {
