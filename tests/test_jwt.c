@@ -107,12 +107,96 @@ static void test_no_exp(void) {
     printf("  Passed no-exp token.\n");
 }
 
+static void test_sequenced_chunks(void) {
+    printf("Testing JWT sequenced chunks...\n");
+
+    const char *secret = "chunk-secret";
+    const char *payload = "{\"sub\":\"user99\",\"role\":\"user\",\"data\":\"CWIST-sequenced-chunk-test\"}";
+    char *token = cwist_jwt_sign(payload, secret, 3600);
+    assert(token != NULL);
+
+    size_t count = 0;
+    cwist_jwt_chunk_t *chunks = cwist_jwt_split_chunks(token, 8, &count);
+    assert(chunks != NULL);
+    assert(count >= 3);
+
+    /* Reassemble out of order. */
+    cwist_jwt_chunk_t *shuffled = (cwist_jwt_chunk_t *)cwist_alloc_array(count, sizeof(cwist_jwt_chunk_t));
+    assert(shuffled != NULL);
+    for (size_t i = 0; i < count; i++) {
+        shuffled[i].data = chunks[i].data;
+        shuffled[i].len = chunks[i].len;
+    }
+    /* Swap first two chunks. */
+    cwist_jwt_chunk_t tmp = shuffled[0];
+    shuffled[0] = shuffled[1];
+    shuffled[1] = tmp;
+
+    char *rejoined = cwist_jwt_join_chunks(shuffled, count);
+    assert(rejoined != NULL);
+    assert(strcmp(rejoined, token) == 0);
+
+    cwist_jwt_claims *claims = cwist_jwt_verify(rejoined, secret);
+    assert(claims != NULL);
+    const char *sub = cwist_jwt_claims_get(claims, "sub");
+    assert(sub != NULL && strcmp(sub, "user99") == 0);
+
+    cwist_jwt_claims_destroy(claims);
+    cwist_free(rejoined);
+    cwist_free(shuffled);
+    cwist_jwt_chunks_free(chunks, count);
+    cwist_free(token);
+    printf("  Passed sequenced chunks.\n");
+}
+
+static void test_sign_verify_chunks(void) {
+    printf("Testing JWT sign_chunks -> verify_chunks roundtrip...\n");
+
+    const char *secret = "login-secret";
+    const char *payload = "{\"sub\":\"login-user\",\"role\":\"admin\"}";
+
+    size_t count = 0;
+    cwist_jwt_chunk_t *chunks = cwist_jwt_sign_chunks(payload, secret, 3600, 12, &count);
+    assert(chunks != NULL);
+    assert(count >= 3);
+
+    /* Shuffle chunks to simulate out-of-order network arrival. */
+    cwist_jwt_chunk_t *shuffled = (cwist_jwt_chunk_t *)cwist_alloc_array(count, sizeof(cwist_jwt_chunk_t));
+    assert(shuffled != NULL);
+    for (size_t i = 0; i < count; i++) {
+        shuffled[i].data = chunks[i].data;
+        shuffled[i].len = chunks[i].len;
+    }
+    for (size_t i = 0; i < count; i++) {
+        size_t j = (i + 1) % count;
+        cwist_jwt_chunk_t tmp = shuffled[i];
+        shuffled[i] = shuffled[j];
+        shuffled[j] = tmp;
+    }
+
+    cwist_jwt_claims *claims = cwist_jwt_verify_chunks(shuffled, count, secret);
+    assert(claims != NULL);
+
+    const char *sub = cwist_jwt_claims_get(claims, "sub");
+    assert(sub != NULL && strcmp(sub, "login-user") == 0);
+
+    const char *role = cwist_jwt_claims_get(claims, "role");
+    assert(role != NULL && strcmp(role, "admin") == 0);
+
+    cwist_jwt_claims_destroy(claims);
+    cwist_free(shuffled);
+    cwist_jwt_chunks_free(chunks, count);
+    printf("  Passed sign/verify chunks.\n");
+}
+
 int main(void) {
     test_sign_and_verify();
     test_wrong_secret();
     test_tampered_payload();
     test_expired_token();
     test_no_exp();
+    test_sequenced_chunks();
+    test_sign_verify_chunks();
     printf("All JWT tests passed!\n");
     return 0;
 }

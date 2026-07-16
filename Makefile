@@ -93,6 +93,7 @@ endif
 
 # Source Files
 SRCS = src/core/sstring/sstring.c \
+       src/core/seq/seq.c \
        src/sys/err/error.c \
        src/net/http/http.c \
        src/net/http/http2.c \
@@ -267,6 +268,7 @@ $(CNATS_LIB):
 # --- Test Targets ---
 
 TEST_TARGETS = test_sstring \
+               test_seq \
                test_http \
                test_siphash \
                test_mux \
@@ -309,6 +311,10 @@ test: $(TEST_TARGETS)
 test_sstring: $(LIB_NAME) tests/test_sstring.c
 	$(CC) $(CFLAGS) -o test_sstring tests/test_sstring.c $(LIB_NAME) $(LIBS)
 	./test_sstring
+
+test_seq: $(LIB_NAME) tests/test_seq.c
+	$(CC) $(CFLAGS) -o test_seq tests/test_seq.c $(LIB_NAME) $(LIBS)
+	./test_seq
 
 test_http: $(LIB_NAME) tests/test_http.c
 	$(CC) $(CFLAGS) -o test_http tests/test_http.c $(LIB_NAME) $(LIBS)
