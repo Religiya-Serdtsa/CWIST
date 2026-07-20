@@ -302,7 +302,8 @@ TEST_TARGETS = test_sstring \
                test_db_pool \
                test_redis \
                test_scheduler \
-               test_test_client
+               test_test_client \
+               test_multiport
 
 .PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild examples clean-examples
 
@@ -614,3 +615,7 @@ test_scheduler: $(LIB_NAME) tests/test_scheduler.c
 test_test_client: $(LIB_NAME) tests/test_test_client.c
 	$(CC) $(CFLAGS) -o test_test_client tests/test_test_client.c $(LIB_NAME) $(LIBS)
 	./test_test_client
+
+test_multiport: $(LIB_NAME) tests/test_multiport.c
+	$(CC) $(CFLAGS) -o test_multiport tests/test_multiport.c $(LIB_NAME) $(LIBS)
+	./test_multiport

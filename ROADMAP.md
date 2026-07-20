@@ -19,28 +19,28 @@
 
 ```
 [P0: Critical]      ████████████████████ 100% (Completed)
-[P1: Production]     ████████████████░░░░  80% (Multiport hardening in progress)
-[P2: DevEx]          ██░░░░░░░░░░░░░░░░░░  20% (Config loader done; test tooling WIP)
-[P3: Deep Protocols] ████████████░░░░░░░░  60% (HTTP/3 extension specs done; io_uring WIP)
+[P1: Production]     ████████████████████ 100% (Multiport hardening complete)
+[P2: DevEx]          ██████░░░░░░░░░░░░░░  30% (Config loader and test tooling done)
+[P3: Deep Protocols] ███████████████░░░░░  75% (HTTP/3 extension specs and io_uring backend done)
 ```
 
 ### 1) Transport Layer
 
 * **Native protocols ready**: HTTP/1.1 through HTTP/3 (QUIC via `lsquic`), WebTransport, and WebSocket are all implemented in-tree. Low-level socket controls (ECN, 0-RTT, connection migration) are complete.
 * **HTTP/3 browser hardening**: Response header emission now normalizes field names to lowercase and rejects CR/LF-bearing values, covering login/logout cookie and redirect paths in strict browsers such as Firefox.
-* **Async I/O optimization (`io_uring`)**: `io_uring_backend.c` and test code have been added; currently prototyping to reduce context-switching overhead in high-volume UDP send/receive loops (`🔄`).
-* **Multiport HTTP/3 fan-out**: The `cwist_multiport_t` facade that isolates multiple ports is being refactored. Future work will split independent UDP contexts per port (`⏳`).
+* **Async I/O optimization (`io_uring`)**: `io_uring_backend.c`, SQE/CQE synchronization, demolition safety, and focused tests are complete.
+* **Multiport HTTP/3 fan-out**: The `cwist_multiport_t` facade now creates per-port UDP contexts and copies global HTTP/3 settings unless a port is detached into a sub-app.
 
 ### 2) Application Layer
 
 * **High-performance router & middleware**: Deterministic resource management with parameterized routes (`/user/:id`), compression (Gzip via zlib), CORS, and rate limiting (libttak token bucket) are integrated.
 * **Observability**: Prometheus `/metrics` and a probe-registry health-check system are operational.
-* **Per-port sub-applications (`🔄`)**: Hardening the lifecycle and exception handling of `cwist_multiport_get_app(&app, port)` logic, which detaches a port into a separately tunable sub-application.
+* **Per-port sub-applications**: Lifecycle and exception handling for `cwist_multiport_get_app(&app, port)` are hardened; detached ports are separately tunable sub-applications.
 
 ### 3) Security & Data Layer
 
 * **Security specs**: BoringSSL-based TLS 1.3 and hybrid post-quantum KEM (`X25519MLKEM768`) are implemented ahead of time. CSRF and automatic secure-header injection remain planned (`⏳`).
-* **Data-layer integrity**: SQLite3 embedded integration, migration system, and a `_Generic` macro-based type-dispatched ORM/query builder are in the build stream. A lock-free work queue (`cwist_io_queue`) is partially implemented (`🔄`).
+* **Data-layer integrity**: SQLite3 embedded integration, migration system, and a `_Generic` macro-based type-dispatched ORM/query builder are in the build stream. The lock-free work queue (`cwist_io_queue`) and scheduler-backed background jobs are implemented.
 
 ---
 
@@ -48,9 +48,7 @@
 
 - Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are already implemented in-tree.
 - **P0 (must-have) is 100 % complete**: the framework’s core architecture and protocol stack are locked.
-- We are now in the **P1–P3 hardening phase**, focusing on structural completeness and extreme performance:
-  * Refining the **multiport facade** (`cwist_multiport_t`) so the root app retains ownership of the default port while counted descriptors and per-port sub-app lifecycle validation are proved by tests.
-  * Hardening the **`io_uring` packet loop** for HTTP/3 UDP workloads: synchronizing SQE submission and CQE consumption, and minimizing memory copies between the `lsquic` async stream callbacks and the kernel ring buffer.
+- We are now in the **P2–P4 tooling and ecosystem phase**. Completed multiport, scheduler, test-client, and `io_uring` hardening remain covered by focused regression tests.
 
 ---
 
@@ -66,7 +64,7 @@
 | WebSocket Server | ✅ | Upgrade, frame parsing, ping/pong |
 | TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH support |
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
-| **io_uring Backend** | 🔄 | Initial implementation added (`io_uring_backend.c`, `test_io_uring.c`); SQE/CQE timing synchronization and copy-minimization with `lsquic` callbacks being hardened |
+| **io_uring Backend** | ✅ | `io_uring_backend.c`, focused smoke tests, demolition tests, SQE/CQE synchronization, and fixed-buffer fallback |
 | **kqueue Backend** | ⏳ | BSD/macOS; blocked on non-Linux test environment |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
 | **WebTransport** | ✅ | Basic server handler (`:protocol=webtransport` detection via HTTP/3 CONNECT) |
@@ -74,8 +72,8 @@
 | ECN (Explicit Congestion Notification) | ✅ | UDP socket with `IP_RECVTOS` / `IPV6_RECVTCLASS` |
 | Connection Migration | ✅ | `es_allow_migration` enabled |
 | 0-RTT Early Data | ✅ | `SSL_CTX_set_early_data_enabled` |
-| **Multiport TCP Facade** | 🔄 | Counted `cwist_multiport_t` descriptor and shared accept loop implemented; duplicate/default-port validation and per-port smoke tests in progress |
-| **Multiport HTTP/3 Fan-out** | ⏳ | Needs one UDP socket/context per bound port, with global settings copied unless the port is detached into a sub-app |
+| **Multiport TCP Facade** | ✅ | Counted `cwist_multiport_t` descriptor, shared accept loop, duplicate/default-port validation, and per-port smoke tests |
+| **Multiport HTTP/3 Fan-out** | ✅ | One UDP socket/context per bound port, with global settings copied unless the port is detached into a sub-app |
 
 ---
 
@@ -104,7 +102,7 @@
 | **Per-Status Error Handlers** | ✅ | `cwist_app_register_error_handler` for custom 404, 500, etc. |
 | **URL Reverse Routing** | ✅ | `cwist_app_get_named` + `cwist_url_for` with param substitution |
 | **Flash Messages** | ✅ | One-time session-scoped messages via `cwist_flash_get/set` |
-| **Per-Port Sub-Applications** | 🔄 | `cwist_multiport_get_app(&app, port)` detaches additional ports for independent tuning; public/default port must remain owned by root app; lifecycle & exception hardening ongoing |
+| **Per-Port Sub-Applications** | ✅ | `cwist_multiport_get_app(&app, port)` detaches additional ports for independent tuning; public/default port remains owned by root app |
 
 ---
 
@@ -134,7 +132,7 @@
 | **ORM / Query Builder** | ✅ | Socket-backed ORM with dialect-aware query builder, `_Generic` type-dispatched RETURNING / scalar helpers |
 | **Redis / Key-Value Cache** | ⏳ | No Redis client integration |
 | NATS Integration | ✅ | `cwist_nats` wrapper |
-| **Message Queue (Job Queue)** | 🔄 | `cwist_io_queue` is lock-free job queue; no persistent queue backend |
+| **Message Queue (Job Queue)** | ✅ | `cwist_io_queue` lock-free job queue plus scheduler-backed immediate and delayed jobs |
 
 ---
 
@@ -148,7 +146,7 @@
 | **CLI Scaffolding** | ⏳ | No `cwist new project` CLI tool |
 | **Hot Reload (Dev Mode)** | ⏳ | No file watcher + auto-recompile |
 | **Configuration Management** | ✅ | `.env` file + environment variable loader via `cwist_config` |
-| **Testing Utilities** | 🔄 | In-process test client (`cwist_test_client_get/post`) added; `test_io_uring_demolition` target wired in Makefile; harness WIP |
+| **Testing Utilities** | ✅ | In-process test client (`cwist_test_client_get/post/request_ex`), cookie jar, multipart helper, and regression targets wired in Makefile |
 | **Benchmark Suite** | ⏳ | No `wrk`/`oha`/`h2load` benchmark automation |
 | **Fuzzing / Hardening** | ⏳ | No AFL/libFuzzer targets for HTTP parser or QUIC path |
 
@@ -161,26 +159,26 @@
 | **gRPC over HTTP/2** | ⏳ | No protobuf / gRPC server or client |
 | **GraphQL** | ⏳ | No GraphQL parser or executor |
 | **OpenAPI / Swagger Generation** | ⏳ | No automatic spec generation from route definitions |
-| **Background Jobs / Scheduler** | ⏳ | No cron-like scheduler or deferred job system |
+| **Background Jobs / Scheduler** | ✅ | `cwist_scheduler` worker pool with immediate and delayed job execution |
 | **WebRTC** | 🔮 | Real-time media; requires separate data channel stack |
 | **Serverless / WASM Runtime** | 🔮 | Edge deployment target |
 
 ---
 
-## Current Focus (P1 – P3 Core Hardening)
+## Current Focus (P2 – P4 Tooling and Ecosystem)
 
-The top priority is blocking side effects in internal implementations and locking down stable interfaces.
+The completed P1-P3 hardening work is now under regression coverage. Current priorities are developer workflow and ecosystem integrations.
 
-### Multiport Facade Hardening (`cwist_multiport_t`)
+### Developer Workflow
 
-* Convert normal port arrays into counted descriptors while ensuring the **root application retains ownership of the default port**.
-* Add lifecycle validation so detaching a port into a sub-app does not accidentally release the primary listener.
-* Detect duplicate bindings and prove isolation / global-settings copy-share mechanics with focused tests.
+* Add hot reload and project scaffolding.
+* Expand benchmark automation and fuzz targets.
+* Keep test-client, scheduler, multiport, and `io_uring` coverage in the default test harness.
 
-### `io_uring` Packet Loop Hardening
+### Ecosystem
 
-* Guarantee SQE (Submission Queue Entry) submission and CQE (Completion Queue Entry) consumption timing consistency under HTTP/3 UDP workloads.
-* Refine control logic to minimize memory copies between the `lsquic` engine’s async stream callbacks and the kernel ring buffer.
+* Add gRPC, GraphQL, and OpenAPI generation.
+* Evaluate persistent job backends separately from the in-process queue/scheduler.
 
 ---
 
@@ -201,28 +199,29 @@ The top priority is blocking side effects in internal implementations and lockin
 10. ~~**Health Check** endpoints~~ ✅
 11. ~~**Secure Headers** (HSTS, CSP, X-Frame-Options, etc.)~~ ✅
 12. ~~**Request Size Limits** (HTTP/1.1/2/3 body limit audit)~~ ✅
-13. **Multiport facade hardening** 🔄: counted port descriptor, per-port sub-app lifecycle, duplicate/default-port validation, and smoke tests
+13. ~~**Multiport facade hardening**: counted port descriptor, per-port sub-app lifecycle, duplicate/default-port validation, and smoke tests~~ ✅
 
 ### P2 — Developer Velocity
 14. **Hot Reload** for development
 15. **CLI Tooling** (project scaffold, route generator)
 16. ~~**Configuration** loader (`.env`, `.toml`)~~ ✅
-17. **Test Harness** with HTTP mock client 🔄
+17. ~~**Test Harness** with HTTP mock client~~ ✅
 
 ### P3 — Advanced Protocols
 18. ~~**WebTransport** server + client~~ ✅ (basic server handler)
 19. ~~**HTTP/2 Server Push**~~ ✅
-20. **io_uring** UDP packet loop for HTTP/3 🔄
+20. ~~**io_uring** UDP packet loop for HTTP/3~~ ✅
 21. **kqueue** backend for macOS/BSD
-22. **Multiport HTTP/3 parity** ⏳: per-port UDP contexts and global setting propagation to non-detached ports
+22. ~~**Multiport HTTP/3 parity**: per-port UDP contexts and global setting propagation to non-detached ports~~ ✅
 
 ### P4 — Ecosystem
 23. **gRPC** support
 24. **GraphQL** executor
 25. **OpenAPI** generator
+26. ~~**Background Jobs / Scheduler**~~ ✅
 
 ---
 
 ## Contributing
 
-If you want to pick up an item, open an issue referencing this roadmap and the specific feature number. Items marked 🔄 have partial code in-tree and may only need polish or integration.
+If you want to pick up an item, open an issue referencing this roadmap and the specific feature number.
