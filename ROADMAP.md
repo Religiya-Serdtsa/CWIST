@@ -27,6 +27,7 @@
 ### 1) Transport Layer
 
 * **Native protocols ready**: HTTP/1.1 through HTTP/3 (QUIC via `lsquic`), WebTransport, and WebSocket are all implemented in-tree. Low-level socket controls (ECN, 0-RTT, connection migration) are complete.
+* **HTTP/3 browser hardening**: Response header emission now normalizes field names to lowercase and rejects CR/LF-bearing values, covering login/logout cookie and redirect paths in strict browsers such as Firefox.
 * **Async I/O optimization (`io_uring`)**: `io_uring_backend.c` and test code have been added; currently prototyping to reduce context-switching overhead in high-volume UDP send/receive loops (`🔄`).
 * **Multiport HTTP/3 fan-out**: The `cwist_multiport_t` facade that isolates multiple ports is being refactored. Future work will split independent UDP contexts per port (`⏳`).
 
@@ -59,7 +60,7 @@
 |---------|--------|-------|
 | HTTP/1.1 Server (epoll, threading, forking) | ✅ | Zero-copy sendfile, keep-alive |
 | HTTP/2 Server | ✅ | h2 with ALPN |
-| HTTP/3 Server (QUIC) | ✅ | lsquic + BoringSSL, QPACK, 0-RTT, migration, push, resilience timeout knobs |
+| HTTP/3 Server (QUIC) | ✅ | lsquic + BoringSSL, QPACK, 0-RTT, migration, push, resilience timeout knobs, lowercase/CRLF-safe response headers |
 | HTTP/1.1 + HTTP/2 Client | ✅ | libcurl based, sync & async APIs |
 | HTTP/3 Client | ✅ | lsquic based, async stream callbacks, auto-retry with exponential backoff, conn timeout knobs |
 | WebSocket Server | ✅ | Upgrade, frame parsing, ping/pong |
