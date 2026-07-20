@@ -1112,6 +1112,7 @@ cwist_app *cwist_app_create(void) {
     app->db_pool = NULL;
     app->redis_pool = NULL;
     app->scheduler = NULL;
+    app->grpc_routes = NULL;
 
     cwist_app_refresh_https_request_handler(app);
 
@@ -1309,6 +1310,7 @@ void cwist_app_destroy(cwist_app *app) {
     if (app->scheduler) {
         cwist_scheduler_destroy((cwist_scheduler_t *)app->scheduler);
     }
+    cwist_grpc_routes_destroy(app);
 
     cwist_free(app);
 }
@@ -2558,6 +2560,10 @@ static cwist_app *cwist_app_clone_for_multiport(cwist_app *src) {
     dst->middlewares = cwist_middleware_clone(src->middlewares);
     dst->error_handlers = cwist_error_handlers_clone(src->error_handlers);
     dst->static_dirs = cwist_static_dirs_clone(src->static_dirs);
+    if (cwist_grpc_routes_clone(dst, src) != 0) {
+        cwist_app_destroy(dst);
+        return NULL;
+    }
 
     if (src->use_ssl && src->cert_path && src->key_path) {
         dst->use_https2 = src->use_https2;
