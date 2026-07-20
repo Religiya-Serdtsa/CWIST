@@ -20,8 +20,9 @@
 ```
 [P0: Critical]      ████████████████████ 100% (Completed)
 [P1: Production]     ████████████████████ 100% (Multiport hardening complete)
-[P2: DevEx]          ██████░░░░░░░░░░░░░░  30% (Config loader and test tooling done)
+[P2: DevEx]          ████████░░░░░░░░░░░░  40% (Config loader, test tooling, and wire helpers done)
 [P3: Deep Protocols] ███████████████░░░░░  75% (HTTP/3 extension specs and io_uring backend done)
+[P4: Ecosystem]      ██████░░░░░░░░░░░░░░  30% (Unary gRPC and Protobuf wire helpers done)
 ```
 
 ### 1) Transport Layer
@@ -36,11 +37,13 @@
 * **High-performance router & middleware**: Deterministic resource management with parameterized routes (`/user/:id`), compression (Gzip via zlib), CORS, and rate limiting (libttak token bucket) are integrated.
 * **Observability**: Prometheus `/metrics` and a probe-registry health-check system are operational.
 * **Per-port sub-applications**: Lifecycle and exception handling for `cwist_multiport_get_app(&app, port)` are hardened; detached ports are separately tunable sub-applications.
+* **Unary gRPC services**: Applications can register unary gRPC handlers over HTTP/2 with `cwist_app_grpc_unary()`, decode the gRPC message envelope, and return `application/grpc` responses with explicit gRPC status metadata.
 
 ### 3) Security & Data Layer
 
 * **Security specs**: BoringSSL-based TLS 1.3 and hybrid post-quantum KEM (`X25519MLKEM768`) are implemented ahead of time. CSRF and automatic secure-header injection remain planned (`⏳`).
 * **Data-layer integrity**: SQLite3 embedded integration, migration system, and a `_Generic` macro-based type-dispatched ORM/query builder are in the build stream. The lock-free work queue (`cwist_io_queue`) and scheduler-backed background jobs are implemented.
+* **Protobuf wire helpers**: A lightweight Protobuf runtime supports varint keys, unsigned/signed/bool fields, length-delimited bytes/strings, reader iteration, and ZigZag helpers for hand-written services.
 
 ---
 
@@ -48,7 +51,7 @@
 
 - Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are already implemented in-tree.
 - **P0 (must-have) is 100 % complete**: the framework’s core architecture and protocol stack are locked.
-- We are now in the **P2–P4 tooling and ecosystem phase**. Completed multiport, scheduler, test-client, and `io_uring` hardening remain covered by focused regression tests.
+- We are now in the **P2–P4 tooling and ecosystem phase**. Completed multiport, scheduler, test-client, `io_uring`, unary gRPC, and Protobuf wire-format work remain covered by focused regression tests.
 
 ---
 
@@ -156,7 +159,8 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **gRPC over HTTP/2** | ⏳ | No protobuf / gRPC server or client |
+| **gRPC over HTTP/2** | ✅ | Unary server registration via `cwist_app_grpc_unary`, gRPC frame decode/encode, gRPC status metadata, and test-client coverage |
+| **Protobuf Runtime Helpers** | ✅ | Wire-format reader/writer for varint, bool, bytes/string, signed integer casting, and ZigZag helpers |
 | **GraphQL** | ⏳ | No GraphQL parser or executor |
 | **OpenAPI / Swagger Generation** | ⏳ | No automatic spec generation from route definitions |
 | **Background Jobs / Scheduler** | ✅ | `cwist_scheduler` worker pool with immediate and delayed job execution |
@@ -177,8 +181,31 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 
 ### Ecosystem
 
-* Add gRPC, GraphQL, and OpenAPI generation.
+* Extend gRPC from unary handlers to server streaming, client streaming, and bidirectional streaming.
+* Add generated-code bindings from `.proto` descriptors once the runtime ABI settles.
+* Add gRPC reflection, health checking, deadlines, cancellation propagation, metadata normalization, and trailer-frame emission.
+* Add GraphQL and OpenAPI generation.
 * Evaluate persistent job backends separately from the in-process queue/scheduler.
+
+### gRPC / Protobuf Status
+
+Completed:
+
+* `cwist_app_grpc_unary(app, service, method, handler, user_ctx)` registers `POST /Service/Method` routes for HTTP/2 gRPC unary calls.
+* `cwist_grpc_decode_message()` and `cwist_grpc_encode_message()` implement the gRPC 5-byte message envelope (`compressed` flag + big-endian payload length).
+* `cwist_grpc_set_response()` and `cwist_grpc_set_error()` produce `application/grpc` responses and explicit `grpc-status` / `grpc-message` metadata.
+* `cwist_pb_writer` supports varint keys, uint64/int64/bool fields, bytes fields, string fields, and dynamic buffer growth.
+* `cwist_pb_reader` iterates Protobuf fields and exposes wire type, field number, varint value, and length-delimited payload slices.
+* `cwist_pb_zigzag_encode()` / `cwist_pb_zigzag_decode()` cover signed integer mappings used by `sint32` / `sint64` style fields.
+* `test_grpc` verifies Protobuf request construction, gRPC frame handling, unary dispatch, Protobuf response parsing, invalid content type handling, and malformed frame rejection.
+
+Known limits:
+
+* Only unary server handlers are implemented; streaming RPCs remain planned.
+* Compressed gRPC messages are rejected with `UNIMPLEMENTED`; compression negotiation is not wired yet.
+* Protobuf support is a runtime wire helper, not a `.proto` compiler or generated binding layer.
+* HTTP/2 response trailers are represented as gRPC metadata headers for now; dedicated trailer-frame emission is a follow-up.
+* No gRPC client, reflection service, health service, deadline propagation, retry policy, or load-balancing policy exists yet.
 
 ---
 
@@ -215,10 +242,11 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 22. ~~**Multiport HTTP/3 parity**: per-port UDP contexts and global setting propagation to non-detached ports~~ ✅
 
 ### P4 — Ecosystem
-23. **gRPC** support
+23. ~~**gRPC unary server support**~~ ✅
 24. **GraphQL** executor
 25. **OpenAPI** generator
 26. ~~**Background Jobs / Scheduler**~~ ✅
+27. **gRPC streaming, reflection, health checks, and `.proto` codegen**
 
 ---
 

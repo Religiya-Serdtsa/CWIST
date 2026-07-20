@@ -103,6 +103,8 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/http3_client.c \
        src/net/http/https.c \
        src/net/http/tls_chain.c \
+       src/net/grpc/grpc.c \
+       src/net/grpc/protobuf.c \
        src/https/pqc_layer.c \
        src/net/http/mux.c \
        src/net/http/multipart.c \
@@ -303,7 +305,8 @@ TEST_TARGETS = test_sstring \
                test_redis \
                test_scheduler \
                test_test_client \
-               test_multiport
+               test_multiport \
+               test_grpc
 
 .PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild examples clean-examples
 
@@ -619,3 +622,7 @@ test_test_client: $(LIB_NAME) tests/test_test_client.c
 test_multiport: $(LIB_NAME) tests/test_multiport.c
 	$(CC) $(CFLAGS) -o test_multiport tests/test_multiport.c $(LIB_NAME) $(LIBS)
 	./test_multiport
+
+test_grpc: $(LIB_NAME) tests/test_grpc.c
+	$(CC) $(CFLAGS) -o test_grpc tests/test_grpc.c $(LIB_NAME) $(LIBS)
+	./test_grpc

@@ -166,7 +166,13 @@ static cwist_http_response *do_request(cwist_test_client *client, cwist_http_met
     const char *body = opts ? opts->body : NULL;
     const char *content_type = opts ? opts->content_type : NULL;
 
-    if (body) cwist_sstring_assign(req->body, (char *)body);
+    if (body) {
+        if (opts && opts->body_len > 0) {
+            cwist_sstring_assign_len(req->body, (char *)body, opts->body_len);
+        } else {
+            cwist_sstring_assign(req->body, (char *)body);
+        }
+    }
     if (content_type) cwist_http_header_add(&req->headers, "Content-Type", content_type);
 
     if (opts && opts->headers) {
@@ -263,6 +269,7 @@ cwist_http_response *cwist_test_client_post_multipart(cwist_test_client *client,
 
     cwist_test_client_request_options opts = {0};
     opts.body = body;
+    opts.body_len = body_len;
     opts.content_type = ct;
     cwist_http_response *res = do_request(client, CWIST_HTTP_POST, path, &opts);
     cwist_free(body);

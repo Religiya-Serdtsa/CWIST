@@ -30,6 +30,7 @@ typedef struct cwist_test_client_kv {
 /** @brief Optional parameters for advanced test requests. */
 typedef struct cwist_test_client_request_options {
     const char *body;               /**< Request body (may be NULL). */
+    size_t body_len;                /**< Explicit body length; 0 means strlen(body). */
     const char *content_type;       /**< Content-Type header value (may be NULL). */
     const cwist_test_client_kv *headers; /**< Extra request headers. */
     size_t header_count;            /**< Number of extra headers. */
