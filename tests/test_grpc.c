@@ -41,6 +41,39 @@ static void echo_unary(cwist_http_request *req,
     cwist_pb_writer_free(&writer);
 }
 
+static void echo_stream(cwist_grpc_stream *stream, void *user_ctx) {
+    const char *prefix = (const char *)user_ctx;
+    for (size_t i = 0; i < stream->message_count; i++) {
+        cwist_pb_reader reader;
+        cwist_pb_reader_init(&reader, stream->messages[i].data, stream->messages[i].len);
+        cwist_pb_field field;
+        const char *input = NULL;
+        size_t input_len = 0;
+        while (cwist_pb_read_field(&reader, &field) > 0) {
+            if (field.number == 1 && field.wire_type == CWIST_PB_LEN) {
+                input = (const char *)field.bytes;
+                input_len = field.len;
+            }
+        }
+        assert(input != NULL);
+
+        char out[128];
+        int n = snprintf(out, sizeof(out), "%s-%zu:%.*s",
+                         prefix ? prefix : "stream",
+                         i + 1,
+                         (int)input_len,
+                         input);
+        assert(n > 0);
+
+        cwist_pb_writer writer;
+        cwist_pb_writer_init(&writer);
+        assert(cwist_pb_write_string_field(&writer, 1, out) == 0);
+        assert(cwist_grpc_stream_send(stream, writer.data, writer.len) == 0);
+        cwist_pb_writer_free(&writer);
+    }
+    cwist_grpc_stream_close(stream, CWIST_GRPC_OK, NULL);
+}
+
 static void decode_response(cwist_http_response *res, const char *expected) {
     assert(res != NULL);
     assert(res->status_code == CWIST_HTTP_OK);
@@ -69,6 +102,50 @@ static void decode_response(cwist_http_response *res, const char *expected) {
     assert(saw_text && saw_code);
 }
 
+static void append_grpc_string_frame(cwist_sstring *body, const char *value) {
+    cwist_pb_writer pb;
+    cwist_pb_writer_init(&pb);
+    assert(cwist_pb_write_string_field(&pb, 1, value) == 0);
+
+    uint8_t *frame = NULL;
+    size_t frame_len = 0;
+    assert(cwist_grpc_encode_message(pb.data, pb.len, 0, &frame, &frame_len) == 0);
+    assert(cwist_sstring_append_len(body, (char *)frame, frame_len).error.err_i16 == 0);
+
+    cwist_free(frame);
+    cwist_pb_writer_free(&pb);
+}
+
+static void assert_stream_response(cwist_http_response *res,
+                                   const char **expected,
+                                   size_t expected_count) {
+    assert(res != NULL);
+    assert(strcmp(cwist_http_header_get(res->headers, "grpc-status"), "0") == 0);
+
+    size_t offset = 0;
+    size_t seen = 0;
+    while (offset < res->body->size) {
+        cwist_grpc_message msg;
+        assert(cwist_grpc_decode_next_message(res->body->data, res->body->size,
+                                              &offset, &msg) == 0);
+        assert(seen < expected_count);
+        cwist_pb_reader reader;
+        cwist_pb_reader_init(&reader, msg.data, msg.len);
+        cwist_pb_field field;
+        int saw_text = 0;
+        while (cwist_pb_read_field(&reader, &field) > 0) {
+            if (field.number == 1 && field.wire_type == CWIST_PB_LEN) {
+                assert(field.len == strlen(expected[seen]));
+                assert(memcmp(field.bytes, expected[seen], field.len) == 0);
+                saw_text = 1;
+            }
+        }
+        assert(saw_text);
+        seen++;
+    }
+    assert(seen == expected_count);
+}
+
 int main(void) {
     cwist_pb_writer request_pb;
     cwist_pb_writer_init(&request_pb);
@@ -90,6 +167,7 @@ int main(void) {
     cwist_app *app = cwist_app_create();
     assert(app != NULL);
     assert(cwist_app_grpc_unary(app, "cwist.test.Echo", "Say", echo_unary, "reply") == 0);
+    assert(cwist_app_grpc_stream(app, "cwist.test.Echo", "Chat", echo_stream, "chunk") == 0);
 
     cwist_test_client *client = cwist_test_client_create(app);
     assert(client != NULL);
@@ -112,6 +190,22 @@ int main(void) {
     assert(res != NULL);
     assert(strcmp(cwist_http_header_get(res->headers, "grpc-status"), "3") == 0);
     cwist_http_response_destroy(res);
+
+    cwist_sstring *stream_body = cwist_sstring_create();
+    assert(stream_body != NULL);
+    append_grpc_string_frame(stream_body, "one");
+    append_grpc_string_frame(stream_body, "two");
+
+    opts.body = stream_body->data;
+    opts.body_len = stream_body->size;
+    opts.content_type = "application/grpc";
+    res = cwist_test_client_request_ex(client, CWIST_HTTP_POST,
+                                       "/cwist.test.Echo/Chat",
+                                       &opts);
+    const char *expected_stream[] = { "chunk-1:one", "chunk-2:two" };
+    assert_stream_response(res, expected_stream, 2);
+    cwist_http_response_destroy(res);
+    cwist_sstring_destroy(stream_body);
 
     opts.content_type = "application/grpc";
     static const unsigned char malformed[] = { 0, 0, 0, 0, 5, 'b', 'a', 'd' };

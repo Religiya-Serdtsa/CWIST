@@ -43,14 +43,32 @@ typedef struct cwist_grpc_message {
     size_t len;
 } cwist_grpc_message;
 
+typedef struct cwist_grpc_stream {
+    cwist_http_request *req;
+    cwist_http_response *res;
+    const cwist_grpc_message *messages;
+    size_t message_count;
+    cwist_grpc_status_t status;
+    const char *status_message;
+    int closed;
+} cwist_grpc_stream;
+
 typedef void (*cwist_grpc_unary_handler_func)(cwist_http_request *req,
                                                cwist_http_response *res,
                                                const cwist_grpc_message *message,
                                                void *user_ctx);
 
+typedef void (*cwist_grpc_stream_handler_func)(cwist_grpc_stream *stream,
+                                                void *user_ctx);
+
 int cwist_grpc_decode_message(const void *frame,
                               size_t frame_len,
                               cwist_grpc_message *out);
+
+int cwist_grpc_decode_next_message(const void *frames,
+                                   size_t frames_len,
+                                   size_t *offset,
+                                   cwist_grpc_message *out);
 
 int cwist_grpc_encode_message(const void *payload,
                               size_t payload_len,
@@ -68,11 +86,25 @@ void cwist_grpc_set_error(cwist_http_response *res,
                           cwist_grpc_status_t status,
                           const char *message);
 
+int cwist_grpc_stream_send(cwist_grpc_stream *stream,
+                           const void *payload,
+                           size_t payload_len);
+
+void cwist_grpc_stream_close(cwist_grpc_stream *stream,
+                             cwist_grpc_status_t status,
+                             const char *message);
+
 int cwist_app_grpc_unary(struct cwist_app *app,
                          const char *service,
                          const char *method,
                          cwist_grpc_unary_handler_func handler,
                          void *user_ctx);
+
+int cwist_app_grpc_stream(struct cwist_app *app,
+                          const char *service,
+                          const char *method,
+                          cwist_grpc_stream_handler_func handler,
+                          void *user_ctx);
 
 void cwist_grpc_routes_destroy(struct cwist_app *app);
 int cwist_grpc_routes_clone(struct cwist_app *dst, const struct cwist_app *src);

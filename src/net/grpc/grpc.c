@@ -13,7 +13,9 @@
 
 typedef struct cwist_grpc_route {
     char *path;
+    int streaming;
     cwist_grpc_unary_handler_func handler;
+    cwist_grpc_stream_handler_func stream_handler;
     void *user_ctx;
     struct cwist_grpc_route *next;
 } cwist_grpc_route;
@@ -69,6 +71,85 @@ static void grpc_dispatch_unary(cwist_http_request *req, cwist_http_response *re
     route->handler(req, res, &message, route->user_ctx);
 }
 
+static int grpc_validate_request(cwist_http_request *req, cwist_http_response *res) {
+    const char *ct = cwist_http_header_get(req->headers, "content-type");
+    if (!grpc_content_type_is_grpc(ct)) {
+        ct = cwist_http_header_get(req->headers, "Content-Type");
+    }
+    if (!grpc_content_type_is_grpc(ct)) {
+        cwist_grpc_set_error(res, CWIST_GRPC_INVALID_ARGUMENT, "content-type must be application/grpc");
+        return -1;
+    }
+    if (!req->body || !req->body->data) {
+        cwist_grpc_set_error(res, CWIST_GRPC_INVALID_ARGUMENT, "missing gRPC request body");
+        return -1;
+    }
+    return 0;
+}
+
+static void grpc_dispatch_stream(cwist_http_request *req, cwist_http_response *res) {
+    if (!req || !res || !req->app || !req->path || !req->path->data) return;
+
+    cwist_grpc_route *route = grpc_find_route(req->app, req->path->data);
+    if (!route || !route->stream_handler) {
+        cwist_grpc_set_error(res, CWIST_GRPC_UNIMPLEMENTED, "gRPC stream method not registered");
+        return;
+    }
+    if (grpc_validate_request(req, res) != 0) return;
+
+    size_t offset = 0;
+    size_t cap = 4;
+    size_t count = 0;
+    cwist_grpc_message *messages = (cwist_grpc_message *)cwist_alloc(cap * sizeof(*messages));
+    if (!messages) {
+        cwist_grpc_set_error(res, CWIST_GRPC_RESOURCE_EXHAUSTED, "failed to allocate gRPC stream messages");
+        return;
+    }
+
+    while (offset < req->body->size) {
+        if (count == cap) {
+            cap *= 2;
+            cwist_grpc_message *next = (cwist_grpc_message *)cwist_realloc(messages, cap * sizeof(*messages));
+            if (!next) {
+                cwist_free(messages);
+                cwist_grpc_set_error(res, CWIST_GRPC_RESOURCE_EXHAUSTED, "failed to grow gRPC stream messages");
+                return;
+            }
+            messages = next;
+        }
+        if (cwist_grpc_decode_next_message(req->body->data, req->body->size,
+                                           &offset, &messages[count]) != 0) {
+            cwist_free(messages);
+            cwist_grpc_set_error(res, CWIST_GRPC_INVALID_ARGUMENT, "malformed gRPC stream frame");
+            return;
+        }
+        if (messages[count].compressed != 0) {
+            cwist_free(messages);
+            cwist_grpc_set_error(res, CWIST_GRPC_UNIMPLEMENTED, "compressed gRPC messages are not supported");
+            return;
+        }
+        count++;
+    }
+
+    res->status_code = CWIST_HTTP_OK;
+    cwist_http_header_add(&res->headers, "content-type", "application/grpc");
+    cwist_http_header_add(&res->headers, "grpc-accept-encoding", "identity");
+    if (res->body) cwist_sstring_assign(res->body, "");
+
+    cwist_grpc_stream stream = {
+        .req = req,
+        .res = res,
+        .messages = messages,
+        .message_count = count,
+        .status = CWIST_GRPC_OK,
+        .status_message = NULL,
+        .closed = 0,
+    };
+    route->stream_handler(&stream, route->user_ctx);
+    cwist_grpc_stream_close(&stream, stream.status, stream.status_message);
+    cwist_free(messages);
+}
+
 int cwist_grpc_decode_message(const void *frame,
                               size_t frame_len,
                               cwist_grpc_message *out) {
@@ -84,6 +165,28 @@ int cwist_grpc_decode_message(const void *frame,
     out->compressed = p[0];
     out->data = p + 5;
     out->len = (size_t)len;
+    return 0;
+}
+
+int cwist_grpc_decode_next_message(const void *frames,
+                                   size_t frames_len,
+                                   size_t *offset,
+                                   cwist_grpc_message *out) {
+    if (!frames || !offset || !out || *offset > frames_len) return -1;
+    size_t pos = *offset;
+    if (frames_len - pos < 5) return -1;
+
+    const uint8_t *p = (const uint8_t *)frames + pos;
+    uint32_t len = ((uint32_t)p[1] << 24) |
+                   ((uint32_t)p[2] << 16) |
+                   ((uint32_t)p[3] << 8) |
+                   (uint32_t)p[4];
+    if ((size_t)len > frames_len - pos - 5) return -1;
+
+    out->compressed = p[0];
+    out->data = p + 5;
+    out->len = (size_t)len;
+    *offset = pos + 5 + (size_t)len;
     return 0;
 }
 
@@ -146,12 +249,53 @@ void cwist_grpc_set_error(cwist_http_response *res,
     cwist_grpc_set_response(res, status, message, NULL, 0);
 }
 
-int cwist_app_grpc_unary(cwist_app *app,
-                         const char *service,
-                         const char *method,
-                         cwist_grpc_unary_handler_func handler,
-                         void *user_ctx) {
-    if (!app || !service || !method || !handler) return -1;
+int cwist_grpc_stream_send(cwist_grpc_stream *stream,
+                           const void *payload,
+                           size_t payload_len) {
+    if (!stream || !stream->res || !stream->res->body) return -1;
+    uint8_t *frame = NULL;
+    size_t frame_len = 0;
+    if (cwist_grpc_encode_message(payload, payload_len, 0, &frame, &frame_len) != 0) {
+        stream->status = CWIST_GRPC_INTERNAL;
+        stream->status_message = "failed to encode gRPC stream message";
+        return -1;
+    }
+    cwist_error_t err = cwist_sstring_append_len(stream->res->body, (char *)frame, frame_len);
+    cwist_free(frame);
+    if (err.error.err_i16 != 0) {
+        stream->status = CWIST_GRPC_INTERNAL;
+        stream->status_message = "failed to append gRPC stream message";
+        return -1;
+    }
+    return 0;
+}
+
+void cwist_grpc_stream_close(cwist_grpc_stream *stream,
+                             cwist_grpc_status_t status,
+                             const char *message) {
+    if (!stream || !stream->res) return;
+    if (stream->closed) return;
+    stream->status = status;
+    stream->status_message = message;
+    stream->closed = 1;
+
+    char status_buf[16];
+    snprintf(status_buf, sizeof(status_buf), "%d", (int)status);
+    cwist_http_header_add(&stream->res->headers, "grpc-status", status_buf);
+    if (message) {
+        cwist_http_header_add(&stream->res->headers, "grpc-message", message);
+    }
+}
+
+static int grpc_register_route(cwist_app *app,
+                               const char *service,
+                               const char *method,
+                               int streaming,
+                               cwist_grpc_unary_handler_func unary_handler,
+                               cwist_grpc_stream_handler_func stream_handler,
+                               void *user_ctx) {
+    if (!app || !service || !method) return -1;
+    if ((!streaming && !unary_handler) || (streaming && !stream_handler)) return -1;
     size_t service_len = strlen(service);
     size_t method_len = strlen(method);
     if (service_len == 0 || method_len == 0) return -1;
@@ -163,7 +307,9 @@ int cwist_app_grpc_unary(cwist_app *app,
 
     cwist_grpc_route *existing = grpc_find_route(app, path);
     if (existing) {
-        existing->handler = handler;
+        existing->streaming = streaming;
+        existing->handler = unary_handler;
+        existing->stream_handler = stream_handler;
         existing->user_ctx = user_ctx;
         cwist_free(path);
         return 0;
@@ -175,13 +321,31 @@ int cwist_app_grpc_unary(cwist_app *app,
         return -1;
     }
     route->path = path;
-    route->handler = handler;
+    route->streaming = streaming;
+    route->handler = unary_handler;
+    route->stream_handler = stream_handler;
     route->user_ctx = user_ctx;
     route->next = (cwist_grpc_route *)app->grpc_routes;
     app->grpc_routes = route;
 
-    cwist_app_post(app, path, grpc_dispatch_unary);
+    cwist_app_post(app, path, streaming ? grpc_dispatch_stream : grpc_dispatch_unary);
     return 0;
+}
+
+int cwist_app_grpc_unary(cwist_app *app,
+                         const char *service,
+                         const char *method,
+                         cwist_grpc_unary_handler_func handler,
+                         void *user_ctx) {
+    return grpc_register_route(app, service, method, 0, handler, NULL, user_ctx);
+}
+
+int cwist_app_grpc_stream(cwist_app *app,
+                          const char *service,
+                          const char *method,
+                          cwist_grpc_stream_handler_func handler,
+                          void *user_ctx) {
+    return grpc_register_route(app, service, method, 1, NULL, handler, user_ctx);
 }
 
 void cwist_grpc_routes_destroy(cwist_app *app) {
@@ -211,8 +375,11 @@ int cwist_grpc_routes_clone(cwist_app *dst, const cwist_app *src) {
         memcpy(service, path + 1, service_len);
         service[service_len] = '\0';
 
-        int rc = cwist_app_grpc_unary(dst, service, method_sep + 1,
-                                      route->handler, route->user_ctx);
+        int rc = route->streaming
+            ? cwist_app_grpc_stream(dst, service, method_sep + 1,
+                                    route->stream_handler, route->user_ctx)
+            : cwist_app_grpc_unary(dst, service, method_sep + 1,
+                                   route->handler, route->user_ctx);
         cwist_free(service);
         if (rc != 0) return -1;
         route = route->next;
