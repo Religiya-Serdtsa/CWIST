@@ -302,6 +302,7 @@ TEST_TARGETS = test_sstring \
                test_static_and_range \
                test_session \
                test_csrf \
+               test_waf \
                test_db_pool \
                test_redis \
                test_scheduler \
@@ -607,6 +608,10 @@ test_session: $(LIB_NAME) tests/test_session.c
 test_csrf: $(LIB_NAME) tests/test_csrf.c
 	$(CC) $(CFLAGS) -o test_csrf tests/test_csrf.c $(LIB_NAME) $(LIBS)
 	./test_csrf
+
+test_waf: $(LIB_NAME) tests/test_waf.c
+	$(CC) $(CFLAGS) -o test_waf tests/test_waf.c $(LIB_NAME) $(LIBS)
+	./test_waf
 
 test_db_pool: $(LIB_NAME) tests/test_db_pool.c
 	$(CC) $(CFLAGS) -o test_db_pool tests/test_db_pool.c $(LIB_NAME) $(LIBS)

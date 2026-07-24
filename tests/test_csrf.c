@@ -107,10 +107,33 @@ static void test_csrf_unsafe_with_token_accepted(void) {
     printf("[csrf] unsafe with matching token accepted OK\n");
 }
 
+static void test_csrf_url_encoded_header_and_rejection(void) {
+    cwist_app *app = cwist_app_create();
+    cwist_middleware_func mw = cwist_mw_csrf(app);
+    cwist_http_request *seed = cwist_http_request_create();
+    cwist_http_response *seed_res = cwist_http_response_create();
+    seed->method = CWIST_HTTP_GET; mw(seed, seed_res, test_next);
+    const char *token = cwist_csrf_token(seed); assert(token && strlen(token) == 64);
+    cwist_http_request *post = cwist_http_request_create();
+    cwist_http_response *post_res = cwist_http_response_create();
+    post->method = CWIST_HTTP_POST;
+    char cookie[96]; snprintf(cookie, sizeof(cookie), "csrf_token=%s", token);
+    cwist_http_header_add(&post->headers, "Cookie", cookie);
+    cwist_http_header_add(&post->headers, "X-CSRF-Token", token);
+    next_called = 0; mw(post, post_res, test_next); assert(next_called == 1);
+    cwist_http_response_destroy(post_res); cwist_http_request_destroy(post);
+    post = cwist_http_request_create(); post_res = cwist_http_response_create(); post->method = CWIST_HTTP_POST;
+    cwist_http_header_add(&post->headers, "Cookie", cookie); cwist_sstring_assign(post->body, "_csrf=wrong");
+    next_called = 0; mw(post, post_res, test_next); assert(next_called == 0 && post_res->status_code == CWIST_HTTP_FORBIDDEN);
+    cwist_http_response_destroy(post_res); cwist_http_request_destroy(post);
+    cwist_http_response_destroy(seed_res); cwist_http_request_destroy(seed); cwist_app_destroy(app);
+}
+
 int main(void) {
     test_csrf_safe_issues_cookie();
     test_csrf_unsafe_missing_rejected();
     test_csrf_unsafe_with_token_accepted();
+    test_csrf_url_encoded_header_and_rejection();
     printf("All CSRF tests passed.\n");
     return 0;
 }

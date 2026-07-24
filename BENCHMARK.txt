@@ -1,5 +1,20 @@
 CWIST BENCHMARK SNAPSHOT
 
+== SECURITY / POOL BENCHMARK (2026-07-24) ==
+
+Build                  : gcc, -O3, C2x; Linux 6.14.0-1017-azure; 4 visible CPUs
+Command                : make bench_security_pool
+WAF workload           : 1,000,000 safe 62-byte request scans
+WAF result             : 0.95–0.97 M checks/s (two runs)
+Pool workload          : 8 threads × 50,000 acquire/release operations; pool size 4
+Pool result            : 2.55–2.58 M leases/s (400,000 total, two runs); assertions and lease accounting passed
+Focused regression     : make test_csrf test_waf test_db_pool — all passed
+
+HTTP load observation  : existing `make stress_test` (20,000 POSTs, concurrency 64)
+                         reproduced 22 and 27 response-length mismatches in two runs.
+                         This affects the pre-existing async HTTP path and is not used as a
+                         pass result for the new middleware/pool implementation.
+
 This file keeps the raw throughput transcript together with the container
 profile that was active during the measurement.  The goal is to make each run
 useful as a benchmark reference instead of leaving an isolated requests/second
