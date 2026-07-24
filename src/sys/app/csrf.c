@@ -43,12 +43,12 @@ static char *csrf_generate_token(void) {
 static bool csrf_equal(const char *a, const char *b) {
     if (!a || !b) return false;
     size_t alen = strlen(a), blen = strlen(b);
-    unsigned char diff = (unsigned char)(alen ^ blen);
+    size_t diff = alen ^ blen;
     size_t limit = alen > blen ? alen : blen;
     for (size_t i = 0; i < limit; ++i) {
         unsigned char ac = i < alen ? (unsigned char)a[i] : 0;
         unsigned char bc = i < blen ? (unsigned char)b[i] : 0;
-        diff |= (unsigned char)(ac ^ bc);
+        diff |= (size_t)(ac ^ bc);
     }
     return diff == 0;
 }

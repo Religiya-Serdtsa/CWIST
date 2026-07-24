@@ -15,6 +15,14 @@ HTTP load observation  : existing `make stress_test` (20,000 POSTs, concurrency 
                          This affects the pre-existing async HTTP path and is not used as a
                          pass result for the new middleware/pool implementation.
 
+== POST-OPTIMIZATION MEASUREMENT (2026-07-24) ==
+
+Change                 : pre-sized WAF signatures and first-byte dispatch; CSRF length diff widened to size_t
+Command                : make test_csrf test_waf test_db_pool bench_security_pool; ./bench_security_pool
+Regression result      : all focused tests passed
+WAF result             : 2.71 and 2.74 M checks/s (2.8× over the prior 0.95–0.97 M range)
+Pool result            : 2.82 and 2.52 M leases/s (scheduler-noise range; no regression from 2.55–2.58 M)
+
 This file keeps the raw throughput transcript together with the container
 profile that was active during the measurement.  The goal is to make each run
 useful as a benchmark reference instead of leaving an isolated requests/second

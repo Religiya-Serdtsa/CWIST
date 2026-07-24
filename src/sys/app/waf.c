@@ -4,28 +4,36 @@
 #include <cwist/core/mem/alloc.h>
 #include <string.h>
 
-static bool ascii_equal_ci(const char *input, size_t input_len, size_t pos, const char *needle) {
-    for (size_t i = 0; needle[i]; ++i) {
+typedef struct {
+    const char *text;
+    size_t length;
+} waf_signature;
+
+static unsigned char ascii_lower(unsigned char c) {
+    return c >= 'A' && c <= 'Z' ? (unsigned char)(c + ('a' - 'A')) : c;
+}
+
+static bool ascii_equal_ci(const char *input, size_t input_len, size_t pos, const waf_signature *signature) {
+    for (size_t i = 0; i < signature->length; ++i) {
         if (pos + i >= input_len) return false;
-        unsigned char c = (unsigned char)input[pos + i];
-        if (c >= 'A' && c <= 'Z') c = (unsigned char)(c + ('a' - 'A'));
-        if (c != (unsigned char)needle[i]) return false;
+        if (ascii_lower((unsigned char)input[pos + i]) != (unsigned char)signature->text[i]) return false;
     }
     return true;
 }
 
 bool cwist_waf_is_safe(const char *input, size_t length) {
     if (!input) return true;
-    static const char *const signatures[] = {
-        "<script", "</script", "javascript:", "vbscript:",
-        "union select", "drop table", "insert into", "delete from",
-        " or 1=1", " and 1=1", "--", "/*", "*/"
+    static const waf_signature signatures[] = {
+        { "<script", 7 }, { "</script", 8 }, { "javascript:", 11 }, { "vbscript:", 9 },
+        { "union select", 12 }, { "drop table", 10 }, { "insert into", 11 }, { "delete from", 11 },
+        { " or 1=1", 7 }, { " and 1=1", 8 }, { "--", 2 }, { "/*", 2 }, { "*/", 2 }
     };
     for (size_t i = 0; i < length; ++i) {
         unsigned char c = (unsigned char)input[i];
         if (c == 0 || (c < 0x20U && c != '\t' && c != '\n' && c != '\r')) return false;
+        c = ascii_lower(c);
         for (size_t rule = 0; rule < sizeof(signatures) / sizeof(signatures[0]); ++rule) {
-            if (ascii_equal_ci(input, length, i, signatures[rule])) return false;
+            if (c == (unsigned char)signatures[rule].text[0] && ascii_equal_ci(input, length, i, &signatures[rule])) return false;
         }
     }
     return true;
