@@ -41,7 +41,7 @@
 
 ### 3) Security & Data Layer
 
-* **Security specs**: BoringSSL-based TLS 1.3 and hybrid post-quantum KEM (`X25519MLKEM768`) are implemented ahead of time. CSRF and automatic secure-header injection remain planned (`⏳`).
+* **Security specs**: BoringSSL-based TLS 1.3 and hybrid post-quantum KEM (`X25519MLKEM768`) are implemented ahead of time. CSRF uses a 256-bit double-submit token with constant-time validation; WAF-lite uses bounded linear scans and HTML output escaping.
 * **Data-layer integrity**: SQLite3 embedded integration, migration system, and a `_Generic` macro-based type-dispatched ORM/query builder are in the build stream. The lock-free work queue (`cwist_io_queue`) and scheduler-backed background jobs are implemented.
 * **Protobuf wire helpers**: A lightweight Protobuf runtime supports varint keys, unsigned/signed/bool fields, length-delimited bytes/strings, reader iteration, and ZigZag helpers for hand-written services.
 
@@ -117,11 +117,11 @@
 | Database Encryption | ✅ | `db_crypt` layer |
 | ECH (Encrypted Client Hello) | ✅ | BoringSSL ECH |
 | **PQC Hybrid KEM (TLS)** | ✅ | `cwist_app_use_pqc_layer` forces `X25519MLKEM768:X25519:P-256`, TLS 1.3 only |
-| **CSRF Protection** | ⏳ | No double-submit cookie or synchronizer token |
+| **CSRF Protection** | ✅ | 256-bit double-submit cookie, constant-time comparison, strict SameSite, header and URL-encoded form support |
 | **Secure Headers** | ✅ | Automatic injection of HSTS, CSP, X-Frame-Options, Referrer-Policy, CORP via `cwist_http_response_add_security_headers()` |
 | **Request Size Limits** | ✅ | HTTP/1.1/2/3 body limits audited and enforced (`CWIST_HTTP_MAX_BODY_SIZE`) |
 | **Input Validation** | ✅ | Bind validator added (`bind.c`, `bind.h`, `test_bind.c`) |
-| **WAF-lite / Sanitization** | ⏳ | No XSS/SQLi sanitizer middleware |
+| **WAF-lite / Sanitization** | ✅ | Linear-time request signature checks plus `cwist_sanitize_html()` output escaping; parameterized SQL remains required |
 
 ---
 
@@ -131,7 +131,7 @@
 |---------|--------|-------|
 | SQLite Integration | ✅ | `sqlite3` embedded |
 | Database Migration | ✅ | `migrate` system |
-| **Connection Pool** | ⏳ | SQLite is direct; no generic connection pool abstraction |
+| **Connection Pool** | ✅ | Bounded SQLite pool with shared `:memory:` URI mode, O(1) leasing, timeout acquisition, and graceful drain on destroy |
 | **ORM / Query Builder** | ✅ | Socket-backed ORM with dialect-aware query builder, `_Generic` type-dispatched RETURNING / scalar helpers |
 | **Redis / Key-Value Cache** | ⏳ | No Redis client integration |
 | NATS Integration | ✅ | `cwist_nats` wrapper |

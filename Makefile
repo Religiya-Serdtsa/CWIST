@@ -115,6 +115,7 @@ SRCS = src/core/sstring/sstring.c \
        lib/multipart-parser-c/multipart_parser.c \
        src/sys/session/session_manager.c \
        src/sys/app/csrf.c \
+       src/sys/app/waf.c \
        src/core/siphash/siphash.c \
        src/core/db/db.c \
        src/core/db/pool.c \
@@ -301,6 +302,7 @@ TEST_TARGETS = test_sstring \
                test_static_and_range \
                test_session \
                test_csrf \
+               test_waf \
                test_db_pool \
                test_redis \
                test_scheduler \
@@ -309,6 +311,10 @@ TEST_TARGETS = test_sstring \
                test_grpc
 
 .PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild examples clean-examples
+
+bench_security_pool: $(LIB_NAME) tests/bench_security_pool.c
+	$(CC) $(CFLAGS) -o bench_security_pool tests/bench_security_pool.c $(LIB_NAME) $(LIBS)
+	./bench_security_pool
 
 test: $(TEST_TARGETS)
 
@@ -602,6 +608,10 @@ test_session: $(LIB_NAME) tests/test_session.c
 test_csrf: $(LIB_NAME) tests/test_csrf.c
 	$(CC) $(CFLAGS) -o test_csrf tests/test_csrf.c $(LIB_NAME) $(LIBS)
 	./test_csrf
+
+test_waf: $(LIB_NAME) tests/test_waf.c
+	$(CC) $(CFLAGS) -o test_waf tests/test_waf.c $(LIB_NAME) $(LIBS)
+	./test_waf
 
 test_db_pool: $(LIB_NAME) tests/test_db_pool.c
 	$(CC) $(CFLAGS) -o test_db_pool tests/test_db_pool.c $(LIB_NAME) $(LIBS)

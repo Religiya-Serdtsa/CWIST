@@ -165,7 +165,9 @@ cwist_error_t cwist_db_open(cwist_db **db, const char *path) {
         return err;
     }
 
-    int rc = sqlite3_open(path, &(*db)->conn);
+    int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
+    if (strncmp(path, "file:", 5) == 0) flags |= SQLITE_OPEN_URI;
+    int rc = sqlite3_open_v2(path, &(*db)->conn, flags, NULL);
     if (rc) {
         cwist_error_t sql_err = make_sqlite_error(rc, (char*)sqlite3_errmsg((*db)->conn));
         sqlite3_close((*db)->conn);
