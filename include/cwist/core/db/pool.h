@@ -41,10 +41,16 @@ void cwist_db_pool_destroy(cwist_db_pool_t *pool);
  */
 cwist_db *cwist_db_pool_acquire(cwist_db_pool_t *pool);
 
+/** Acquire a connection, waiting at most @p timeout_ms milliseconds. */
+cwist_db *cwist_db_pool_acquire_timeout(cwist_db_pool_t *pool, int timeout_ms);
+
 /**
  * @brief Return a connection to the pool.
  */
 void cwist_db_pool_release(cwist_db_pool_t *pool, cwist_db *conn);
+
+/** Return the number of currently checked-out connections. */
+size_t cwist_db_pool_in_use(cwist_db_pool_t *pool);
 
 /**
  * @brief Execute a non-query using a pooled connection.

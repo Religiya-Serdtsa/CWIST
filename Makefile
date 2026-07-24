@@ -115,6 +115,7 @@ SRCS = src/core/sstring/sstring.c \
        lib/multipart-parser-c/multipart_parser.c \
        src/sys/session/session_manager.c \
        src/sys/app/csrf.c \
+       src/sys/app/waf.c \
        src/core/siphash/siphash.c \
        src/core/db/db.c \
        src/core/db/pool.c \
@@ -309,6 +310,10 @@ TEST_TARGETS = test_sstring \
                test_grpc
 
 .PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild examples clean-examples
+
+bench_security_pool: $(LIB_NAME) tests/bench_security_pool.c
+	$(CC) $(CFLAGS) -o bench_security_pool tests/bench_security_pool.c $(LIB_NAME) $(LIBS)
+	./bench_security_pool
 
 test: $(TEST_TARGETS)
 

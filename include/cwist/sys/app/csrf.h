@@ -18,7 +18,8 @@ extern "C" {
  *
  * On safe requests (GET/HEAD/OPTIONS) a `csrf_token` cookie is issued if
  * missing. On unsafe requests the `X-CSRF-Token` header, `_csrf` form field,
- * or `csrf_token` query parameter must match the cookie value.
+ * or URL-encoded `_csrf` / `csrf_token` form field must match the cookie
+ * value. Query-string tokens are not accepted because URLs leak easily.
  *
  * @param app Application context.
  * @return Middleware function pointer.

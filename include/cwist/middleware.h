@@ -5,6 +5,7 @@
 #define __CWIST_MIDDLEWARE_H__
 
 #include <cwist/app.h>
+#include <cwist/sys/app/waf.h>
 
 /**
  * @brief Request ID middleware factory.
