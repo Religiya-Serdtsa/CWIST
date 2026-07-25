@@ -194,8 +194,13 @@ static lsquic_wt_session_t *cwist_wt_handle_session(void *handle) {
 /* Header-set interface for lsquic (QPACK decode)                     */
 /* ------------------------------------------------------------------ */
 
-#define H3_MAX_HEADERS 64
+/* Browsers routinely send more than 64 HTTP/3 headers once Client Hints,
+ * security metadata and cookies are included.  Keep a firm per-stream cap,
+ * but leave enough headroom that a late Cookie or :path is never discarded. */
+#define H3_MAX_HEADERS 128
 #define H3_DECODE_BUF_SIZE 65536
+#define H3_MAX_RESPONSE_HEADERS 128
+#define H3_RESPONSE_HEADER_BUF_SIZE 16384
 
 typedef struct cwist_h3_hset {
     lsquic_stream_t *stream;
@@ -218,7 +223,21 @@ static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
 static struct lsxpack_header *
 cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
     cwist_h3_hset_t *hset = hset_p;
-    (void)xhdr;
+    if (!hset) return NULL;
+
+    /* lsquic calls us again with the same header when its initial output
+     * buffer was too small.  Preserve the decoded name and grow only the
+     * value capacity; reinitializing the slot here loses :path/Cookie. */
+    if (xhdr) {
+        if (req_space > LSXPACK_MAX_STRLEN || xhdr->name_offset < 0 ||
+            (size_t)xhdr->name_offset >= sizeof(hset->decode_buf) ||
+            req_space > sizeof(hset->decode_buf) - (size_t)xhdr->name_offset) {
+            return NULL;
+        }
+        xhdr->val_len = (lsxpack_strlen_t)req_space;
+        return xhdr;
+    }
+
     if (hset->count >= H3_MAX_HEADERS)
         return NULL;
     if (req_space > sizeof(hset->decode_buf) - hset->decode_off)
@@ -231,15 +250,19 @@ cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space
 
 static int cwist_h3_hsi_process_header(void *hset_p, struct lsxpack_header *xhdr) {
     cwist_h3_hset_t *hset = hset_p;
+    /* A NULL header marks the end of a header block. */
     if (!hset || !xhdr)
         return 0;
-    size_t total = (xhdr->val_offset + xhdr->val_len + xhdr->dec_overhead)
-                   - (size_t)hset->decode_off;
-    if (total > sizeof(hset->decode_buf) - hset->decode_off)
-        total = sizeof(hset->decode_buf) - hset->decode_off;
+
+    /* The QPACK decoder exposes the exact storage used by this completed
+     * header.  Do not derive it from offsets: val_offset is relative to the
+     * shared buffer, and the old subtraction underflowed after :method,
+     * exhausting the buffer and silently losing :path and Cookie. */
+    size_t total = lsxpack_header_get_dec_size(xhdr);
+    if (total == 0 || total > sizeof(hset->decode_buf) - hset->decode_off)
+        return -1;
     hset->decode_off += total;
-    if (hset->count < H3_MAX_HEADERS)
-        hset->count++;
+    hset->count++;
     return 0;
 }
 
@@ -624,8 +647,8 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
     if (!st || !st->response_ready) return;
 
     if (st->write_state == 0) {
-        struct lsxpack_header headers_arr[64];
-        char hbuf[8192];
+        struct lsxpack_header headers_arr[H3_MAX_RESPONSE_HEADERS];
+        char hbuf[H3_RESPONSE_HEADER_BUF_SIZE];
         size_t hbuf_off = 0;
         size_t hdr_count = 0;
 
@@ -633,7 +656,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         char status_str[16];
         snprintf(status_str, sizeof(status_str), "%d", st->res->status_code);
         size_t slen = strlen(status_str);
-        if (hdr_count < 64 && hbuf_off + 7 + 2 + slen <= sizeof(hbuf)) {
+        if (hdr_count < H3_MAX_RESPONSE_HEADERS && hbuf_off + 7 + 2 + slen <= sizeof(hbuf)) {
             memcpy(hbuf + hbuf_off, ":status", 7);
             memcpy(hbuf + hbuf_off + 9, status_str, slen);
             lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
@@ -648,7 +671,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         else if (st->res->is_ptr_body) body_len = st->res->ptr_body_len;
         else if (st->res->body) body_len = st->res->body->size;
 
-        if (body_len > 0 && hdr_count < 64) {
+        if (body_len > 0 && hdr_count < H3_MAX_RESPONSE_HEADERS) {
             char cl_str[32];
             snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
             size_t cl_name_len = strlen("content-length");
@@ -667,7 +690,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         /* content-type (if present) */
         if (st->res->headers) {
             char *ct = cwist_http_header_get(st->res->headers, "content-type");
-            if (ct && hdr_count < 64) {
+            if (ct && hdr_count < H3_MAX_RESPONSE_HEADERS) {
                 size_t klen = strlen("content-type");
                 size_t vlen = strlen(ct);
                 if (hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
@@ -683,7 +706,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
 
         /* user headers (skip content-length/content-type already handled) */
         cwist_http_header_node *node = st->res->headers;
-        while (node && hdr_count < 64) {
+        while (node && hdr_count < H3_MAX_RESPONSE_HEADERS) {
             if (node->key && node->key->data && node->value && node->value->data) {
                 char h3_name[256];
                 if (cwist_http3_normalize_response_header_name(node->key->data,
