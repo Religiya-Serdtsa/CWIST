@@ -297,6 +297,7 @@ TEST_TARGETS = test_sstring \
                test_access_log \
                test_rate_limit \
                test_cache \
+               test_bdr \
                test_secure_headers \
                test_http_chunked \
                test_static_and_range \
@@ -429,6 +430,10 @@ test_rate_limit: $(LIB_NAME) tests/test_rate_limit.c
 test_cache: $(LIB_NAME) tests/test_cache.c
 	$(CC) $(CFLAGS) -o test_cache tests/test_cache.c $(LIB_NAME) $(LIBS)
 	./test_cache
+
+test_bdr: $(LIB_NAME) tests/test_bdr.c
+	$(CC) $(CFLAGS) -o test_bdr tests/test_bdr.c $(LIB_NAME) $(LIBS)
+	./test_bdr
 
 install: $(LIB_NAME)
 	@echo "Installing library to $(LIBDIR)..."

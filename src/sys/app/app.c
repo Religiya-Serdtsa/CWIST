@@ -2164,10 +2164,11 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
         // --- Big Dumb Reply (Read) ---
         if (app->bdr_ctx && req->method == CWIST_HTTP_GET) {
             size_t cached_len = 0;
-            const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
+            void *cached_blob = cwist_bdr_copy_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
             if (cached_blob) {
                 // BDR Hit! Blast it out.
                 send(client_fd, cached_blob, cached_len, 0); // Flags handled by socket opt ideally or just 0
+                cwist_free(cached_blob);
                 
                 // Cleanup and Loop
                 bool keep_alive = req->keep_alive;
