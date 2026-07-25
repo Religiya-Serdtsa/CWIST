@@ -232,6 +232,8 @@ cwist_h3_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space
         if (req_space > LSXPACK_MAX_STRLEN || xhdr->name_offset < 0 ||
             (size_t)xhdr->name_offset >= sizeof(hset->decode_buf) ||
             req_space > sizeof(hset->decode_buf) - (size_t)xhdr->name_offset) {
+            fprintf(stderr, "[HTTP/3] Rejecting oversized QPACK header resize (space=%zu, offset=%d)\n",
+                    req_space, (int)xhdr->name_offset);
             return NULL;
         }
         xhdr->val_len = (lsxpack_strlen_t)req_space;
@@ -259,8 +261,11 @@ static int cwist_h3_hsi_process_header(void *hset_p, struct lsxpack_header *xhdr
      * shared buffer, and the old subtraction underflowed after :method,
      * exhausting the buffer and silently losing :path and Cookie. */
     size_t total = lsxpack_header_get_dec_size(xhdr);
-    if (total == 0 || total > sizeof(hset->decode_buf) - hset->decode_off)
+    if (total == 0 || total > sizeof(hset->decode_buf) - hset->decode_off) {
+        fprintf(stderr, "[HTTP/3] Rejecting malformed QPACK header (size=%zu, used=%zu)\n",
+                total, hset->decode_off);
         return -1;
+    }
     hset->decode_off += total;
     hset->count++;
     return 0;
