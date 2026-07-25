@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
+#include <pthread.h>
 
 /**
  * @brief Big Dumb Reply Entry.
@@ -35,6 +36,7 @@ typedef struct bdr_entry_t {
  * Manages cache buckets and learning parameters.
  */
 typedef struct cwist_bdr_t {
+    pthread_mutex_t lock;      ///< Serializes cache entry and blob lifetime changes.
     bdr_entry_t **buckets;     ///< Hash buckets
     size_t bucket_count;       ///< Number of buckets
     
@@ -72,6 +74,13 @@ void cwist_bdr_destroy(cwist_bdr_t *bdr);
  * @return Pointer to the blob if found, NULL otherwise.
  */
 const void *cwist_bdr_get(cwist_bdr_t *bdr, const char *method, const char *path, size_t *out_len);
+
+/**
+ * @brief Copy a stable response from the cache for concurrent server use.
+ *
+ * The caller owns the returned buffer and must release it with cwist_free().
+ */
+void *cwist_bdr_copy_get(cwist_bdr_t *bdr, const char *method, const char *path, size_t *out_len);
 
 /**
  * @brief Store a response in the cache.
