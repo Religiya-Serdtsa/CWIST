@@ -24,6 +24,25 @@ static atomic_ulong pool_sequence = 1;
 
 static cwist_error_t pool_error(void) { cwist_error_t err = make_error(CWIST_ERR_INT16); err.error.err_i16 = -1; return err; }
 
+static bool pool_cond_init_monotonic(pthread_cond_t *cond) {
+    pthread_condattr_t attr;
+    if (pthread_condattr_init(&attr) != 0) return false;
+    bool ok = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) == 0 &&
+              pthread_cond_init(cond, &attr) == 0;
+    pthread_condattr_destroy(&attr);
+    return ok;
+}
+
+static void pool_deadline_after_ms(struct timespec *deadline, int timeout_ms) {
+    clock_gettime(CLOCK_MONOTONIC, deadline);
+    deadline->tv_sec += timeout_ms / 1000;
+    deadline->tv_nsec += (long)(timeout_ms % 1000) * 1000000L;
+    if (deadline->tv_nsec >= 1000000000L) {
+        ++deadline->tv_sec;
+        deadline->tv_nsec -= 1000000000L;
+    }
+}
+
 static char *pool_open_path(const char *path) {
     if (strcmp(path, ":memory:") != 0) return cwist_strdup(path);
     unsigned long seq = atomic_fetch_add_explicit(&pool_sequence, 1, memory_order_relaxed);
@@ -42,7 +61,13 @@ cwist_db_pool_t *cwist_db_pool_create(const char *path, size_t max_conns) {
     pool->conns = cwist_alloc_array(max_conns, sizeof(*pool->conns));
     pool->idle_slots = cwist_alloc_array(max_conns, sizeof(*pool->idle_slots));
     pool->leased = cwist_alloc_array(max_conns, sizeof(*pool->leased));
-    if (!pool->path || !pool->open_path || !pool->conns || !pool->idle_slots || !pool->leased || pthread_mutex_init(&pool->mtx, NULL) || pthread_cond_init(&pool->cond, NULL)) goto fail;
+    bool mutex_ready = false;
+    bool cond_ready = false;
+    if (!pool->path || !pool->open_path || !pool->conns || !pool->idle_slots || !pool->leased) goto fail;
+    if (pthread_mutex_init(&pool->mtx, NULL) != 0) goto fail;
+    mutex_ready = true;
+    if (!pool_cond_init_monotonic(&pool->cond)) goto fail;
+    cond_ready = true;
     pool->max_conns = max_conns;
     for (size_t i = 0; i < max_conns; ++i) {
         if (cwist_db_open(&pool->conns[i], pool->open_path).error.err_i16 != 0) goto fail;
@@ -53,7 +78,8 @@ cwist_db_pool_t *cwist_db_pool_create(const char *path, size_t max_conns) {
     return pool;
 fail:
     if (pool->conns) for (size_t i = 0; i < max_conns; ++i) cwist_db_close(pool->conns[i]);
-    if (pool->max_conns) { pthread_cond_destroy(&pool->cond); pthread_mutex_destroy(&pool->mtx); }
+    if (cond_ready) pthread_cond_destroy(&pool->cond);
+    if (mutex_ready) pthread_mutex_destroy(&pool->mtx);
     cwist_free(pool->leased); cwist_free(pool->idle_slots); cwist_free(pool->conns); cwist_free(pool->open_path); cwist_free(pool->path); cwist_free(pool);
     return NULL;
 }
@@ -78,10 +104,7 @@ cwist_db *cwist_db_pool_acquire(cwist_db_pool_t *pool) {
 cwist_db *cwist_db_pool_acquire_timeout(cwist_db_pool_t *pool, int timeout_ms) {
     if (!pool || timeout_ms < 0) return NULL;
     struct timespec deadline;
-    clock_gettime(CLOCK_REALTIME, &deadline);
-    deadline.tv_sec += timeout_ms / 1000;
-    deadline.tv_nsec += (long)(timeout_ms % 1000) * 1000000L;
-    if (deadline.tv_nsec >= 1000000000L) { ++deadline.tv_sec; deadline.tv_nsec -= 1000000000L; }
+    pool_deadline_after_ms(&deadline, timeout_ms);
     pthread_mutex_lock(&pool->mtx);
     while (!pool->closing && pool->idle_count == 0) {
         if (pthread_cond_timedwait(&pool->cond, &pool->mtx, &deadline) != 0) break;
@@ -110,16 +133,33 @@ size_t cwist_db_pool_in_use(cwist_db_pool_t *pool) {
     return count;
 }
 
-void cwist_db_pool_destroy(cwist_db_pool_t *pool) {
-    if (!pool) return;
+bool cwist_db_pool_destroy_timeout(cwist_db_pool_t *pool, int timeout_ms) {
+    if (!pool || timeout_ms < -1) return false;
     pthread_mutex_lock(&pool->mtx);
     pool->closing = true;
     pthread_cond_broadcast(&pool->cond);
-    while (pool->in_use != 0) pthread_cond_wait(&pool->cond, &pool->mtx);
+    if (timeout_ms < 0) {
+        while (pool->in_use != 0) pthread_cond_wait(&pool->cond, &pool->mtx);
+    } else {
+        struct timespec deadline;
+        pool_deadline_after_ms(&deadline, timeout_ms);
+        while (pool->in_use != 0) {
+            int rc = pthread_cond_timedwait(&pool->cond, &pool->mtx, &deadline);
+            if (rc != 0 && pool->in_use != 0) {
+                pthread_mutex_unlock(&pool->mtx);
+                return false;
+            }
+        }
+    }
     pthread_mutex_unlock(&pool->mtx);
     for (size_t i = 0; i < pool->max_conns; ++i) cwist_db_close(pool->conns[i]);
     pthread_cond_destroy(&pool->cond); pthread_mutex_destroy(&pool->mtx);
     cwist_free(pool->leased); cwist_free(pool->idle_slots); cwist_free(pool->conns); cwist_free(pool->open_path); cwist_free(pool->path); cwist_free(pool);
+    return true;
+}
+
+void cwist_db_pool_destroy(cwist_db_pool_t *pool) {
+    (void)cwist_db_pool_destroy_timeout(pool, -1);
 }
 
 cwist_error_t cwist_db_pool_exec(cwist_db_pool_t *pool, const char *sql) {

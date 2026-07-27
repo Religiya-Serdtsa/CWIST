@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 
 int main(void) {
     cwist_db_pool_t *pool = cwist_db_pool_create(":memory:", 3);
@@ -50,7 +51,21 @@ int main(void) {
     assert(cwist_db_pool_acquire_timeout(pool, 5) == NULL);
     cwist_db_pool_release(pool, one); cwist_db_pool_release(pool, two); cwist_db_pool_release(pool, three);
 
-    cwist_db_pool_destroy(pool);
+    /* An orphaned lease must not make shutdown wait forever.  Timed shutdown
+     * closes the pool to new borrowers, preserves the leased handle, and can
+     * complete safely after its owner returns it. */
+    conn = cwist_db_pool_acquire(pool);
+    assert(conn != NULL);
+    struct timespec started, finished;
+    clock_gettime(CLOCK_MONOTONIC, &started);
+    assert(!cwist_db_pool_destroy_timeout(pool, 5));
+    clock_gettime(CLOCK_MONOTONIC, &finished);
+    long elapsed_ms = (finished.tv_sec - started.tv_sec) * 1000L +
+                      (finished.tv_nsec - started.tv_nsec) / 1000000L;
+    assert(elapsed_ms < 500);
+    assert(cwist_db_pool_acquire_timeout(pool, 1) == NULL);
+    cwist_db_pool_release(pool, conn);
+    assert(cwist_db_pool_destroy_timeout(pool, 100));
     printf("All DB pool tests passed.\n");
     return 0;
 }
