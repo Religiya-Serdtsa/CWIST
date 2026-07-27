@@ -151,7 +151,7 @@
 | **Configuration Management** | ✅ | `.env` file + environment variable loader via `cwist_config` |
 | **Testing Utilities** | ✅ | In-process test client (`cwist_test_client_get/post/request_ex`), cookie jar, multipart helper, and regression targets wired in Makefile |
 | **Benchmark Suite** | ⏳ | No `wrk`/`oha`/`h2load` benchmark automation |
-| **Fuzzing / Hardening** | ⏳ | No AFL/libFuzzer targets for HTTP parser or QUIC path |
+| **Fuzzing / Hardening** | 🔄 | `fuzz_seq` libFuzzer target covers sequenced and authenticated fragment parsing; HTTP parser and QUIC paths remain planned |
 
 ---
 

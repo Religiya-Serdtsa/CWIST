@@ -1,5 +1,6 @@
 # Compiler and Flags
 CC ?= gcc
+FUZZ_CC ?= clang
 
 CURL_CFLAGS := $(shell pkg-config --cflags libcurl 2>/dev/null)
 NGHTTP2_CFLAGS := $(shell pkg-config --cflags libnghttp2 2>/dev/null)
@@ -94,6 +95,7 @@ endif
 # Source Files
 SRCS = src/core/sstring/sstring.c \
        src/core/seq/seq.c \
+       src/core/seq/seq_auth.c \
        src/sys/err/error.c \
        src/net/http/http.c \
        src/net/http/http2.c \
@@ -272,6 +274,7 @@ $(CNATS_LIB):
 
 TEST_TARGETS = test_sstring \
                test_seq \
+               test_seq_auth \
                test_http \
                test_siphash \
                test_mux \
@@ -311,7 +314,17 @@ TEST_TARGETS = test_sstring \
                test_multiport \
                test_grpc
 
-.PHONY: all test $(TEST_TARGETS) install uninstall clean rebuild examples clean-examples
+.PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall clean rebuild examples clean-examples
+
+# Run with e.g. `make fuzz_seq FUZZ_RUNS=100000`.  The target intentionally
+# uses a dedicated clang/libFuzzer toolchain and is not part of `make test`.
+FUZZ_RUNS ?= 10000
+fuzz_seq: $(LIBTTAK_LIB) $(CJSON_LIB) tests/fuzz_seq.c src/core/seq/seq.c src/core/seq/seq_auth.c src/core/mem/alloc.c
+	$(FUZZ_CC) $(INCLUDE_PATHS) $(COMMON_DEFINES) -std=c2x -g -O1 \
+		-fsanitize=fuzzer,address,undefined -o $@ tests/fuzz_seq.c \
+		src/core/seq/seq.c src/core/seq/seq_auth.c src/core/mem/alloc.c \
+		$(LIBTTAK_LIB) $(CJSON_LIB) $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB) -pthread
+	./$@ -runs=$(FUZZ_RUNS)
 
 bench_security_pool: $(LIB_NAME) tests/bench_security_pool.c
 	$(CC) $(CFLAGS) -o bench_security_pool tests/bench_security_pool.c $(LIB_NAME) $(LIBS)
@@ -326,6 +339,10 @@ test_sstring: $(LIB_NAME) tests/test_sstring.c
 test_seq: $(LIB_NAME) tests/test_seq.c
 	$(CC) $(CFLAGS) -o test_seq tests/test_seq.c $(LIB_NAME) $(LIBS)
 	./test_seq
+
+test_seq_auth: $(LIB_NAME) tests/test_seq_auth.c
+	$(CC) $(CFLAGS) -o test_seq_auth tests/test_seq_auth.c $(LIB_NAME) $(LIBS)
+	./test_seq_auth
 
 test_http: $(LIB_NAME) tests/test_http.c
 	$(CC) $(CFLAGS) -o test_http tests/test_http.c $(LIB_NAME) $(LIBS)

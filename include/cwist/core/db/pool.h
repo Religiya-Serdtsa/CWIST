@@ -35,6 +35,21 @@ cwist_db_pool_t *cwist_db_pool_create(const char *path, size_t max_conns);
 void cwist_db_pool_destroy(cwist_db_pool_t *pool);
 
 /**
+ * Begin shutdown and destroy the pool after outstanding leases return.
+ *
+ * Unlike cwist_db_pool_destroy(), this never waits indefinitely for an
+ * orphaned checked-out connection.  On timeout it leaves @p pool allocated,
+ * closed to new acquisitions, and safe for cwist_db_pool_release(); call this
+ * function again after the remaining leases return.
+ *
+ * @param pool Pool to shut down.
+ * @param timeout_ms Maximum wait in milliseconds; -1 waits indefinitely.
+ * @return true when the pool was destroyed, false when leases remain or the
+ *         arguments are invalid.
+ */
+bool cwist_db_pool_destroy_timeout(cwist_db_pool_t *pool, int timeout_ms);
+
+/**
  * @brief Acquire a connection from the pool. Blocks until one is available.
  *
  * @return SQLite db handle, or NULL on error.
