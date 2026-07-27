@@ -108,7 +108,10 @@ static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
     hc->conn_send_window = 65535;
     hc->conn_recv_window = 65535;
     hc->cont_end_stream = false;
-    hc->sequenced_data = conn && conn->http2_sequenced_data;
+    /* The extension carries application bodies and must not be enabled over
+     * h2c: its ordering metadata is not an integrity mechanism.  HTTPS/TLS
+     * supplies authenticated transport protection against on-path mutation. */
+    hc->sequenced_data = conn && conn->ssl && conn->http2_sequenced_data;
 }
 
 static void h2_conn_destroy(h2_conn *hc) {
@@ -1807,13 +1810,23 @@ cwist_error_t cwist_http2_serve_connection(
                         cwist_seq_chunk_t chunk;
                         if (cwist_seq_chunk_parse(payload, len, &chunk)) {
                             if (!s->body_assembler) {
-                                s->body_assembler = cwist_seq_assembler_create();
+                                s->body_assembler = cwist_seq_assembler_create_limited(
+                                    CWIST_HTTP_MAX_BODY_SIZE);
                                 if (!s->body_assembler) {
                                     connected = false;
                                     break;
                                 }
                             }
-                            cwist_seq_assembler_feed(s->body_assembler, &chunk);
+                            if (!cwist_seq_assembler_feed(s->body_assembler, &chunk)) {
+                                /* A conflicting duplicate is corruption, not a
+                                 * retransmission.  Refuse the stream without
+                                 * exposing a mixed body to the application. */
+                                uint8_t rst[4] = {0, 0, 0, H2_ERR_PROTOCOL_ERROR};
+                                h2_write_frame(hc.conn, CWIST_HTTP2_FRAME_RST_STREAM,
+                                               0, stream_id, rst, sizeof(rst));
+                                h2_stream_remove(&hc, stream_id);
+                                break;
+                            }
                         }
                         /* Malformed sequence chunks are ignored (discarded). */
                     } else if (!hc.sequenced_data) {
@@ -1828,6 +1841,7 @@ cwist_error_t cwist_http2_serve_connection(
                     }
                 }
                 if (flags & CWIST_HTTP2_FLAG_END_STREAM) {
+                    bool sequence_complete = !hc.sequenced_data;
                     if (hc.sequenced_data && s->body_assembler) {
                         const uint8_t *assembled = NULL;
                         size_t assembled_len = 0;
@@ -1835,8 +1849,22 @@ cwist_error_t cwist_http2_serve_connection(
                             if (s->req->body->size + assembled_len <= CWIST_HTTP_MAX_BODY_SIZE) {
                                 s->recv_xor ^= h2_xor_bytes(assembled, assembled_len);
                                 cwist_sstring_append_len(s->req->body, (const char *)assembled, assembled_len);
+                                sequence_complete = true;
                             }
                         }
+                    }
+                    if (!sequence_complete) {
+                        /* TASFA-style ARQ boundary: the assembler retains the
+                         * exact missing sequence numbers as recovery targets;
+                         * HTTP/2 represents "retry this unprocessed request"
+                         * with REFUSED_STREAM.  Never call the handler with a
+                         * partial sequenced body. */
+                        uint8_t rst[4] = {0, 0, 0, H2_ERR_REFUSED_STREAM};
+                        h2_write_frame(hc.conn, CWIST_HTTP2_FRAME_RST_STREAM,
+                                       0, stream_id, rst, sizeof(rst));
+                        h2_auto_window_update(&hc, s);
+                        h2_stream_remove(&hc, stream_id);
+                        break;
                     }
                     cwist_http_response *res = cwist_http_response_create();
                     if (res) {
@@ -1845,9 +1873,13 @@ cwist_error_t cwist_http2_serve_connection(
                         if (h2_send_response_hc(&hc, stream_id, res) != 0) connected = false;
                         cwist_http_response_destroy(res);
                     }
+                    /* Keep the stream state alive until its final window
+                     * credit is returned; h2_auto_window_update reads it. */
+                    if (connected) h2_auto_window_update(&hc, s);
                     h2_stream_remove(&hc, stream_id);
+                    s = NULL;
                 }
-                if (connected) {
+                if (connected && s) {
                     h2_auto_window_update(&hc, s);
                 }
                 break;
