@@ -12,9 +12,12 @@ struct cwist_seq_assembler {
     bool have_state;        ///< True after the first valid chunk was fed.
     uint16_t total;         ///< Expected number of chunks.
     uint16_t chunk_size;    ///< Payload size of a full chunk.
-    size_t total_len;       ///< Reassembled message length.
+    size_t total_len;       ///< Reassembled length, known once final chunk arrives.
+    size_t data_cap;        ///< Capacity for every possible full-size chunk.
+    size_t max_data_len;    ///< Optional network-facing allocation limit.
     uint8_t *data;          ///< Reassembly buffer.
     bool *received;         ///< received[i] == true if chunk (i+1) arrived.
+    uint16_t *payload_lens; ///< Accepted payload length for duplicate checks.
     uint16_t received_count;///< Number of distinct chunks received.
 };
 
@@ -125,9 +128,14 @@ void cwist_seq_message_free(cwist_seq_message_t *msg) {
 /* -------------------------------------------------------------------------- */
 
 cwist_seq_assembler_t *cwist_seq_assembler_create(void) {
+    return cwist_seq_assembler_create_limited(0);
+}
+
+cwist_seq_assembler_t *cwist_seq_assembler_create_limited(size_t max_data_len) {
     cwist_seq_assembler_t *a = (cwist_seq_assembler_t *)cwist_alloc(sizeof(*a));
     if (!a) return NULL;
     memset(a, 0, sizeof(*a));
+    a->max_data_len = max_data_len;
     return a;
 }
 
@@ -135,6 +143,7 @@ void cwist_seq_assembler_destroy(cwist_seq_assembler_t *a) {
     if (!a) return;
     cwist_free(a->data);
     cwist_free(a->received);
+    cwist_free(a->payload_lens);
     cwist_free(a);
 }
 
@@ -142,6 +151,7 @@ void cwist_seq_assembler_reset(cwist_seq_assembler_t *a) {
     if (!a) return;
     cwist_free(a->data);
     cwist_free(a->received);
+    cwist_free(a->payload_lens);
     memset(a, 0, sizeof(*a));
 }
 
@@ -153,16 +163,28 @@ bool cwist_seq_assembler_feed(cwist_seq_assembler_t *a, const cwist_seq_chunk_t 
     if (chunk->payload_len == 0 || chunk->chunk_size == 0) return false;
     if (chunk->payload_len > chunk->chunk_size) return false;
     if (chunk->seq != chunk->total && chunk->payload_len != chunk->chunk_size) return false;
+    if (!chunk->payload) return false;
 
     if (!a->have_state) {
         a->total = chunk->total;
         a->chunk_size = chunk->chunk_size;
-        a->total_len = (size_t)(chunk->total - 1) * chunk->chunk_size + chunk->payload_len;
-        a->data = (uint8_t *)cwist_alloc(a->total_len);
+        /* The first packet may be the short final packet.  Allocate for the
+         * full layout and determine total_len only after seq == total is
+         * actually received; deriving it from arrival order was the source of
+         * false protocol errors on reordered HTTP/2/3-adjacent transports. */
+        if ((size_t)chunk->total > SIZE_MAX / (size_t)chunk->chunk_size) return false;
+        a->data_cap = (size_t)chunk->total * chunk->chunk_size;
+        if (a->max_data_len && a->data_cap > a->max_data_len) {
+            a->data_cap = 0;
+            return false;
+        }
+        a->data = (uint8_t *)cwist_alloc(a->data_cap);
         a->received = (bool *)cwist_alloc_array(chunk->total, sizeof(bool));
-        if (!a->data || !a->received) {
+        a->payload_lens = (uint16_t *)cwist_alloc_array(chunk->total, sizeof(uint16_t));
+        if (!a->data || !a->received || !a->payload_lens) {
             cwist_free(a->data);
             cwist_free(a->received);
+            cwist_free(a->payload_lens);
             memset(a, 0, sizeof(*a));
             return false;
         }
@@ -171,19 +193,45 @@ bool cwist_seq_assembler_feed(cwist_seq_assembler_t *a, const cwist_seq_chunk_t 
         if (chunk->total != a->total || chunk->chunk_size != a->chunk_size) return false;
     }
 
-    if (a->received[chunk->seq - 1]) return true; /* duplicate: discard */
+    size_t index = (size_t)chunk->seq - 1;
+    size_t offset = index * a->chunk_size;
+    if (a->received[index]) {
+        /* Safe duplicates are idempotent.  A different duplicate is data
+         * corruption, not a retry, and must never overwrite good bytes. */
+        return a->payload_lens[index] == chunk->payload_len &&
+               memcmp(a->data + offset, chunk->payload, chunk->payload_len) == 0;
+    }
 
-    size_t offset = (size_t)(chunk->seq - 1) * a->chunk_size;
-    if (offset + chunk->payload_len > a->total_len) return false;
+    if (offset > a->data_cap || chunk->payload_len > a->data_cap - offset) return false;
 
     memcpy(a->data + offset, chunk->payload, chunk->payload_len);
-    a->received[chunk->seq - 1] = true;
+    a->received[index] = true;
+    a->payload_lens[index] = chunk->payload_len;
+    if (chunk->seq == chunk->total) {
+        a->total_len = offset + chunk->payload_len;
+    }
     a->received_count++;
     return true;
 }
 
 bool cwist_seq_assembler_is_complete(const cwist_seq_assembler_t *a) {
-    return a && a->have_state && a->received_count == a->total;
+    return a && a->have_state && a->received_count == a->total &&
+           a->received[a->total - 1] && a->total_len > 0;
+}
+
+size_t cwist_seq_assembler_recovery_targets(const cwist_seq_assembler_t *a,
+                                            uint16_t *out,
+                                            size_t out_cap) {
+    if (!a || !a->have_state || cwist_seq_assembler_is_complete(a)) return 0;
+
+    size_t missing = 0;
+    for (uint16_t i = 0; i < a->total; ++i) {
+        if (!a->received[i]) {
+            if (out && missing < out_cap) out[missing] = (uint16_t)(i + 1);
+            missing++;
+        }
+    }
+    return missing;
 }
 
 bool cwist_seq_assembler_get_data(cwist_seq_assembler_t *a,

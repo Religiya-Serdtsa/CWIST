@@ -121,11 +121,62 @@ static void test_single_chunk(void) {
     printf("  Passed single chunk.\n");
 }
 
+static void test_final_chunk_first_recovery_targets(void) {
+    printf("Testing final-chunk-first recovery...\n");
+    const char *msg = "1234567890";
+    cwist_seq_message_t split;
+    assert(cwist_seq_split((const uint8_t *)msg, strlen(msg), 3, &split));
+
+    cwist_seq_assembler_t *a = cwist_seq_assembler_create();
+    cwist_seq_chunk_t chunk;
+    /* This used to allocate only one byte of body space and reject seq 1-3. */
+    assert(cwist_seq_chunk_parse(split.chunks[3], split.chunk_lens[3], &chunk));
+    assert(cwist_seq_assembler_feed(a, &chunk));
+
+    uint16_t retry[3] = {0};
+    assert(cwist_seq_assembler_recovery_targets(a, retry, 3) == 3);
+    assert(retry[0] == 1 && retry[1] == 2 && retry[2] == 3);
+
+    for (size_t i = 0; i < 3; ++i) {
+        assert(cwist_seq_chunk_parse(split.chunks[i], split.chunk_lens[i], &chunk));
+        assert(cwist_seq_assembler_feed(a, &chunk));
+    }
+    const uint8_t *out = NULL;
+    size_t out_len = 0;
+    assert(cwist_seq_assembler_get_data(a, &out, &out_len));
+    assert(out_len == strlen(msg) && memcmp(out, msg, out_len) == 0);
+
+    cwist_seq_assembler_destroy(a);
+    cwist_seq_message_free(&split);
+    printf("  Passed final-chunk-first recovery.\n");
+}
+
+static void test_conflicting_duplicate_rejected(void) {
+    printf("Testing conflicting duplicate rejection...\n");
+    const char *msg = "abcdef";
+    cwist_seq_message_t split;
+    assert(cwist_seq_split((const uint8_t *)msg, strlen(msg), 3, &split));
+    cwist_seq_assembler_t *a = cwist_seq_assembler_create();
+    cwist_seq_chunk_t chunk;
+    assert(cwist_seq_chunk_parse(split.chunks[0], split.chunk_lens[0], &chunk));
+    assert(cwist_seq_assembler_feed(a, &chunk));
+    uint8_t altered[11];
+    memcpy(altered, split.chunks[0], sizeof(altered));
+    altered[CWIST_SEQ_HEADER_SIZE] ^= 1;
+    assert(cwist_seq_chunk_parse(altered, sizeof(altered), &chunk));
+    assert(!cwist_seq_assembler_feed(a, &chunk));
+    cwist_seq_assembler_destroy(a);
+    cwist_seq_message_free(&split);
+    printf("  Passed conflicting duplicate rejection.\n");
+}
+
 int main(void) {
     test_split_and_reassemble();
     test_duplicate_discard();
     test_invalid_chunk();
     test_single_chunk();
+    test_final_chunk_first_recovery_targets();
+    test_conflicting_duplicate_rejected();
     printf("All seq tests passed!\n");
     return 0;
 }

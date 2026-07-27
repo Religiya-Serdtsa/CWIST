@@ -11,6 +11,7 @@
 #include <cwist/net/http/http3.h>
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/seq/seq.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/sys/app/shutdown.h>
 #include "tls_chain.h"
@@ -90,6 +91,11 @@ typedef struct h3_stream_ctx {
     size_t body_sent;
     uint8_t recv_xor; /* running XOR of received body bytes */
     uint8_t send_xor; /* running XOR of sent body bytes */
+    int sequenced_data; /* X-CWIST-Sequenced-Data: 1 request body */
+    unsigned char *seq_buf;
+    size_t seq_len;
+    size_t seq_cap;
+    cwist_seq_assembler_t *body_assembler;
 #ifdef CWIST_WEBTRANSPORT
     int is_webtransport;
     int wt_taken;
@@ -533,6 +539,49 @@ static void h3_apply_header(cwist_http_request *req,
     }
 }
 
+/* HTTP/3 delivers an ordered QUIC byte stream, but an application-level
+ * sequenced body can be split at arbitrary read boundaries.  Buffer just one
+ * wire chunk, then hand complete chunks to the common TASFA-style ARQ
+ * assembler. */
+static int h3_seq_append_and_feed(h3_stream_ctx_t *st,
+                                  const unsigned char *data, size_t len) {
+    if (len > SIZE_MAX - st->seq_len) return -1;
+    size_t need = st->seq_len + len;
+    if (need > st->seq_cap) {
+        size_t cap = st->seq_cap ? st->seq_cap : 4096;
+        while (cap < need) {
+            if (cap > (CWIST_SEQ_HEADER_SIZE + UINT16_MAX) / 2) {
+                cap = CWIST_SEQ_HEADER_SIZE + UINT16_MAX;
+                break;
+            }
+            cap *= 2;
+        }
+        if (cap < need || cap > CWIST_SEQ_HEADER_SIZE + UINT16_MAX) return -1;
+        unsigned char *tmp = realloc(st->seq_buf, cap);
+        if (!tmp) return -1;
+        st->seq_buf = tmp;
+        st->seq_cap = cap;
+    }
+    memcpy(st->seq_buf + st->seq_len, data, len);
+    st->seq_len += len;
+
+    while (st->seq_len >= CWIST_SEQ_HEADER_SIZE) {
+        size_t payload_len = ((size_t)st->seq_buf[4] << 8) | st->seq_buf[5];
+        size_t chunk_len = CWIST_SEQ_HEADER_SIZE + payload_len;
+        if (payload_len == 0 || st->seq_len < chunk_len) break;
+        cwist_seq_chunk_t chunk;
+        if (!cwist_seq_chunk_parse(st->seq_buf, chunk_len, &chunk)) return -1;
+        if (!st->body_assembler) {
+            st->body_assembler = cwist_seq_assembler_create_limited(CWIST_HTTP_MAX_BODY_SIZE);
+            if (!st->body_assembler) return -1;
+        }
+        if (!cwist_seq_assembler_feed(st->body_assembler, &chunk)) return -1;
+        memmove(st->seq_buf, st->seq_buf + chunk_len, st->seq_len - chunk_len);
+        st->seq_len -= chunk_len;
+    }
+    return 0;
+}
+
 static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     h3_stream_ctx_t *st = (h3_stream_ctx_t *)st_h;
     if (!st) return;
@@ -583,10 +632,21 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                 }
             }
             st->headers_done = 1;
+            char *seq_header = cwist_http_header_get(st->req->headers,
+                                                      "x-cwist-sequenced-data");
+            st->sequenced_data = seq_header &&
+                (strcmp(seq_header, "1") == 0 || strcasecmp(seq_header, "true") == 0);
         }
     }
 
     while ((nread = lsquic_stream_read(stream, buf, sizeof(buf))) > 0) {
+        if (st->sequenced_data) {
+            if (h3_seq_append_and_feed(st, buf, (size_t)nread) != 0) {
+                lsquic_stream_close(stream);
+                return;
+            }
+            continue;
+        }
         size_t need = st->body_len + (size_t)nread;
         if (need > CWIST_HTTP_MAX_BODY_SIZE) {
             /* Body too large: abort stream */
@@ -621,6 +681,34 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             lsquic_stream_wantread(stream, 0);
             lsquic_stream_wantwrite(stream, 1);
             return;
+        }
+
+        if (st->sequenced_data) {
+            const uint8_t *assembled = NULL;
+            size_t assembled_len = 0;
+            if (st->seq_len != 0 || !st->body_assembler ||
+                !cwist_seq_assembler_get_data(st->body_assembler, &assembled, &assembled_len)) {
+                /* Do not dispatch a partial request.  QUIC already repairs
+                 * transport loss; this catches application fragmentation loss
+                 * and lets the client resend the idempotent request. */
+                st->res = cwist_http_response_create();
+                if (st->res) {
+                    st->res->status_code = CWIST_HTTP_BAD_REQUEST;
+                    cwist_http_header_add(&st->res->headers, "x-cwist-retry", "1");
+                }
+                st->response_ready = 1;
+                lsquic_stream_wantread(stream, 0);
+                lsquic_stream_wantwrite(stream, 1);
+                return;
+            }
+            st->body = realloc(st->body, assembled_len);
+            if (!st->body) {
+                lsquic_stream_close(stream);
+                return;
+            }
+            memcpy(st->body, assembled, assembled_len);
+            st->body_len = assembled_len;
+            st->body_cap = assembled_len;
         }
 
         if (st->body_len > 0 && st->req && st->req->body) {
@@ -859,6 +947,8 @@ static void cwist_h3_on_close(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         cwist_http_request_destroy(st->req);
         cwist_http_response_destroy(st->res);
         free(st->body);
+        cwist_seq_assembler_destroy(st->body_assembler);
+        free(st->seq_buf);
         free(st);
     }
     (void)stream;

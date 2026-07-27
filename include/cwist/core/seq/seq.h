@@ -3,8 +3,9 @@
  * @brief TCP-like sequenced message fragmentation and reassembly.
  *
  * Splits large payloads into small numbered chunks, transmits them, and
- * reassembles them even when they arrive out of order.  Duplicate chunks
- * and malformed sequence pairs are discarded.
+ * reassembles them even when they arrive out of order.  It also exposes the
+ * exact missing sequence numbers so a transport can request retransmission
+ * rather than treating a partially assembled body as complete.
  *
  * Chunk wire format (8 bytes, big-endian):
  *   seq          uint16_t  1-based sequence number
@@ -111,6 +112,15 @@ void cwist_seq_message_free(cwist_seq_message_t *msg);
 cwist_seq_assembler_t *cwist_seq_assembler_create(void);
 
 /**
+ * @brief Create an assembler with a maximum possible reassembled size.
+ *
+ * A non-zero limit rejects a sequence layout whose full chunks would exceed
+ * it before allocating its reassembly buffer.  Use this for network-facing
+ * parsers.  A zero limit has the same behaviour as cwist_seq_assembler_create.
+ */
+cwist_seq_assembler_t *cwist_seq_assembler_create_limited(size_t max_data_len);
+
+/**
  * @brief Destroy an assembler and its internal buffer.
  */
 void cwist_seq_assembler_destroy(cwist_seq_assembler_t *a);
@@ -131,6 +141,24 @@ bool cwist_seq_assembler_feed(cwist_seq_assembler_t *a, const cwist_seq_chunk_t 
  * @brief Return true when every expected chunk has been received.
  */
 bool cwist_seq_assembler_is_complete(const cwist_seq_assembler_t *a);
+
+/**
+ * @brief Return the sequence numbers still required to complete a message.
+ *
+ * This is the ARQ recovery side of the sequenced protocol: callers can use
+ * the returned 1-based values as retry targets.  The return value is the
+ * total number of missing chunks, even when @p out is NULL or too small.
+ * The result is zero for a complete assembler or one that has not yet seen a
+ * valid chunk.
+ *
+ * @param a Assembler state.
+ * @param out Optional output array for missing sequence numbers.
+ * @param out_cap Number of entries available in @p out.
+ * @return Number of missing chunks.
+ */
+size_t cwist_seq_assembler_recovery_targets(const cwist_seq_assembler_t *a,
+                                            uint16_t *out,
+                                            size_t out_cap);
 
 /**
  * @brief Borrow the assembled message when complete.
