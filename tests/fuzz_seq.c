@@ -28,7 +28,6 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         offset += frame_len;
     }
     cwist_seq_assembler_destroy(assembler);
-
     static const uint8_t key[CWIST_SEQ_AUTH_KEY_SIZE] = { 0x5a };
     static const uint8_t session[CWIST_SEQ_AUTH_SESSION_ID_SIZE] = { 0xa5 };
     cwist_seq_auth_context_t *auth = cwist_seq_auth_context_create(key, session, 64);
