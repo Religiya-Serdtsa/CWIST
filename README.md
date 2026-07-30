@@ -99,13 +99,16 @@ gcc -o server main.c \
 New projects include a self-describing `.cwpro` development command. Run the
 watcher from the project directory to calculate the affected translation units,
 incrementally invoke the build, and restart the app only after a successful
-build. The previous process remains available if a build fails.
+build. It uses Linux `inotify` or BSD/macOS `kqueue` for low-latency wakeups,
+with an mtime snapshot and polling fallback to prevent missed rebuilds. The
+previous process remains available if a build fails.
 
 ```sh
 cwist watcher
 ```
 
-Use `cwist watcher --no-run` for CI or rebuild-only use. `dev.debounce_ms` and
+Use `cwist watcher --no-run` for CI or rebuild-only use, or `--poll` to force
+portable polling. `dev.debounce_ms` and
 `dev.stop_timeout_ms` in the manifest control atomic-save coalescing and
 graceful process shutdown.
 

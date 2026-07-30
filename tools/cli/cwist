@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
+import os
 import re
+import select
 import shlex
 import signal
 import subprocess
@@ -195,6 +198,108 @@ def impacted_sources(root: Path, changed: set[Path]) -> set[Path]:
     return {path for path in affected if path.suffix == ".c"}
 
 
+class FileEventSource:
+    """Event-first watcher with an mtime snapshot fallback.
+
+    The snapshot remains authoritative: kernel events are only a low-latency
+    wake-up signal, so overflow, dropped events, and newly-created directories
+    cannot cause a missed rebuild.
+    """
+    _IN_MASK = 0x00000002 | 0x00000008 | 0x00000040 | 0x00000080 | 0x00000100 | 0x00000200
+    _SKIP = {".git", "bin", "build", ".cwist-build", "node_modules", "__pycache__"}
+
+    def __init__(self, root: Path, force_poll: bool = False) -> None:
+        self.root = root
+        self.fd = -1
+        self.kq = None
+        self.open_fds: list[int] = []
+        self.backend = "poll"
+        if not force_poll and sys.platform.startswith("linux"):
+            self._open_inotify()
+        elif not force_poll and hasattr(select, "kqueue"):
+            self._open_kqueue()
+
+    def _directories(self) -> list[Path]:
+        dirs = []
+        for path in self.root.rglob("*"):
+            if path.is_dir() and not any(part in self._SKIP for part in path.parts):
+                dirs.append(path)
+        return [self.root, *dirs]
+
+    def _open_inotify(self) -> None:
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            init = libc.inotify_init1
+            init.argtypes, init.restype = [ctypes.c_int], ctypes.c_int
+            self.fd = init(os.O_NONBLOCK | os.O_CLOEXEC)
+            if self.fd < 0:
+                return
+            add = libc.inotify_add_watch
+            add.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
+            add.restype = ctypes.c_int
+            for directory in self._directories():
+                add(self.fd, os.fsencode(directory), self._IN_MASK)
+            self.backend = "inotify"
+        except (AttributeError, OSError):
+            self.close()
+
+    def _open_kqueue(self) -> None:
+        try:
+            self.kq = select.kqueue()
+            events = []
+            flags = select.KQ_NOTE_WRITE | select.KQ_NOTE_DELETE | select.KQ_NOTE_RENAME | select.KQ_NOTE_EXTEND
+            for directory in self._directories():
+                fd = os.open(directory, os.O_RDONLY)
+                self.open_fds.append(fd)
+                events.append(select.kevent(fd, filter=select.KQ_FILTER_VNODE,
+                                            flags=select.KQ_EV_ADD | select.KQ_EV_ENABLE | select.KQ_EV_CLEAR,
+                                            fflags=flags))
+            self.kq.control(events, 0, 0)
+            self.backend = "kqueue"
+        except (AttributeError, OSError):
+            self.close()
+
+    def wait(self, timeout: float) -> bool:
+        if self.backend == "inotify" and self.fd >= 0:
+            readable, _, _ = select.select([self.fd], [], [], timeout)
+            if not readable:
+                return False
+            try:
+                while os.read(self.fd, 65536):
+                    pass
+            except BlockingIOError:
+                pass
+            return True
+        elif self.backend == "kqueue" and self.kq:
+            return bool(self.kq.control(None, 1, timeout))
+        else:
+            time.sleep(timeout)
+            return False
+
+    def refresh(self) -> None:
+        """Pick up recursively created source directories after a tree event."""
+        backend = self.backend
+        if backend == "poll":
+            return
+        self.close()
+        if backend == "inotify":
+            self._open_inotify()
+        else:
+            self._open_kqueue()
+
+    def close(self) -> None:
+        if self.fd >= 0:
+            os.close(self.fd)
+            self.fd = -1
+        for fd in self.open_fds:
+            os.close(fd)
+        self.open_fds = []
+        if self.kq:
+            self.kq.close()
+            self.kq = None
+        self.backend = "poll"
+
+
 class ProcessSupervisor:
     """Own the development child in a process group for reliable restarts."""
 
@@ -235,7 +340,7 @@ class ProcessSupervisor:
         return self.start()
 
 
-def watcher(project_arg: str | None, interval: float, once: bool, run: bool) -> bool:
+def watcher(project_arg: str | None, interval: float, once: bool, run: bool, force_poll: bool) -> bool:
     manifest_path = project_file(project_arg).resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("format") != FORMAT: fail("unsupported .cwpro format")
@@ -245,8 +350,9 @@ def watcher(project_arg: str | None, interval: float, once: bool, run: bool) -> 
     dev = manifest.get("dev", {})
     command = dev.get("command") or f"./{manifest.get('build', {}).get('binary', '')}"
     supervisor = ProcessSupervisor(root, command, int(dev.get("stop_timeout_ms", 5000)))
+    events = FileEventSource(root, force_poll)
     debounce = max(int(dev.get("debounce_ms", 150)), 0) / 1000
-    print(f"watching {source_root} (interval {interval:.2f}s, hot reload {'on' if run else 'off'})")
+    print(f"watching {source_root} ({events.backend}, interval {interval:.2f}s, hot reload {'on' if run else 'off'})")
     last_build_ok = True
     try:
         if run and not once and not supervisor.start():
@@ -255,10 +361,12 @@ def watcher(project_arg: str | None, interval: float, once: bool, run: bool) -> 
             if once:
                 changed = {path for path in previous if path.suffix == ".c"}
             else:
-                time.sleep(interval)
+                event_changed = events.wait(interval)
                 current = watched_files(root)
                 changed = {path for path in set(previous) | set(current) if previous.get(path) != current.get(path)}
                 previous = current
+                if event_changed:
+                    events.refresh()
             if changed:
                 # Coalesce editor atomic-save bursts before calculating the impact graph.
                 if debounce and not once:
@@ -286,6 +394,7 @@ def watcher(project_arg: str | None, interval: float, once: bool, run: bool) -> 
         return last_build_ok
     finally:
         supervisor.stop()
+        events.close()
 
 
 def main() -> None:
@@ -311,6 +420,7 @@ def main() -> None:
     watch.add_argument("--interval", type=float, default=0.5)
     watch.add_argument("--once", action="store_true")
     watch.add_argument("--no-run", action="store_true", help="rebuild only; do not start or restart the app")
+    watch.add_argument("--poll", action="store_true", help="force polling instead of inotify/kqueue")
     args = parser.parse_args()
     if args.command == "new": write_new_project(args.name, args.directory)
     elif args.command == "proto":
@@ -319,7 +429,7 @@ def main() -> None:
     elif args.command == "describe": print(json.dumps(json.loads(project_file(args.project).read_text()), indent=2))
     elif args.command == "watcher":
         if args.interval <= 0: fail("--interval must be positive")
-        if not watcher(args.project, args.interval, args.once, not args.no_run): raise SystemExit(1)
+        if not watcher(args.project, args.interval, args.once, not args.no_run, args.poll): raise SystemExit(1)
     else:
         config = {}
         if args.project or list(Path.cwd().glob("*.cwpro")):
