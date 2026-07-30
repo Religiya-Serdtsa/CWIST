@@ -74,7 +74,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 | **io_uring Backend** | ✅ | `io_uring_backend.c`, focused smoke tests, demolition tests, SQE/CQE synchronization, and fixed-buffer fallback |
 | **kqueue Backend** | 🔄 | macOS GitHub Actions gate builds the kqueue-selected backend and runs focused regressions |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
-| **WebTransport** | 🔄 | Server sessions, streams, and datagrams are implemented with a browser example; native C client sessions await a client-capable QUIC dependency |
+| **WebTransport** | 🧪 | Server sessions, streams, and datagrams are implemented; `dev` adds an experimental native C client on LSQUIC PR #629, with Extended CONNECT, session streams, datagrams, and explicit I/O polling |
 | HTTP/3 Datagram Extension | ✅ | `send_datagram`, callbacks, `es_datagrams` enabled |
 | ECN (Explicit Congestion Notification) | ✅ | UDP socket with `IP_RECVTOS` / `IPV6_RECVTCLASS` |
 | Connection Migration | ✅ | `es_allow_migration` enabled |
@@ -189,7 +189,7 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 * Add generated-code bindings from `.proto` descriptors once the runtime ABI settles.
 * Add gRPC reflection, health checking, deadlines, cancellation propagation, metadata normalization, and trailer-frame emission.
 * Extend the GraphQL subset with schema validation, mutations, nested selections, and subscriptions.
-* Add a native C WebTransport client after adopting a QUIC dependency with client-session support.
+* Stabilize the experimental native C WebTransport client after LSQUIC PR #629 merges upstream.
 * Evaluate persistent job backends separately from the in-process queue/scheduler.
 
 ### gRPC / Protobuf Status
@@ -243,7 +243,7 @@ Known limits:
 17. ~~**Test Harness** with HTTP mock client~~ ✅
 
 ### P3 — Advanced Protocols
-18. **Native C WebTransport client** (server and browser example are available)
+18. **Native C WebTransport client stabilization** (experimental `dev` implementation available)
 19. ~~**HTTP/2 Server Push**~~ ✅
 20. ~~**io_uring** UDP packet loop for HTTP/3~~ ✅
 21. **kqueue** backend for macOS/BSD

@@ -20,8 +20,8 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 Most C web frameworks stop at HTTP/1.1 and leave TLS, protocol upgrades, and memory
 management as exercises for the user. CWIST ships with the entire stack:
 
-- **HTTP/3 & WebTransport Server** powered by lsquic (server-side WebTransport sessions
-  over QUIC with bidirectional/unidirectional streams).
+- **HTTP/3 & WebTransport** powered by lsquic (server-side sessions plus an experimental
+  native C client on `dev`, backed by LSQUIC PR #629).
 - **Post-Quantum TLS** via a single API call: `cwist_app_use_pqc_layer(app, true)`
   forces hybrid X25519MLKEM768 and disables legacy TLS < 1.3. No OpenSSL knowledge required.
 - **Server-side zero-copy I/O & C100K Reactor** backed by io_uring / epoll / kqueue with lock-free
