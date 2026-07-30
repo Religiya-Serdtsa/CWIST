@@ -23,8 +23,12 @@ jobs:
         with:
           submodules: recursive
       - name: Install build dependencies
-        run: brew install cmake nghttp2 brotli
+        run: brew install cmake pkg-config curl nghttp2 brotli
       - name: Verify kqueue backend and focused suite
+        env:
+          # AppleClang does not implement GCC's -ffat-lto-objects option.
+          PERF_STACK_FLAGS: -O3 -march=native -mtune=native -pipe -flto -fomit-frame-pointer -funroll-loops -fstrict-aliasing -ffunction-sections -fdata-sections -fvisibility=hidden -DNDEBUG
+          PKG_CONFIG_PATH: /opt/homebrew/opt/curl/lib/pkgconfig
         run: |
           make test_seq test_http_chunked test_mux test_test_client
           make -pn | grep -E '^IO_SRC[[:space:]]*=[[:space:]]*src/sys/io/kqueue\.c$'
@@ -41,10 +45,14 @@ jobs:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake libnghttp2-dev libbrotli-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev libnghttp2-dev libbrotli-dev
       - if: runner.os == 'macOS'
-        run: brew install cmake nghttp2 brotli
-      - run: python3 scripts/ci/benchmark.py measure > benchmark-${{ runner.os }}.json
+        run: brew install cmake pkg-config curl nghttp2 brotli
+      - env:
+          # AppleClang does not implement GCC's -ffat-lto-objects option.
+          PERF_STACK_FLAGS: ${{ runner.os == 'macOS' && '-O3 -march=native -mtune=native -pipe -flto -fomit-frame-pointer -funroll-loops -fstrict-aliasing -ffunction-sections -fdata-sections -fvisibility=hidden -DNDEBUG' || '' }}
+          PKG_CONFIG_PATH: ${{ runner.os == 'macOS' && format('{0}/lib/pkgconfig', '/opt/homebrew/opt/curl') || '' }}
+        run: python3 scripts/ci/benchmark.py measure > benchmark-${{ runner.os }}.json
       - uses: actions/upload-artifact@v4
         with:
           name: benchmark-${{ runner.os }}
