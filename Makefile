@@ -169,6 +169,10 @@ OBJS = $(SRCS:.c=.o)
 LIB_NAME = libcwist.a
 LIBTTAK_DIR = lib/libttak
 LIBTTAK_LIB = $(LIBTTAK_DIR)/lib/libttak.a
+LIBTTAK_EXTRA_CFLAGS =
+ifeq ($(UNAME_S),Darwin)
+    LIBTTAK_EXTRA_CFLAGS += -D_DARWIN_C_SOURCE
+endif
 CJSON_DIR = lib/cjson
 CJSON_LIB = $(CJSON_DIR)/libcjson.a
 CNATS_DIR = lib/cnats
@@ -219,7 +223,7 @@ $(LIB_NAME): $(URIPARSER_LIB) $(CJSON_LIB) $(LIBTTAK_LIB) $(CNATS_LIB) $(BORINGS
 
 $(LIBTTAK_LIB):
 	@echo "Building libttak..."
-	$(MAKE) -C $(LIBTTAK_DIR)
+	$(MAKE) -C $(LIBTTAK_DIR) EXTRA_CFLAGS="$(LIBTTAK_EXTRA_CFLAGS)"
 
 $(CJSON_LIB):
 	@echo "Building cJSON..."
