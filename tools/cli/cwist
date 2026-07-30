@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import time
@@ -32,6 +33,7 @@ def write_new_project(name: str, directory: Path | None) -> None:
         "language": "c",
         "entrypoint": "src/main.c",
         "build": {"command": "make", "binary": f"bin/{name}"},
+        "dev": {"command": f"./bin/{name}", "debounce_ms": 150, "stop_timeout_ms": 5000},
         "dependencies": {"cwist": ">=0.1.0"},
         "openapi": {"source": "src", "output": "openapi.json", "title": name, "version": "0.1.0"},
     }
@@ -123,8 +125,11 @@ def project_file(value: str | None) -> Path:
 
 
 def watched_files(root: Path) -> dict[Path, int]:
+    """Return source and build-description mtimes, excluding generated output."""
+    names = {"Makefile", "makefile", "GNUmakefile"}
     return {path: path.stat().st_mtime_ns for path in root.rglob("*")
-            if path.is_file() and path.suffix in {".c", ".h"} and ".cwist-build" not in path.parts}
+            if path.is_file() and (path.suffix in {".c", ".h", ".cwpro"} or path.name in names)
+            and ".cwist-build" not in path.parts and "bin" not in path.parts}
 
 
 def impacted_sources(root: Path, changed: set[Path]) -> set[Path]:
@@ -147,31 +152,97 @@ def impacted_sources(root: Path, changed: set[Path]) -> set[Path]:
     return {path for path in affected if path.suffix == ".c"}
 
 
-def watcher(project_arg: str | None, interval: float, once: bool) -> bool:
+class ProcessSupervisor:
+    """Own the development child in a process group for reliable restarts."""
+
+    def __init__(self, root: Path, command: str, timeout_ms: int) -> None:
+        self.root, self.command = root, command
+        self.timeout = max(timeout_ms, 100) / 1000
+        self.child: subprocess.Popen | None = None
+
+    def start(self) -> bool:
+        if not self.command:
+            return True
+        try:
+            self.child = subprocess.Popen(shlex.split(self.command), cwd=self.root,
+                                          start_new_session=True)
+            print(f"started: {self.command} (pid {self.child.pid})")
+            return True
+        except OSError as exc:
+            print(f"could not start development process: {exc}", file=sys.stderr)
+            self.child = None
+            return False
+
+    def stop(self) -> None:
+        if not self.child or self.child.poll() is not None:
+            return
+        try:
+            import os
+            os.killpg(self.child.pid, signal.SIGTERM)
+            self.child.wait(timeout=self.timeout)
+        except subprocess.TimeoutExpired:
+            import os
+            os.killpg(self.child.pid, signal.SIGKILL)
+            self.child.wait()
+        finally:
+            self.child = None
+
+    def restart(self) -> bool:
+        self.stop()
+        return self.start()
+
+
+def watcher(project_arg: str | None, interval: float, once: bool, run: bool) -> bool:
     manifest_path = project_file(project_arg).resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("format") != FORMAT: fail("unsupported .cwpro format")
     root = manifest_path.parent
     source_root = root / manifest.get("openapi", {}).get("source", "src")
-    previous = watched_files(source_root)
-    print(f"watching {source_root} (interval {interval:.2f}s)")
+    previous = watched_files(root)
+    dev = manifest.get("dev", {})
+    command = dev.get("command") or f"./{manifest.get('build', {}).get('binary', '')}"
+    supervisor = ProcessSupervisor(root, command, int(dev.get("stop_timeout_ms", 5000)))
+    debounce = max(int(dev.get("debounce_ms", 150)), 0) / 1000
+    print(f"watching {source_root} (interval {interval:.2f}s, hot reload {'on' if run else 'off'})")
     last_build_ok = True
-    while True:
-        if once: changed = {path for path in previous if path.suffix == ".c"}
-        else:
-            time.sleep(interval)
-            current = watched_files(source_root)
-            changed = {path for path in set(previous) | set(current) if previous.get(path) != current.get(path)}
-            previous = current
-        if changed:
-            scope = impacted_sources(source_root, changed)
-            print("changed:", ", ".join(str(path.relative_to(root)) for path in sorted(changed)))
-            print("recompile scope:", ", ".join(str(path.relative_to(root)) for path in sorted(scope)) or "none")
-            command = shlex.split(manifest.get("build", {}).get("command", "make"))
-            result = subprocess.run(command, cwd=root)
-            last_build_ok = result.returncode == 0
-            if not last_build_ok: print(f"build failed ({result.returncode})", file=sys.stderr)
-        if once: return last_build_ok
+    try:
+        if run and not once and not supervisor.start():
+            return False
+        while True:
+            if once:
+                changed = {path for path in previous if path.suffix == ".c"}
+            else:
+                time.sleep(interval)
+                current = watched_files(root)
+                changed = {path for path in set(previous) | set(current) if previous.get(path) != current.get(path)}
+                previous = current
+            if changed:
+                # Coalesce editor atomic-save bursts before calculating the impact graph.
+                if debounce and not once:
+                    time.sleep(debounce)
+                    current = watched_files(root)
+                    changed |= {path for path in set(previous) | set(current)
+                                if previous.get(path) != current.get(path)}
+                    previous = current
+                source_changes = {path for path in changed if path.suffix in {".c", ".h"}}
+                scope = impacted_sources(root, source_changes) if source_changes else set()
+                print("changed:", ", ".join(str(path.relative_to(root)) for path in sorted(changed)))
+                print("recompile scope:", ", ".join(str(path.relative_to(root)) for path in sorted(scope)) or "build metadata")
+                env = dict(__import__("os").environ)
+                env["CWIST_CHANGED_SOURCES"] = ":".join(str(path.relative_to(root)) for path in sorted(scope))
+                result = subprocess.run(shlex.split(manifest.get("build", {}).get("command", "make")),
+                                        cwd=root, env=env)
+                last_build_ok = result.returncode == 0
+                if last_build_ok and run and not once:
+                    supervisor.restart()
+                elif not last_build_ok:
+                    print(f"build failed ({result.returncode}); keeping the previous process", file=sys.stderr)
+            if once: return last_build_ok
+    except KeyboardInterrupt:
+        print("stopping watcher")
+        return last_build_ok
+    finally:
+        supervisor.stop()
 
 
 def main() -> None:
@@ -189,16 +260,17 @@ def main() -> None:
     api.add_argument("--version")
     describe = sub.add_parser("describe", help="print a .cwpro manifest")
     describe.add_argument("--project")
-    watch = sub.add_parser("watcher", help="watch sources, compute include impact, and run the incremental build")
+    watch = sub.add_parser("watcher", help="watch, incrementally rebuild, and hot-restart the development process")
     watch.add_argument("--project")
     watch.add_argument("--interval", type=float, default=0.5)
     watch.add_argument("--once", action="store_true")
+    watch.add_argument("--no-run", action="store_true", help="rebuild only; do not start or restart the app")
     args = parser.parse_args()
     if args.command == "new": write_new_project(args.name, args.directory)
     elif args.command == "describe": print(json.dumps(json.loads(project_file(args.project).read_text()), indent=2))
     elif args.command == "watcher":
         if args.interval <= 0: fail("--interval must be positive")
-        if not watcher(args.project, args.interval, args.once): raise SystemExit(1)
+        if not watcher(args.project, args.interval, args.once, not args.no_run): raise SystemExit(1)
     else:
         config = {}
         if args.project or list(Path.cwd().glob("*.cwpro")):

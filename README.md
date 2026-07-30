@@ -93,6 +93,21 @@ gcc -o server main.c \
 ./server
 ```
 
+## Development hot reload
+
+New projects include a self-describing `.cwpro` development command. Run the
+watcher from the project directory to calculate the affected translation units,
+incrementally invoke the build, and restart the app only after a successful
+build. The previous process remains available if a build fails.
+
+```sh
+cwist watcher
+```
+
+Use `cwist watcher --no-run` for CI or rebuild-only use. `dev.debounce_ms` and
+`dev.stop_timeout_ms` in the manifest control atomic-save coalescing and
+graceful process shutdown.
+
 ## Linking
 
 When you link against `libcwist.a`, you must supply the following flags.
