@@ -52,6 +52,17 @@ void cwist_redis_close(cwist_redis_t *r);
  */
 cwist_error_t cwist_redis_command(cwist_redis_t *r, const char *cmd, char **out);
 
+/** Execute a binary-safe Redis command expressed as explicit arguments.
+ * Reply strings are allocated with cwist_alloc() and may contain NUL bytes;
+ * use @p out_len to obtain their exact length. */
+cwist_error_t cwist_redis_command_argv(cwist_redis_t *r, size_t argc,
+                                       const void *const *argv, const size_t *argv_lens,
+                                       char **out, size_t *out_len);
+
+/** Authenticate/select a logical Redis database on this connection. */
+cwist_error_t cwist_redis_auth(cwist_redis_t *r, const char *username, const char *password);
+cwist_error_t cwist_redis_select(cwist_redis_t *r, unsigned int database);
+
 /**
  * @brief Convenience commands.
  * @{ */
@@ -104,6 +115,9 @@ cwist_error_t cwist_redis_pool_set(cwist_redis_pool_t *pool, const char *key, co
 cwist_error_t cwist_redis_pool_setex(cwist_redis_pool_t *pool, const char *key, const char *value, int seconds);
 cwist_error_t cwist_redis_pool_del(cwist_redis_pool_t *pool, const char *key);
 cwist_error_t cwist_redis_pool_publish(cwist_redis_pool_t *pool, const char *channel, const char *message);
+cwist_error_t cwist_redis_pool_command_argv(cwist_redis_pool_t *pool, size_t argc,
+                                            const void *const *argv, const size_t *argv_lens,
+                                            char **out, size_t *out_len);
 /** @} */
 
 #ifdef __cplusplus

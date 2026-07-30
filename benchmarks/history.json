@@ -1,0 +1,13 @@
+[
+  {
+    "timestamp": "2026-07-30T01:46:50.785324+00:00",
+    "os": "Linux",
+    "arch": "x86_64",
+    "cpu_percent": 184.01,
+    "rss_kib": 42476,
+    "context_switches": 82980,
+    "memory_recovery_kib": 0,
+    "waf_mchecks_s": 2.83,
+    "throughput_mleases_s": 2.72
+  }
+]

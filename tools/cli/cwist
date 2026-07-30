@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""CWIST project and source-documentation command line tool."""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shlex
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+FORMAT = "cwist-project/v1"
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"cwist: {message}")
+
+
+def write_new_project(name: str, directory: Path | None) -> None:
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
+        fail("project name must start with a letter and contain only letters, digits, _ or -")
+    root = (directory or Path.cwd()) / name
+    if root.exists():
+        fail(f"destination already exists: {root}")
+    root.mkdir(parents=True)
+    project = {
+        "format": FORMAT,
+        "name": name,
+        "version": "0.1.0",
+        "language": "c",
+        "entrypoint": "src/main.c",
+        "build": {"command": "make", "binary": f"bin/{name}"},
+        "dependencies": {"cwist": ">=0.1.0"},
+        "openapi": {"source": "src", "output": "openapi.json", "title": name, "version": "0.1.0"},
+    }
+    (root / f"{name}.cwpro").write_text(json.dumps(project, indent=2) + "\n", encoding="utf-8")
+    (root / "src").mkdir()
+    (root / "bin").mkdir()
+    (root / ".gitignore").write_text("bin/\nopenapi.json\n", encoding="utf-8")
+    (root / "Makefile").write_text(
+        f"CC ?= cc\nCFLAGS ?= -std=c2x -Wall -Wextra\nTARGET = bin/{name}\n\n"
+        "$(TARGET): src/main.c\n\tmkdir -p bin\n\t$(CC) $(CFLAGS) -o $@ $< -lcwist -lpthread\n\n"
+        "openapi:\n\tcwist openapi src --project *.cwpro\n\nclean:\n\trm -f $(TARGET)\n",
+        encoding="utf-8",
+    )
+    (root / "src" / "main.c").write_text(
+        "#include <cwist/sys/app/app.h>\n#include <cwist/openapi.h>\n\n"
+        "static void health(cwist_http_request *req, cwist_http_response *res) {\n"
+        "    (void)req;\n    cwist_sstring_assign(res->body, \"{\\\"status\\\":\\\"ok\\\"}\");\n"
+        "    cwist_http_header_add(&res->headers, \"Content-Type\", \"application/json\");\n}\n\n"
+        "int main(void) {\n    cwist_app *app = cwist_app_create();\n"
+        "    /** @openapi.summary Service health\n     * @openapi.tags system\n     * @openapi.response 200 application/json Service status. */\n"
+        "    CWIST_OPENAPI_GET(app, \"/health\", health);\n"
+        "    int rc = cwist_app_listen(app, 8080);\n    cwist_app_destroy(app);\n    return rc;\n}\n",
+        encoding="utf-8",
+    )
+    print(f"created {root}")
+
+
+def clean_comment(text: str) -> list[str]:
+    body = re.sub(r"^/\*\*?|\*/$", "", text.strip(), flags=re.S)
+    return [re.sub(r"^\s*\*?\s?", "", line).strip() for line in body.splitlines()]
+
+
+def operation_from_comment(comment: str) -> dict:
+    operation: dict = {"responses": {"200": {"description": "Success"}}}
+    for line in clean_comment(comment):
+        match = re.match(r"@openapi\.([a-z_]+)\s+(.+)$", line)
+        if not match:
+            continue
+        key, value = match.groups()
+        if key == "summary": operation["summary"] = value
+        elif key == "description": operation["description"] = value
+        elif key == "operation_id": operation["operationId"] = value
+        elif key == "tags": operation["tags"] = [tag.strip() for tag in value.split(",") if tag.strip()]
+        elif key == "response":
+            parts = value.split(None, 2)
+            if not parts or not parts[0].isdigit():
+                fail(f"invalid @openapi.response: {value}")
+            response = {"description": parts[2] if len(parts) == 3 else "Response"}
+            if len(parts) >= 2 and "/" in parts[1]: response["content"] = {parts[1]: {"schema": {"type": "object"}}}
+            operation["responses"][parts[0]] = response
+    return operation
+
+
+def source_files(source: Path) -> list[Path]:
+    return [source] if source.is_file() else sorted(source.rglob("*.c"))
+
+
+def generate_openapi(source: Path, output: Path, title: str, version: str) -> None:
+    route_re = re.compile(r"CWIST_OPENAPI_(GET|POST|PUT|DELETE|PATCH)\s*\(\s*[^,]+,\s*\"([^\"]+)\"")
+    comment_re = re.compile(r"/\*\*.*?\*/", re.S)
+    paths: dict = {}
+    for file in source_files(source):
+        text = file.read_text(encoding="utf-8")
+        comments = list(comment_re.finditer(text))
+        for route in route_re.finditer(text):
+            preceding = [comment for comment in comments if comment.end() <= route.start()]
+            doc = preceding[-1].group(0) if preceding else ""
+            operation = operation_from_comment(doc) if "@openapi." in doc else {"responses": {"200": {"description": "Success"}}}
+            method, raw_path = route.groups()
+            path = re.sub(r":([A-Za-z_][A-Za-z0-9_]*)", r"{\1}", raw_path)
+            params = re.findall(r"\{([^}]+)\}", path)
+            if params:
+                operation["parameters"] = [{"name": p, "in": "path", "required": True, "schema": {"type": "string"}} for p in params]
+            paths.setdefault(path, {})[method.lower()] = operation
+    document = {"openapi": "3.1.0", "info": {"title": title, "version": version}, "paths": paths}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {output} ({len(paths)} paths)")
+
+
+def project_file(value: str | None) -> Path:
+    if value:
+        matches = list(Path.cwd().glob(value))
+        if len(matches) != 1: fail("--project must identify exactly one .cwpro file")
+        return matches[0]
+    matches = list(Path.cwd().glob("*.cwpro"))
+    if len(matches) != 1: fail("run in a project directory or pass --project")
+    return matches[0]
+
+
+def watched_files(root: Path) -> dict[Path, int]:
+    return {path: path.stat().st_mtime_ns for path in root.rglob("*")
+            if path.is_file() and path.suffix in {".c", ".h"} and ".cwist-build" not in path.parts}
+
+
+def impacted_sources(root: Path, changed: set[Path]) -> set[Path]:
+    """Return C translation units affected through local quoted includes."""
+    files = watched_files(root)
+    reverse: dict[Path, set[Path]] = {}
+    include = re.compile(r'^\s*#\s*include\s+"([^"]+)"')
+    for path in files:
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            found = include.match(line)
+            if found:
+                target = (path.parent / found.group(1)).resolve()
+                reverse.setdefault(target, set()).add(path.resolve())
+    queue = [path.resolve() for path in changed]
+    affected = set(queue)
+    while queue:
+        current = queue.pop()
+        for parent in reverse.get(current, set()):
+            if parent not in affected: affected.add(parent); queue.append(parent)
+    return {path for path in affected if path.suffix == ".c"}
+
+
+def watcher(project_arg: str | None, interval: float, once: bool) -> bool:
+    manifest_path = project_file(project_arg).resolve()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("format") != FORMAT: fail("unsupported .cwpro format")
+    root = manifest_path.parent
+    source_root = root / manifest.get("openapi", {}).get("source", "src")
+    previous = watched_files(source_root)
+    print(f"watching {source_root} (interval {interval:.2f}s)")
+    last_build_ok = True
+    while True:
+        if once: changed = {path for path in previous if path.suffix == ".c"}
+        else:
+            time.sleep(interval)
+            current = watched_files(source_root)
+            changed = {path for path in set(previous) | set(current) if previous.get(path) != current.get(path)}
+            previous = current
+        if changed:
+            scope = impacted_sources(source_root, changed)
+            print("changed:", ", ".join(str(path.relative_to(root)) for path in sorted(changed)))
+            print("recompile scope:", ", ".join(str(path.relative_to(root)) for path in sorted(scope)) or "none")
+            command = shlex.split(manifest.get("build", {}).get("command", "make"))
+            result = subprocess.run(command, cwd=root)
+            last_build_ok = result.returncode == 0
+            if not last_build_ok: print(f"build failed ({result.returncode})", file=sys.stderr)
+        if once: return last_build_ok
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="cwist")
+    sub = parser.add_subparsers(dest="command", required=True)
+    new = sub.add_parser("new", help="create a self-describing CWIST project")
+    new.add_argument("kind", choices=["project"])
+    new.add_argument("name")
+    new.add_argument("--directory", type=Path)
+    api = sub.add_parser("openapi", help="generate OpenAPI 3.1 from Doxygen route annotations")
+    api.add_argument("source", type=Path)
+    api.add_argument("--output", type=Path)
+    api.add_argument("--project")
+    api.add_argument("--title")
+    api.add_argument("--version")
+    describe = sub.add_parser("describe", help="print a .cwpro manifest")
+    describe.add_argument("--project")
+    watch = sub.add_parser("watcher", help="watch sources, compute include impact, and run the incremental build")
+    watch.add_argument("--project")
+    watch.add_argument("--interval", type=float, default=0.5)
+    watch.add_argument("--once", action="store_true")
+    args = parser.parse_args()
+    if args.command == "new": write_new_project(args.name, args.directory)
+    elif args.command == "describe": print(json.dumps(json.loads(project_file(args.project).read_text()), indent=2))
+    elif args.command == "watcher":
+        if args.interval <= 0: fail("--interval must be positive")
+        if not watcher(args.project, args.interval, args.once): raise SystemExit(1)
+    else:
+        config = {}
+        if args.project or list(Path.cwd().glob("*.cwpro")):
+            config = json.loads(project_file(args.project).read_text()).get("openapi", {})
+        generate_openapi(args.source, args.output or Path(config.get("output", "openapi.json")),
+                         args.title or config.get("title", "CWIST API"), args.version or config.get("version", "0.1.0"))
+
+
+if __name__ == "__main__": main()

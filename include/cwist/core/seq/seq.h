@@ -31,6 +31,11 @@ extern "C" {
 /** Default payload size for each chunk when the caller does not care. */
 #define CWIST_SEQ_DEFAULT_CHUNK_PAYLOAD 1024
 
+/** Hard resource ceilings for network-facing reassembly, including callers
+ * that use cwist_seq_assembler_create() without an explicit limit. */
+#define CWIST_SEQ_MAX_CHUNKS 8192
+#define CWIST_SEQ_MAX_REASSEMBLED_SIZE (64U * 1024U * 1024U)
+
 /**
  * @brief Parsed view of one sequenced chunk.
  *

@@ -2,6 +2,7 @@
 #include <cwist/net/redis/cwist_redis.h>
 #include <cwist/core/mem/alloc.h>
 #include <stdio.h>
+#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -32,6 +33,19 @@ int main(void) {
         cwist_redis_close(r);
         return 1;
     }
+    cwist_free(out);
+    out = NULL;
+
+    /* argv API is binary-safe: values containing a NUL must round-trip. */
+    const char binary_value[] = { 'a', '\0', 'b' };
+    const void *set_args[] = { "SET", "cwist:test:binary", binary_value };
+    size_t set_lens[] = { 3, strlen("cwist:test:binary"), sizeof(binary_value) };
+    assert(cwist_redis_command_argv(r, 3, set_args, set_lens, NULL, NULL).error.err_i16 == 0);
+    const void *get_args[] = { "GET", "cwist:test:binary" };
+    size_t get_lens[] = { 3, strlen("cwist:test:binary") };
+    size_t binary_len = 0;
+    assert(cwist_redis_command_argv(r, 2, get_args, get_lens, &out, &binary_len).error.err_i16 == 0);
+    assert(binary_len == sizeof(binary_value) && memcmp(out, binary_value, binary_len) == 0);
     cwist_free(out);
     out = NULL;
 

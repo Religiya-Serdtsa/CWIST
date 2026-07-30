@@ -98,6 +98,8 @@ SRCS = src/core/sstring/sstring.c \
        src/core/seq/seq_auth.c \
        src/sys/err/error.c \
        src/net/http/http.c \
+       src/net/http/sse.c \
+       src/net/graphql/graphql.c \
        src/net/http/http2.c \
        src/net/http/http3.c \
        src/net/http/curl_global.c \
@@ -642,6 +644,18 @@ test_db_pool: $(LIB_NAME) tests/test_db_pool.c
 test_redis: $(LIB_NAME) tests/test_redis.c
 	$(CC) $(CFLAGS) -o test_redis tests/test_redis.c $(LIB_NAME) $(LIBS)
 	./test_redis
+
+test_sse: $(LIB_NAME) tests/test_sse.c
+	$(CC) $(CFLAGS) -o test_sse tests/test_sse.c $(LIB_NAME) $(LIBS)
+	./test_sse
+
+test_graphql: $(LIB_NAME) tests/test_graphql.c
+	$(CC) $(CFLAGS) -o test_graphql tests/test_graphql.c $(LIB_NAME) $(LIBS)
+	./test_graphql
+
+cli:
+	chmod +x tools/cli/cwist
+	@echo "CLI ready: ./tools/cli/cwist"
 
 test_scheduler: $(LIB_NAME) tests/test_scheduler.c
 	$(CC) $(CFLAGS) -o test_scheduler tests/test_scheduler.c $(LIB_NAME) $(LIBS)

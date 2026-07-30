@@ -1079,6 +1079,24 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
  * @brief Read and reassemble a chunked transfer-encoded body.
  * @return 0 on success, -1 on error.
  */
+static int http_parse_chunk_size(const char *line, size_t len, size_t *out_size) {
+    size_t value = 0, digits = 0;
+    for (size_t i = 0; i < len && line[i] != ';'; ++i) {
+        unsigned char c = (unsigned char)line[i];
+        unsigned int digit;
+        if (c >= '0' && c <= '9') digit = c - '0';
+        else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
+        else return -1;
+        if (value > (CWIST_HTTP_MAX_BODY_SIZE - digit) / 16) return -1;
+        value = value * 16 + digit;
+        ++digits;
+    }
+    if (!digits) return -1;
+    *out_size = value;
+    return 0;
+}
+
 static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_t buf_cap, cwist_sstring *out) {
     size_t offset = 0;
 
@@ -1100,12 +1118,11 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
             crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
         }
 
-        *crlf = '\0';
-        char *endptr;
-        unsigned long chunk_size = strtoul(buf + offset, &endptr, 16);
-        if (endptr == buf + offset) return -1;
-
         size_t line_len = (size_t)(crlf - (buf + offset)) + 2;
+        size_t chunk_size = 0;
+        /* Strict hexadecimal parsing prevents accepting contaminated framing
+         * such as `4junk` or signed/overflowed chunk lengths. */
+        if (http_parse_chunk_size(buf + offset, line_len - 2, &chunk_size) != 0) return -1;
         offset += line_len;
 
         if (chunk_size == 0) {
@@ -1154,7 +1171,8 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
             buf[*avail] = '\0';
         }
 
-        cwist_sstring_append_len(out, buf + offset, chunk_size);
+        if (buf[offset + chunk_size] != '\r' || buf[offset + chunk_size + 1] != '\n') return -1;
+        if (cwist_sstring_append_len(out, buf + offset, chunk_size).error.err_i8 != 0) return -1;
         offset += chunk_size + 2;
     }
 

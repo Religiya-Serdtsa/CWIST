@@ -49,6 +49,10 @@
 
 ## Current Snapshot
 
+<!-- CI-BENCHMARKS:START -->
+Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Latest platform: **Linux**.
+<!-- CI-BENCHMARKS:END -->
+
 - Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are already implemented in-tree.
 - **P0 (must-have) is 100 % complete**: the framework’s core architecture and protocol stack are locked.
 - We are now in the **P2–P4 tooling and ecosystem phase**. Completed multiport, scheduler, test-client, `io_uring`, unary/buffered streaming gRPC, and Protobuf wire-format work remain covered by focused regression tests.
@@ -68,7 +72,7 @@
 | TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH support |
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
 | **io_uring Backend** | ✅ | `io_uring_backend.c`, focused smoke tests, demolition tests, SQE/CQE synchronization, and fixed-buffer fallback |
-| **kqueue Backend** | ⏳ | BSD/macOS; blocked on non-Linux test environment |
+| **kqueue Backend** | 🔄 | macOS GitHub Actions gate builds the kqueue-selected backend and runs focused regressions |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
 | **WebTransport** | ✅ | Basic server handler (`:protocol=webtransport` detection via HTTP/3 CONNECT) |
 | HTTP/3 Datagram Extension | ✅ | `send_datagram`, callbacks, `es_datagrams` enabled |

@@ -1,0 +1,84 @@
+name: BSD kqueue, tests, and benchmarks
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cwist-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bsd-kqueue:
+    name: kqueue tests (macOS)
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install build dependencies
+        run: brew install cmake nghttp2 brotli
+      - name: Verify kqueue backend and focused suite
+        run: |
+          make test_seq test_http_chunked test_mux test_test_client
+          make -pn | grep -E '^IO_SRC[[:space:]]*=[[:space:]]*src/sys/io/kqueue\.c$'
+
+  benchmark:
+    name: benchmark (${{ matrix.os }})
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake libnghttp2-dev libbrotli-dev
+      - if: runner.os == 'macOS'
+        run: brew install cmake nghttp2 brotli
+      - run: python3 scripts/ci/benchmark.py measure > benchmark-${{ runner.os }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ runner.os }}
+          path: benchmark-${{ runner.os }}.json
+
+  publish-benchmark-report:
+    needs: [bsd-kqueue, benchmark]
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Update benchmark history and English SVG report
+        run: |
+          mkdir -p benchmarks
+          python3 - <<'PY'
+          import glob, json
+          from pathlib import Path
+          path = Path('benchmarks/history.json')
+          history = json.loads(path.read_text()) if path.exists() else []
+          history.extend(json.load(open(f)) for f in glob.glob('artifacts/benchmark-*.json'))
+          path.write_text(json.dumps(history[-100:], indent=2) + '\n')
+          PY
+          python3 scripts/ci/benchmark.py render
+      - name: Commit generated benchmark documentation
+        run: |
+          git config user.name "cwist-ci[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README ROADMAP.md benchmarks/history.json docs/benchmark-trends.svg
+          git diff --cached --quiet || git commit -m "docs(ci): update benchmark report [skip ci]"
+          git push
