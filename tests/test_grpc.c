@@ -146,6 +146,13 @@ static void assert_stream_response(cwist_http_response *res,
     assert(seen == expected_count);
 }
 
+static int decoder_count(void *ctx, const cwist_grpc_message *message) {
+    size_t *count = ctx;
+    assert(message->compressed == 0);
+    (*count)++;
+    return 0;
+}
+
 int main(void) {
     cwist_pb_writer request_pb;
     cwist_pb_writer_init(&request_pb);
@@ -164,10 +171,21 @@ int main(void) {
     assert(memcmp(decoded.data, request_pb.data, request_pb.len) == 0);
     assert(cwist_grpc_decode_message(frame, frame_len - 1, &decoded) != 0);
 
+    cwist_grpc_decoder decoder;
+    cwist_grpc_decoder_init(&decoder, 1024);
+    size_t decoded_count = 0;
+    assert(cwist_grpc_decoder_feed(&decoder, frame, 2, decoder_count, &decoded_count) == 0);
+    assert(cwist_grpc_decoder_feed(&decoder, frame + 2, frame_len - 2, decoder_count, &decoded_count) == 0);
+    assert(decoded_count == 1);
+    cwist_grpc_decoder_destroy(&decoder);
+
     cwist_app *app = cwist_app_create();
     assert(app != NULL);
     assert(cwist_app_grpc_unary(app, "cwist.test.Echo", "Say", echo_unary, "reply") == 0);
     assert(cwist_app_grpc_stream(app, "cwist.test.Echo", "Chat", echo_stream, "chunk") == 0);
+    assert(cwist_app_grpc_health(app) == 0);
+    assert(cwist_app_grpc_health_set_status(app, "cwist.test.Echo", 1) == 0);
+    assert(cwist_app_grpc_reflection(app) == 0);
 
     cwist_test_client *client = cwist_test_client_create(app);
     assert(client != NULL);
@@ -206,6 +224,23 @@ int main(void) {
     assert_stream_response(res, expected_stream, 2);
     cwist_http_response_destroy(res);
     cwist_sstring_destroy(stream_body);
+
+    uint8_t *empty_frame = NULL;
+    size_t empty_frame_len = 0;
+    assert(cwist_grpc_encode_message(NULL, 0, 0, &empty_frame, &empty_frame_len) == 0);
+    opts.body = (const char *)empty_frame;
+    opts.body_len = empty_frame_len;
+    res = cwist_test_client_request_ex(client, CWIST_HTTP_POST,
+                                       "/grpc.health.v1.Health/Check", &opts);
+    cwist_grpc_message health_message;
+    assert(cwist_grpc_decode_message(res->body->data, res->body->size, &health_message) == 0);
+    cwist_pb_reader health_reader;
+    cwist_pb_reader_init(&health_reader, health_message.data, health_message.len);
+    cwist_pb_field health_field;
+    assert(cwist_pb_read_field(&health_reader, &health_field) > 0);
+    assert(health_field.number == 1 && health_field.varint == 1);
+    cwist_http_response_destroy(res);
+    cwist_free(empty_frame);
 
     opts.content_type = "application/grpc";
     static const unsigned char malformed[] = { 0, 0, 0, 0, 5, 'b', 'a', 'd' };

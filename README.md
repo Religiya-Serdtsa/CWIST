@@ -40,6 +40,7 @@ management as exercises for the user. CWIST ships with the entire stack:
 | **Routing** | Express-style `:param` routes, Mux router, chainable middleware |
 | **Performance** | Zero-copy I/O, generational arenas, EBR GC, lock-free queues, Big Dumb Reply cache |
 | **Observability** | Structured access logs, metrics endpoint, healthz, rate limiting |
+| **gRPC / Protobuf** | Unary and streaming routes, incremental framing, health/reflection services, and `cwist proto` scalar-model generation |
 | **Rendering** | HTML builder, CSS composer, template engine, JSON builder / heal |
 
 ## Quick Start

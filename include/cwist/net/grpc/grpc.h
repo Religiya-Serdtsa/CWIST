@@ -51,7 +51,23 @@ typedef struct cwist_grpc_stream {
     cwist_grpc_status_t status;
     const char *status_message;
     int closed;
+    int (*write_frame)(void *ctx, const uint8_t *frame, size_t frame_len, int end_stream);
+    void *write_frame_ctx;
 } cwist_grpc_stream;
+
+/** Incremental gRPC frame decoder for arbitrarily split HTTP/2 DATA payloads. */
+typedef struct cwist_grpc_decoder {
+    uint8_t header[5];
+    size_t header_len;
+    uint8_t *payload;
+    size_t payload_len;
+    size_t payload_used;
+    uint8_t compressed;
+    size_t max_message_size;
+} cwist_grpc_decoder;
+
+typedef int (*cwist_grpc_message_callback)(void *ctx,
+                                           const cwist_grpc_message *message);
 
 typedef void (*cwist_grpc_unary_handler_func)(cwist_http_request *req,
                                                cwist_http_response *res,
@@ -93,6 +109,25 @@ int cwist_grpc_stream_send(cwist_grpc_stream *stream,
 void cwist_grpc_stream_close(cwist_grpc_stream *stream,
                              cwist_grpc_status_t status,
                              const char *message);
+
+/** Attach a transport writer; subsequent sends are emitted immediately. */
+void cwist_grpc_stream_set_writer(cwist_grpc_stream *stream,
+                                  int (*write_frame)(void *, const uint8_t *, size_t, int),
+                                  void *ctx);
+
+void cwist_grpc_decoder_init(cwist_grpc_decoder *decoder, size_t max_message_size);
+void cwist_grpc_decoder_destroy(cwist_grpc_decoder *decoder);
+/** Feed a partial HTTP/2 DATA payload.  Calls @p callback for every complete frame. */
+int cwist_grpc_decoder_feed(cwist_grpc_decoder *decoder, const void *data, size_t len,
+                            cwist_grpc_message_callback callback, void *ctx);
+
+/** Register the standard grpc.health.v1.Health Check and Watch methods. */
+int cwist_app_grpc_health(struct cwist_app *app);
+int cwist_app_grpc_health_set_status(struct cwist_app *app, const char *service,
+                                     int serving);
+
+/** Register the grpc.reflection.v1alpha.ServerReflection service. */
+int cwist_app_grpc_reflection(struct cwist_app *app);
 
 int cwist_app_grpc_unary(struct cwist_app *app,
                          const char *service,
