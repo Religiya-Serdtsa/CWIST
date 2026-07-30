@@ -151,7 +151,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 | README / API Reference | ✅ | Markdown docs in `docs/` |
 | **Tutorial & Examples** | ⏳ | Few examples; no step-by-step tutorial |
 | **CLI Scaffolding** | ✅ | `cwist new project`, `.cwpro` manifests, OpenAPI generation, and include-aware incremental watcher |
-| **Hot Reload (Dev Mode)** | ⏳ | No file watcher + auto-recompile |
+| **Hot Reload (Dev Mode)** | ✅ | `cwist watcher` debounces changes, exports include-graph recompilation scope, preserves the prior process on build failure, and gracefully restarts successful builds |
 | **Configuration Management** | ✅ | `.env` file + environment variable loader via `cwist_config` |
 | **Testing Utilities** | ✅ | In-process test client (`cwist_test_client_get/post/request_ex`), cookie jar, multipart helper, and regression targets wired in Makefile |
 | **Benchmark Suite** | ✅ | GitHub Actions Linux/macOS measurements publish CPU, throughput, RSS, memory-recovery drift, and context-switch SVG trends |
