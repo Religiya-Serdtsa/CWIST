@@ -6,6 +6,7 @@
 #include <cwist/net/http/multipart.h>
 #include <cwist/core/mem/alloc.h>
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <ctype.h>
 #include "multipart_parser.h"
