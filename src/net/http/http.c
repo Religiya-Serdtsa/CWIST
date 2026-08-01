@@ -41,6 +41,9 @@
 #if defined(__linux__)
 #include <sys/sendfile.h>
 #endif
+#if defined(__APPLE__) || defined(__FreeBSD__)
+#include <sys/uio.h>
+#endif
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #include <sys/event.h>
 #endif
