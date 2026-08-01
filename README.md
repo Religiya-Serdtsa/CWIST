@@ -51,6 +51,15 @@ cd cwist
 make
 ```
 
+## Platform support
+
+CWIST builds on Linux, macOS, and BSD systems. The HTTP/3 server and native
+client use non-blocking UDP sockets on every platform; Linux uses `epoll`,
+while BSD-family systems use the portable polling path. ECN metadata is
+enabled only when the host exposes the required socket option and ancillary
+data interfaces, so an unavailable optional API does not prevent an HTTP/3
+build.
+
 ```c
 #include <cwist/app.h>
 

@@ -72,7 +72,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 | TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH support |
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
 | **io_uring Backend** | ✅ | `io_uring_backend.c`, focused smoke tests, demolition tests, SQE/CQE synchronization, and fixed-buffer fallback |
-| **kqueue Backend** | 🔄 | macOS GitHub Actions gate builds the kqueue-selected backend and runs focused regressions |
+| **kqueue Backend** | 🔄 | macOS GitHub Actions gate builds the kqueue-selected backend and runs focused regressions; HTTP/3 uses the BSD polling path with optional ECN socket capabilities |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
 | **WebTransport** | 🧪 | Server sessions, streams, and datagrams are implemented; `dev` adds an experimental native C client on LSQUIC PR #629, with Extended CONNECT, session streams, datagrams, and explicit I/O polling |
 | HTTP/3 Datagram Extension | ✅ | `send_datagram`, callbacks, `es_datagrams` enabled |

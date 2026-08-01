@@ -5,6 +5,10 @@ browser client, and a native C client available on the `dev` branch.
 
 ## Build
 
+The HTTP/3 transport builds on Linux, macOS, and BSD systems. Linux uses its
+`epoll` path; macOS/BSD use portable polling, and unavailable optional ECN
+socket extensions are disabled automatically.
+
 ```sh
 make example/webtransport/server/webtransport-server
 ```
