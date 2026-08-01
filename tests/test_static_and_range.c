@@ -16,9 +16,26 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <ctype.h>
 
 #define TEST_PORT 19998
 #define TEST_HOST "127.0.0.1"
+
+/* strcasestr() is a GNU extension missing on macOS; local ASCII-only variant. */
+static const char *test_strcasestr(const char *haystack, const char *needle) {
+    if (!*needle) return haystack;
+    for (; *haystack; haystack++) {
+        const char *h = haystack;
+        const char *n = needle;
+        while (*h && *n &&
+               tolower((unsigned char)*h) == tolower((unsigned char)*n)) {
+            h++;
+            n++;
+        }
+        if (!*n) return haystack;
+    }
+    return NULL;
+}
 
 static int connect_to_server(void) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -68,7 +85,7 @@ static bool response_has_code(const char *response, const char *code) {
 }
 
 static bool response_has_header(const char *response, const char *header) {
-    return strcasestr(response, header) != NULL;
+    return test_strcasestr(response, header) != NULL;
 }
 
 int main(void) {

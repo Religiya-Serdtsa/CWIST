@@ -68,6 +68,11 @@ static int redis_open_socket(const char *host, int port) {
 static int redis_send_all(int fd, const char *buf, size_t len) {
     size_t sent = 0;
     while (sent < len) {
+        /* RESP speaks plaintext TCP by design (same as redis-cli without
+         * --tls). Credentials must be protected at the deployment layer:
+         * loopback/Unix sockets, private network, or a TLS-terminating proxy
+         * such as stunnel/spiped in front of Redis. */
+        // codeql[cpp/cleartext-transmission] plaintext RESP by design; see note above
         ssize_t n = send(fd, buf + sent, len - sent, 0);
         if (n < 0) {
             if (errno == EINTR) continue;

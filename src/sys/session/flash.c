@@ -6,9 +6,16 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <cwist/core/siphash/siphash.h>
+
 void cwist_flash_set(cwist_http_request *req, const char *key, const char *value) {
-    if (!req || !key || !req->flash) return;
-    cwist_query_map_set(req->flash, key, value ? value : "");
+    if (!req || !key) return;
+    if (!req->flash) {
+        req->flash = cwist_query_map_create();
+    }
+    if (req->flash) {
+        cwist_query_map_set(req->flash, key, value ? value : "");
+    }
 }
 
 const char *cwist_flash_peek(cwist_http_request *req, const char *key) {
@@ -18,16 +25,8 @@ const char *cwist_flash_peek(cwist_http_request *req, const char *key) {
 
 const char *cwist_flash_get(cwist_http_request *req, const char *key) {
     if (!req || !key || !req->flash) return NULL;
-    const char *val = cwist_query_map_get(req->flash, key);
-    if (!val) return NULL;
-    // Remove from map by clearing the bucket entry
-    size_t idx = 0;
-    // Re-hash to find bucket (djb2 hash used in query.c)
-    size_t hash = 5381;
-    int c;
-    const char *k = key;
-    while ((c = *k++)) hash = ((hash << 5) + hash) + c;
-    idx = hash % req->flash->size;
+    uint64_t hash = siphash24(key, strlen(key), req->flash->seed);
+    size_t idx = hash % req->flash->size;
 
     cwist_query_bucket **prev = &req->flash->buckets[idx];
     cwist_query_bucket *curr = *prev;
@@ -35,14 +34,15 @@ const char *cwist_flash_get(cwist_http_request *req, const char *key) {
         if (strcmp(curr->key, key) == 0) {
             *prev = curr->next;
             cwist_free(curr->key);
-            cwist_free(curr->value);
+            /* value 포인터 소유권을 호출자에게 이전 - 호출자가 free 책임 */
+            char *ret_val = curr->value;
             cwist_free(curr);
-            return val;
+            return ret_val;
         }
         prev = &curr->next;
         curr = curr->next;
     }
-    return val;
+    return NULL;
 }
 
 char *cwist_flash_pop_all_json(cwist_http_request *req) {

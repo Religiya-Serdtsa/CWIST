@@ -11,6 +11,7 @@
 #include <brotli/encode.h>
 #include <zstd.h>
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
 

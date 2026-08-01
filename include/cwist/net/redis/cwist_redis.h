@@ -59,7 +59,12 @@ cwist_error_t cwist_redis_command_argv(cwist_redis_t *r, size_t argc,
                                        const void *const *argv, const size_t *argv_lens,
                                        char **out, size_t *out_len);
 
-/** Authenticate/select a logical Redis database on this connection. */
+/** Authenticate/select a logical Redis database on this connection.
+ *
+ * @warning AUTH credentials are sent over plaintext TCP (RESP has no
+ * encryption by itself). Only use this over loopback, a trusted private
+ * network, or behind a TLS-terminating proxy (stunnel/spiped) in front of
+ * Redis. */
 cwist_error_t cwist_redis_auth(cwist_redis_t *r, const char *username, const char *password);
 cwist_error_t cwist_redis_select(cwist_redis_t *r, unsigned int database);
 

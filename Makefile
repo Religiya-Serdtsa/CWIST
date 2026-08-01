@@ -7,10 +7,7 @@ NGHTTP2_CFLAGS := $(shell pkg-config --cflags libnghttp2 2>/dev/null)
 BROTLI_CFLAGS := $(shell pkg-config --cflags libbrotlienc libbrotlicommon libbrotlidec 2>/dev/null)
 
 INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src -I./lib/boringssl/include -I./lib/lsquic/include -I./lib/multipart-parser-c $(CURL_CFLAGS) $(NGHTTP2_CFLAGS) $(BROTLI_CFLAGS)
-# LSQUIC WebTransport is supplied by the pinned proposal branch (PR #629).
-# Keep the CWIST adapter and the dependency enabled together so a build cannot
-# expose headers for a feature that the linked static library omitted.
-COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE -DCWIST_WEBTRANSPORT
+COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
 COMMON_WARNINGS = -std=c2x -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
 
@@ -61,8 +58,14 @@ LSQUIC_LIB = $(LSQUIC_BUILD_DIR)/src/liblsquic/liblsquic.a
 CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null)
 NGHTTP2_LIBS := $(shell pkg-config --libs libnghttp2 2>/dev/null)
 BROTLI_LIBS := $(shell pkg-config --libs libbrotlienc libbrotlicommon libbrotlidec 2>/dev/null)
+# zstd via pkg-config so Homebrew's non-standard lib path (-L/opt/homebrew/...)
+# is picked up on macOS; fall back to a bare -lzstd elsewhere.
+ZSTD_LIBS := $(shell pkg-config --libs libzstd 2>/dev/null)
+ifeq ($(strip $(ZSTD_LIBS)),)
+ZSTD_LIBS = -lzstd
+endif
 
-LIBS = -pthread -ldl -lm -lstdc++ -lz -lzstd \
+LIBS = -pthread -ldl -lm -lstdc++ -lz $(ZSTD_LIBS) \
        $(LSQUIC_LIB) \
        $(BORINGSSL_SSL_LIB) \
        $(BORINGSSL_CRYPTO_LIB) \
@@ -80,18 +83,25 @@ SQLITE_DIR = lib/sqlite3
 # Detect OS
 UNAME_S := $(shell uname -s)
 IO_SRC = src/sys/io/io_select.c # Default fallback
+PLATFORM_SRC =
 
 ifeq ($(UNAME_S),Linux)
     CFLAGS += -DCWIST_OS_LINUX
     # Check for io_uring headers? For now assume available or user manages env.
     IO_SRC = src/sys/io/io_uring.c
+    # io_uring_backend.c includes <linux/io_uring.h>; Linux-only.
+    PLATFORM_SRC = src/sys/io/io_uring_backend.c
 endif
 ifeq ($(UNAME_S),Darwin)
-    CFLAGS += -DCWIST_OS_BSD
+    # _DARWIN_C_SOURCE: in-file strict _POSIX_C_SOURCE/_XOPEN_SOURCE would
+    # otherwise hide BSD types (u_int, ...) and kqueue/sysctl declarations.
+    CFLAGS += -DCWIST_OS_BSD -D_DARWIN_C_SOURCE
     IO_SRC = src/sys/io/kqueue.c
 endif
 ifeq ($(UNAME_S),FreeBSD)
-    CFLAGS += -DCWIST_OS_BSD
+    # _DEFAULT_SOURCE keeps BSD-visible types available under strict
+    # _POSIX_C_SOURCE on FreeBSD (same class of issue as on Darwin).
+    CFLAGS += -DCWIST_OS_BSD -D_DEFAULT_SOURCE
     IO_SRC = src/sys/io/kqueue.c
 endif
 
@@ -109,6 +119,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/http_client.c \
        src/net/http/http3_client.c \
        src/net/http/https.c \
+       src/net/http/https_upgrade_hook.c \
        src/net/http/tls_chain.c \
        src/net/grpc/grpc.c \
        src/net/grpc/protobuf.c \
@@ -160,7 +171,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/nats/cwist_nats.c \
        src/net/redis/cwist_redis.c \
        src/core/validation/bind.c \
-       src/sys/io/io_uring_backend.c \
+       $(PLATFORM_SRC) \
        src/sys/io/reactor.c \
        src/sys/job/scheduler.c \
        src/sys/metrics/metrics.c \
@@ -305,8 +316,6 @@ TEST_TARGETS = test_sstring \
                nuke_missing_user_test \
                test_bind \
                test_metrics \
-               test_io_uring \
-               test_io_uring_demolition \
                test_access_log \
                test_rate_limit \
                test_cache \
@@ -323,6 +332,11 @@ TEST_TARGETS = test_sstring \
                test_test_client \
                test_multiport \
                test_grpc
+
+# io_uring backend is Linux-only (linux/io_uring.h), as are its tests.
+ifeq ($(UNAME_S),Linux)
+TEST_TARGETS += test_io_uring test_io_uring_demolition
+endif
 
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall clean rebuild examples clean-examples
 
@@ -660,6 +674,10 @@ test_sse: $(LIB_NAME) tests/test_sse.c
 test_graphql: $(LIB_NAME) tests/test_graphql.c
 	$(CC) $(CFLAGS) -o test_graphql tests/test_graphql.c $(LIB_NAME) $(LIBS)
 	./test_graphql
+
+test_core_hardening: $(LIB_NAME) tests/test_core_hardening.c
+	$(CC) $(CFLAGS) -o test_core_hardening tests/test_core_hardening.c $(LIB_NAME) $(LIBS)
+	./test_core_hardening
 
 cli:
 	chmod +x tools/cli/cwist

@@ -7,7 +7,13 @@
  * QPACK, and HTTP/3 framing per RFC 9114.
  */
 
+#if defined(__APPLE__)
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#endif
+#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__DragonFly__)
 #define _POSIX_C_SOURCE 200809L
+#endif
 #include <cwist/net/http/http3.h>
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
@@ -23,6 +29,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <sys/stat.h>
@@ -46,6 +53,18 @@
 #include <lsquic_wt.h>
 #endif
 #include <lsxpack_header.h>
+
+/* BSD sockets do not universally provide MSG_DONTWAIT.  The UDP socket is
+ * configured non-blocking before lsquic can emit packets, so no flag is
+ * needed on platforms that omit it. */
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
+#endif
+
+/* ECN ancillary data is optional across supported socket implementations. */
+#if defined(CMSG_SPACE) && defined(CMSG_FIRSTHDR) && defined(CMSG_NXTHDR) && defined(IP_TOS)
+#define CWIST_H3_HAVE_ECN_CMSG 1
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Globals                                                            */
@@ -1405,7 +1424,9 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 
     /* Enable ECN reception for congestion control feedback */
     int on = 1;
+#ifdef IP_RECVTOS
     setsockopt(udp_fd, IPPROTO_IP, IP_RECVTOS, &on, sizeof(on));
+#endif
 #ifdef IPV6_RECVTCLASS
     setsockopt(udp_fd, IPPROTO_IPV6, IPV6_RECVTCLASS, &on, sizeof(on));
 #endif
@@ -1439,8 +1460,13 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 #endif
 
     while (ctx && ctx->running && atomic_load(&g_cwist_running)) {
-        int diff = 1000; /* default 1 ms; let earliest_adv_tick drive it */
-        if (lsquic_engine_earliest_adv_tick(engine, &diff)) {
+        /* With no active QUIC connections lsquic has no earlier deadline.
+         * Sleeping for only 1 ms in that state turns an otherwise idle
+         * listener into a permanent polling loop.  Active connections still
+         * replace this with their precise earliest timer below. */
+        int diff = 100000; /* default 100 ms (microseconds) */
+        bool has_engine_tick = lsquic_engine_earliest_adv_tick(engine, &diff);
+        if (has_engine_tick) {
             /* Enforce a small floor so pacing timers or back-to-back zero
              * ticks cannot turn this loop into a busy-wait. */
             if (diff < 1000)
@@ -1449,6 +1475,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                 diff = 1000000;
         }
 
+        bool received_packet = false;
 #ifdef __linux__
         struct epoll_event events[1];
         int pret = epoll_wait(epoll_fd, events, 1, diff / 1000);
@@ -1462,6 +1489,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
             break;
         }
         if (pret > 0 && (events[0].events & EPOLLIN)) {
+            received_packet = true;
 #else
         struct pollfd pfd = { .fd = udp_fd, .events = POLLIN };
         int pret = poll(&pfd, 1, diff / 1000);
@@ -1493,14 +1521,17 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                 msg.msg_iov = &iov;
                 msg.msg_iovlen = 1;
 
-                /* ECN support: allocate cmsg buffer */
+                /* ECN support is optional on BSD-derived socket APIs. */
+#ifdef CWIST_H3_HAVE_ECN_CMSG
                 char cmsg_buf[CMSG_SPACE(sizeof(int))];
                 msg.msg_control = cmsg_buf;
                 msg.msg_controllen = sizeof(cmsg_buf);
+#endif
 
                 ssize_t nr = recvmsg(udp_fd, &msg, 0);
                 if (nr > 0) {
                     int ecn = 0;
+#ifdef CWIST_H3_HAVE_ECN_CMSG
                     for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
                          cmsg != NULL;
                          cmsg = CMSG_NXTHDR(&msg, cmsg)) {
@@ -1517,6 +1548,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                         }
 #endif
                     }
+#endif
                     lsquic_engine_packet_in(engine, pkt_buf, (size_t)nr,
                                             local_addr_len ? (struct sockaddr *)&local_addr : NULL,
                                             (struct sockaddr *)&peer_addr,
@@ -1537,7 +1569,10 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
         }
 #endif
 
-        lsquic_engine_process_conns(engine);
+        /* Do not run lsquic's connection sweep for an empty engine.  With no
+         * packet and no advertised timer this is pure idle CPU work. */
+        if (received_packet || has_engine_tick)
+            lsquic_engine_process_conns(engine);
     }
 
 #ifdef __linux__

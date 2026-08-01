@@ -3,6 +3,10 @@
 CWIST exposes WebTransport over its HTTP/3 server. WebTransport requires TLS
 and QUIC; browsers also require a certificate they trust during development.
 
+> **Platform note:** the HTTP/3 listener uses `epoll` on Linux and a portable
+> polling path on macOS/BSD. ECN receive metadata is optional, so missing BSD
+> socket extensions do not block a WebTransport build or listener startup.
+
 ## 1. Configure HTTP/3 and a session handler
 
 ```c
