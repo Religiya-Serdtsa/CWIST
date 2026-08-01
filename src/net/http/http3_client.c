@@ -3,7 +3,13 @@
  * @brief lsquic/BoringSSL-based HTTP/3 client for CWIST.
  */
 
+#if defined(__APPLE__)
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#endif
+#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__DragonFly__)
 #define _POSIX_C_SOURCE 200809L
+#endif
 #include <cwist/net/http/http3_client.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/sys/err/cwist_err.h>
@@ -32,6 +38,12 @@
 #include <lsquic_wt.h>
 #endif
 #include <lsxpack_header.h>
+
+/* BSD sockets do not universally provide MSG_DONTWAIT.  This client creates
+ * its UDP socket in non-blocking mode before lsquic can emit packets. */
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Globals                                                            */
