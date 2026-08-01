@@ -38,7 +38,7 @@
 #ifdef __linux__
 #include <sys/epoll.h>
 #endif
-#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
+#if defined(__linux__)
 #include <sys/sendfile.h>
 #endif
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
