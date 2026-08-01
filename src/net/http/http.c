@@ -839,7 +839,6 @@ static int cwist_http_sendmsg_all(int fd, struct iovec *iov, int iovcnt, int fla
  * @return true when the file body and headers were transmitted successfully.
  */
 static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res) {
-#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
     if (!res || !res->use_file_stream || res->file_stream_fd < 0) return false;
     size_t remaining = res->file_stream_len;
     off_t offset = res->file_stream_offset;
@@ -858,57 +857,39 @@ static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res)
         }
         if (sent == 0) break;
         remaining -= (size_t)sent;
-#elif defined(__APPLE__)
-        off_t chunk = (off_t)remaining;
-        int rc = sendfile(res->file_stream_fd, client_fd, offset, &chunk, NULL, 0);
-        if (rc == -1) {
+#else
+        /* Portable read+write fallback for macOS, FreeBSD, and other platforms.
+           lseek is used to handle the offset since pread avoids modifying the
+           file descriptor's position across calls. */
+        char buf[65536];
+        size_t to_read = remaining < sizeof(buf) ? remaining : sizeof(buf);
+        ssize_t n = pread(res->file_stream_fd, buf, to_read, offset);
+        if (n < 0) {
             if (errno == EINTR) continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (chunk > 0) {
-                    offset += chunk;
-                    remaining -= (size_t)chunk;
-                }
-                struct pollfd pfd = { .fd = client_fd, .events = POLLOUT };
-                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-                if (ret <= 0 || (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))) return false;
-                continue;
-            }
             return false;
         }
-        if (chunk == 0) break;
-        offset += chunk;
-        remaining -= (size_t)chunk;
-#elif defined(__FreeBSD__)
-        off_t sent = 0;
-        size_t chunk = remaining;
-        int rc = sendfile(res->file_stream_fd, client_fd, offset, chunk, NULL, &sent, 0);
-        if (rc == -1) {
-            if (errno == EINTR) continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (sent > 0) {
-                    offset += sent;
-                    remaining -= (size_t)sent;
+        if (n == 0) break;
+        ssize_t nw = 0;
+        while (nw < n) {
+            ssize_t w = write(client_fd, buf + nw, (size_t)(n - nw));
+            if (w < 0) {
+                if (errno == EINTR) continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    struct pollfd pfd = { .fd = client_fd, .events = POLLOUT };
+                    int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                    if (ret <= 0 || (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))) return false;
+                    continue;
                 }
-                struct pollfd pfd = { .fd = client_fd, .events = POLLOUT };
-                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-                if (ret <= 0 || (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))) return false;
-                continue;
+                return false;
             }
-            return false;
+            nw += w;
         }
-        if (sent == 0) break;
-        offset += sent;
-        remaining -= (size_t)sent;
+        offset += nw;
+        remaining -= (size_t)nw;
 #endif
     }
     res->file_stream_offset = offset;
     return remaining == 0;
-#else
-    (void)client_fd;
-    (void)res;
-    errno = ENOTSUP;
-    return false;
-#endif
 }
 
 /**
