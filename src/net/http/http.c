@@ -1,4 +1,10 @@
+#if defined(__APPLE__)
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#endif
+#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__DragonFly__)
 #define _POSIX_C_SOURCE 200809L
+#endif
 #include <cwist/net/http/http.h>
 #include <cwist/net/http/session.h>
 #include <cwist/core/sstring/sstring.h>
@@ -31,6 +37,8 @@
 #include <fcntl.h>
 #ifdef __linux__
 #include <sys/epoll.h>
+#endif
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
 #include <sys/sendfile.h>
 #endif
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -206,6 +214,7 @@ void cwist_http_pool_destroy(void) {
         pthread_mutex_unlock(&g_workers[i].mutex);
     }
     for (int i = 0; i < get_optimal_thread_count(); i++) {
+#if defined(__linux__)
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec += g_cwist_drain_timeout_sec;
@@ -214,6 +223,9 @@ void cwist_http_pool_destroy(void) {
             pthread_cancel(g_workers[i].thread);
             pthread_join(g_workers[i].thread, NULL);
         }
+#else
+        pthread_join(g_workers[i].thread, NULL);
+#endif
         pthread_mutex_destroy(&g_workers[i].mutex);
         pthread_cond_destroy(&g_workers[i].cond_not_empty);
         pthread_cond_destroy(&g_workers[i].cond_not_full);
@@ -1474,9 +1486,8 @@ const char CWIST_BLOB_500[] = "HTTP/1.1 500 Internal Server Error\r\nContent-Len
 int cwist_make_socket_ipv4(struct sockaddr_in *sockv4, const char *address, uint16_t port, uint16_t backlog) {
   int server_fd = -1;
   int opt = 1;
-  in_addr_t addr = inet_addr(address);
 
-  if(addr == INADDR_NONE) {
+  if(!address || inet_pton(AF_INET, address, &sockv4->sin_addr) != 1) {
     return CWIST_HTTP_UNAVAILABLE_ADDRESS;
   }
 
@@ -1507,13 +1518,13 @@ int cwist_make_socket_ipv4(struct sockaddr_in *sockv4, const char *address, uint
 #endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
+#ifdef SO_NOSIGPIPE
   int no_sig_pipe = 1;
   setsockopt(server_fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sig_pipe, sizeof(no_sig_pipe));
 #endif
+#endif
 
   sockv4->sin_family = AF_INET;
-
-  sockv4->sin_addr.s_addr = addr;
   sockv4->sin_port = htons(port);
 
   if(bind(server_fd, (struct sockaddr *)sockv4, sizeof(struct sockaddr_in)) < 0) {
