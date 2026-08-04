@@ -25,6 +25,16 @@
  * @brief In-memory SQLite mirroring layer that can fall back to disk under memory pressure.
  */
 
+#ifndef NSIG
+#  if defined(_NSIG)
+#    define NSIG _NSIG
+#  elif defined(SIGRTMAX)
+#    define NSIG (SIGRTMAX + 1)
+#  else
+#    define NSIG 32
+#  endif
+#endif
+
 static cwist_nuke_db_t g_nuke = {0};
 static pthread_t g_sync_thread = 0;
 static volatile bool g_running = false;
