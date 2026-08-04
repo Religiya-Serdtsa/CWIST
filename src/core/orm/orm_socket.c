@@ -1,16 +1,11 @@
 #ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+#define _GNU_SOURCE 1
 #endif
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/un.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
+#include <fcntl.h>
 
 #ifndef SOCK_CLOEXEC
 #define SOCK_CLOEXEC 0
@@ -21,8 +16,14 @@ int cwist_orm_socketpair(int sv[2]) {
         return -1;
     }
 #if SOCK_CLOEXEC == 0
-    fcntl(sv[0], F_SETFD, FD_CLOEXEC);
-    fcntl(sv[1], F_SETFD, FD_CLOEXEC);
+    int flags = fcntl(sv[0], F_GETFD);
+    if (flags != -1) {
+        fcntl(sv[0], F_SETFD, flags | FD_CLOEXEC);
+    }
+    flags = fcntl(sv[1], F_GETFD);
+    if (flags != -1) {
+        fcntl(sv[1], F_SETFD, flags | FD_CLOEXEC);
+    }
 #endif
     return 0;
 }
