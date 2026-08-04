@@ -1040,7 +1040,12 @@ int cwist_webtransport_client_poll(cwist_http3_client *client, int timeout_ms) {
 }
 
 int cwist_webtransport_client_is_open(const cwist_webtransport_client_session *session) {
+#ifdef CWIST_WEBTRANSPORT
     return session && session->open && session->native;
+#else
+    (void)session;
+    return 0;
+#endif
 }
 
 void *cwist_webtransport_client_open_bidi(cwist_webtransport_client_session *session) {
