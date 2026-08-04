@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -75,6 +76,23 @@ cwist_db_pool_t *cwist_db_pool_create(const char *path, size_t max_conns) {
         sqlite3_busy_timeout(pool->conns[i]->conn, 5000);
         pool->idle_slots[pool->idle_count++] = i;
     }
+<<<<<<< HEAD
+=======
+
+    pthread_mutex_init(&pool->mtx, NULL);
+#if defined(CWIST_OS_BSD)
+    pthread_cond_init(&pool->cond, NULL);
+#else
+    pthread_condattr_t attr;
+    pthread_condattr_init(&attr);
+    bool ok = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) == 0 &&
+              pthread_cond_init(&pool->cond, &attr) == 0;
+    pthread_condattr_destroy(&attr);
+    if (!ok) {
+        pthread_cond_init(&pool->cond, NULL);
+    }
+#endif
+>>>>>>> b81b3744 (compat(bsd): remove pthread_condattr_setclock from BSD build)
     return pool;
 fail:
     if (pool->conns) for (size_t i = 0; i < max_conns; ++i) cwist_db_close(pool->conns[i]);
