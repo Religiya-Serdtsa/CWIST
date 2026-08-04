@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <time.h>
 
 #include <cwist/net/http/http2.h>
 #include <cwist/core/mem/alloc.h>
@@ -70,6 +71,25 @@
 #define H2_ERR_REFUSED_STREAM     0x7
 #define H2_ERR_COMPRESSION_ERROR  0x9
 
+/* Monotonic clock in milliseconds, for the connection idle deadline. */
+static uint64_t h2_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
+
+/* Idle deadline for a connection with no complete frame arriving.  Defaults
+ * to CWIST_HTTP2_IDLE_TIMEOUT_MS, overridable via the env var of the same
+ * name (read once at first use). */
+static int h2_idle_timeout_ms(void) {
+    static int timeout_ms = 0;
+    if (timeout_ms == 0) {
+        const char *env = getenv("CWIST_HTTP2_IDLE_TIMEOUT_MS");
+        timeout_ms = (env && atoi(env) > 0) ? atoi(env) : CWIST_HTTP2_IDLE_TIMEOUT_MS;
+    }
+    return timeout_ms;
+}
+
 /* --- Stream & Connection State --- */
 
 typedef struct h2_stream {
@@ -99,6 +119,7 @@ typedef struct {
     bool cont_end_stream;
     bool sequenced_data;   /* CWIST extension: DATA frames carry seq chunks */
     uint32_t last_processed_stream_id;
+    uint64_t last_activity; /* monotonic ms of the last complete frame read */
 } h2_conn;
 
 static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
@@ -109,6 +130,7 @@ static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
     hc->conn_send_window = 65535;
     hc->conn_recv_window = 65535;
     hc->cont_end_stream = false;
+    hc->last_activity = h2_now_ms();
     /* The extension carries application bodies and must not be enabled over
      * h2c: its ordering metadata is not an integrity mechanism.  HTTPS/TLS
      * supplies authenticated transport protection against on-path mutation. */
@@ -275,9 +297,32 @@ static int h2_wait_socket(cwist_https_connection *conn, int ssl_error, int timeo
     return 0;
 }
 
+/* Poll until frame bytes can be read or the connection idle deadline
+ * expires.  Skips the poll when decrypted bytes are already buffered.
+ * Returns 0 when readable, -1 on idle timeout or socket error. */
+static int h2_wait_readable(h2_conn *hc) {
+    while (hc->conn->ssl ? (SSL_pending(hc->conn->ssl) <= 0) : true) {
+        uint64_t idle_ms = (uint64_t)h2_idle_timeout_ms();
+        uint64_t now = h2_now_ms();
+        if (now - hc->last_activity >= idle_ms) return -1;
+        uint64_t idle_left = idle_ms - (now - hc->last_activity);
+        int wait_ms = CWIST_HTTP_TIMEOUT_MS;
+        if (idle_left < (uint64_t)wait_ms) wait_ms = (int)idle_left;
+        struct pollfd pfd = { .fd = hc->conn->fd, .events = POLLIN };
+        int pret = poll(&pfd, 1, wait_ms);
+        if (pret < 0) return -1;
+        if (pret > 0) return 0;
+    }
+    return 0;
+}
+
 static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t len) {
     const unsigned char *p = (const unsigned char *)buf;
     int retries = 0;
+    /* 100ms polls; keep the total wait under the connection idle deadline. */
+    int max_retries = h2_idle_timeout_ms() / 100;
+    if (max_retries > 1000) max_retries = 1000;
+    if (max_retries < 1) max_retries = 1;
     while (len > 0) {
         int n = h2_write(conn, p, (int)len);
         if (n <= 0) {
@@ -285,13 +330,13 @@ static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t le
                 if (conn->ssl) {
                     int err = SSL_get_error(conn->ssl, n);
                     if (err == SSL_ERROR_WANT_WRITE || err == SSL_ERROR_WANT_READ) {
-                        if (++retries > 1000) return -1; /* ~overall timeout guard */
+                        if (++retries > max_retries) return -1; /* ~overall timeout guard */
                         if (h2_wait_socket(conn, err, 100) != 0) return -1;
                         continue;
                     }
                 } else {
                     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-                        if (++retries > 1000) return -1;
+                        if (++retries > max_retries) return -1;
                         if (h2_wait_socket(conn, 0, 100) != 0) return -1;
                         continue;
                     }
@@ -1103,18 +1148,16 @@ static int h2_read_all(cwist_https_connection *conn, void *buf, int len) {
     int total = 0;
     while (total < len) {
         int n = h2_read(conn, (char *)buf + total, len - total);
-        if (n < 0) return -1;
-        if (n == 0) {
-            struct timespec ts = {0, 1000000}; // 1ms
-            nanosleep(&ts, NULL);
-            continue;
-        }
+        /* 0 is EOF on these blocking sockets (peer shutdown); retrying it
+         * would spin forever, so treat it as a read failure. */
+        if (n <= 0) return -1;
         total += n;
     }
     return total;
 }
 
-static void h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
+/* Returns 0 normally, -1 when the peer vanished mid-frame (EOF/error). */
+static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
     struct pollfd pfd;
     pfd.fd = hc->conn->fd;
     pfd.events = POLLIN;
@@ -1122,7 +1165,7 @@ static void h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
     while (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN)) {
         unsigned char hdr[9];
         int n = h2_read_all(hc->conn, hdr, 9);
-        if (n != 9) break;
+        if (n != 9) return -1;
 
         uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | hdr[2];
         uint8_t type = hdr[3];
@@ -1135,13 +1178,15 @@ static void h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
         unsigned char *payload = NULL;
         if (len > 0) {
             payload = (unsigned char *)cwist_alloc(len);
-            if (!payload) break;
+            if (!payload) return -1;
             int r = h2_read_all(hc->conn, payload, len);
             if (r != (int)len) {
                 cwist_free(payload);
-                break;
+                return -1;
             }
         }
+
+        hc->last_activity = h2_now_ms();
 
         if (type == 0x08) { // WINDOW_UPDATE
             if (len == 4) {
@@ -1171,6 +1216,7 @@ static void h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
         }
         cwist_free(payload);
     }
+    return 0;
 }
 
 /**
@@ -1200,9 +1246,11 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
 
     for (uint32_t i = 0; i < total_chunks && remaining > 0; i++) {
         while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
-            h2_process_incoming_frames_nonblocking(hc, s);
+            if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
             if (s && s->send_window == -999) return -1;
             if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                /* Give up if no frame arrived within the idle deadline. */
+                if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
                 struct timespec ts = {0, 2000000};
                 nanosleep(&ts, NULL);
             }
@@ -1213,6 +1261,8 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
         if ((int32_t)chunk_len > hc->conn_send_window ||
             (s && (int32_t)chunk_len > s->send_window)) {
             /* Window too small for a full sequenced chunk; wait for update. */
+            if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
+            if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
             struct timespec ts = {0, 2000000};
             nanosleep(&ts, NULL);
             i--;
@@ -1254,9 +1304,11 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
 
     for (size_t i = 0; i < msg.count; i++) {
         while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
-            h2_process_incoming_frames_nonblocking(hc, s);
+            if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
             if (s && s->send_window == -999) return -1;
             if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                /* Give up if no frame arrived within the idle deadline. */
+                if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
                 struct timespec ts = {0, 2000000};
                 nanosleep(&ts, NULL);
             }
@@ -1265,6 +1317,9 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
         size_t chunk_len = msg.chunk_lens[i];
         if ((int32_t)chunk_len > hc->conn_send_window ||
             (s && (int32_t)chunk_len > s->send_window)) {
+            /* Window too small for a full sequenced chunk; wait for update. */
+            if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
+            if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
             struct timespec ts = {0, 2000000};
             nanosleep(&ts, NULL);
             i--;
@@ -1332,9 +1387,11 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
         size_t remaining = res->file_stream_len;
         while (remaining > 0) {
             while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
-                h2_process_incoming_frames_nonblocking(hc, s);
+                if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
                 if (s && s->send_window == -999) return -1;
                 if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                    /* Give up if no frame arrived within the idle deadline. */
+                    if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
                     struct timespec ts = {0, 2000000};
                     nanosleep(&ts, NULL);
                 }
@@ -1364,9 +1421,11 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
         size_t sent = 0;
         while (sent < body_len) {
             while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
-                h2_process_incoming_frames_nonblocking(hc, s);
+                if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
                 if (s && s->send_window == -999) return -1;
                 if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                    /* Give up if no frame arrived within the idle deadline. */
+                    if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
                     struct timespec ts = {0, 2000000};
                     nanosleep(&ts, NULL);
                 }
@@ -1650,6 +1709,17 @@ cwist_error_t cwist_http2_serve_connection(
         unsigned char hdr[9];
         int offset = 0;
         while (offset < 9) {
+            /* Bound each blocking read with the idle deadline so an idle
+             * connection cannot monopolize a pool worker forever. */
+            if (h2_wait_readable(&hc) != 0) {
+                if (!sent_goaway &&
+                    h2_now_ms() - hc.last_activity >= (uint64_t)h2_idle_timeout_ms()) {
+                    h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR);
+                    sent_goaway = true;
+                }
+                connected = false;
+                break;
+            }
             int n = h2_read(conn, hdr + offset, 9 - offset);
             if (n <= 0) { connected = false; break; }
             offset += n;
@@ -1688,6 +1758,8 @@ cwist_error_t cwist_http2_serve_connection(
             }
         }
         if (!connected) { cwist_free(payload); break; }
+
+        hc.last_activity = h2_now_ms();
 
         switch (type) {
             case CWIST_HTTP2_FRAME_SETTINGS: {

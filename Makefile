@@ -661,6 +661,10 @@ test_graphql: $(LIB_NAME) tests/test_graphql.c
 	$(CC) $(CFLAGS) -o test_graphql tests/test_graphql.c $(LIB_NAME) $(LIBS)
 	./test_graphql
 
+test_core_hardening: $(LIB_NAME) tests/test_core_hardening.c
+	$(CC) $(CFLAGS) -o test_core_hardening tests/test_core_hardening.c $(LIB_NAME) $(LIBS)
+	./test_core_hardening
+
 cli:
 	chmod +x tools/cli/cwist
 	@echo "CLI ready: ./tools/cli/cwist"
