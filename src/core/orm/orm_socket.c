@@ -4,26 +4,37 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <cwist/core/orm/orm_socket.h>
 
 #ifndef SOCK_CLOEXEC
 #define SOCK_CLOEXEC 0
 #endif
 
-int cwist_orm_socketpair(int sv[2]) {
-    if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) == -1) {
-        return -1;
+static void set_cloexec(int fd) {
+    if (fd >= 0) {
+        int flags = fcntl(fd, F_GETFD);
+        if (flags != -1) {
+            fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+        }
     }
-#if SOCK_CLOEXEC == 0
-    int flags = fcntl(sv[0], F_GETFD);
-    if (flags != -1) {
-        fcntl(sv[0], F_SETFD, flags | FD_CLOEXEC);
-    }
-    flags = fcntl(sv[1], F_GETFD);
-    if (flags != -1) {
-        fcntl(sv[1], F_SETFD, flags | FD_CLOEXEC);
-    }
+}
+
+int cwist_orm_socketpair_cloexec(int domain, int type, int protocol, int sv[2]) {
+    int res = -1;
+#if defined(SOCK_CLOEXEC) && SOCK_CLOEXEC != 0
+    res = socketpair(domain, type | SOCK_CLOEXEC, protocol, sv);
 #endif
-    return 0;
+    if (res != 0) {
+        res = socketpair(domain, type & ~SOCK_CLOEXEC, protocol, sv);
+        if (res == 0) {
+            set_cloexec(sv[0]);
+            set_cloexec(sv[1]);
+        }
+    } else {
+        set_cloexec(sv[0]);
+        set_cloexec(sv[1]);
+    }
+    return res;
 }
