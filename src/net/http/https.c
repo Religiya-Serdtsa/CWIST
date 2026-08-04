@@ -16,12 +16,21 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <stdint.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <time.h>
 
 /* Forward declaration: PQC layer applied inside TLS bootstrap */
 bool cwist_tls_apply_pqc_layer(cwist_app *app, SSL_CTX *ctx);
+
+/* Monotonic clock in milliseconds, for connection deadlines. */
+static uint64_t cwist_https_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
 
 /**
  * @brief Poll the socket for the direction OpenSSL is waiting on.
@@ -392,11 +401,23 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
 
     SSL_set_fd(ssl, client_fd);
 
+    /* Bound the whole handshake so a client dribbling bytes cannot pin a
+     * pool worker forever. */
+    uint64_t handshake_deadline = cwist_https_now_ms() + CWIST_HTTPS_HANDSHAKE_TIMEOUT_MS;
     int rc;
     while ((rc = SSL_accept(ssl)) <= 0) {
         int ssl_err = SSL_get_error(ssl, rc);
         if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
-            if (cwist_ssl_wait(client_fd, ssl_err, CWIST_HTTP_TIMEOUT_MS) != 0) {
+            uint64_t now = cwist_https_now_ms();
+            if (now >= handshake_deadline) {
+                cwist_error_t err_obj = make_ssl_error("SSL handshake timed out");
+                SSL_free(ssl);
+                return err_obj;
+            }
+            int wait_ms = CWIST_HTTP_TIMEOUT_MS;
+            uint64_t remaining = handshake_deadline - now;
+            if (remaining < (uint64_t)wait_ms) wait_ms = (int)remaining;
+            if (cwist_ssl_wait(client_fd, ssl_err, wait_ms) != 0) {
                 cwist_error_t err_obj = make_ssl_error("SSL handshake timed out or socket error");
                 SSL_free(ssl);
                 return err_obj;
@@ -482,13 +503,24 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
     size_t total_received = conn->buf_len;
     char *header_end = NULL;
 
+    /* Total deadline for assembling the request headers. */
+    uint64_t headers_deadline = cwist_https_now_ms() + CWIST_HTTP_HEADERS_TIMEOUT_MS;
+
     while (!(header_end = strstr(conn->read_buf, "\r\n\r\n"))) {
         if (total_received >= CWIST_HTTP_READ_BUFFER_SIZE - 1) {
             return NULL;
         }
 
+        uint64_t now = cwist_https_now_ms();
+        if (now >= headers_deadline) {
+            return NULL;
+        }
+        int wait_ms = CWIST_HTTP_TIMEOUT_MS;
+        uint64_t remaining = headers_deadline - now;
+        if (remaining < (uint64_t)wait_ms) wait_ms = (int)remaining;
+
         struct pollfd pfd = { .fd = conn->fd, .events = POLLIN };
-        int pret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+        int pret = poll(&pfd, 1, wait_ms);
         if (pret <= 0) {
             return NULL;
         }
@@ -531,9 +563,24 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
         memcpy(body, header_end + 4, to_copy);
         size_t current_body_len = to_copy;
 
+        /* No total cap (slow 1 GiB uploads must keep working); abort only
+         * when no bytes arrive for a cumulative idle span.  Any successful
+         * read resets the idle clock. */
+        uint64_t body_idle_start = cwist_https_now_ms();
+
         while (current_body_len < req->content_length) {
+            uint64_t now = cwist_https_now_ms();
+            if (now - body_idle_start >= CWIST_HTTP_BODY_IDLE_TIMEOUT_MS) {
+                cwist_free(body);
+                cwist_http_request_destroy(req);
+                return NULL;
+            }
+            int wait_ms = CWIST_HTTP_TIMEOUT_MS;
+            uint64_t idle_left = CWIST_HTTP_BODY_IDLE_TIMEOUT_MS - (now - body_idle_start);
+            if (idle_left < (uint64_t)wait_ms) wait_ms = (int)idle_left;
+
             struct pollfd pfd = { .fd = conn->fd, .events = POLLIN };
-            int pret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+            int pret = poll(&pfd, 1, wait_ms);
             if (pret <= 0) {
                 cwist_free(body);
                 cwist_http_request_destroy(req);
@@ -556,6 +603,7 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
                 return NULL;
             }
             current_body_len += (size_t)bytes;
+            body_idle_start = cwist_https_now_ms();
         }
         body[req->content_length] = '\0';
         cwist_sstring_assign_len(req->body, body, req->content_length);
@@ -702,6 +750,25 @@ cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, v
             if (errno == EINTR) continue;
             if (errno == EBADF || errno == EINVAL) break;
             continue;
+        }
+
+        /* Reap vanished peers within ~2 minutes instead of the ~2h kernel
+         * default, so dead connections cannot park pool workers forever. */
+        {
+            int one = 1;
+            setsockopt(client_fd, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof(one));
+#ifdef TCP_KEEPIDLE
+            int keepidle = 60;
+            setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle));
+#endif
+#ifdef TCP_KEEPINTVL
+            int keepintvl = 10;
+            setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
+#endif
+#ifdef TCP_KEEPCNT
+            int keepcnt = 6;
+            setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
+#endif
         }
 
         https_pool_submit(client_fd, ctx, handler, user_ctx);
