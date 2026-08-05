@@ -13,6 +13,12 @@
 extern "C" {
 #endif
 
+typedef enum cwist_http2_network_quality {
+    CWIST_HTTP2_NETWORK_QUALITY_NORMAL = 0,
+    CWIST_HTTP2_NETWORK_QUALITY_HIGH_RTT,
+    CWIST_HTTP2_NETWORK_QUALITY_UNSTABLE
+} cwist_http2_network_quality;
+
 typedef struct cwist_http2_flow_control {
     uint32_t receive_window;
     uint32_t target_window;
@@ -21,6 +27,9 @@ typedef struct cwist_http2_flow_control {
     uint32_t pending_update;
     uint32_t send_window;
     uint64_t srtt_us;
+    uint64_t rttvar_us;
+    bool rtt_initialized;
+    cwist_http2_network_quality network_quality;
     uint64_t last_window_update_us;
     uint64_t pacing_tokens;
     uint64_t pacing_rate_bytes_per_sec;
