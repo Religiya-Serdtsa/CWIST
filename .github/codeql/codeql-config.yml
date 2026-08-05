@@ -1,0 +1,7 @@
+name: "CWIST CodeQL config"
+
+# Vendored third-party libraries and generated documentation are not
+# first-party code; report upstream issues to their respective projects.
+paths-ignore:
+  - lib/**
+  - docs/doxygen/**
