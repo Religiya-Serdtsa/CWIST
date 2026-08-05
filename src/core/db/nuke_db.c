@@ -14,6 +14,9 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <errno.h>
 #include <fcntl.h>
 
 /**
@@ -21,11 +24,73 @@
  * @brief In-memory SQLite mirroring layer that can fall back to disk under memory pressure.
  */
 
+#ifndef NSIG
+#  if defined(_NSIG)
+#    define NSIG _NSIG
+#  elif defined(SIGRTMAX)
+#    define NSIG (SIGRTMAX + 1)
+#  else
+#    define NSIG 32
+#  endif
+#endif
+
 static cwist_nuke_db_t g_nuke = {0};
 static pthread_t g_sync_thread = 0;
 static volatile bool g_running = false;
 static pthread_mutex_t g_nuke_lock = PTHREAD_MUTEX_INITIALIZER;
 static sigset_t g_sigset;
+
+#if defined(__FREEBSD__) || defined(__OPENBSD__) || defined(__NETBSD__) || defined(__APPLE__)
+// @brief bsd compatible sigtimedwait
+static inline int bsd_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout) {
+    int kq = kqueue();
+    if (kq < 0) {
+        return -1;
+    }
+
+    struct kevent changes[NSIG];
+    int nchanges = 0;
+
+    for (int sig = 1; sig < NSIG; sig++) {
+        if (sigismember(set, sig)) {
+            EV_SET(&changes[nchanges], sig, EVFILT_SIGNAL, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, NULL);
+            nchanges++;
+        }
+    }
+
+    if (nchanges == 0) {
+        close(kq);
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct kevent event;
+    int ret = kevent(kq, changes, nchanges, &event, 1, timeout);
+
+    int saved_errno = errno;
+    close(kq);
+
+    if (ret < 0) {
+        errno = saved_errno;
+        return -1;
+    }
+
+    if (ret == 0) {
+        errno = EAGAIN;
+        return -1;
+    }
+
+    int sig = (int)event.ident;
+
+    if (info != NULL) {
+        memset(info, 0, sizeof(siginfo_t));
+        info->si_signo = sig;
+    }
+
+    return sig;
+}
+#endif
+
 
 /**
  * @brief Estimate the RAM budget needed to mirror a disk database into memory.
@@ -245,6 +310,10 @@ static void *sync_thread_func(void *arg) {
         timeout.tv_nsec = (g_nuke.sync_interval_ms % 1000) * 1000000;
 
         // Wait for signals (INT, TERM, USR1, USR2) or Timeout
+#if defined(__FREEBSD__) || defined(__OPENBSD__) || defined(__NETBSD__) || defined(__APPLE__)
+#define sigtimedwait bsd_sigtimedwait
+#endif
+        
         signum = sigtimedwait(&g_sigset, NULL, &timeout);
 
         if (signum > 0) {

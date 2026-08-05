@@ -25,17 +25,29 @@ static atomic_ulong pool_sequence = 1;
 
 static cwist_error_t pool_error(void) { cwist_error_t err = make_error(CWIST_ERR_INT16); err.error.err_i16 = -1; return err; }
 
-static bool pool_cond_init_monotonic(pthread_cond_t *cond) {
+static clockid_t pool_cond_clock(void) {
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
+    return CLOCK_REALTIME;
+#else
+    return CLOCK_MONOTONIC;
+#endif
+}
+
+static bool pool_cond_init(pthread_cond_t *cond) {
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
+    return pthread_cond_init(cond, NULL) == 0;
+#else
     pthread_condattr_t attr;
     if (pthread_condattr_init(&attr) != 0) return false;
     bool ok = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) == 0 &&
               pthread_cond_init(cond, &attr) == 0;
     pthread_condattr_destroy(&attr);
     return ok;
+#endif
 }
 
 static void pool_deadline_after_ms(struct timespec *deadline, int timeout_ms) {
-    clock_gettime(CLOCK_MONOTONIC, deadline);
+    clock_gettime(pool_cond_clock(), deadline);
     deadline->tv_sec += timeout_ms / 1000;
     deadline->tv_nsec += (long)(timeout_ms % 1000) * 1000000L;
     if (deadline->tv_nsec >= 1000000000L) {
@@ -67,7 +79,7 @@ cwist_db_pool_t *cwist_db_pool_create(const char *path, size_t max_conns) {
     if (!pool->path || !pool->open_path || !pool->conns || !pool->idle_slots || !pool->leased) goto fail;
     if (pthread_mutex_init(&pool->mtx, NULL) != 0) goto fail;
     mutex_ready = true;
-    if (!pool_cond_init_monotonic(&pool->cond)) goto fail;
+    if (!pool_cond_init(&pool->cond)) goto fail;
     cond_ready = true;
     pool->max_conns = max_conns;
     for (size_t i = 0; i < max_conns; ++i) {
@@ -76,11 +88,9 @@ cwist_db_pool_t *cwist_db_pool_create(const char *path, size_t max_conns) {
         sqlite3_busy_timeout(pool->conns[i]->conn, 5000);
         pool->idle_slots[pool->idle_count++] = i;
     }
-<<<<<<< HEAD
-=======
 
     pthread_mutex_init(&pool->mtx, NULL);
-#if defined(CWIST_OS_BSD)
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
     pthread_cond_init(&pool->cond, NULL);
 #else
     pthread_condattr_t attr;
@@ -92,7 +102,6 @@ cwist_db_pool_t *cwist_db_pool_create(const char *path, size_t max_conns) {
         pthread_cond_init(&pool->cond, NULL);
     }
 #endif
->>>>>>> b81b3744 (compat(bsd): remove pthread_condattr_setclock from BSD build)
     return pool;
 fail:
     if (pool->conns) for (size_t i = 0; i < max_conns; ++i) cwist_db_close(pool->conns[i]);
