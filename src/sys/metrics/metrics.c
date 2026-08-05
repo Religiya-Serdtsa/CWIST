@@ -133,26 +133,32 @@ char *cwist_metrics_render_prometheus(const cwist_metrics_registry_t *reg) {
                             (unsigned long)(raw % 1000),
                             m->name,
                             (unsigned long)cnt);
+        if (need < 0) { free(buf); return NULL; }
 
-        if (len + (size_t)need + 1 > cap) {
-            cap = (len + (size_t)need + 1) * 2;
-            char *nb = realloc(buf, cap);
+        size_t required = (size_t)need + 1;
+        if (required > cap - len) {
+            size_t new_cap = cap;
+            while (required > new_cap - len) new_cap *= 2;
+            char *nb = realloc(buf, new_cap);
             if (!nb) { free(buf); return NULL; }
             buf = nb;
+            cap = new_cap;
         }
 
-        len += (size_t)snprintf(buf + len, cap - len,
-                                "# HELP %s %s\n"
-                                "# TYPE %s %s\n"
-                                "%s %lu.%03lu\n"
-                                "%s_count %lu\n\n",
-                                m->name, m->help,
-                                m->name, type_str(m->type),
-                                m->name,
-                                (unsigned long)(raw / 1000),
-                                (unsigned long)(raw % 1000),
-                                m->name,
-                                (unsigned long)cnt);
+        int written = snprintf(buf + len, cap - len,
+                               "# HELP %s %s\n"
+                               "# TYPE %s %s\n"
+                               "%s %lu.%03lu\n"
+                               "%s_count %lu\n\n",
+                               m->name, m->help,
+                               m->name, type_str(m->type),
+                               m->name,
+                               (unsigned long)(raw / 1000),
+                               (unsigned long)(raw % 1000),
+                               m->name,
+                               (unsigned long)cnt);
+        if (written < 0 || (size_t)written >= cap - len) { free(buf); return NULL; }
+        len += (size_t)written;
     }
 
     buf[len] = '\0';
