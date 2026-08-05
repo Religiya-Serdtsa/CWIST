@@ -40,6 +40,7 @@ static volatile bool g_running = false;
 static pthread_mutex_t g_nuke_lock = PTHREAD_MUTEX_INITIALIZER;
 static sigset_t g_sigset;
 
+#if defined(__FREEBSD__) || defined(__OPENBSD__) || defined(__NETBSD__) || defined(__APPLE__)
 // @brief bsd compatible sigtimedwait
 static inline int bsd_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout) {
     int kq = kqueue();
@@ -88,6 +89,7 @@ static inline int bsd_sigtimedwait(const sigset_t *set, siginfo_t *info, const s
 
     return sig;
 }
+#endif
 
 
 /**
