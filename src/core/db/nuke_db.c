@@ -1,5 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
+#if defined(__APPLE__)
+/* Keep kqueue/kevent visible: strict _POSIX_C_SOURCE hides them on macOS. */
+#  define _DARWIN_C_SOURCE
+#endif
 #include <cwist/core/db/nuke_db.h>
 #include <cwist/core/macros.h>
 #include <cwist/core/mem/alloc.h>
@@ -18,6 +22,10 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <fcntl.h>
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
+#  include <sys/event.h>
+#endif
 
 /**
  * @file nuke_db.c
@@ -40,7 +48,7 @@ static volatile bool g_running = false;
 static pthread_mutex_t g_nuke_lock = PTHREAD_MUTEX_INITIALIZER;
 static sigset_t g_sigset;
 
-#if defined(__FREEBSD__) || defined(__OPENBSD__) || defined(__NETBSD__) || defined(__APPLE__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
 // @brief bsd compatible sigtimedwait
 static inline int bsd_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout) {
     int kq = kqueue();
@@ -310,7 +318,7 @@ static void *sync_thread_func(void *arg) {
         timeout.tv_nsec = (g_nuke.sync_interval_ms % 1000) * 1000000;
 
         // Wait for signals (INT, TERM, USR1, USR2) or Timeout
-#if defined(__FREEBSD__) || defined(__OPENBSD__) || defined(__NETBSD__) || defined(__APPLE__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
 #define sigtimedwait bsd_sigtimedwait
 #endif
         
