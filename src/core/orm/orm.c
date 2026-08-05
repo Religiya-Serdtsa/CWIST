@@ -7,7 +7,9 @@
  * cwist_db_transfer_sqlite_to_socket().
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <cwist/core/orm/orm.h>
 #include <cwist/core/mem/alloc.h>
 

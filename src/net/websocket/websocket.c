@@ -1,10 +1,13 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <cwist/net/websocket/websocket.h>
 #include <cwist/net/http/http.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/core/seq/seq.h>
 #include "ws_utils.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +22,27 @@
  */
 
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+/**
+ * @brief Portable case-insensitive substring search.
+ *
+ * strcasestr() is a GNU extension that does not exist on macOS, so keep a
+ * small ASCII-only variant for header validation.
+ */
+static char *ws_strcasestr(const char *haystack, const char *needle) {
+    if (!*needle) return (char *)haystack;
+    for (; *haystack; haystack++) {
+        const char *h = haystack;
+        const char *n = needle;
+        while (*h && *n &&
+               tolower((unsigned char)*h) == tolower((unsigned char)*n)) {
+            h++;
+            n++;
+        }
+        if (!*n) return (char *)haystack;
+    }
+    return NULL;
+}
 
 /**
  * @brief Upgrade an HTTP request to a WebSocket connection.
@@ -40,7 +64,7 @@ cwist_websocket *cwist_websocket_upgrade(cwist_http_request *req, int client_fd)
     char *key = cwist_http_header_get(req->headers, "Sec-WebSocket-Key");
 
     if (!connection || !upgrade || !key) return NULL;
-    if (strcasestr(connection, "Upgrade") == NULL) return NULL;
+    if (ws_strcasestr(connection, "Upgrade") == NULL) return NULL;
     if (strcasecmp(upgrade, "websocket") != 0) return NULL;
 
     // Handshake Key Generation
