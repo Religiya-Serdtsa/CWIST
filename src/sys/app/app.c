@@ -2084,7 +2084,13 @@ static void static_ssl_handler(cwist_https_connection *conn, void *ctx) {
 /* Weak hook for applications that need to take ownership of a TLS-upgraded
  * connection (e.g. reverse-session hijacking). Return true to detach the
  * fd/ssl from cwist so they are not closed after the response is sent. */
+#if defined(__APPLE__)
+/* Mach-O has no ELF-style weak symbols; weak_import is the equivalent and
+ * resolves to NULL when the embedding app does not provide the hook. */
+__attribute__((weak_import)) bool cwist_https_upgrade_handler(cwist_https_connection *conn, cwist_http_request *req, cwist_http_response *res);
+#else
 __attribute__((weak)) bool cwist_https_upgrade_handler(cwist_https_connection *conn, cwist_http_request *req, cwist_http_response *res);
+#endif
 
 static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
