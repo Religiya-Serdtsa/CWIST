@@ -86,8 +86,12 @@ the README benchmark summary.
 
 ## Known limitations
 
-- GitHub-hosted runners are shared, noisy 4-vCPU machines; treat absolute numbers as
-  trend data, not lab-grade measurements.
+- GitHub-hosted runners are shared, noisy **4-vCPU** machines; treat absolute numbers as
+  trend data, not lab-grade measurements. Each entry records `runner_hw` (vCPU count and
+  CPU model) precisely so that entries from different machines are never compared
+  directly — e.g. CWIST measures ~170k-185k req/s on a local 12-thread Ryzen 5600X but
+  ~89k req/s on the 4-vCPU CI runner under the identical wrk profile. A drop between
+  entries with different `runner_hw` reflects the machine, not the code.
 - RSS for the JVM includes its reserved heap by design (`-Xms512m`); this is a real
   cost of the runtime model and is reported as-is.
 - The workload measures plain-text routing throughput only — no TLS, JSON

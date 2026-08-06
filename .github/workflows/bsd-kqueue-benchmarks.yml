@@ -250,6 +250,7 @@ jobs:
           cd $GITHUB_WORKSPACE
 
           # Record exact toolchain/runtime facts alongside the numbers
+          export RUNNER_HW="$(nproc) vCPU | $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
           export SPRING_JAVA_VERSION="$(java -version 2>&1 | head -1)"
           export SPRING_BOOT_VERSION="3.2.3"
           export SPRING_STACK="Spring WebFlux + Reactor Netty (event loop, virtual threads enabled)"
@@ -304,6 +305,7 @@ jobs:
               "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
               "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_rss_kib": spring_rss, "spring_csw": spring_csw,
               "wrk_profile": os.environ.get("WRK_PROFILE", ""),
+              "runner_hw": os.environ.get("RUNNER_HW", ""),
               "spring_env": {
                   "java_version": os.environ.get("SPRING_JAVA_VERSION", ""),
                   "spring_boot_version": os.environ.get("SPRING_BOOT_VERSION", ""),
