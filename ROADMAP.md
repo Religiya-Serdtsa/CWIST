@@ -50,11 +50,13 @@
 ## Current Snapshot
 
 <!-- CI-BENCHMARKS:START -->
-Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Latest platform: **Darwin**.
+Automated OS & Web Server benchmark histories are published in `docs/benchmark-trends.svg` and `docs/webserver-benchmark-trends.svg`. Latest platform: **Linux / Darwin**.
 <!-- CI-BENCHMARKS:END -->
 
-- Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are already implemented in-tree.
-- **P0 (must-have) is 100 % complete**: the framework’s core architecture and protocol stack are locked.
+- Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are fully implemented in-tree.
+- **Developer Ecosystem & Tutorials**: 30 comprehensive hands-on tutorial modules with C source (`main.c`), `CMakeLists.txt`, and English documentation guides (`README.md`) are available under `tutorials/`.
+- **CI Automated Web Server Benchmark**: Inline CI job dynamically generates and measures CWIST, Axum, and Spring Boot web servers using `wrk`, rendering real-time RPS, Latency, Peak RSS, and Context Switch metrics.
+- **P0 (must-have) is 100% complete**: the framework’s core architecture and protocol stack are locked.
 - We are now in the **P2–P4 tooling and ecosystem phase**. Completed multiport, scheduler, test-client, `io_uring`, unary/buffered streaming gRPC, and Protobuf wire-format work remain covered by focused regression tests.
 
 ---
