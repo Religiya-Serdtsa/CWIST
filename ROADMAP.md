@@ -242,7 +242,7 @@ Known limits:
 13. ~~**Multiport facade hardening**: counted port descriptor, per-port sub-app lifecycle, duplicate/default-port validation, and smoke tests~~ ✅
 
 ### P2 — Developer Velocity
-14. **Hot Reload** for development
+14. ~~**Hot Reload** for development~~ ✅
 15. ~~**CLI Tooling** (project scaffold, route generator, watcher)~~ ✅
 16. ~~**Configuration** loader (`.env`, `.toml`)~~ ✅
 17. ~~**Test Harness** with HTTP mock client~~ ✅
