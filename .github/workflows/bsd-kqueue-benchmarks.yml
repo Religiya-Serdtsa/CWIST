@@ -197,8 +197,9 @@ jobs:
           SPRING_OUT=$(wrk -t12 -c400 -d10s http://127.0.0.1:8080/ || true)
           kill -9 $PID_SPRING || true
 
-          python3 - <<PY
-          import json, re, time
+          export CWIST_OUT AXUM_OUT SPRING_OUT
+          python3 - <<'PY'
+          import json, os, re
           from datetime import datetime, timezone
 
           def parse_rps(text):
@@ -207,9 +208,9 @@ jobs:
 
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
-              "cwist_rps": parse_rps("""$CWIST_OUT"""),
-              "axum_rps": parse_rps("""$AXUM_OUT"""),
-              "spring_rps": parse_rps("""$SPRING_OUT""")
+              "cwist_rps": parse_rps(os.environ.get("CWIST_OUT", "")),
+              "axum_rps": parse_rps(os.environ.get("AXUM_OUT", "")),
+              "spring_rps": parse_rps(os.environ.get("SPRING_OUT", ""))
           }
           with open("webserver-result.json", "w") as f:
               json.dump(data, f)
