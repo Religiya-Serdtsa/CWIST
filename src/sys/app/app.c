@@ -3186,9 +3186,19 @@ int cwist_app_listen(cwist_app *app, int port) {
     // Fork worker processes before any threads are created.
     int workers = 1;
     const char *workers_env = getenv("CWIST_WORKERS");
-    if (workers_env) workers = atoi(workers_env);
+    if (workers_env) {
+        if (strcmp(workers_env, "auto") == 0) {
+            long cores = get_cpu_cores();
+            workers = (cores > 0) ? (int)cores : 1;
+        } else {
+            workers = atoi(workers_env);
+        }
+    } else {
+        // Default to auto (number of online CPU cores) to maximize performance on multi-core systems out of the box.
+        long cores = get_cpu_cores();
+        workers = (cores > 0) ? (int)cores : 1;
+    }
     if (workers < 1) workers = 1;
-    pid_t parent_pid = getpid();
     bool is_worker_child = false;
     for (int i = 1; i < workers; i++) {
         pid_t pid = fork();
