@@ -119,6 +119,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/http_client.c \
        src/net/http/http3_client.c \
        src/net/http/https.c \
+       src/net/http/https_upgrade_hook.c \
        src/net/http/tls_chain.c \
        src/net/grpc/grpc.c \
        src/net/grpc/protobuf.c \
