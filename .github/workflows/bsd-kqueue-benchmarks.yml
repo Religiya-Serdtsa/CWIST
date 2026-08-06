@@ -175,48 +175,90 @@ jobs:
           cd /tmp/axum_bench && cargo build --release
           cd /tmp/spring_bench && mvn -q package -DskipTests
 
-          # Execute RPS benchmark with wrk (12 threads, 400 connections, 10 seconds)
-          echo "=== Starting CWIST Web Server (Port 8081) ==="
-          /tmp/cwist_server &
-          PID_CWIST=$!
-          sleep 2
-          wrk -t12 -c400 -d10s http://127.0.0.1:8081/ > /tmp/cwist.txt 2>&1 || true
-          kill -9 $PID_CWIST || true
-          cat /tmp/cwist.txt
+          # Helper function for process stats before/after wrk test
+          run_bench() {
+            NAME=$1
+            CMD=$2
+            PORT=$3
+            TXT=$4
+            STAT_TXT=$5
 
-          echo "=== Starting Axum Web Server (Port 8082) ==="
-          /tmp/axum_bench/target/release/axum_server &
-          PID_AXUM=$!
-          sleep 2
-          wrk -t12 -c400 -d10s http://127.0.0.1:8082/ > /tmp/axum.txt 2>&1 || true
-          kill -9 $PID_AXUM || true
-          cat /tmp/axum.txt
+            echo "=== Starting $NAME Web Server (Port $PORT) ==="
+            $CMD &
+            PID=$!
+            sleep 2
+            
+            # Initial stat
+            BEFORE_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
+            [ -z "$BEFORE_CSW" ] && BEFORE_CSW=0
 
-          echo "=== Starting Spring Boot Web Server (Port 8080) ==="
-          java -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar &
-          PID_SPRING=$!
-          sleep 5
-          wrk -t12 -c400 -d10s http://127.0.0.1:8080/ > /tmp/spring.txt 2>&1 || true
-          kill -9 $PID_SPRING || true
-          cat /tmp/spring.txt
+            wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
+            
+            AFTER_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
+            [ -z "$AFTER_CSW" ] && AFTER_CSW=0
+            RSS=$(ps -o rss= -p $PID 2>/dev/null | awk '{print $1}')
+            [ -z "$RSS" ] && RSS=0
+
+            CSW=$((AFTER_CSW - BEFORE_CSW))
+            [ $CSW -lt 0 ] && CSW=0
+
+            kill -9 $PID || true
+            echo "rss_kib=$RSS csw=$CSW" > $STAT_TXT
+            cat $TXT
+          }
+
+          run_bench "CWIST" "/tmp/cwist_server" 8081 "/tmp/cwist.txt" "/tmp/cwist_stat.txt"
+          run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 8082 "/tmp/axum.txt" "/tmp/axum_stat.txt"
+          run_bench "Spring Boot" "java -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar" 8080 "/tmp/spring.txt" "/tmp/spring_stat.txt"
 
           python3 - <<'PY'
           import json, re, pathlib
           from datetime import datetime, timezone
 
-          def parse_rps(path_str):
+          def parse_wrk(path_str):
               p = pathlib.Path(path_str)
               text = p.read_text() if p.exists() else ""
-              m = re.search(r"Requests/sec:\s+([0-9.]+)", text)
-              return float(m.group(1)) if m else 0.0
+              rps = 0.0
+              lat_ms = 0.0
+              m_rps = re.search(r"Requests/sec:\s+([0-9.]+)", text)
+              if m_rps:
+                  rps = float(m_rps.group(1))
+              m_lat = re.search(r"Latency\s+([0-9.]+)(us|ms|s)", text)
+              if m_lat:
+                  val = float(m_lat.group(1))
+                  unit = m_lat.group(2)
+                  if unit == "us": lat_ms = val / 1000.0
+                  elif unit == "ms": lat_ms = val
+                  elif unit == "s": lat_ms = val * 1000.0
+              return rps, lat_ms
+
+          def parse_stat(path_str):
+              p = pathlib.Path(path_str)
+              text = p.read_text() if p.exists() else ""
+              rss = 0.0
+              csw = 0.0
+              m_rss = re.search(r"rss_kib=([0-9]+)", text)
+              if m_rss: rss = float(m_rss.group(1))
+              m_csw = re.search(r"csw=([0-9]+)", text)
+              if m_csw: csw = float(m_csw.group(1))
+              return rss, csw
+
+          cwist_rps, cwist_lat = parse_wrk("/tmp/cwist.txt")
+          cwist_rss, cwist_csw = parse_stat("/tmp/cwist_stat.txt")
+
+          axum_rps, axum_lat = parse_wrk("/tmp/axum.txt")
+          axum_rss, axum_csw = parse_stat("/tmp/axum_stat.txt")
+
+          spring_rps, spring_lat = parse_wrk("/tmp/spring.txt")
+          spring_rss, spring_csw = parse_stat("/tmp/spring_stat.txt")
 
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
-              "cwist_rps": parse_rps("/tmp/cwist.txt"),
-              "axum_rps": parse_rps("/tmp/axum.txt"),
-              "spring_rps": parse_rps("/tmp/spring.txt")
+              "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
+              "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
+              "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_rss_kib": spring_rss, "spring_csw": spring_csw
           }
-          print("Parsed web server benchmark data:", data)
+          print("Parsed web server multi-metric benchmark data:", data)
           with open("webserver-result.json", "w") as f:
               json.dump(data, f)
           PY

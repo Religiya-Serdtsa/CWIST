@@ -14,9 +14,12 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 [Heavy Benchmark on CWIST APP](https://github.com/gg582/fly.board/blob/main/README.md)
 
 <!-- WEBSERVER_BENCHMARKS:START -->
-Latest Web Server RPS (wrk 12t 400c): **CWIST** 184520 req/s | **Axum** 142110 req/s | **Spring Boot** 38920 req/s
+Latest Web Server Benchmark (wrk 12t 400c):
+- **CWIST**: 184520 req/s | Latency 2.15ms | RSS 12480KiB | Csw 420
+- **Axum**: 142110 req/s | Latency 2.81ms | RSS 28640KiB | Csw 1850
+- **Spring Boot**: 38920 req/s | Latency 10.25ms | RSS 245000KiB | Csw 14200
 
-![Web Server RPS Comparison](docs/webserver-benchmark-trends.svg)
+![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)
 <!-- WEBSERVER_BENCHMARKS:END -->
 
 ---

@@ -53,16 +53,36 @@ README_MD = ROOT / "README.md"
 
 def render_webserver_svg(history: list[dict]) -> str:
     rows = history[-20:]
-    frameworks = [("CWIST", "cwist_rps", "#22c55e"), ("Axum", "axum_rps", "#3b82f6"), ("Spring Boot", "spring_rps", "#ef4444")]
+    metrics = [
+        ("Throughput (Requests/sec - Higher is better)", [("CWIST", "cwist_rps", "#22c55e"), ("Axum", "axum_rps", "#3b82f6"), ("Spring", "spring_rps", "#ef4444")]),
+        ("Avg Latency (ms - Lower is better)", [("CWIST", "cwist_lat_ms", "#22c55e"), ("Axum", "axum_lat_ms", "#3b82f6"), ("Spring", "spring_lat_ms", "#ef4444")]),
+        ("Peak RSS (KiB - Lower is better)", [("CWIST", "cwist_rss_kib", "#22c55e"), ("Axum", "axum_rss_kib", "#3b82f6"), ("Spring", "spring_rss_kib", "#ef4444")]),
+        ("Context Switches (Lower is better)", [("CWIST", "cwist_csw", "#22c55e"), ("Axum", "axum_csw", "#3b82f6"), ("Spring", "spring_csw", "#ef4444")])
+    ]
     blocks = []
-    blocks.append('<text x="40" y="30" class="title">Web Server RPS Comparison (wrk 12t 400c)</text>')
-    for n, (label, key, color) in enumerate(frameworks):
-        vals = [float(x.get(key, 0)) for x in rows]
-        low, high = min(vals, default=0), max(vals, default=1)
+    blocks.append('<text x="40" y="30" class="title">Web Server Benchmark Comparison (CWIST vs Axum vs Spring Boot)</text>')
+    
+    for m_idx, (m_title, series_list) in enumerate(metrics):
+        base_y = 60 + m_idx * 130
+        blocks.append(f'<text x="40" y="{base_y}" class="subtitle">{m_title}</text>')
+        blocks.append(f'<line x1="40" y1="{base_y+65}" x2="640" y2="{base_y+65}" class="axis"/>')
+        
+        # collect all values to normalize y axis across series for this metric
+        all_vals = []
+        for _, key, _ in series_list:
+            all_vals.extend(float(x.get(key, 0)) for x in rows)
+        low, high = min(all_vals, default=0), max(all_vals, default=1)
         if high == low: high = low + 1
-        pts = " ".join(f"{40+i*25},{100+n*110-(v-low)/(high-low)*55:.1f}" for i,v in enumerate(vals))
-        blocks.append(f'<text x="40" y="{65+n*110}" class="label">{label}</text><text x="640" y="{65+n*110}" text-anchor="end" class="value">latest: {vals[-1] if vals else 0:.0f} req/s</text><line x1="40" y1="{100+n*110}" x2="640" y2="{100+n*110}" class="axis"/><polyline points="{pts}" stroke="{color}" class="series"/>')
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="380" viewBox="0 0 680 380"><style>.title{font:16px sans-serif;font-weight:bold;fill:#f3f4f6}.label{font:14px sans-serif;fill:#e5e7eb}.value{font:12px sans-serif;fill:#9ca3af}.axis{stroke:#374151}.series{fill:none;stroke-width:2.5}</style><rect width="100%" height="100%" fill="#111827"/>'+''.join(blocks)+'</svg>\n'
+        
+        for s_idx, (label, key, color) in enumerate(series_list):
+            vals = [float(x.get(key, 0)) for x in rows]
+            pts = " ".join(f"{40+i*30},{base_y+65-(v-low)/(high-low)*45:.1f}" for i, v in enumerate(vals))
+            latest_val = vals[-1] if vals else 0
+            fmt_val = f"{latest_val:.1f}" if "ms" in m_title else (f"{latest_val:.0f}" if "Requests" in m_title or "Switches" in m_title else f"{latest_val:.0f}")
+            blocks.append(f'<polyline points="{pts}" stroke="{color}" class="series"/>')
+            blocks.append(f'<text x="{500 + s_idx*50}" y="{base_y}" class="legend" fill="{color}">{label}: {fmt_val}</text>')
+            
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="580" viewBox="0 0 680 580"><style>.title{font:16px sans-serif;font-weight:bold;fill:#f3f4f6}.subtitle{font:13px sans-serif;font-weight:600;fill:#e5e7eb}.legend{font:11px sans-serif;font-weight:500}.axis{stroke:#374151}.series{fill:none;stroke-width:2}</style><rect width="100%" height="100%" fill="#111827"/>'+''.join(blocks)+'</svg>\n'
 
 def render() -> None:
     history = json.loads(HISTORY.read_text()) if HISTORY.exists() else []
@@ -75,7 +95,13 @@ def render() -> None:
     WEBSERVER_SVG.parent.mkdir(parents=True, exist_ok=True)
     WEBSERVER_SVG.write_text(render_webserver_svg(ws_history))
     ws_latest = ws_history[-1] if ws_history else {}
-    ws_summary = f"Latest Web Server RPS (wrk 12t 400c): **CWIST** {ws_latest.get('cwist_rps',0):.0f} req/s | **Axum** {ws_latest.get('axum_rps',0):.0f} req/s | **Spring Boot** {ws_latest.get('spring_rps',0):.0f} req/s\n\n![Web Server RPS Comparison](docs/webserver-benchmark-trends.svg)"
+    ws_summary = (
+        f"Latest Web Server Benchmark (wrk 12t 400c):\n"
+        f"- **CWIST**: {ws_latest.get('cwist_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_lat_ms',0):.2f}ms | RSS {ws_latest.get('cwist_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_csw',0):.0f}\n"
+        f"- **Axum**: {ws_latest.get('axum_rps',0):.0f} req/s | Latency {ws_latest.get('axum_lat_ms',0):.2f}ms | RSS {ws_latest.get('axum_rss_kib',0):.0f}KiB | Csw {ws_latest.get('axum_csw',0):.0f}\n"
+        f"- **Spring Boot**: {ws_latest.get('spring_rps',0):.0f} req/s | Latency {ws_latest.get('spring_lat_ms',0):.2f}ms | RSS {ws_latest.get('spring_rss_kib',0):.0f}KiB | Csw {ws_latest.get('spring_csw',0):.0f}\n\n"
+        f"![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)"
+    )
     if README.exists(): replace(README, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
     if README_MD.exists(): replace(README_MD, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
 

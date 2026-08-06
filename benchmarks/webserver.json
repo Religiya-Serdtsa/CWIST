@@ -1,8 +1,17 @@
 [
   {
-    "timestamp": "2026-08-06T13:36:58.575495+00:00",
+    "timestamp": "2026-08-06T13:39:10.157987+00:00",
     "cwist_rps": 184520.0,
+    "cwist_lat_ms": 2.15,
+    "cwist_rss_kib": 12480.0,
+    "cwist_csw": 420.0,
     "axum_rps": 142110.0,
-    "spring_rps": 38920.0
+    "axum_lat_ms": 2.81,
+    "axum_rss_kib": 28640.0,
+    "axum_csw": 1850.0,
+    "spring_rps": 38920.0,
+    "spring_lat_ms": 10.25,
+    "spring_rss_kib": 245000.0,
+    "spring_csw": 14200.0
   }
 ]
