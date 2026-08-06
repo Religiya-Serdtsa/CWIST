@@ -110,8 +110,12 @@ def render_webserver_svg(history: list[dict]) -> str:
     # Footer: recorded Spring/JVM runtime environment & benchmark profile
     env = ws_latest.get("spring_env", {}) or {}
     if env:
-        footer1 = (f"Spring Boot {env.get('spring_boot_version','n/a')} | {env.get('java_version','n/a')} | "
-                   f"virtual threads: {'on' if env.get('virtual_threads') else 'off'} | JVM: {env.get('jvm_opts','n/a')}")
+        stack = env.get('stack')
+        stack_part = f" ({stack})" if stack else ""
+        vt = env.get('virtual_threads')
+        vt_part = f" | virtual threads: {'on' if vt else 'off'}" if vt else ""
+        footer1 = (f"Spring Boot {env.get('spring_boot_version','n/a')}{stack_part} | {env.get('java_version','n/a')} | "
+                   f"JVM: {env.get('jvm_opts','n/a')}{vt_part}")
         footer2 = f"Profile: {ws_latest.get('wrk_profile', 'wrk 12t 400c')}"
         blocks.append(f'<text x="30" y="512" class="footer">{footer1}</text>')
         blocks.append(f'<text x="30" y="530" class="footer">{footer2}</text>')
@@ -147,9 +151,13 @@ def render() -> None:
     )
     ws_env = ws_latest.get("spring_env", {}) or {}
     if ws_env:
+        ws_stack = ws_env.get('stack')
+        ws_stack_part = f" ({ws_stack})" if ws_stack else ""
+        ws_vt = ws_env.get('virtual_threads')
+        ws_vt_part = f", virtual threads **{'on' if ws_vt else 'off'}**" if ws_vt else ""
         ws_summary += (
-            f"\nSpring runtime env: **{ws_env.get('java_version','n/a')}**, Spring Boot **{ws_env.get('spring_boot_version','n/a')}**, "
-            f"virtual threads **{'on' if ws_env.get('virtual_threads') else 'off'}**, "
+            f"\nSpring runtime env: **{ws_env.get('java_version','n/a')}**, Spring Boot **{ws_env.get('spring_boot_version','n/a')}**{ws_stack_part}"
+            f"{ws_vt_part}, "
             f"JVM opts `{ws_env.get('jvm_opts','n/a')}`, warmup/profile: {ws_latest.get('wrk_profile','n/a')}\n"
         )
     ws_summary += f"\n![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)"
