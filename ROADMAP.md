@@ -72,7 +72,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 | TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH support |
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
 | **io_uring Backend** | ✅ | `io_uring_backend.c`, focused smoke tests, demolition tests, SQE/CQE synchronization, and fixed-buffer fallback |
-| **kqueue Backend** | 🔄 | macOS GitHub Actions gate builds the kqueue-selected backend and runs focused regressions; HTTP/3 uses the BSD polling path with optional ECN socket capabilities |
+| **kqueue Backend** | ✅ | `src/sys/io/kqueue.c`, BSD/macOS I/O multiplexing event loop, integration tests in GitHub Actions CI gate |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
 | **WebTransport** | ⏳ / 🔮 | Excluded from `main`; experimental WebTransport server/native C client proposal (LSQUIC PR #629) is evaluated exclusively on `dev` |
 | HTTP/3 Datagram Extension | ✅ | `send_datagram`, callbacks, `es_datagrams` enabled |
@@ -249,7 +249,7 @@ Known limits:
 18. **Native C WebTransport client stabilization** (experimental `dev` implementation available)
 19. ~~**HTTP/2 Server Push**~~ ✅
 20. ~~**io_uring** UDP packet loop for HTTP/3~~ ✅
-21. **kqueue** backend for macOS/BSD
+21. ~~**kqueue** backend for macOS/BSD~~ ✅
 22. ~~**Multiport HTTP/3 parity**: per-port UDP contexts and global setting propagation to non-detached ports~~ ✅
 
 ### P4 — Ecosystem
