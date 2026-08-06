@@ -84,11 +84,15 @@ ifeq ($(UNAME_S),Linux)
     IO_SRC = src/sys/io/io_uring.c
 endif
 ifeq ($(UNAME_S),Darwin)
-    CFLAGS += -DCWIST_OS_BSD
+    # _DARWIN_C_SOURCE: in-file strict _POSIX_C_SOURCE/_XOPEN_SOURCE would
+    # otherwise hide BSD types (u_int, ...) and kqueue/sysctl declarations.
+    CFLAGS += -DCWIST_OS_BSD -D_DARWIN_C_SOURCE
     IO_SRC = src/sys/io/kqueue.c
 endif
 ifeq ($(UNAME_S),FreeBSD)
-    CFLAGS += -DCWIST_OS_BSD
+    # _DEFAULT_SOURCE keeps BSD-visible types available under strict
+    # _POSIX_C_SOURCE on FreeBSD (same class of issue as on Darwin).
+    CFLAGS += -DCWIST_OS_BSD -D_DEFAULT_SOURCE
     IO_SRC = src/sys/io/kqueue.c
 endif
 
