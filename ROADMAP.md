@@ -50,7 +50,7 @@
 ## Current Snapshot
 
 <!-- CI-BENCHMARKS:START -->
-Automated OS & Web Server benchmark histories are published in `docs/benchmark-trends.svg` and `docs/webserver-benchmark-trends.svg`. Latest platform: **Linux / Darwin**.
+Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Latest platform: **Darwin**.
 <!-- CI-BENCHMARKS:END -->
 
 - Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are fully implemented in-tree.
