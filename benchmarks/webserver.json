@@ -12,7 +12,8 @@
     "spring_rps": 38920.0,
     "spring_lat_ms": 10.25,
     "spring_rss_kib": 245000.0,
-    "spring_csw": 14200.0
+    "spring_csw": 14200.0,
+    "runner_hw": "12 threads | AMD Ryzen 5 5600X (local workstation)"
   },
   {
     "timestamp": "2026-08-06T14:31:54.456939+00:00",
@@ -36,7 +37,8 @@
       "jvm_opts": "-Xms512m -Xmx512m -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)",
       "virtual_threads": true,
       "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
-    }
+    },
+    "runner_hw": "4 vCPU | AMD EPYC 7763 (GitHub Actions ubuntu-latest shared runner)"
   },
   {
     "timestamp": "2026-08-06T14:51:05.281447+00:00",
@@ -60,6 +62,7 @@
       "jvm_opts": "-Xms512m -Xmx512m -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)",
       "virtual_threads": true,
       "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
-    }
+    },
+    "runner_hw": "4 vCPU | AMD EPYC 7763 (GitHub Actions ubuntu-latest shared runner)"
   }
 ]

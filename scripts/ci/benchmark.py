@@ -117,6 +117,9 @@ def render_webserver_svg(history: list[dict]) -> str:
         footer1 = (f"Spring Boot {env.get('spring_boot_version','n/a')}{stack_part} | {env.get('java_version','n/a')} | "
                    f"JVM: {env.get('jvm_opts','n/a')}{vt_part}")
         footer2 = f"Profile: {ws_latest.get('wrk_profile', 'wrk 12t 400c')}"
+        runner = ws_latest.get('runner_hw')
+        if runner:
+            footer2 += f" | Runner: {runner}"
         blocks.append(f'<text x="30" y="512" class="footer">{footer1}</text>')
         blocks.append(f'<text x="30" y="530" class="footer">{footer2}</text>')
 
