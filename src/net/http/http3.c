@@ -494,7 +494,9 @@ int cwist_http3_normalize_response_header_name(const char *name,
 int cwist_http3_response_header_value_is_safe(const char *value) {
     if (!value) return 0;
     for (const unsigned char *p = (const unsigned char *)value; *p; p++) {
-        if (*p == '\r' || *p == '\n') return 0;
+        /* RFC 9113/9114 field-value grammar: no CTLs (incl. CR/LF) or DEL;
+         * clients reject such responses as malformed. */
+        if (*p < 0x20 || *p == 0x7f) return 0;
     }
     return 1;
 }
@@ -776,15 +778,31 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 }
 
+/* RFC 9114 §4.1.2: 1xx/204/304 responses carry no content, and
+ * content-length on them makes the message malformed at connection level. */
+static bool h3_status_forbids_body(int status_code) {
+    return (status_code >= 100 && status_code < 200) ||
+           status_code == 204 || status_code == 304;
+}
+
 static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     h3_stream_ctx_t *st = (h3_stream_ctx_t *)st_h;
     if (!st || !st->response_ready) return;
+    if (!st->res) {
+        /* Response allocation failed upstream; reset instead of dereferencing
+         * NULL (which used to take down every stream on the connection). */
+        lsquic_stream_close(stream);
+        return;
+    }
 
     if (st->write_state == 0) {
         struct lsxpack_header headers_arr[H3_MAX_RESPONSE_HEADERS];
         char hbuf[H3_RESPONSE_HEADER_BUF_SIZE];
         size_t hbuf_off = 0;
         size_t hdr_count = 0;
+
+        bool bodyless = h3_status_forbids_body(st->res->status_code);
+        bool is_head = st->req && st->req->method == CWIST_HTTP_HEAD;
 
         /* :status */
         char status_str[16];
@@ -801,23 +819,39 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
 
         /* content-length */
         size_t body_len = 0;
-        if (st->res->use_file_stream) body_len = st->res->file_stream_len;
-        else if (st->res->is_ptr_body) body_len = st->res->ptr_body_len;
+        if (st->res->use_file_stream) {
+            if (st->res->file_stream_fd >= 0) body_len = st->res->file_stream_len;
+        }
+        else if (st->res->is_ptr_body) body_len = st->res->ptr_body ? st->res->ptr_body_len : 0;
         else if (st->res->body) body_len = st->res->body->size;
 
-        if (body_len > 0 && hdr_count < H3_MAX_RESPONSE_HEADERS) {
+        const char *user_cl = st->res->headers
+            ? cwist_http_header_get(st->res->headers, "content-length") : NULL;
+
+        if (!bodyless && hdr_count < H3_MAX_RESPONSE_HEADERS) {
+            /* For HEAD, content-length describes the would-be GET body: keep
+             * the handler-provided value when present (e.g. static file size
+             * with an empty body), otherwise compute it like a GET. */
             char cl_str[32];
-            snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
-            size_t cl_name_len = strlen("content-length");
-            size_t cl_val_len  = strlen(cl_str);
-            size_t total = cl_name_len + 2 + cl_val_len;
-            if (hbuf_off + total <= sizeof(hbuf)) {
-                memcpy(hbuf + hbuf_off, "content-length", cl_name_len);
-                memcpy(hbuf + hbuf_off + cl_name_len + 2, cl_str, cl_val_len);
-                lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
-                                           0, cl_name_len, cl_name_len + 2, cl_val_len);
-                hbuf_off += total;
-                hdr_count++;
+            const char *cl_val = NULL;
+            if (is_head && user_cl) {
+                cl_val = user_cl;
+            } else if (body_len > 0 || (is_head && body_len == 0)) {
+                snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
+                cl_val = cl_str;
+            }
+            if (cl_val) {
+                size_t cl_name_len = strlen("content-length");
+                size_t cl_val_len  = strlen(cl_val);
+                size_t total = cl_name_len + 2 + cl_val_len;
+                if (hbuf_off + total <= sizeof(hbuf)) {
+                    memcpy(hbuf + hbuf_off, "content-length", cl_name_len);
+                    memcpy(hbuf + hbuf_off + cl_name_len + 2, cl_val, cl_val_len);
+                    lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                               0, cl_name_len, cl_name_len + 2, cl_val_len);
+                    hbuf_off += total;
+                    hdr_count++;
+                }
             }
         }
 
@@ -846,6 +880,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 if (cwist_http3_normalize_response_header_name(node->key->data,
                                                                h3_name,
                                                                sizeof(h3_name)) != 0 ||
+                    strlen(node->value->data) != node->value->size ||
                     !cwist_http3_response_header_value_is_safe(node->value->data)) {
                     node = node->next;
                     continue;
@@ -853,6 +888,18 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
 
                 if (strcmp(h3_name, "content-length") == 0 ||
                     strcmp(h3_name, "content-type") == 0) {
+                    node = node->next;
+                    continue;
+                }
+                /* RFC 9114 §4.2: connection-specific fields are malformed in
+                 * HTTP/3; te is only allowed with the value "trailers". */
+                if (strcmp(h3_name, "connection") == 0 ||
+                    strcmp(h3_name, "keep-alive") == 0 ||
+                    strcmp(h3_name, "proxy-connection") == 0 ||
+                    strcmp(h3_name, "transfer-encoding") == 0 ||
+                    strcmp(h3_name, "upgrade") == 0 ||
+                    (strcmp(h3_name, "te") == 0 &&
+                     strcasecmp(node->value->data, "trailers") != 0)) {
                     node = node->next;
                     continue;
                 }
@@ -875,8 +922,14 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             .count = (unsigned)hdr_count,
             .headers = headers_arr,
         };
-        int eos = (body_len == 0);
-        if (lsquic_stream_send_headers(stream, &headers, eos) != 0) {
+        /* HEAD responses and 1xx/204/304 statuses never carry content. */
+        bool send_content = !bodyless && !is_head && body_len > 0;
+        /* NB: the eos argument of lsquic_stream_send_headers is ignored for
+         * IETF QUIC, so an empty body must be finished with an explicit
+         * shutdown(1) below; relying on eos left every empty-body response
+         * (204 preflights, 304s, HEAD, error statuses) hanging until the
+         * browser gave up with ERR_INVALID_RESPONSE. */
+        if (lsquic_stream_send_headers(stream, &headers, 0) != 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 lsquic_stream_wantwrite(stream, 1);
                 return;
@@ -885,8 +938,9 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             return;
         }
         st->write_state = 1;
-        if (body_len == 0) {
+        if (!send_content) {
             st->write_state = 2;
+            lsquic_stream_shutdown(stream, 1);
             lsquic_stream_wantwrite(stream, 0);
             return;
         }
@@ -917,8 +971,12 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                     st->send_xor ^= h3_xor_bytes((const unsigned char *)file_buf, (size_t)nw);
                     st->body_sent += (size_t)nw;
                 } else if (nr == 0) {
-                    /* EOF: mark everything as sent */
-                    st->body_sent = st->res->file_stream_len;
+                    /* Short EOF (file truncated after fstat): the announced
+                     * content-length can no longer be honoured, and finishing
+                     * anyway would be a malformed-message error at the
+                     * client.  Reset the stream instead. */
+                    lsquic_stream_close(stream);
+                    return;
                 } else if (nr < 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         /* Retry next tick */
@@ -930,6 +988,12 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 body_len = st->res->file_stream_len;
             }
         } else if (st->res->is_ptr_body) {
+            if (!st->res->ptr_body && st->res->ptr_body_len > 0) {
+                /* Announced a body we cannot produce; spinning here with
+                 * wantwrite armed would hang the stream forever. */
+                lsquic_stream_close(stream);
+                return;
+            }
             body_len = st->res->ptr_body_len;
             body_data = (const char *)st->res->ptr_body;
         } else if (st->res->body) {
@@ -1603,8 +1667,10 @@ int cwist_http3_push_resource(cwist_http_request *req,
     lsquic_stream_t *stream = (lsquic_stream_t *)req->private_data;
     lsquic_conn_t *conn = lsquic_stream_conn(stream);
     if (!conn || !lsquic_conn_is_push_enabled(conn)) return -1;
+    (void)content_type; /* response field; not valid in a push request set */
 
-    /* Build push headers */
+    /* Build push headers (a request header set needs :method, :scheme,
+     * :authority, :path; content-type is a response field and is omitted) */
     struct lsxpack_header headers_arr[4];
     char hbuf[2048];
     size_t hbuf_off = 0;
@@ -1619,6 +1685,18 @@ int cwist_http3_push_resource(cwist_http_request *req,
         lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
                                    0, 7, 9, mlen);
         hbuf_off += 9 + mlen;
+        hdr_count++;
+    }
+
+    /* :scheme = https (HTTP/3 is always over QUIC/TLS) */
+    const char *scheme = "https";
+    size_t sclen = strlen(scheme);
+    if (hbuf_off + 7 + 2 + sclen <= sizeof(hbuf)) {
+        memcpy(hbuf + hbuf_off, ":scheme", 7);
+        memcpy(hbuf + hbuf_off + 9, scheme, sclen);
+        lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
+                                   0, 7, 9, sclen);
+        hbuf_off += 9 + sclen;
         hdr_count++;
     }
 
@@ -1644,20 +1722,6 @@ int cwist_http3_push_resource(cwist_http_request *req,
                                    0, 10, 12, alen);
         hbuf_off += 12 + alen;
         hdr_count++;
-    }
-
-    /* content-type (optional) */
-    if (content_type) {
-        size_t ctlen = strlen(content_type);
-        size_t ct_name_len = strlen("content-type");
-        if (hbuf_off + ct_name_len + 2 + ctlen <= sizeof(hbuf)) {
-            memcpy(hbuf + hbuf_off, "content-type", ct_name_len);
-            memcpy(hbuf + hbuf_off + ct_name_len + 2, content_type, ctlen);
-            lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
-                                       0, ct_name_len, ct_name_len + 2, ctlen);
-            hbuf_off += ct_name_len + 2 + ctlen;
-            hdr_count++;
-        }
     }
 
     lsquic_http_headers_t headers = {
