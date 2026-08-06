@@ -40,8 +40,8 @@ def svg(history: list[dict]) -> str:
         vals = [float(x.get(key, 0)) for x in rows]; low, high = min(vals, default=0), max(vals, default=1)
         if high == low: high = low + 1
         pts = " ".join(f"{40+i*25},{55+n*95-(v-low)/(high-low)*45:.1f}" for i,v in enumerate(vals))
-        blocks.append(f'<text x="40" y="{20+n*95}" class="label">{label}</text><text x="560" y="{20+n*95}" class="value">latest: {vals[-1] if vals else 0:.2f}</text><line x1="40" y1="{55+n*95}" x2="540" y2="{55+n*95}" class="axis"/><polyline points="{pts}" stroke="{color}" class="series"/>')
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="620" height="500" viewBox="0 0 620 500"><style>.label{font:14px sans-serif;fill:#e5e7eb}.value{font:12px sans-serif;fill:#9ca3af}.axis{stroke:#374151}.series{fill:none;stroke-width:2}</style><rect width="100%" height="100%" fill="#111827"/>'+''.join(blocks)+'</svg>\n'
+        blocks.append(f'<text x="40" y="{20+n*95}" class="label">{label}</text><text x="640" y="{20+n*95}" text-anchor="end" class="value">latest: {vals[-1] if vals else 0:.2f}</text><line x1="40" y1="{55+n*95}" x2="640" y2="{55+n*95}" class="axis"/><polyline points="{pts}" stroke="{color}" class="series"/>')
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="500" viewBox="0 0 680 500"><style>.label{font:14px sans-serif;fill:#e5e7eb}.value{font:12px sans-serif;fill:#9ca3af}.axis{stroke:#374151}.series{fill:none;stroke-width:2}</style><rect width="100%" height="100%" fill="#111827"/>'+''.join(blocks)+'</svg>\n'
 
 def replace(path: Path, begin: str, end: str, content: str) -> None:
     text = path.read_text(); start = text.index(begin) + len(begin); finish = text.index(end, start)
@@ -61,8 +61,8 @@ def render_webserver_svg(history: list[dict]) -> str:
         low, high = min(vals, default=0), max(vals, default=1)
         if high == low: high = low + 1
         pts = " ".join(f"{40+i*25},{100+n*110-(v-low)/(high-low)*55:.1f}" for i,v in enumerate(vals))
-        blocks.append(f'<text x="40" y="{65+n*110}" class="label">{label}</text><text x="560" y="{65+n*110}" class="value">latest: {vals[-1] if vals else 0:.0f} req/s</text><line x1="40" y1="{100+n*110}" x2="540" y2="{100+n*110}" class="axis"/><polyline points="{pts}" stroke="{color}" class="series"/>')
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="620" height="380" viewBox="0 0 620 380"><style>.title{font:16px sans-serif;font-weight:bold;fill:#f3f4f6}.label{font:14px sans-serif;fill:#e5e7eb}.value{font:12px sans-serif;fill:#9ca3af}.axis{stroke:#374151}.series{fill:none;stroke-width:2.5}</style><rect width="100%" height="100%" fill="#111827"/>'+''.join(blocks)+'</svg>\n'
+        blocks.append(f'<text x="40" y="{65+n*110}" class="label">{label}</text><text x="640" y="{65+n*110}" text-anchor="end" class="value">latest: {vals[-1] if vals else 0:.0f} req/s</text><line x1="40" y1="{100+n*110}" x2="640" y2="{100+n*110}" class="axis"/><polyline points="{pts}" stroke="{color}" class="series"/>')
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="380" viewBox="0 0 680 380"><style>.title{font:16px sans-serif;font-weight:bold;fill:#f3f4f6}.label{font:14px sans-serif;fill:#e5e7eb}.value{font:12px sans-serif;fill:#9ca3af}.axis{stroke:#374151}.series{fill:none;stroke-width:2.5}</style><rect width="100%" height="100%" fill="#111827"/>'+''.join(blocks)+'</svg>\n'
 
 def render() -> None:
     history = json.loads(HISTORY.read_text()) if HISTORY.exists() else []
