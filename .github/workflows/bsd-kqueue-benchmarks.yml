@@ -58,6 +58,148 @@ jobs:
           name: benchmark-${{ runner.os }}
           path: benchmark-${{ runner.os }}.json
 
+  web-server-benchmark:
+    name: web server benchmark (CWIST vs Axum vs Spring)
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - name: Set up Rust & Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Install dependencies & wrk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libcurl4-openssl-dev libnghttp2-dev libbrotli-dev wrk maven
+      - name: Generate inline web server code & run HTTP benchmark
+        run: |
+          # 1. CWIST Minimal HTTP Web Server
+          cat << 'EOF' > /tmp/cwist_server.c
+          #include <cwist/app.h>
+          static void handle_root(cwist_req_t *req, cwist_res_t *res) {
+              (void)req;
+              cwist_res_send(res, 200, "text/plain", "Hello, World!");
+          }
+          int main(void) {
+              cwist_app_t *app = cwist_app_create();
+              cwist_app_get(app, "/", handle_root);
+              cwist_app_listen(app, 8081);
+              cwist_app_destroy(app);
+              return 0;
+          }
+          EOF
+
+          # 2. Axum Minimal HTTP Web Server
+          mkdir -p /tmp/axum_bench && cd /tmp/axum_bench
+          cat << 'EOF' > Cargo.toml
+          [package]
+          name = "axum_server"
+          version = "0.1.0"
+          edition = "2021"
+
+          [dependencies]
+          axum = "0.7"
+          tokio = { version = "1.0", features = ["full"] }
+          EOF
+          mkdir -p src
+          cat << 'EOF' > src/main.rs
+          use axum::{routing::get, Router};
+
+          #[tokio::main]
+          async fn main() {
+              let app = Router::new().route("/", get(|| async { "Hello, World!" }));
+              let listener = tokio::net::TcpListener::bind("127.0.0.1:8082").await.unwrap();
+              axum::serve(listener, app).await.unwrap();
+          }
+          EOF
+
+          # 3. Spring Boot Minimal HTTP Web Server
+          mkdir -p /tmp/spring_bench && cd /tmp/spring_bench
+          cat << 'EOF' > pom.xml
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.example</groupId>
+              <artifactId>spring-bench</artifactId>
+              <version>0.0.1-SNAPSHOT</version>
+              <parent>
+                  <groupId>org.springframework.boot</groupId>
+                  <artifactId>spring-boot-starter-parent</artifactId>
+                  <version>3.2.3</version>
+              </parent>
+              <dependencies>
+                  <dependency>
+                      <groupId>org.springframework.boot</groupId>
+                      <artifactId>spring-boot-starter-web</artifactId>
+                  </dependency>
+              </dependencies>
+              <build>
+                  <plugins>
+                      <plugin>
+                          <groupId>org.springframework.boot</groupId>
+                          <artifactId>spring-boot-maven-plugin</artifactId>
+                      </plugin>
+                  </plugins>
+              </build>
+          </project>
+          EOF
+          mkdir -p src/main/java/com/example
+          cat << 'EOF' > src/main/java/com/example/Application.java
+          package com.example;
+          import org.springframework.boot.SpringApplication;
+          import org.springframework.boot.autoconfigure.SpringBootApplication;
+          import org.springframework.web.bind.annotation.GetMapping;
+          import org.springframework.web.bind.annotation.RestController;
+
+          @SpringBootApplication
+          @RestController
+          public class Application {
+              @GetMapping("/")
+              public String hello() { return "Hello, World!"; }
+
+              public static void main(String[] args) {
+                  SpringApplication.run(Application.class, args);
+              }
+          }
+          EOF
+
+          # Build servers
+          cd $GITHUB_WORKSPACE
+          make
+          gcc -O3 -o /tmp/cwist_server /tmp/cwist_server.c libcwist.a -pthread -ldl -lm -lstdc++ -lz -lzstd lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec
+
+          cd /tmp/axum_bench && cargo build --release
+          cd /tmp/spring_bench && mvn -q package -DskipTests
+
+          # Execute RPS benchmark with wrk (12 threads, 400 connections, 10 seconds)
+          echo "=== Starting CWIST Web Server (Port 8081) ==="
+          /tmp/cwist_server &
+          PID_CWIST=$!
+          sleep 2
+          echo "--- CWIST wrk result ---"
+          wrk -t12 -c400 -d10s http://127.0.0.1:8081/ || true
+          kill -9 $PID_CWIST || true
+
+          echo "=== Starting Axum Web Server (Port 8082) ==="
+          /tmp/axum_bench/target/release/axum_server &
+          PID_AXUM=$!
+          sleep 2
+          echo "--- Axum wrk result ---"
+          wrk -t12 -c400 -d10s http://127.0.0.1:8082/ || true
+          kill -9 $PID_AXUM || true
+
+          echo "=== Starting Spring Boot Web Server (Port 8080) ==="
+          java -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar &
+          PID_SPRING=$!
+          sleep 5
+          echo "--- Spring Boot wrk result ---"
+          wrk -t12 -c400 -d10s http://127.0.0.1:8080/ || true
+          kill -9 $PID_SPRING || true
+
   publish-benchmark-report:
     needs: [bsd-kqueue, benchmark]
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
