@@ -15,6 +15,7 @@
 #include <strings.h>
 #include <poll.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <ctype.h>
 #include <stdatomic.h>
 #include <sys/socket.h>
@@ -316,6 +317,50 @@ static int h2_wait_readable(h2_conn *hc) {
     return 0;
 }
 
+/* Read exactly len bytes, tolerating SSL_ERROR_WANT_READ/WANT_WRITE (and
+ * plain EAGAIN) on the non-blocking sockets the pool hands us.  Bounded by
+ * the connection idle deadline so a stalled peer cannot pin a worker.
+ * Returns 0 on success, -1 on EOF, timeout, or socket error. */
+static int h2_read_full(h2_conn *hc, void *buf, size_t len) {
+    unsigned char *p = (unsigned char *)buf;
+    size_t got = 0;
+    while (got < len) {
+        int n = h2_read(hc->conn, p + got, (int)(len - got));
+        if (n > 0) {
+            got += (size_t)n;
+            hc->last_activity = h2_now_ms();
+            continue;
+        }
+        if (n < 0) {
+            int retryable = 0;
+            int ssl_err = 0;
+            if (hc->conn->ssl) {
+                ssl_err = SSL_get_error(hc->conn->ssl, n);
+                retryable = (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE);
+            } else {
+                retryable = (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR);
+            }
+            if (retryable) {
+                uint64_t idle_ms = (uint64_t)h2_idle_timeout_ms();
+                uint64_t now = h2_now_ms();
+                if (now - hc->last_activity >= idle_ms) return -1;
+                uint64_t left = idle_ms - (now - hc->last_activity);
+                int wait_ms = CWIST_HTTP_TIMEOUT_MS;
+                if (left < (uint64_t)wait_ms) wait_ms = (int)left;
+                if (hc->conn->ssl) {
+                    if (h2_wait_socket(hc->conn, ssl_err, wait_ms) != 0) return -1;
+                } else {
+                    struct pollfd pfd = { .fd = hc->conn->fd, .events = POLLIN };
+                    if (poll(&pfd, 1, wait_ms) <= 0) return -1;
+                }
+                continue;
+            }
+        }
+        return -1; /* EOF (0) or a real read error */
+    }
+    return 0;
+}
+
 static int h2_write_all(cwist_https_connection *conn, const void *buf, size_t len) {
     const unsigned char *p = (const unsigned char *)buf;
     int retries = 0;
@@ -461,6 +506,10 @@ typedef struct h2_huffman_node {
 static h2_huffman_node h2_huffman_pool[4096];
 static size_t h2_huffman_pool_used = 0;
 static h2_huffman_node *h2_huffman_root = NULL;
+/* The pool is shared mutable state; build the trie exactly once instead of
+ * letting concurrent first connections race through lazy init (a lost race
+ * could hand a half-built trie to a decoder or exhaust the pool twice). */
+static pthread_once_t h2_huffman_once = PTHREAD_ONCE_INIT;
 
 static h2_huffman_node *h2_huffman_alloc_node(void) {
     if (h2_huffman_pool_used >= sizeof(h2_huffman_pool)/sizeof(h2_huffman_pool[0]))
@@ -473,8 +522,6 @@ static h2_huffman_node *h2_huffman_alloc_node(void) {
 }
 
 static void h2_huffman_init(void) {
-    if (h2_huffman_root) return;
-
 static const struct {
     uint32_t code;
     uint8_t bits;
@@ -738,23 +785,27 @@ static const struct {
     {0x3fffffff, 30},
 };
 
-    h2_huffman_root = h2_huffman_alloc_node();
+    h2_huffman_node *root = h2_huffman_alloc_node();
+    if (!root) return;
     for (int sym = 0; sym <= 256; ++sym) {
         uint32_t code = table[sym].code;
         uint8_t bits = table[sym].bits;
-        h2_huffman_node *node = h2_huffman_root;
+        h2_huffman_node *node = root;
         for (int i = bits - 1; i >= 0; --i) {
             int bit = (int)((code >> i) & 1);
             if (!node->child[bit]) node->child[bit] = h2_huffman_alloc_node();
+            if (!node->child[bit]) return; /* pool exhausted: leave root unset */
             node = node->child[bit];
         }
         node->symbol = sym;
         node->is_terminal = true;
     }
+    h2_huffman_root = root;
 }
 
 char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_len) {
-    h2_huffman_init();
+    pthread_once(&h2_huffman_once, h2_huffman_init);
+    if (!h2_huffman_root) return NULL;
     size_t cap = src_len * 2 + 1;
     if (cap < 16) cap = 16;
     char *out = (char *)cwist_alloc(cap);
@@ -957,9 +1008,17 @@ static int h2_static_table_find_name(const char *name) {
     return 0;
 }
 
+/* RFC 9113 §8.1.1: responses with 1xx/204/304 status carry no content, and
+ * content-length is forbidden on 1xx/204 (and meaningless on 304 here). */
+static bool h2_status_forbids_body(int status_code) {
+    return (status_code >= 100 && status_code < 200) ||
+           status_code == 204 || status_code == 304;
+}
+
 static size_t h2_encode_response_headers(cwist_http_response *res,
                                           unsigned char *dst, size_t dst_cap) {
     size_t pos = 0;
+    const bool bodyless = h2_status_forbids_body(res->status_code);
 
     switch (res->status_code) {
         case 200: if (pos >= dst_cap) return 0; dst[pos++] = 0x88; break;
@@ -992,7 +1051,7 @@ static size_t h2_encode_response_headers(cwist_http_response *res,
     else if (res->is_ptr_body) body_len = res->ptr_body_len;
     else if (res->body) body_len = res->body->size;
 
-    if (!headers_have_content_length(res->headers)) {
+    if (!bodyless && !headers_have_content_length(res->headers)) {
         char cl_str[32];
         snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
         int name_idx = h2_static_table_find_name("content-length");
@@ -1023,10 +1082,26 @@ static size_t h2_encode_response_headers(cwist_http_response *res,
             curr = curr->next;
             continue;
         }
+        /* RFC 9113 §8.2.2: connection-specific fields are malformed in
+         * HTTP/2; te is only allowed with the value "trailers". */
         if (strcasecmp(curr->key->data, "connection") == 0 ||
             strcasecmp(curr->key->data, "keep-alive") == 0 ||
+            strcasecmp(curr->key->data, "proxy-connection") == 0 ||
             strcasecmp(curr->key->data, "transfer-encoding") == 0 ||
-            strcasecmp(curr->key->data, "upgrade") == 0) {
+            strcasecmp(curr->key->data, "upgrade") == 0 ||
+            (strcasecmp(curr->key->data, "te") == 0 &&
+             strcasecmp(curr->value->data, "trailers") != 0)) {
+            curr = curr->next;
+            continue;
+        }
+        if (bodyless && strcasecmp(curr->key->data, "content-length") == 0) {
+            curr = curr->next;
+            continue;
+        }
+        /* NUL/CR/LF in a field value makes the response malformed; drop the
+         * offending field instead of poisoning the whole response. */
+        if (strpbrk(curr->value->data, "\r\n") ||
+            strlen(curr->value->data) != curr->value->size) {
             curr = curr->next;
             continue;
         }
@@ -1068,6 +1143,56 @@ static size_t h2_encode_response_headers(cwist_http_response *res,
 
 /* --- Response Senders --- */
 
+/* Send an encoded header block as HEADERS, splitting into CONTINUATION
+ * frames when it exceeds the peer's advertised max frame size.  base_flags
+ * (e.g. END_STREAM) applies to the HEADERS frame only. */
+static int h2_send_header_block(cwist_https_connection *conn, uint32_t stream_id,
+                                const unsigned char *block, size_t block_len,
+                                uint32_t max_frame, uint8_t base_flags) {
+    size_t sent = 0;
+    uint8_t type = CWIST_HTTP2_FRAME_HEADERS;
+    uint8_t flags = base_flags;
+    while (true) {
+        size_t chunk = block_len - sent;
+        if (chunk > max_frame) chunk = max_frame;
+        uint8_t frame_flags = flags;
+        if (sent + chunk == block_len) frame_flags |= CWIST_HTTP2_FLAG_END_HEADERS;
+        if (h2_write_frame(conn, type, frame_flags, stream_id,
+                           block + sent, (uint32_t)chunk) != 0) {
+            return -1;
+        }
+        sent += chunk;
+        if (sent == block_len) return 0;
+        type = CWIST_HTTP2_FRAME_CONTINUATION;
+        flags = 0; /* END_STREAM is illegal on CONTINUATION */
+    }
+}
+
+/* Encode response headers into a heap buffer that doubles until the block
+ * fits (up to 1 MiB).  The old fixed 8 KiB stack buffer made any response
+ * with a large header set (big cookies, JWTs) abort the whole connection,
+ * which browsers surface as ERR_INVALID_RESPONSE. */
+static unsigned char *h2_encode_response_block(cwist_http_response *res, size_t *out_len) {
+    size_t cap = 16384;
+    unsigned char *buf = NULL;
+    while (cap <= (1u << 20)) {
+        unsigned char *nb = (unsigned char *)cwist_realloc(buf, cap);
+        if (!nb) {
+            cwist_free(buf);
+            return NULL;
+        }
+        buf = nb;
+        size_t n = h2_encode_response_headers(res, buf, cap);
+        if (n > 0) {
+            *out_len = n;
+            return buf;
+        }
+        cap *= 2;
+    }
+    cwist_free(buf);
+    return NULL;
+}
+
 /**
  * @brief Send a memory body as sequenced DATA frames.
  *
@@ -1102,11 +1227,9 @@ static int h2_send_seq_data_frames(cwist_https_connection *conn,
 
 static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id,
                                  cwist_http_response *res, uint32_t max_frame_size) {
-    unsigned char header_block[8192];
-    size_t block_len = h2_encode_response_headers(res, header_block, sizeof(header_block));
-    if (block_len == 0) return -1;
-
-    uint8_t header_flags = CWIST_HTTP2_FLAG_END_HEADERS;
+    size_t block_len = 0;
+    unsigned char *block = h2_encode_response_block(res, &block_len);
+    if (!block) return -1;
 
     size_t body_len = 0;
     const unsigned char *body_data = NULL;
@@ -1120,12 +1243,15 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
         body_data = (const unsigned char *)res->body->data;
     }
 
-    if (body_len == 0) header_flags |= CWIST_HTTP2_FLAG_END_STREAM;
-
-    if (h2_write_frame(conn, CWIST_HTTP2_FRAME_HEADERS, header_flags, stream_id,
-                       header_block, (uint32_t)block_len) != 0) {
-        return -1;
+    uint8_t header_flags = 0;
+    if (body_len == 0 || h2_status_forbids_body(res->status_code)) {
+        body_len = 0;
+        header_flags |= CWIST_HTTP2_FLAG_END_STREAM;
     }
+
+    int rc = h2_send_header_block(conn, stream_id, block, block_len, max_frame_size, header_flags);
+    cwist_free(block);
+    if (rc != 0) return -1;
 
     if (body_len == 0) return 0;
 
@@ -1144,16 +1270,11 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
     return h2_send_seq_data_frames(conn, stream_id, body_data, body_len, max_frame_size, NULL);
 }
 
-static int h2_read_all(cwist_https_connection *conn, void *buf, int len) {
-    int total = 0;
-    while (total < len) {
-        int n = h2_read(conn, (char *)buf + total, len - total);
-        /* 0 is EOF on these blocking sockets (peer shutdown); retrying it
-         * would spin forever, so treat it as a read failure. */
-        if (n <= 0) return -1;
-        total += n;
-    }
-    return total;
+static int h2_read_all(h2_conn *hc, void *buf, int len) {
+    /* h2_read_full tolerates WANT_READ on the non-blocking TLS sockets;
+     * 0/EOF and real errors stay fatal. */
+    if (h2_read_full(hc, buf, (size_t)len) != 0) return -1;
+    return len;
 }
 
 /* Returns 0 normally, -1 when the peer vanished mid-frame (EOF/error). */
@@ -1164,7 +1285,7 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
 
     while (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN)) {
         unsigned char hdr[9];
-        int n = h2_read_all(hc->conn, hdr, 9);
+        int n = h2_read_all(hc, hdr, 9);
         if (n != 9) return -1;
 
         uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | hdr[2];
@@ -1179,7 +1300,7 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
         if (len > 0) {
             payload = (unsigned char *)cwist_alloc(len);
             if (!payload) return -1;
-            int r = h2_read_all(hc->conn, payload, len);
+            int r = h2_read_all(hc, payload, len);
             if (r != (int)len) {
                 cwist_free(payload);
                 return -1;
@@ -1342,13 +1463,12 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
 }
 
 static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_response *res) {
-    unsigned char header_block[8192];
-    size_t block_len = h2_encode_response_headers(res, header_block, sizeof(header_block));
-    if (block_len == 0) return -1;
-
     h2_stream *s = h2_stream_find(hc, stream_id);
 
-    uint8_t header_flags = CWIST_HTTP2_FLAG_END_HEADERS;
+    size_t block_len = 0;
+    unsigned char *block = h2_encode_response_block(res, &block_len);
+    if (!block) return -1;
+
     size_t body_len = 0;
     const unsigned char *body_data = NULL;
     if (res->use_file_stream) {
@@ -1361,15 +1481,25 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
         body_data = (const unsigned char *)res->body->data;
     }
 
-    if (body_len == 0) header_flags |= CWIST_HTTP2_FLAG_END_STREAM;
+    /* HEAD responses and 1xx/204/304 statuses carry no content.  The
+     * content-length header (already encoded from the real body length for
+     * HEAD; suppressed by the encoder for bodyless statuses) stays, but no
+     * DATA frames may follow. */
+    bool no_content = h2_status_forbids_body(res->status_code) ||
+                      (s && s->req && s->req->method == CWIST_HTTP_HEAD);
 
-    if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_HEADERS, header_flags, stream_id,
-                       header_block, (uint32_t)block_len) != 0) {
-        return -1;
+    uint8_t header_flags = 0;
+    if (body_len == 0 || no_content) {
+        body_len = 0;
+        header_flags |= CWIST_HTTP2_FLAG_END_STREAM;
     }
 
     uint32_t max_frame = hc->peer_max_frame_size;
     if (max_frame == 0) max_frame = CWIST_HTTP2_MAX_FRAME_SIZE;
+
+    int rc = h2_send_header_block(hc->conn, stream_id, block, block_len, max_frame, header_flags);
+    cwist_free(block);
+    if (rc != 0) return -1;
 
     if (body_len == 0) return 0;
 
@@ -1629,13 +1759,13 @@ static int h2_handle_window_update(h2_conn *hc, uint32_t stream_id,
 
 /* --- Preface Verification --- */
 
-static int cwist_http2_verify_preface(cwist_https_connection *conn) {
+static int cwist_http2_verify_preface(h2_conn *hc) {
     char buffer[CWIST_HTTP2_CONNECTION_PREFACE_LEN];
-    int offset = 0;
-    while (offset < CWIST_HTTP2_CONNECTION_PREFACE_LEN) {
-        int n = h2_read(conn, buffer + offset, CWIST_HTTP2_CONNECTION_PREFACE_LEN - offset);
-        if (n <= 0) return -1;
-        offset += n;
+    /* The preface can arrive in a later TLS record than the handshake, so a
+     * non-blocking SSL_read may legitimately report WANT_READ here; wait it
+     * out instead of dropping the connection. */
+    if (h2_read_full(hc, buffer, CWIST_HTTP2_CONNECTION_PREFACE_LEN) != 0) {
+        return -1;
     }
 
     if (memcmp(buffer, CWIST_HTTP2_CONNECTION_PREFACE, CWIST_HTTP2_CONNECTION_PREFACE_LEN) != 0) {
@@ -1680,14 +1810,15 @@ cwist_error_t cwist_http2_serve_connection(
         return result;
     }
 
-    if (cwist_http2_verify_preface(conn) != 0) {
+    h2_conn hc;
+    h2_conn_init(&hc, conn);
+
+    if (cwist_http2_verify_preface(&hc) != 0) {
+        h2_conn_destroy(&hc);
         result = make_error(CWIST_ERR_INT16);
         result.error.err_i16 = -1;
         return result;
     }
-
-    h2_conn hc;
-    h2_conn_init(&hc, conn);
 
     unsigned char settings[12] = {
         0x00, 0x01, 0x00, 0x00, 0x10, 0x00, // SETTINGS_HEADER_TABLE_SIZE = 4096
@@ -1707,24 +1838,21 @@ cwist_error_t cwist_http2_serve_connection(
     bool sent_goaway = false;
     while (connected && atomic_load(&g_cwist_running)) {
         unsigned char hdr[9];
-        int offset = 0;
-        while (offset < 9) {
-            /* Bound each blocking read with the idle deadline so an idle
-             * connection cannot monopolize a pool worker forever. */
-            if (h2_wait_readable(&hc) != 0) {
-                if (!sent_goaway &&
-                    h2_now_ms() - hc.last_activity >= (uint64_t)h2_idle_timeout_ms()) {
-                    h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR);
-                    sent_goaway = true;
-                }
-                connected = false;
-                break;
+        /* Bound the wait for the next frame with the idle deadline so an
+         * idle connection cannot monopolize a pool worker forever. */
+        if (h2_wait_readable(&hc) != 0) {
+            if (!sent_goaway &&
+                h2_now_ms() - hc.last_activity >= (uint64_t)h2_idle_timeout_ms()) {
+                h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR);
+                sent_goaway = true;
             }
-            int n = h2_read(conn, hdr + offset, 9 - offset);
-            if (n <= 0) { connected = false; break; }
-            offset += n;
+            connected = false;
+            break;
         }
-        if (!connected) break;
+        /* Frame bytes already in flight may still straddle TLS records or
+         * TCP segments; h2_read_full waits out WANT_READ instead of
+         * treating it as a dropped connection. */
+        if (h2_read_full(&hc, hdr, 9) != 0) { connected = false; break; }
 
         uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | hdr[2];
         uint8_t type = hdr[3];
@@ -1750,12 +1878,7 @@ cwist_error_t cwist_http2_serve_connection(
         if (len > 0) {
             payload = (unsigned char *)cwist_alloc(len);
             if (!payload) { connected = false; break; }
-            int off = 0;
-            while (off < (int)len) {
-                int r = h2_read(conn, payload + off, len - off);
-                if (r <= 0) { connected = false; break; }
-                off += r;
-            }
+            if (h2_read_full(&hc, payload, len) != 0) connected = false;
         }
         if (!connected) { cwist_free(payload); break; }
 
