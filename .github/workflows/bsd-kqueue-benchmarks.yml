@@ -241,6 +241,8 @@ jobs:
       - name: Update benchmark history and English SVG report
         run: |
           mkdir -p benchmarks
+          echo "=== Artifacts Directory Content ==="
+          ls -laR artifacts || true
           python3 - <<'PY'
           import glob, json
           from pathlib import Path
@@ -251,10 +253,16 @@ jobs:
 
           ws_path = Path('benchmarks/webserver.json')
           ws_history = json.loads(ws_path.read_text()) if ws_path.exists() else []
+          # Filter out previous erroneous zero entries
+          ws_history = [x for x in ws_history if x.get("cwist_rps", 0) > 0 or x.get("axum_rps", 0) > 0]
+          
           ws_files = glob.glob('artifacts/webserver-result*.json') + glob.glob('artifacts/**/webserver-result*.json', recursive=True) + glob.glob('webserver-result*.json')
+          print("Found webserver result files:", ws_files)
           for f in set(ws_files):
               try:
-                  ws_history.append(json.load(open(f)))
+                  data = json.load(open(f))
+                  print("Loaded data from", f, ":", data)
+                  ws_history.append(data)
               except Exception as e:
                   print(f"Error reading {f}: {e}")
           ws_path.write_text(json.dumps(ws_history[-100:], indent=2) + '\n')
