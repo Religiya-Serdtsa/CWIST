@@ -170,7 +170,16 @@ int main(void) {
     /* Path with query string */
     res = cwist_test_client_get(client, "/query?q=direct");
     FAIL_IF(!res || !res->body, "path query res");
-    FAIL_IF(strcmp(res->body->data, "direct") != 0, "path query body");
+    CWIST_ASSERT_STATUS(res, 200);
+    CWIST_ASSERT_BODY_CONTAINS(res, "direct");
+    cwist_http_response_destroy(res);
+
+    /* Test Swagger UI Route & Fluent Assertions */
+    cwist_app_enable_swagger(app, "/docs", "openapi.json");
+    res = cwist_test_client_get(client, "/docs");
+    CWIST_ASSERT_STATUS(res, 200);
+    CWIST_ASSERT_HEADER(res, "Content-Type", "text/html; charset=utf-8");
+    CWIST_ASSERT_BODY_CONTAINS(res, "CWIST Swagger UI");
     cwist_http_response_destroy(res);
 
     cwist_test_client_destroy(client);

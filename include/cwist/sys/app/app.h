@@ -228,6 +228,14 @@ typedef struct cwist_fix_server_mem {
 cwist_app *cwist_app_create(void);
 
 /**
+ * @brief Enables embedded Swagger UI interactive documentation page.
+ * @param app Pointer to the app.
+ * @param mount_path URL route path to serve Swagger UI (e.g. "/swagger" or "/docs").
+ * @param openapi_json_path Path to the generated openapi.json file on disk.
+ */
+void cwist_app_enable_swagger(cwist_app *app, const char *mount_path, const char *openapi_json_path);
+
+/**
  * @brief Destroys the application and frees all resources.
  * @param app Pointer to the app to destroy.
  */
