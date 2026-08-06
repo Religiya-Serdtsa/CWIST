@@ -138,4 +138,43 @@ void cwist_test_client_clear_cookies(cwist_test_client *client);
 
 /** @} */
 
+/** @name Fluent Test Assertions */
+/** @{ */
+
+#define CWIST_ASSERT_STATUS(res, expected_status) do { \
+    if (!(res) || (res)->status_code != (expected_status)) { \
+        fprintf(stderr, "[ASSERT FAIL] %s:%d: expected status %d, got %d\n", \
+                __FILE__, __LINE__, (int)(expected_status), (res) ? (int)(res)->status_code : -1); \
+        exit(1); \
+    } \
+} while(0)
+
+#define CWIST_ASSERT_HEADER(res, header_name, expected_value) do { \
+    const char *actual_val = NULL; \
+    if (res) { \
+        for (cwist_http_header_node *h = (res)->headers; h; h = h->next) { \
+            if (h->key && strcasecmp(h->key->data, (header_name)) == 0) { \
+                actual_val = h->value ? h->value->data : ""; \
+                break; \
+            } \
+        } \
+    } \
+    if (!actual_val || strcmp(actual_val, (expected_value)) != 0) { \
+        fprintf(stderr, "[ASSERT FAIL] %s:%d: expected header '%s' = '%s', got '%s'\n", \
+                __FILE__, __LINE__, (header_name), (expected_value), actual_val ? actual_val : "<null>"); \
+        exit(1); \
+    } \
+} while(0)
+
+#define CWIST_ASSERT_BODY_CONTAINS(res, snippet) do { \
+    const char *bdata = ((res) && (res)->body) ? (res)->body->data : NULL; \
+    if (!bdata || strstr(bdata, (snippet)) == NULL) { \
+        fprintf(stderr, "[ASSERT FAIL] %s:%d: body snippet '%s' not found in body '%s'\n", \
+                __FILE__, __LINE__, (snippet), bdata ? bdata : "<null>"); \
+        exit(1); \
+    } \
+} while(0)
+
+/** @} */
+
 #endif

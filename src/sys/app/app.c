@@ -3283,3 +3283,60 @@ int cwist_app_listen(cwist_app *app, int port) {
 
     return 0;
 }
+
+static char cwist_swagger_json_path[512] = "openapi.json";
+
+static void cwist_swagger_html_handler(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
+    static const char html[] =
+        "<!DOCTYPE html>\n<html>\n<head>\n"
+        "<title>CWIST Swagger UI</title>\n"
+        "<link rel=\"stylesheet\" href=\"https://unpkg.com/swagger-ui-dist@5/swagger-ui.css\" />\n"
+        "</head>\n<body>\n"
+        "<div id=\"swagger-ui\"></div>\n"
+        "<script src=\"https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js\"></script>\n"
+        "<script>\n"
+        "window.onload = () => {\n"
+        "  SwaggerUIBundle({\n"
+        "    url: '/openapi.json',\n"
+        "    dom_id: '#swagger-ui',\n"
+        "  });\n"
+        "};\n"
+        "</script>\n"
+        "</body>\n</html>\n";
+    cwist_sstring_assign(res->body, (char *)html);
+    cwist_http_header_add(&res->headers, "Content-Type", "text/html; charset=utf-8");
+}
+
+static void cwist_swagger_json_handler(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
+    FILE *f = fopen(cwist_swagger_json_path, "rb");
+    if (!f) {
+        res->status_code = 404;
+        cwist_sstring_assign(res->body, (char *)"{\"error\":\"openapi.json not found\"}");
+        cwist_http_header_add(&res->headers, "Content-Type", "application/json");
+        return;
+    }
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *buf = (char *)malloc((size_t)sz + 1);
+    if (buf) {
+        fread(buf, 1, (size_t)sz, f);
+        buf[sz] = '\0';
+        cwist_sstring_assign(res->body, buf);
+        free(buf);
+    }
+    fclose(f);
+    cwist_http_header_add(&res->headers, "Content-Type", "application/json");
+}
+
+void cwist_app_enable_swagger(cwist_app *app, const char *mount_path, const char *openapi_json_path) {
+    if (!app) return;
+    if (openapi_json_path) {
+        snprintf(cwist_swagger_json_path, sizeof(cwist_swagger_json_path), "%s", openapi_json_path);
+    }
+    const char *mp = mount_path ? mount_path : "/docs";
+    cwist_app_get(app, mp, cwist_swagger_html_handler);
+    cwist_app_get(app, "/openapi.json", cwist_swagger_json_handler);
+}
