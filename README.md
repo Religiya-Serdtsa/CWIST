@@ -22,6 +22,8 @@ Latest Web Server Benchmark (wrk 12t 400c):
 ![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)
 <!-- WEBSERVER_BENCHMARKS:END -->
 
+_Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
+
 ---
 
 ## Why CWIST?
