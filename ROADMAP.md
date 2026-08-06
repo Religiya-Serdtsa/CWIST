@@ -20,7 +20,7 @@
 ```
 [P0: Critical]      ████████████████████ 100% (Completed)
 [P1: Production]     ████████████████████ 100% (Multiport hardening complete)
-[P2: DevEx]          ████████░░░░░░░░░░░░  40% (Config loader, test tooling, and wire helpers done)
+[P2: DevEx]          ████████████████████ 100% (30 English hands-on tutorials, CLI, hot reload, and test client complete)
 [P3: Deep Protocols] ███████████████░░░░░  75% (HTTP/3 extension specs and io_uring backend done)
 [P4: Ecosystem]      ████████████░░░░░░░░  60% (gRPC framing, health, reflection, and proto codegen done)
 ```
@@ -151,7 +151,7 @@ Automated OS & Web Server benchmark histories are published in `docs/benchmark-t
 |---------|--------|-------|
 | Doxygen Docs | ✅ | Generated HTML docs |
 | README / API Reference | ✅ | Markdown docs in `docs/` |
-| **Tutorial & Examples** | ⏳ | Few examples; no step-by-step tutorial |
+| **Tutorial & Examples** | ✅ | 30 comprehensive hands-on tutorial modules with C source, CMakeLists, and English guides in `tutorials/` |
 | **CLI Scaffolding** | ✅ | `cwist new project`, `.cwpro` manifests, OpenAPI generation, and include-aware incremental watcher |
 | **Hot Reload (Dev Mode)** | ✅ | `cwist watcher` uses inotify/kqueue with snapshot/poll fallback, debounces changes, exports include-graph recompilation scope, preserves the prior process on build failure, and gracefully restarts successful builds |
 | **Configuration Management** | ✅ | `.env` file + environment variable loader via `cwist_config` |
