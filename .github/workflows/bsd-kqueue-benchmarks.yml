@@ -251,8 +251,12 @@ jobs:
 
           ws_path = Path('benchmarks/webserver.json')
           ws_history = json.loads(ws_path.read_text()) if ws_path.exists() else []
-          for f in glob.glob('artifacts/webserver-result*.json'):
-              ws_history.append(json.load(open(f)))
+          ws_files = glob.glob('artifacts/webserver-result*.json') + glob.glob('artifacts/**/webserver-result*.json', recursive=True) + glob.glob('webserver-result*.json')
+          for f in set(ws_files):
+              try:
+                  ws_history.append(json.load(open(f)))
+              except Exception as e:
+                  print(f"Error reading {f}: {e}")
           ws_path.write_text(json.dumps(ws_history[-100:], indent=2) + '\n')
           PY
           python3 scripts/ci/benchmark.py render
