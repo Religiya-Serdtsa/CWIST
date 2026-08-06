@@ -13,6 +13,12 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 
 [Heavy Benchmark on CWIST APP](https://github.com/gg582/fly.board/blob/main/README.md)
 
+<!-- WEBSERVER_BENCHMARKS:START -->
+Latest Web Server RPS (wrk 12t 400c): **CWIST** 0 req/s | **Axum** 0 req/s | **Spring Boot** 0 req/s
+
+![Web Server RPS Comparison](docs/webserver-benchmark-trends.svg)
+<!-- WEBSERVER_BENCHMARKS:END -->
+
 ---
 
 ## Why CWIST?

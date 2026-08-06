@@ -47,12 +47,37 @@ def replace(path: Path, begin: str, end: str, content: str) -> None:
     text = path.read_text(); start = text.index(begin) + len(begin); finish = text.index(end, start)
     path.write_text(text[:start] + "\n" + content.rstrip() + "\n" + text[finish:])
 
+WEBSERVER_HISTORY = ROOT / "benchmarks" / "webserver.json"
+WEBSERVER_SVG = ROOT / "docs" / "webserver-benchmark-trends.svg"
+README_MD = ROOT / "README.md"
+
+def render_webserver_svg(history: list[dict]) -> str:
+    rows = history[-20:]
+    frameworks = [("CWIST", "cwist_rps", "#22c55e"), ("Axum", "axum_rps", "#3b82f6"), ("Spring Boot", "spring_rps", "#ef4444")]
+    blocks = []
+    blocks.append('<text x="40" y="30" class="title">Web Server RPS Comparison (wrk 12t 400c)</text>')
+    for n, (label, key, color) in enumerate(frameworks):
+        vals = [float(x.get(key, 0)) for x in rows]
+        low, high = min(vals, default=0), max(vals, default=1)
+        if high == low: high = low + 1
+        pts = " ".join(f"{40+i*25},{100+n*110-(v-low)/(high-low)*55:.1f}" for i,v in enumerate(vals))
+        blocks.append(f'<text x="40" y="{65+n*110}" class="label">{label}</text><text x="560" y="{65+n*110}" class="value">latest: {vals[-1] if vals else 0:.0f} req/s</text><line x1="40" y1="{100+n*110}" x2="540" y2="{100+n*110}" class="axis"/><polyline points="{pts}" stroke="{color}" class="series"/>')
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="620" height="380" viewBox="0 0 620 380"><style>.title{font:16px sans-serif;font-weight:bold;fill:#f3f4f6}.label{font:14px sans-serif;fill:#e5e7eb}.value{font:12px sans-serif;fill:#9ca3af}.axis{stroke:#374151}.series{fill:none;stroke-width:2.5}</style><rect width="100%" height="100%" fill="#111827"/>'+''.join(blocks)+'</svg>\n'
+
 def render() -> None:
     history = json.loads(HISTORY.read_text()) if HISTORY.exists() else []
     SVG.parent.mkdir(parents=True, exist_ok=True); SVG.write_text(svg(history))
     latest = history[-1] if history else {}; summary = f"Latest automated benchmark: **{latest.get('os','n/a')}** — {latest.get('throughput_mleases_s',0)} M leases/s, {latest.get('cpu_percent',0)}% CPU, {latest.get('rss_kib',0)} KiB RSS.\n\n![CWIST benchmark trends](docs/benchmark-trends.svg)"
     replace(README, "<!-- BENCHMARKS:START -->", "<!-- BENCHMARKS:END -->", summary)
     replace(ROADMAP, "<!-- CI-BENCHMARKS:START -->", "<!-- CI-BENCHMARKS:END -->", f"Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Latest platform: **{latest.get('os','n/a')}**.")
+
+    ws_history = json.loads(WEBSERVER_HISTORY.read_text()) if WEBSERVER_HISTORY.exists() else []
+    WEBSERVER_SVG.parent.mkdir(parents=True, exist_ok=True)
+    WEBSERVER_SVG.write_text(render_webserver_svg(ws_history))
+    ws_latest = ws_history[-1] if ws_history else {}
+    ws_summary = f"Latest Web Server RPS (wrk 12t 400c): **CWIST** {ws_latest.get('cwist_rps',0):.0f} req/s | **Axum** {ws_latest.get('axum_rps',0):.0f} req/s | **Spring Boot** {ws_latest.get('spring_rps',0):.0f} req/s\n\n![Web Server RPS Comparison](docs/webserver-benchmark-trends.svg)"
+    if README.exists(): replace(README, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
+    if README_MD.exists(): replace(README_MD, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
 
 if __name__ == "__main__":
     if len(sys.argv) == 2 and sys.argv[1] == "measure": print(json.dumps(run_measurement()))

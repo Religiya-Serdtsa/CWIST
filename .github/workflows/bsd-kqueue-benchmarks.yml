@@ -79,12 +79,12 @@ jobs:
           # 1. CWIST Minimal HTTP Web Server
           cat << 'EOF' > /tmp/cwist_server.c
           #include <cwist/app.h>
-          static void handle_root(cwist_req_t *req, cwist_res_t *res) {
+          static void handle_root(cwist_http_request *req, cwist_http_response *res) {
               (void)req;
-              cwist_res_send(res, 200, "text/plain", "Hello, World!");
+              cwist_sstring_assign(res->body, "Hello, World!");
           }
           int main(void) {
-              cwist_app_t *app = cwist_app_create();
+              cwist_app *app = cwist_app_create();
               cwist_app_get(app, "/", handle_root);
               cwist_app_listen(app, 8081);
               cwist_app_destroy(app);
@@ -170,7 +170,7 @@ jobs:
           # Build servers
           cd $GITHUB_WORKSPACE
           make
-          gcc -O3 -o /tmp/cwist_server /tmp/cwist_server.c libcwist.a -pthread -ldl -lm -lstdc++ -lz -lzstd lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec
+          gcc -O3 -I./include -I./lib -I./lib/libttak/include -o /tmp/cwist_server /tmp/cwist_server.c libcwist.a -pthread -ldl -lm -lstdc++ -lz -lzstd lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec
 
           cd /tmp/axum_bench && cargo build --release
           cd /tmp/spring_bench && mvn -q package -DskipTests
@@ -180,28 +180,47 @@ jobs:
           /tmp/cwist_server &
           PID_CWIST=$!
           sleep 2
-          echo "--- CWIST wrk result ---"
-          wrk -t12 -c400 -d10s http://127.0.0.1:8081/ || true
+          CWIST_OUT=$(wrk -t12 -c400 -d10s http://127.0.0.1:8081/ || true)
           kill -9 $PID_CWIST || true
 
           echo "=== Starting Axum Web Server (Port 8082) ==="
           /tmp/axum_bench/target/release/axum_server &
           PID_AXUM=$!
           sleep 2
-          echo "--- Axum wrk result ---"
-          wrk -t12 -c400 -d10s http://127.0.0.1:8082/ || true
+          AXUM_OUT=$(wrk -t12 -c400 -d10s http://127.0.0.1:8082/ || true)
           kill -9 $PID_AXUM || true
 
           echo "=== Starting Spring Boot Web Server (Port 8080) ==="
           java -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar &
           PID_SPRING=$!
           sleep 5
-          echo "--- Spring Boot wrk result ---"
-          wrk -t12 -c400 -d10s http://127.0.0.1:8080/ || true
+          SPRING_OUT=$(wrk -t12 -c400 -d10s http://127.0.0.1:8080/ || true)
           kill -9 $PID_SPRING || true
 
+          python3 - <<PY
+          import json, re, time
+          from datetime import datetime, timezone
+
+          def parse_rps(text):
+              m = re.search(r"Requests/sec:\s+([0-9.]+)", text)
+              return float(m.group(1)) if m else 0.0
+
+          data = {
+              "timestamp": datetime.now(timezone.utc).isoformat(),
+              "cwist_rps": parse_rps("""$CWIST_OUT"""),
+              "axum_rps": parse_rps("""$AXUM_OUT"""),
+              "spring_rps": parse_rps("""$SPRING_OUT""")
+          }
+          with open("webserver-result.json", "w") as f:
+              json.dump(data, f)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webserver-result
+          path: webserver-result.json
+
   publish-benchmark-report:
-    needs: [bsd-kqueue, benchmark]
+    needs: [bsd-kqueue, benchmark, web-server-benchmark]
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
@@ -223,12 +242,18 @@ jobs:
           history = json.loads(path.read_text()) if path.exists() else []
           history.extend(json.load(open(f)) for f in glob.glob('artifacts/benchmark-*.json'))
           path.write_text(json.dumps(history[-100:], indent=2) + '\n')
+
+          ws_path = Path('benchmarks/webserver.json')
+          ws_history = json.loads(ws_path.read_text()) if ws_path.exists() else []
+          for f in glob.glob('artifacts/webserver-result*.json'):
+              ws_history.append(json.load(open(f)))
+          ws_path.write_text(json.dumps(ws_history[-100:], indent=2) + '\n')
           PY
           python3 scripts/ci/benchmark.py render
       - name: Commit generated benchmark documentation
         run: |
           git config user.name "cwist-ci[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README ROADMAP.md benchmarks/db.json docs/benchmark-trends.svg
+          git add README README.md ROADMAP.md benchmarks/db.json benchmarks/webserver.json docs/benchmark-trends.svg docs/webserver-benchmark-trends.svg
           git diff --cached --quiet || git commit -m "docs(ci): update benchmark report [skip ci]"
           git push
