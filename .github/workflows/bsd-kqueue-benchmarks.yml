@@ -180,38 +180,43 @@ jobs:
           /tmp/cwist_server &
           PID_CWIST=$!
           sleep 2
-          CWIST_OUT=$(wrk -t12 -c400 -d10s http://127.0.0.1:8081/ || true)
+          wrk -t12 -c400 -d10s http://127.0.0.1:8081/ > /tmp/cwist.txt 2>&1 || true
           kill -9 $PID_CWIST || true
+          cat /tmp/cwist.txt
 
           echo "=== Starting Axum Web Server (Port 8082) ==="
           /tmp/axum_bench/target/release/axum_server &
           PID_AXUM=$!
           sleep 2
-          AXUM_OUT=$(wrk -t12 -c400 -d10s http://127.0.0.1:8082/ || true)
+          wrk -t12 -c400 -d10s http://127.0.0.1:8082/ > /tmp/axum.txt 2>&1 || true
           kill -9 $PID_AXUM || true
+          cat /tmp/axum.txt
 
           echo "=== Starting Spring Boot Web Server (Port 8080) ==="
           java -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar &
           PID_SPRING=$!
           sleep 5
-          SPRING_OUT=$(wrk -t12 -c400 -d10s http://127.0.0.1:8080/ || true)
+          wrk -t12 -c400 -d10s http://127.0.0.1:8080/ > /tmp/spring.txt 2>&1 || true
           kill -9 $PID_SPRING || true
+          cat /tmp/spring.txt
 
-          export CWIST_OUT AXUM_OUT SPRING_OUT
           python3 - <<'PY'
-          import json, os, re
+          import json, re, pathlib
           from datetime import datetime, timezone
 
-          def parse_rps(text):
+          def parse_rps(path_str):
+              p = pathlib.Path(path_str)
+              text = p.read_text() if p.exists() else ""
               m = re.search(r"Requests/sec:\s+([0-9.]+)", text)
               return float(m.group(1)) if m else 0.0
 
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
-              "cwist_rps": parse_rps(os.environ.get("CWIST_OUT", "")),
-              "axum_rps": parse_rps(os.environ.get("AXUM_OUT", "")),
-              "spring_rps": parse_rps(os.environ.get("SPRING_OUT", ""))
+              "cwist_rps": parse_rps("/tmp/cwist.txt"),
+              "axum_rps": parse_rps("/tmp/axum.txt"),
+              "spring_rps": parse_rps("/tmp/spring.txt")
           }
+          print("Parsed web server benchmark data:", data)
           with open("webserver-result.json", "w") as f:
               json.dump(data, f)
           PY
