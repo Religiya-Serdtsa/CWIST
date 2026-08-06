@@ -236,6 +236,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v4
         with:
+          pattern: '*'
           path: artifacts
           merge-multiple: true
       - name: Update benchmark history and English SVG report
@@ -243,12 +244,14 @@ jobs:
           mkdir -p benchmarks
           echo "=== Artifacts Directory Content ==="
           ls -laR artifacts || true
+          echo "=== Current Directory Content ==="
+          ls -la || true
           python3 - <<'PY'
           import glob, json
           from pathlib import Path
           path = Path('benchmarks/db.json')
           history = json.loads(path.read_text()) if path.exists() else []
-          history.extend(json.load(open(f)) for f in glob.glob('artifacts/benchmark-*.json'))
+          history.extend(json.load(open(f)) for f in glob.glob('artifacts/benchmark-*.json') + glob.glob('benchmark-*.json'))
           path.write_text(json.dumps(history[-100:], indent=2) + '\n')
 
           ws_path = Path('benchmarks/webserver.json')
@@ -256,7 +259,7 @@ jobs:
           # Filter out previous erroneous zero entries
           ws_history = [x for x in ws_history if x.get("cwist_rps", 0) > 0 or x.get("axum_rps", 0) > 0]
           
-          ws_files = glob.glob('artifacts/webserver-result*.json') + glob.glob('artifacts/**/webserver-result*.json', recursive=True) + glob.glob('webserver-result*.json')
+          ws_files = glob.glob('artifacts/webserver-result*.json') + glob.glob('artifacts/**/webserver-result*.json', recursive=True) + glob.glob('webserver-result*.json') + glob.glob('**/webserver-result*.json', recursive=True)
           print("Found webserver result files:", ws_files)
           for f in set(ws_files):
               try:
