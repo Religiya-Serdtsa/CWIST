@@ -52,37 +52,71 @@ WEBSERVER_SVG = ROOT / "docs" / "webserver-benchmark-trends.svg"
 README_MD = ROOT / "README.md"
 
 def render_webserver_svg(history: list[dict]) -> str:
-    rows = history[-20:]
+    ws_latest = history[-1] if history else {}
     metrics = [
-        ("Throughput (Requests/sec - Higher is better)", [("CWIST", "cwist_rps", "#22c55e"), ("Axum", "axum_rps", "#3b82f6"), ("Spring", "spring_rps", "#ef4444")]),
-        ("Avg Latency (ms - Lower is better)", [("CWIST", "cwist_lat_ms", "#22c55e"), ("Axum", "axum_lat_ms", "#3b82f6"), ("Spring", "spring_lat_ms", "#ef4444")]),
-        ("Peak RSS (KiB - Lower is better)", [("CWIST", "cwist_rss_kib", "#22c55e"), ("Axum", "axum_rss_kib", "#3b82f6"), ("Spring", "spring_rss_kib", "#ef4444")]),
-        ("Context Switches (Lower is better)", [("CWIST", "cwist_csw", "#22c55e"), ("Axum", "axum_csw", "#3b82f6"), ("Spring", "spring_csw", "#ef4444")])
+        ("Throughput (req/s)", [("CWIST", "cwist_rps", "#22c55e"), ("Axum", "axum_rps", "#3b82f6"), ("Spring", "spring_rps", "#ef4444")]),
+        ("Avg Latency (ms)", [("CWIST", "cwist_lat_ms", "#22c55e"), ("Axum", "axum_lat_ms", "#3b82f6"), ("Spring", "spring_lat_ms", "#ef4444")]),
+        ("Peak RSS (KiB)", [("CWIST", "cwist_rss_kib", "#22c55e"), ("Axum", "axum_rss_kib", "#3b82f6"), ("Spring", "spring_rss_kib", "#ef4444")]),
+        ("Context Switches", [("CWIST", "cwist_csw", "#22c55e"), ("Axum", "axum_csw", "#3b82f6"), ("Spring", "spring_csw", "#ef4444")])
     ]
-    blocks = []
-    blocks.append('<text x="40" y="30" class="title">Web Server Benchmark Comparison (CWIST vs Axum vs Spring Boot)</text>')
     
-    for m_idx, (m_title, series_list) in enumerate(metrics):
-        base_y = 60 + m_idx * 130
-        blocks.append(f'<text x="40" y="{base_y}" class="subtitle">{m_title}</text>')
-        blocks.append(f'<line x1="40" y1="{base_y+65}" x2="640" y2="{base_y+65}" class="axis"/>')
+    width = 960
+    height = 540
+    blocks = []
+    
+    # Title & Legend
+    blocks.append('<text x="30" y="35" class="title">Web Server Performance Comparison (wrk 12t 400c)</text>')
+    blocks.append('<rect x="660" y="20" width="12" height="12" fill="#22c55e" rx="2"/><text x="680" y="31" class="legend">CWIST</text>')
+    blocks.append('<rect x="750" y="20" width="12" height="12" fill="#3b82f6" rx="2"/><text x="770" y="31" class="legend">Axum</text>')
+    blocks.append('<rect x="830" y="20" width="12" height="12" fill="#ef4444" rx="2"/><text x="850" y="31" class="legend">Spring Boot</text>')
+    
+    # Render 4 grid subpanels (2x2 layout)
+    panel_w = 420
+    panel_h = 200
+    offsets = [(30, 60), (490, 60), (30, 290), (490, 290)]
+    
+    for idx, (m_title, series_list) in enumerate(metrics):
+        px, py = offsets[idx]
+        blocks.append(f'<rect x="{px}" y="{py}" width="{panel_w}" height="{panel_h}" fill="#1f2937" rx="6" stroke="#374151"/>')
+        blocks.append(f'<text x="{px+15}" y="{py+28}" class="panel-title">{m_title}</text>')
         
-        # collect all values to normalize y axis across series for this metric
-        all_vals = []
-        for _, key, _ in series_list:
-            all_vals.extend(float(x.get(key, 0)) for x in rows)
-        low, high = min(all_vals, default=0), max(all_vals, default=1)
-        if high == low: high = low + 1
+        vals = [float(ws_latest.get(key, 0)) for _, key, _ in series_list]
+        max_val = max(vals, default=1.0)
+        if max_val <= 0: max_val = 1.0
         
+        bar_y_base = py + 60
         for s_idx, (label, key, color) in enumerate(series_list):
-            vals = [float(x.get(key, 0)) for x in rows]
-            pts = " ".join(f"{40+i*30},{base_y+65-(v-low)/(high-low)*45:.1f}" for i, v in enumerate(vals))
-            latest_val = vals[-1] if vals else 0
-            fmt_val = f"{latest_val:.1f}" if "ms" in m_title else (f"{latest_val:.0f}" if "Requests" in m_title or "Switches" in m_title else f"{latest_val:.0f}")
-            blocks.append(f'<polyline points="{pts}" stroke="{color}" class="series"/>')
-            blocks.append(f'<text x="{500 + s_idx*50}" y="{base_y}" class="legend" fill="{color}">{label}: {fmt_val}</text>')
+            val = float(ws_latest.get(key, 0))
+            ratio = min(1.0, max(0.0, val / max_val))
+            bar_len = int(ratio * 240)
+            by = bar_y_base + s_idx * 42
             
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="580" viewBox="0 0 680 580"><style>.title{font:16px sans-serif;font-weight:bold;fill:#f3f4f6}.subtitle{font:13px sans-serif;font-weight:600;fill:#e5e7eb}.legend{font:11px sans-serif;font-weight:500}.axis{stroke:#374151}.series{fill:none;stroke-width:2}</style><rect width="100%" height="100%" fill="#111827"/>'+''.join(blocks)+'</svg>\n'
+            # Format value label
+            if "ms" in m_title:
+                val_str = f"{val:.2f} ms"
+            elif "KiB" in m_title:
+                val_str = f"{val:,.0f} KiB"
+            elif "req/s" in m_title:
+                val_str = f"{val:,.0f} req/s"
+            else:
+                val_str = f"{val:,.0f}"
+                
+            blocks.append(f'<text x="{px+15}" y="{by+16}" class="bar-label">{label}</text>')
+            blocks.append(f'<rect x="{px+80}" y="{by}" width="240" height="22" fill="#374151" rx="3"/>')
+            if bar_len > 0:
+                blocks.append(f'<rect x="{px+80}" y="{by}" width="{bar_len}" height="22" fill="{color}" rx="3"/>')
+            blocks.append(f'<text x="{px+330}" y="{by+16}" class="bar-val">{val_str}</text>')
+            
+    svg_style = (
+        '<style>'
+        '.title{font:18px sans-serif;font-weight:bold;fill:#f9fafb}'
+        '.panel-title{font:14px sans-serif;font-weight:600;fill:#9ca3af}'
+        '.legend{font:13px sans-serif;fill:#d1d5db}'
+        '.bar-label{font:13px sans-serif;font-weight:500;fill:#e5e7eb}'
+        '.bar-val{font:12px sans-serif;font-weight:bold;fill:#f3f4f6}'
+        '</style>'
+    )
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">{svg_style}<rect width="100%" height="100%" fill="#111827"/>' + ''.join(blocks) + '</svg>\n'
 
 def render() -> None:
     history = json.loads(HISTORY.read_text()) if HISTORY.exists() else []
