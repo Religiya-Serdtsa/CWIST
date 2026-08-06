@@ -37,5 +37,29 @@
       "virtual_threads": true,
       "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
     }
+  },
+  {
+    "timestamp": "2026-08-06T14:51:05.281447+00:00",
+    "cwist_rps": 60893.85,
+    "cwist_lat_ms": 0.23108,
+    "cwist_rss_kib": 12676.0,
+    "cwist_csw": 0.0,
+    "axum_rps": 111343.21,
+    "axum_lat_ms": 3.45,
+    "axum_rss_kib": 16136.0,
+    "axum_csw": 0.0,
+    "spring_rps": 44666.5,
+    "spring_lat_ms": 9.05,
+    "spring_rss_kib": 558008.0,
+    "spring_csw": 0.0,
+    "wrk_profile": "wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)",
+    "spring_env": {
+      "java_version": "openjdk version \"21.0.12\" 2026-07-21 LTS",
+      "spring_boot_version": "3.2.3",
+      "stack": "Spring WebFlux + Reactor Netty (event loop, virtual threads enabled)",
+      "jvm_opts": "-Xms512m -Xmx512m -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)",
+      "virtual_threads": true,
+      "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
+    }
   }
 ]
