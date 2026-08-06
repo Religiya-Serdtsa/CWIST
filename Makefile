@@ -58,8 +58,14 @@ LSQUIC_LIB = $(LSQUIC_BUILD_DIR)/src/liblsquic/liblsquic.a
 CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null)
 NGHTTP2_LIBS := $(shell pkg-config --libs libnghttp2 2>/dev/null)
 BROTLI_LIBS := $(shell pkg-config --libs libbrotlienc libbrotlicommon libbrotlidec 2>/dev/null)
+# zstd via pkg-config so Homebrew's non-standard lib path (-L/opt/homebrew/...)
+# is picked up on macOS; fall back to a bare -lzstd elsewhere.
+ZSTD_LIBS := $(shell pkg-config --libs libzstd 2>/dev/null)
+ifeq ($(strip $(ZSTD_LIBS)),)
+ZSTD_LIBS = -lzstd
+endif
 
-LIBS = -pthread -ldl -lm -lstdc++ -lz -lzstd \
+LIBS = -pthread -ldl -lm -lstdc++ -lz $(ZSTD_LIBS) \
        $(LSQUIC_LIB) \
        $(BORINGSSL_SSL_LIB) \
        $(BORINGSSL_CRYPTO_LIB) \
