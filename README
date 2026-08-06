@@ -16,7 +16,7 @@ to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
 <!-- BENCHMARKS:START -->
-Latest automated benchmark: **Linux** — 2.72 M leases/s, 184.01% CPU, 42476 KiB RSS.
+Latest automated benchmark: **Darwin** — 12.46 M leases/s, 114.29% CPU, 633472 KiB RSS.
 
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
