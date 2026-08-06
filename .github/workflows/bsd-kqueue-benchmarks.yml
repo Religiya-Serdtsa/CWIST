@@ -245,6 +245,10 @@ jobs:
 
           run_bench "Spring Boot" "java $SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar" 8080 "/tmp/spring.txt" "/tmp/spring_stat.txt" 90
 
+          # Result JSON must land in the workspace so upload-artifact can find it
+          # (the shell is still sitting in /tmp/spring_bench from the maven build).
+          cd $GITHUB_WORKSPACE
+
           # Record exact toolchain/runtime facts alongside the numbers
           export SPRING_JAVA_VERSION="$(java -version 2>&1 | head -1)"
           export SPRING_BOOT_VERSION="3.2.3"
