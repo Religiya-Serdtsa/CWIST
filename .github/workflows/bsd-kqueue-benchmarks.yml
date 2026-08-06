@@ -134,7 +134,7 @@ jobs:
               <dependencies>
                   <dependency>
                       <groupId>org.springframework.boot</groupId>
-                      <artifactId>spring-boot-starter-web</artifactId>
+                      <artifactId>spring-boot-starter-webflux</artifactId>
                   </dependency>
               </dependencies>
               <build>
@@ -147,9 +147,11 @@ jobs:
               </build>
           </project>
           EOF
+          # Spring WebFlux runs on the Reactor Netty event loop, and virtual
+          # threads (Project Loom, Java 21) are additionally enabled so any
+          # blocking dispatch off the event loop runs on Loom carriers.
           mkdir -p src/main/java/com/example src/main/resources
           cat << 'EOF' > src/main/resources/application.properties
-          # JVM fairness: serve requests on virtual threads (Project Loom, Java 21)
           spring.threads.virtual.enabled=true
           EOF
           cat << 'EOF' > src/main/java/com/example/Application.java
@@ -246,6 +248,7 @@ jobs:
           # Record exact toolchain/runtime facts alongside the numbers
           export SPRING_JAVA_VERSION="$(java -version 2>&1 | head -1)"
           export SPRING_BOOT_VERSION="3.2.3"
+          export SPRING_STACK="Spring WebFlux + Reactor Netty (event loop, virtual threads enabled)"
           export SPRING_JVM_OPTS_RECORDED="$SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE (CDS AOT cache)"
           export SPRING_VIRTUAL_THREADS="true"
           export WRK_PROFILE="wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)"
@@ -300,6 +303,7 @@ jobs:
               "spring_env": {
                   "java_version": os.environ.get("SPRING_JAVA_VERSION", ""),
                   "spring_boot_version": os.environ.get("SPRING_BOOT_VERSION", ""),
+                  "stack": os.environ.get("SPRING_STACK", ""),
                   "jvm_opts": os.environ.get("SPRING_JVM_OPTS_RECORDED", ""),
                   "virtual_threads": os.environ.get("SPRING_VIRTUAL_THREADS", "") == "true",
                   "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"

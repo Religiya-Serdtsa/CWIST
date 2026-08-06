@@ -35,12 +35,21 @@ framework-specific tuning is applied beyond what is documented here.
 ## Spring Boot (JVM fairness configuration)
 
 The JVM is not a measure-once runtime: tiered JIT compilation, heap resizing, and class
-loading dominate short runs. The suite therefore fixes and *records* the following:
+loading dominate short runs. The suite therefore fixes and *records* the following.
+
+The benchmarked stack is **Spring WebFlux on Reactor Netty** — Spring's reactive,
+event-loop server — rather than Spring MVC on the thread-per-request Tomcat servlet
+container. Netty's event loop is the appropriate Java comparison point for the async
+CWIST (io_uring/epoll) and Axum (tokio) servers. On top of the event loop,
+**virtual threads are enabled** (`spring.threads.virtual.enabled=true`, Project Loom)
+so that any work dispatched off the Netty event loop runs on Loom virtual threads
+instead of a bounded platform-thread pool.
 
 | Setting | Value |
 |---|---|
 | Java | Temurin **21** (`actions/setup-java`) |
-| Spring Boot | **3.2.3** (`spring-boot-starter-web`) |
+| Spring Boot | **3.2.3** (`spring-boot-starter-webflux`) |
+| Server | **Reactor Netty** (event loop, non-blocking I/O) |
 | Virtual threads | **enabled** — `spring.threads.virtual.enabled=true` (Project Loom) |
 | JVM options | `-Xms512m -Xmx512m` (fixed heap, no resize noise during measurement) |
 | AOT cache | **CDS** — training run with `-XX:ArchiveClassesAtExit=app.jsa` (clean shutdown via SIGTERM), measured run replays `-XX:SharedArchiveFile=app.jsa` |
@@ -64,6 +73,7 @@ to the numbers, so a result is never an isolated req/s figure:
   "spring_env": {
     "java_version": "openjdk version \"21.x\" ... (Temurin)",
     "spring_boot_version": "3.2.3",
+    "stack": "Spring WebFlux + Reactor Netty (event loop, virtual threads enabled)",
     "jvm_opts": "-Xms512m -Xmx512m -XX:SharedArchiveFile=... (CDS AOT cache)",
     "virtual_threads": true,
     "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
