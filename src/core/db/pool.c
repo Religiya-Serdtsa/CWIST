@@ -149,7 +149,7 @@ void cwist_db_pool_release(cwist_db_pool_t *pool, cwist_db *conn) {
         pool->leased[slot] = false;
         pool->idle_slots[pool->idle_count++] = slot;
         --pool->in_use;
-        pthread_cond_broadcast(&pool->cond);
+        pthread_cond_signal(&pool->cond);
     }
     pthread_mutex_unlock(&pool->mtx);
 }

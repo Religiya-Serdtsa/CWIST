@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-HISTORY = ROOT / "benchmarks" / "history.json"
+HISTORY = ROOT / "benchmarks" / "db.json"
 SVG = ROOT / "docs" / "benchmark-trends.svg"
 README = ROOT / "README"
 ROADMAP = ROOT / "ROADMAP.md"

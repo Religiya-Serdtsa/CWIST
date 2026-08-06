@@ -77,7 +77,7 @@ jobs:
           python3 - <<'PY'
           import glob, json
           from pathlib import Path
-          path = Path('benchmarks/history.json')
+          path = Path('benchmarks/db.json')
           history = json.loads(path.read_text()) if path.exists() else []
           history.extend(json.load(open(f)) for f in glob.glob('artifacts/benchmark-*.json'))
           path.write_text(json.dumps(history[-100:], indent=2) + '\n')
@@ -87,6 +87,6 @@ jobs:
         run: |
           git config user.name "cwist-ci[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README ROADMAP.md benchmarks/history.json docs/benchmark-trends.svg
+          git add README ROADMAP.md benchmarks/db.json docs/benchmark-trends.svg
           git diff --cached --quiet || git commit -m "docs(ci): update benchmark report [skip ci]"
           git push

@@ -36,7 +36,7 @@ int main(void) {
     for (unsigned long i = 0; i < WAF_ITERATIONS; ++i) assert(cwist_waf_is_safe(safe, strlen(safe)));
     uint64_t waf_elapsed = monotonic_ns() - start;
 
-    cwist_db_pool_t *pool = cwist_db_pool_create(":memory:", 4);
+    cwist_db_pool_t *pool = cwist_db_pool_create(":memory:", 8);
     assert(pool != NULL);
     pthread_t threads[POOL_THREADS];
     pool_worker worker = { .pool = pool };
