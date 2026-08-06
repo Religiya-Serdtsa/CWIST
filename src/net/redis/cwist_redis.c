@@ -73,8 +73,7 @@ static int redis_send_all(int fd, const char *buf, size_t len) {
          * --tls). Credentials must be protected at the deployment layer:
          * loopback/Unix sockets, private network, or a TLS-terminating proxy
          * such as stunnel/spiped in front of Redis. */
-        // codeql[cpp/cleartext-transmission]
-        ssize_t n = send(fd, buf + sent, len - sent, 0);
+        ssize_t n = send(fd, buf + sent, len - sent, 0); // codeql[cpp/cleartext-transmission]
         if (n < 0) {
             if (errno == EINTR) continue;
             return -1;
