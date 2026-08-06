@@ -21,6 +21,12 @@ Latest automated benchmark: **Darwin** — 8.5 M leases/s, 97.33% CPU, 690880 Ki
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
 
+<!-- WEBSERVER_BENCHMARKS:START -->
+Latest Web Server RPS (wrk 12t 400c): **CWIST** 0 req/s | **Axum** 0 req/s | **Spring Boot** 0 req/s
+
+![Web Server RPS Comparison](docs/webserver-benchmark-trends.svg)
+<!-- WEBSERVER_BENCHMARKS:END -->
+
 ~~~HEAVY BENCHMARK ON CWIST APP~~~ ==> https://github.com/gg582/fly.board/blob/main/README.md
 
 ==================================================================
