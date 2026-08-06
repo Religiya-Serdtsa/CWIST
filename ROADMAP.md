@@ -27,7 +27,7 @@
 
 ### 1) Transport Layer
 
-* **Native protocols ready**: HTTP/1.1 through HTTP/3 (QUIC via `lsquic`), WebTransport server support, WebSocket, SSE, and a bounded GraphQL query layer are implemented in-tree. Low-level socket controls (ECN, 0-RTT, connection migration) are complete.
+* **Native protocols ready**: HTTP/1.1 through HTTP/3 (QUIC via `lsquic`), WebSocket, SSE, and a bounded GraphQL query layer are implemented in-tree (WebTransport server/client evaluation is isolated to `dev`). Low-level socket controls (ECN, 0-RTT, connection migration) are complete.
 * **HTTP/3 browser hardening**: Response header emission now normalizes field names to lowercase and rejects CR/LF-bearing values, covering login/logout cookie and redirect paths in strict browsers such as Firefox.
 * **Async I/O optimization (`io_uring`)**: `io_uring_backend.c`, SQE/CQE synchronization, demolition safety, and focused tests are complete.
 * **Multiport HTTP/3 fan-out**: The `cwist_multiport_t` facade now creates per-port UDP contexts and copies global HTTP/3 settings unless a port is detached into a sub-app.
@@ -74,7 +74,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 | **io_uring Backend** | ✅ | `io_uring_backend.c`, focused smoke tests, demolition tests, SQE/CQE synchronization, and fixed-buffer fallback |
 | **kqueue Backend** | 🔄 | macOS GitHub Actions gate builds the kqueue-selected backend and runs focused regressions; HTTP/3 uses the BSD polling path with optional ECN socket capabilities |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
-| **WebTransport** | 🧪 | Server sessions, streams, and datagrams are implemented; `dev` adds an experimental native C client on LSQUIC PR #629, with Extended CONNECT, session streams, datagrams, and explicit I/O polling |
+| **WebTransport** | ⏳ / 🔮 | Excluded from `main`; experimental WebTransport server/native C client proposal (LSQUIC PR #629) is evaluated exclusively on `dev` |
 | HTTP/3 Datagram Extension | ✅ | `send_datagram`, callbacks, `es_datagrams` enabled |
 | ECN (Explicit Congestion Notification) | ✅ | UDP socket with `IP_RECVTOS` / `IPV6_RECVTCLASS` |
 | Connection Migration | ✅ | `es_allow_migration` enabled |
