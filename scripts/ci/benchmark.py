@@ -116,7 +116,7 @@ def render_webserver_svg(history: list[dict]) -> str:
         '.bar-val{font:12px sans-serif;font-weight:bold;fill:#f3f4f6}'
         '</style>'
     )
-    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">{svg_style}<rect width="100%" height="100%" fill="#111827"/>' + ''.join(blocks) + '</svg>\n'
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {width} {height}">{svg_style}<rect width="100%" height="100%" fill="#111827"/>' + ''.join(blocks) + '</svg>\n'
 
 def render() -> None:
     history = json.loads(HISTORY.read_text()) if HISTORY.exists() else []
