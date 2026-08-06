@@ -106,7 +106,16 @@ def render_webserver_svg(history: list[dict]) -> str:
             if bar_len > 0:
                 blocks.append(f'<rect x="{px+80}" y="{by}" width="{bar_len}" height="22" fill="{color}" rx="3"/>')
             blocks.append(f'<text x="{px+330}" y="{by+16}" class="bar-val">{val_str}</text>')
-            
+
+    # Footer: recorded Spring/JVM runtime environment & benchmark profile
+    env = ws_latest.get("spring_env", {}) or {}
+    if env:
+        footer1 = (f"Spring Boot {env.get('spring_boot_version','n/a')} | {env.get('java_version','n/a')} | "
+                   f"virtual threads: {'on' if env.get('virtual_threads') else 'off'} | JVM: {env.get('jvm_opts','n/a')}")
+        footer2 = f"Profile: {ws_latest.get('wrk_profile', 'wrk 12t 400c')}"
+        blocks.append(f'<text x="30" y="512" class="footer">{footer1}</text>')
+        blocks.append(f'<text x="30" y="530" class="footer">{footer2}</text>')
+
     svg_style = (
         '<style>'
         '.title{font:18px sans-serif;font-weight:bold;fill:#f9fafb}'
@@ -114,6 +123,7 @@ def render_webserver_svg(history: list[dict]) -> str:
         '.legend{font:13px sans-serif;fill:#d1d5db}'
         '.bar-label{font:13px sans-serif;font-weight:500;fill:#e5e7eb}'
         '.bar-val{font:12px sans-serif;font-weight:bold;fill:#f3f4f6}'
+        '.footer{font:11px sans-serif;fill:#6b7280}'
         '</style>'
     )
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {width} {height}">{svg_style}<rect width="100%" height="100%" fill="#111827"/>' + ''.join(blocks) + '</svg>\n'
@@ -133,9 +143,16 @@ def render() -> None:
         f"Latest Web Server Benchmark (wrk 12t 400c):\n"
         f"- **CWIST**: {ws_latest.get('cwist_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_lat_ms',0):.2f}ms | RSS {ws_latest.get('cwist_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_csw',0):.0f}\n"
         f"- **Axum**: {ws_latest.get('axum_rps',0):.0f} req/s | Latency {ws_latest.get('axum_lat_ms',0):.2f}ms | RSS {ws_latest.get('axum_rss_kib',0):.0f}KiB | Csw {ws_latest.get('axum_csw',0):.0f}\n"
-        f"- **Spring Boot**: {ws_latest.get('spring_rps',0):.0f} req/s | Latency {ws_latest.get('spring_lat_ms',0):.2f}ms | RSS {ws_latest.get('spring_rss_kib',0):.0f}KiB | Csw {ws_latest.get('spring_csw',0):.0f}\n\n"
-        f"![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)"
+        f"- **Spring Boot**: {ws_latest.get('spring_rps',0):.0f} req/s | Latency {ws_latest.get('spring_lat_ms',0):.2f}ms | RSS {ws_latest.get('spring_rss_kib',0):.0f}KiB | Csw {ws_latest.get('spring_csw',0):.0f}\n"
     )
+    ws_env = ws_latest.get("spring_env", {}) or {}
+    if ws_env:
+        ws_summary += (
+            f"\nSpring runtime env: **{ws_env.get('java_version','n/a')}**, Spring Boot **{ws_env.get('spring_boot_version','n/a')}**, "
+            f"virtual threads **{'on' if ws_env.get('virtual_threads') else 'off'}**, "
+            f"JVM opts `{ws_env.get('jvm_opts','n/a')}`, warmup/profile: {ws_latest.get('wrk_profile','n/a')}\n"
+        )
+    ws_summary += f"\n![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)"
     if README.exists(): replace(README, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
     if README_MD.exists(): replace(README_MD, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
 

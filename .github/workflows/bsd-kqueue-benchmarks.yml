@@ -147,7 +147,11 @@ jobs:
               </build>
           </project>
           EOF
-          mkdir -p src/main/java/com/example
+          mkdir -p src/main/java/com/example src/main/resources
+          cat << 'EOF' > src/main/resources/application.properties
+          # JVM fairness: serve requests on virtual threads (Project Loom, Java 21)
+          spring.threads.virtual.enabled=true
+          EOF
           cat << 'EOF' > src/main/java/com/example/Application.java
           package com.example;
           import org.springframework.boot.SpringApplication;
@@ -175,25 +179,35 @@ jobs:
           cd /tmp/axum_bench && cargo build --release
           cd /tmp/spring_bench && mvn -q package -DskipTests
 
-          # Helper function for process stats before/after wrk test
+          # Helper function for process stats before/after wrk test.
+          # Every server gets an identical 10s warmup run (discarded) before the
+          # measured run so JIT-tiered runtimes (JVM) reach steady state; context
+          # switches are only counted over the measured window.
           run_bench() {
             NAME=$1
             CMD=$2
             PORT=$3
             TXT=$4
             STAT_TXT=$5
+            WAIT=${6:-2}
 
             echo "=== Starting $NAME Web Server (Port $PORT) ==="
             $CMD &
             PID=$!
-            sleep 2
-            
-            # Initial stat
+            for i in $(seq 1 $WAIT); do
+              curl -sf http://127.0.0.1:$PORT/ > /dev/null 2>&1 && break
+              sleep 1
+            done
+
+            # Warmup (results discarded)
+            wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/ > /dev/null 2>&1 || true
+
+            # Initial stat (after warmup)
             BEFORE_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$BEFORE_CSW" ] && BEFORE_CSW=0
 
             wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
-            
+
             AFTER_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$AFTER_CSW" ] && AFTER_CSW=0
             RSS=$(ps -o rss= -p $PID 2>/dev/null | awk '{print $1}')
@@ -207,12 +221,37 @@ jobs:
             cat $TXT
           }
 
-          run_bench "CWIST" "/tmp/cwist_server" 8081 "/tmp/cwist.txt" "/tmp/cwist_stat.txt"
-          run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 8082 "/tmp/axum.txt" "/tmp/axum_stat.txt"
-          run_bench "Spring Boot" "java -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar" 8080 "/tmp/spring.txt" "/tmp/spring_stat.txt"
+          run_bench "CWIST" "/tmp/cwist_server" 8081 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
+          run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 8082 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
+
+          # Spring Boot JVM fairness setup:
+          #  - fixed heap to avoid resize noise during measurement
+          #  - CDS (Class Data Sharing) AOT cache trained from a real boot, then
+          #    replayed via -XX:SharedArchiveFile for representative startup/warmup
+          SPRING_JVM_OPTS="-Xms512m -Xmx512m"
+          SPRING_CDS_ARCHIVE=/tmp/spring_bench/app.jsa
+
+          java $SPRING_JVM_OPTS -XX:ArchiveClassesAtExit=$SPRING_CDS_ARCHIVE \
+            -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar &
+          TRAIN_PID=$!
+          for i in $(seq 1 90); do
+            curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 && break
+            sleep 1
+          done
+          kill -TERM $TRAIN_PID 2>/dev/null || true
+          wait $TRAIN_PID 2>/dev/null || true
+
+          run_bench "Spring Boot" "java $SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar" 8080 "/tmp/spring.txt" "/tmp/spring_stat.txt" 90
+
+          # Record exact toolchain/runtime facts alongside the numbers
+          export SPRING_JAVA_VERSION="$(java -version 2>&1 | head -1)"
+          export SPRING_BOOT_VERSION="3.2.3"
+          export SPRING_JVM_OPTS_RECORDED="$SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE (CDS AOT cache)"
+          export SPRING_VIRTUAL_THREADS="true"
+          export WRK_PROFILE="wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)"
 
           python3 - <<'PY'
-          import json, re, pathlib
+          import json, os, re, pathlib
           from datetime import datetime, timezone
 
           def parse_wrk(path_str):
@@ -256,7 +295,15 @@ jobs:
               "timestamp": datetime.now(timezone.utc).isoformat(),
               "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
               "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
-              "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_rss_kib": spring_rss, "spring_csw": spring_csw
+              "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_rss_kib": spring_rss, "spring_csw": spring_csw,
+              "wrk_profile": os.environ.get("WRK_PROFILE", ""),
+              "spring_env": {
+                  "java_version": os.environ.get("SPRING_JAVA_VERSION", ""),
+                  "spring_boot_version": os.environ.get("SPRING_BOOT_VERSION", ""),
+                  "jvm_opts": os.environ.get("SPRING_JVM_OPTS_RECORDED", ""),
+                  "virtual_threads": os.environ.get("SPRING_VIRTUAL_THREADS", "") == "true",
+                  "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
+              }
           }
           print("Parsed web server multi-metric benchmark data:", data)
           with open("webserver-result.json", "w") as f:
