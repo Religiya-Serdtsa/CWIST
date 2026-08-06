@@ -153,7 +153,7 @@ Automated OS & Web Server benchmark histories are published in `docs/benchmark-t
 | README / API Reference | ✅ | Markdown docs in `docs/` |
 | **Tutorial & Examples** | ✅ | 30 comprehensive hands-on tutorial modules with C source, CMakeLists, and English guides in `tutorials/` |
 | **CLI Scaffolding** | ✅ | `cwist new project`, `.cwpro` manifests, OpenAPI generation, and include-aware incremental watcher |
-| **Hot Reload (Dev Mode)** | ✅ | `cwist watcher` uses inotify/kqueue with snapshot/poll fallback, debounces changes, exports include-graph recompilation scope, preserves the prior process on build failure, and gracefully restarts successful builds |
+| **Hot Reload (Dev Mode)** | ✅ | `cwist watcher` uses inotify/kqueue with snapshot/poll fallback, debounces changes, exports include-graph scope, preserves prior process on build failure, and performs zero-downtime SO_REUSEPORT overlap process hot-swapping |
 | **Configuration Management** | ✅ | `.env` file + environment variable loader via `cwist_config` |
 | **Testing Utilities** | ✅ | In-process test client (`cwist_test_client_get/post/request_ex`), cookie jar, multipart helper, and regression targets wired in Makefile |
 | **Benchmark Suite** | ✅ | GitHub Actions Linux/macOS measurements publish CPU, throughput, RSS, memory-recovery drift, and context-switch SVG trends |

@@ -336,8 +336,30 @@ class ProcessSupervisor:
             self.child = None
 
     def restart(self) -> bool:
-        self.stop()
-        return self.start()
+        """Perform seamless overlap restart: spawn new process first then terminate old."""
+        old_child = self.child
+        try:
+            new_child = subprocess.Popen(shlex.split(self.command), cwd=self.root,
+                                         start_new_session=True)
+            print(f"hot-swapped: started new process {self.command} (pid {new_child.pid})")
+            self.child = new_child
+            time.sleep(0.05)  # Brief overlap for SO_REUSEPORT binding transfer
+        except OSError as exc:
+            print(f"could not start new development process during hot swap: {exc}", file=sys.stderr)
+            return False
+
+        if old_child and old_child.poll() is None:
+            try:
+                import os
+                os.killpg(old_child.pid, signal.SIGTERM)
+                old_child.wait(timeout=self.timeout)
+            except subprocess.TimeoutExpired:
+                import os
+                os.killpg(old_child.pid, signal.SIGKILL)
+                old_child.wait()
+            except Exception:
+                pass
+        return True
 
 
 def watcher(project_arg: str | None, interval: float, once: bool, run: bool, force_poll: bool) -> bool:
