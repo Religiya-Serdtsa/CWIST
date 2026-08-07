@@ -160,6 +160,7 @@ static cwist_http_response *do_request(cwist_test_client *client, cwist_http_met
     }
     if (query) {
         cwist_sstring_assign(req->query, (char *)query);
+        if (!req->query_params) req->query_params = cwist_query_map_create();
         cwist_query_map_clear(req->query_params);
         cwist_query_map_parse(req->query_params, query);
     }
