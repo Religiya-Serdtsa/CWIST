@@ -2159,7 +2159,17 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
     size_t buf_len = 0;
     read_buf[0] = '\0';
 
+    bool is_first = true;
     while (true) {
+        if (!is_first && buf_len == 0) {
+            struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+            int ret = poll(&pfd, 1, 5); /* 5ms keep-alive idle budget */
+            if (ret <= 0) {
+                break;
+            }
+        }
+        is_first = false;
+
         cwist_http_request *req = cwist_http_receive_request(client_fd, read_buf, sizeof(read_buf), &buf_len);
         if (!req) {
             break;
