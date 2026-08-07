@@ -14,7 +14,15 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 [Heavy Benchmark on CWIST APP](https://github.com/gg582/fly.board/blob/main/README.md)
 
 <!-- WEBSERVER_BENCHMARKS:START -->
-*Benchmark results are dynamically rendered here during CI runs.*
+Latest Web Server Benchmark (wrk 12t 400c):
+- **CWIST**: 161627 req/s | Latency 0.07ms | RSS 11716KiB | Csw 0
+- **Axum**: 178277 req/s | Latency 2.23ms | RSS 17028KiB | Csw 0
+- **Gin (Go)**: 120413 req/s | Latency 5.76ms | RSS 29984KiB | Csw 0
+- **Spring Boot**: 79973 req/s | Latency 4.99ms | RSS 1257084KiB | Csw 0
+
+Spring runtime env: **openjdk version "21.0.12" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty (optimized event loop, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:+AlwaysPreTouch -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
+
+![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)
 <!-- WEBSERVER_BENCHMARKS:END -->
 
 _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
