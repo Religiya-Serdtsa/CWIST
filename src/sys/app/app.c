@@ -2007,24 +2007,8 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
         res->endpoint_opts = req->endpoint_opts;
     }
 
-    cwist_static_request_info static_info = {0};
-    if (cwist_prepare_static(app, req, &static_info)) {
-        req->endpoint_opts = CWIST_ENDPOINT_FILE;
-        if (res) res->endpoint_opts = req->endpoint_opts;
-        execute_chain(app, req, res, cwist_static_handler, &static_info);
-        return;
-    }
-
     const char *path = (req->path && req->path->data) ? req->path->data : "/";
     cwist_route_entry *found_route = cwist_route_table_lookup(app->router, req->method, path);
-
-    if (found_route && req->path_params) {
-        cwist_query_map_clear(req->path_params);
-    }
-
-    if (!found_route) {
-        found_route = cwist_route_table_match_params(app->router, req);
-    }
 
     if (found_route) {
         req->endpoint_opts = found_route->opts ? found_route->opts : CWIST_ENDPOINT_DEFAULT;
@@ -2043,6 +2027,25 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
         } else {
             execute_chain(app, req, res, found_route->handler, NULL);
         }
+        return;
+    }
+
+    cwist_static_request_info static_info = {0};
+    if (cwist_prepare_static(app, req, &static_info)) {
+        req->endpoint_opts = CWIST_ENDPOINT_FILE;
+        if (res) res->endpoint_opts = req->endpoint_opts;
+        execute_chain(app, req, res, cwist_static_handler, &static_info);
+        return;
+    }
+
+    if (!found_route) {
+        found_route = cwist_route_table_match_params(app->router, req);
+    }
+
+    if (found_route) {
+        req->endpoint_opts = found_route->opts ? found_route->opts : CWIST_ENDPOINT_DEFAULT;
+        if (res) res->endpoint_opts = req->endpoint_opts;
+        execute_chain(app, req, res, found_route->handler, NULL);
     } else {
         cwist_error_handler_func eh = cwist_app_find_error_handler(app, CWIST_HTTP_NOT_FOUND);
         if (eh) {
