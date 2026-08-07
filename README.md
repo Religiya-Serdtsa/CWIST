@@ -15,10 +15,10 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk 12t 400c):
-- **CWIST**: 103965 req/s | Latency 0.09ms | RSS 11652KiB | Csw 0
-- **Axum**: 122081 req/s | Latency 3.20ms | RSS 17832KiB | Csw 0
-- **Gin (Go)**: 91669 req/s | Latency 5.41ms | RSS 29460KiB | Csw 0
-- **Spring Boot**: 61580 req/s | Latency 6.42ms | RSS 1247224KiB | Csw 0
+- **CWIST**: 99714 req/s | Latency 0.10ms | RSS 11792KiB | Csw 0
+- **Axum**: 112963 req/s | Latency 3.38ms | RSS 14912KiB | Csw 0
+- **Gin (Go)**: 78400 req/s | Latency 6.84ms | RSS 30332KiB | Csw 0
+- **Spring Boot**: 45721 req/s | Latency 8.65ms | RSS 1229412KiB | Csw 0
 
 Spring runtime env: **openjdk version "21.0.11" 2026-04-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty (optimized event loop, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:+AlwaysPreTouch -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
