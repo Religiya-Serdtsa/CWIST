@@ -64,5 +64,30 @@
       "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
     },
     "runner_hw": "4 vCPU | AMD EPYC 7763 (GitHub Actions ubuntu-latest shared runner)"
+  },
+  {
+    "timestamp": "2026-08-07T01:37:10.448133+00:00",
+    "cwist_rps": 66657.68,
+    "cwist_lat_ms": 0.45663,
+    "cwist_rss_kib": 12500.0,
+    "cwist_csw": 0.0,
+    "axum_rps": 120847.27,
+    "axum_lat_ms": 3.23,
+    "axum_rss_kib": 15688.0,
+    "axum_csw": 0.0,
+    "spring_rps": 55468.24,
+    "spring_lat_ms": 7.19,
+    "spring_rss_kib": 560904.0,
+    "spring_csw": 0.0,
+    "wrk_profile": "wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)",
+    "runner_hw": "4 vCPU | AMD EPYC 9V74 80-Core Processor",
+    "spring_env": {
+      "java_version": "openjdk version \"21.0.12\" 2026-07-21 LTS",
+      "spring_boot_version": "3.2.3",
+      "stack": "Spring WebFlux + Reactor Netty (event loop, virtual threads enabled)",
+      "jvm_opts": "-Xms512m -Xmx512m -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)",
+      "virtual_threads": true,
+      "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
+    }
   }
 ]
