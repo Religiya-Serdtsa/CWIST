@@ -19,6 +19,7 @@ typedef struct cwist_query_map {
     cwist_query_bucket **buckets;
     size_t size;
     uint8_t seed[16];
+    void *arena;
 } cwist_query_map;
 
 /** @name Lifecycle */
@@ -28,6 +29,7 @@ typedef struct cwist_query_map {
  * @brief Create a new query map.
  */
 cwist_query_map *cwist_query_map_create(void);
+cwist_query_map *cwist_query_map_create_in_arena(void *arena);
 
 /**
  * @brief Destroy a query map.

@@ -503,6 +503,13 @@ typedef struct h2_huffman_node {
     bool is_terminal;
 } h2_huffman_node;
 
+typedef struct {
+    int16_t symbol;
+    uint8_t bits;
+} h2_huffman_lut_entry;
+
+static h2_huffman_lut_entry h2_huffman_root_lut[256];
+
 static h2_huffman_node h2_huffman_pool[4096];
 static size_t h2_huffman_pool_used = 0;
 static h2_huffman_node *h2_huffman_root = NULL;
@@ -801,6 +808,27 @@ static const struct {
         node->is_terminal = true;
     }
     h2_huffman_root = root;
+    
+    /* Precompute the 8-bit lookup table for root node transitions. */
+    for (int i = 0; i < 256; ++i) {
+        h2_huffman_node *n = h2_huffman_root;
+        int16_t decoded_sym = -1;
+        uint8_t consumed_bits = 0;
+        for (int b = 7; b >= 0; --b) {
+            int bit = (i >> b) & 1;
+            n = n->child[bit];
+            if (!n) {
+                break;
+            }
+            if (n->is_terminal) {
+                decoded_sym = (int16_t)n->symbol;
+                consumed_bits = (uint8_t)(8 - b);
+                break;
+            }
+        }
+        h2_huffman_root_lut[i].symbol = decoded_sym;
+        h2_huffman_root_lut[i].bits = consumed_bits;
+    }
 }
 
 char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_len) {
@@ -812,11 +840,43 @@ char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_le
     if (!out) return NULL;
     size_t out_pos = 0;
 
+    uint32_t bit_buf = 0;
+    int bit_cnt = 0;
+    size_t src_idx = 0;
     h2_huffman_node *node = h2_huffman_root;
-    for (size_t i = 0; i < src_len; ++i) {
-        unsigned char byte = src[i];
-        for (int b = 7; b >= 0; --b) {
-            int bit = (byte >> b) & 1;
+
+    while (src_idx < src_len || bit_cnt > 0) {
+        /* Keep the bit buffer filled with up to 24 bits. */
+        while (bit_cnt <= 24 && src_idx < src_len) {
+            bit_buf = (bit_buf << 8) | src[src_idx++];
+            bit_cnt += 8;
+        }
+
+        /* Speed-up: If we are at the root, try decoding 8 bits using the LUT. */
+        if (node == h2_huffman_root && bit_cnt >= 8) {
+            uint8_t index = (uint8_t)(bit_buf >> (bit_cnt - 8));
+            h2_huffman_lut_entry entry = h2_huffman_root_lut[index];
+            if (entry.symbol != -1) {
+                if (entry.symbol == 256) {
+                    cwist_free(out);
+                    return NULL;
+                }
+                if (out_pos + 1 >= cap) {
+                    cap *= 2;
+                    char *tmp = (char *)cwist_realloc(out, cap);
+                    if (!tmp) { cwist_free(out); return NULL; }
+                    out = tmp;
+                }
+                out[out_pos++] = (char)entry.symbol;
+                bit_cnt -= entry.bits;
+                continue;
+            }
+        }
+
+        /* Fallback: bit-by-bit traversal. */
+        if (bit_cnt > 0) {
+            int bit = (bit_buf >> (bit_cnt - 1)) & 1;
+            bit_cnt--;
             node = node->child[bit];
             if (!node) { cwist_free(out); return NULL; }
             if (node->is_terminal) {
@@ -833,6 +893,8 @@ char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_le
                 out[out_pos++] = (char)node->symbol;
                 node = h2_huffman_root;
             }
+        } else {
+            break;
         }
     }
 
@@ -888,7 +950,7 @@ static void h2_parse_path(cwist_http_request *req, const char *path) {
         if (req->query_params) {
             cwist_query_map_clear(req->query_params);
         } else {
-            req->query_params = cwist_query_map_create();
+            req->query_params = cwist_query_map_create_in_arena(req->arena);
         }
         if (req->query_params && req->query->size > 0) {
             cwist_query_map_parse(req->query_params, req->query->data);

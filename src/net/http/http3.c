@@ -447,7 +447,7 @@ static void h3_parse_path(cwist_http_request *req, const char *path) {
         if (req->query_params) {
             cwist_query_map_clear(req->query_params);
         } else {
-            req->query_params = cwist_query_map_create();
+            req->query_params = cwist_query_map_create_in_arena(req->arena);
         }
         if (req->query_params && req->query->size > 0) {
             cwist_query_map_parse(req->query_params, req->query->data);

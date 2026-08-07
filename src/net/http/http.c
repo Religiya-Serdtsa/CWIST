@@ -1265,7 +1265,7 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     if (query_sep) {
         cwist_sstring_assign_len(req->path, path_start, query_sep - path_start);
         cwist_sstring_assign_len(req->query, query_sep + 1, path_end - (query_sep + 1));
-        req->query_params = cwist_query_map_create();
+        req->query_params = cwist_query_map_create_in_arena(req->arena);
         if (req->query_params) {
             cwist_query_map_parse(req->query_params, req->query->data);
         }
