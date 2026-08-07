@@ -887,15 +887,21 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
 
     /* Fast path for default HTTP/1.1 200 OK response with no custom headers */
     if (res->status_code == 200 && !res->headers && !res->alt_svc && buf_size >= 128) {
-        /* "HTTP/1.1 200 OK\r\nContent-Length: " + body_len + "\r\nConnection: " + keep_alive + "\r\n\r\n" */
+        /* Compact ring/line buffer optimization for high-throughput pipelining */
         static const char status_prefix[] = "HTTP/1.1 200 OK\r\nContent-Length: ";
         memcpy(buf, status_prefix, sizeof(status_prefix) - 1);
         size_t offset = sizeof(status_prefix) - 1;
 
-        /* Fast integer to ascii */
-        char num_buf[32];
-        int num_len = snprintf(num_buf, sizeof(num_buf), "%zu", body_len);
-        memcpy(buf + offset, num_buf, num_len);
+        /* Fast integer to ascii without snprintf overhead */
+        char num_buf[20];
+        char *p = num_buf + sizeof(num_buf);
+        size_t tmp_len = body_len;
+        do {
+            *--p = '0' + (tmp_len % 10);
+            tmp_len /= 10;
+        } while (tmp_len > 0);
+        size_t num_len = (num_buf + sizeof(num_buf)) - p;
+        memcpy(buf + offset, p, num_len);
         offset += num_len;
 
         if (res->keep_alive) {
