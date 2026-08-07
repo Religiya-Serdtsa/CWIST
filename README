@@ -16,19 +16,19 @@ to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
 <!-- BENCHMARKS:START -->
-Latest automated benchmark: **Darwin** — 16.01 M leases/s, 101.62% CPU, 739136 KiB RSS.
+Latest automated benchmark: **Darwin** — 12.63 M leases/s, 106.12% CPU, 707968 KiB RSS.
 
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk 12t 400c):
-- **CWIST**: 188376 req/s | Latency 0.05ms | RSS 11956KiB | Csw 0
-- **Axum**: 194598 req/s | Latency 2.03ms | RSS 16144KiB | Csw 0
-- **Gin (Go)**: 142877 req/s | Latency 4.82ms | RSS 28744KiB | Csw 0
-- **Spring Boot**: 96204 req/s | Latency 4.31ms | RSS 1239996KiB | Csw 0
+- **CWIST**: 102978 req/s | Latency 0.10ms | RSS 11840KiB | Csw 0
+- **Axum**: 123244 req/s | Latency 3.17ms | RSS 16364KiB | Csw 0
+- **Gin (Go)**: 92030 req/s | Latency 5.71ms | RSS 29740KiB | Csw 0
+- **Spring Boot**: 59670 req/s | Latency 6.67ms | RSS 1241284KiB | Csw 0
 
-Spring runtime env: **openjdk version "21.0.11" 2026-04-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty (optimized event loop, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:+AlwaysPreTouch -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
+Spring runtime env: **openjdk version "21.0.12" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty (optimized event loop, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:+AlwaysPreTouch -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
 ![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)
 <!-- WEBSERVER_BENCHMARKS:END -->
