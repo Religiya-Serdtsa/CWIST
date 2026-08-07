@@ -96,19 +96,15 @@ long get_cpu_cores(void) {
 }
 
 long get_optimal_thread_count(void) {
-    /* Scale with cores but cap at a sane default.  C1M mode historically
-     * used cores*32, which exhausts resources on modest hardware and adds
-     * scheduling overhead without improving throughput.  Allow explicit
-     * override via CWIST_WORKER_THREADS. */
     const char *env = getenv("CWIST_WORKER_THREADS");
     if (env && env[0]) {
         long override = atol(env);
         if (override > 0) return override;
     }
     long cores = get_cpu_cores();
-    long count = cores * 4;
-    if (count < 16) count = 16;
-    if (count > 128) count = 128;
+    long count = cores;
+    if (count < 4) count = 4;
+    if (count > 32) count = 32;
     return count;
 }
 
@@ -280,13 +276,25 @@ const char *cwist_http_method_to_string(cwist_http_method_t method) {
  * @return Parsed enum value, or CWIST_HTTP_UNKNOWN when unsupported.
  */
 cwist_http_method_t cwist_http_string_to_method_len(const char *str, size_t len) {
-    if (len == 3 && strncmp(str, "GET", 3) == 0) return CWIST_HTTP_GET;
-    if (len == 4 && strncmp(str, "POST", 4) == 0) return CWIST_HTTP_POST;
-    if (len == 3 && strncmp(str, "PUT", 3) == 0) return CWIST_HTTP_PUT;
-    if (len == 6 && strncmp(str, "DELETE", 6) == 0) return CWIST_HTTP_DELETE;
-    if (len == 5 && strncmp(str, "PATCH", 5) == 0) return CWIST_HTTP_PATCH;
-    if (len == 4 && strncmp(str, "HEAD", 4) == 0) return CWIST_HTTP_HEAD;
-    if (len == 7 && strncmp(str, "OPTIONS", 7) == 0) return CWIST_HTTP_OPTIONS;
+    if (!str || len == 0) return CWIST_HTTP_UNKNOWN;
+    if (len == 3) {
+        /* "GET" -> 0x00544547 (Little Endian) or 0x474554 */
+        uint32_t v = 0;
+        memcpy(&v, str, 3);
+        if ((v & 0x00FFFFFF) == 0x00544547) return CWIST_HTTP_GET;
+        if ((v & 0x00FFFFFF) == 0x00545550) return CWIST_HTTP_PUT; /* "PUT" */
+    } else if (len == 4) {
+        uint32_t v = 0;
+        memcpy(&v, str, 4);
+        if (v == 0x54534F50) return CWIST_HTTP_POST; /* "POST" */
+        if (v == 0x44414548) return CWIST_HTTP_HEAD; /* "HEAD" */
+    } else if (len == 5) {
+        if (memcmp(str, "PATCH", 5) == 0) return CWIST_HTTP_PATCH;
+    } else if (len == 6) {
+        if (memcmp(str, "DELETE", 6) == 0) return CWIST_HTTP_DELETE;
+    } else if (len == 7) {
+        if (memcmp(str, "OPTIONS", 7) == 0) return CWIST_HTTP_OPTIONS;
+    }
     return CWIST_HTTP_UNKNOWN;
 }
 
@@ -336,10 +344,14 @@ cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *k
  * @return Raw header value string, or NULL when absent.
  */
 char *cwist_http_header_get(cwist_http_header_node *head, const char *key) {
+    if (!head || !key) return NULL;
+    size_t klen = strlen(key);
     cwist_http_header_node *curr = head;
     while (curr) {
-        if (curr->key->data && strcasecmp(curr->key->data, key) == 0) {
-            return curr->value->data;
+        if (curr->key && curr->key->data && curr->key->size == klen) {
+            if (strcasecmp(curr->key->data, key) == 0) {
+                return curr->value ? curr->value->data : NULL;
+            }
         }
         curr = curr->next;
     }
@@ -408,12 +420,41 @@ static bool header_key_is_connection(const char *key) {
     return strcasecmp(key, "connection") == 0;
 }
 
+static bool headers_have_date(cwist_http_header_node *head) {
+    cwist_http_header_node *curr = head;
+    while (curr) {
+        if (curr->key && curr->key->data && curr->key->size == 4 && strcasecmp(curr->key->data, "date") == 0) {
+            return true;
+        }
+        curr = curr->next;
+    }
+    return false;
+}
 
-/**
- * @brief Detect whether the current header list already contains a Connection header.
- * @param head Head of the header linked list.
- * @return true when a Connection header is present.
- */
+static void cwist_get_cached_date_header(char out_buf[36]) {
+    static _Atomic time_t g_last_sec = 0;
+    static char g_date_str[36] = {0};
+    static pthread_mutex_t g_date_lock = PTHREAD_MUTEX_INITIALIZER;
+
+    time_t now = time(NULL);
+    time_t last = atomic_load_explicit(&g_last_sec, memory_order_relaxed);
+    if (now != last) {
+        pthread_mutex_lock(&g_date_lock);
+        if (now != atomic_load_explicit(&g_last_sec, memory_order_relaxed)) {
+            struct tm gmt;
+#if defined(_WIN32)
+            gmtime_s(&gmt, &now);
+#else
+            gmtime_r(&now, &gmt);
+#endif
+            strftime(g_date_str, sizeof(g_date_str), "%a, %d %b %Y %H:%M:%S GMT", &gmt);
+            atomic_store_explicit(&g_last_sec, now, memory_order_release);
+        }
+        pthread_mutex_unlock(&g_date_lock);
+    }
+    memcpy(out_buf, g_date_str, 30);
+    out_buf[29] = '\0';
+}
 static bool headers_have_connection(cwist_http_header_node *head) {
     cwist_http_header_node *curr = head;
     while (curr) {
@@ -438,8 +479,8 @@ cwist_http_request *cwist_http_request_create(void) {
     req->method = CWIST_HTTP_GET; // Default
     req->path = cwist_sstring_create();
     req->query = cwist_sstring_create();
-    req->query_params = cwist_query_map_create();
-    req->path_params = cwist_query_map_create();
+    req->query_params = NULL;
+    req->path_params = NULL;
     req->version = cwist_sstring_create();
     req->headers = NULL;
     req->body = cwist_sstring_create();
@@ -447,7 +488,7 @@ cwist_http_request *cwist_http_request_create(void) {
     req->client_fd = -1;
     req->app = NULL;
     req->db = NULL;
-    req->flash = cwist_query_map_create();
+    req->flash = NULL;
     req->upgraded = false;
     req->content_length = 0;
     req->stream_id = 0;
@@ -777,6 +818,18 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
         curr = curr->next;
     }
 
+    if (!headers_have_date(res->headers)) {
+        char date_str[36];
+        cwist_get_cached_date_header(date_str);
+        if (offset < buf_size) {
+            int n = snprintf(buf + offset, buf_size - offset, "Date: %s\r\n", date_str);
+            if (n > 0) {
+                offset += n;
+                if (offset > buf_size) offset = buf_size;
+            }
+        }
+    }
+
     if (!headers_have_content_length(res->headers)) {
         if (offset < buf_size) {
             int n = snprintf(buf + offset, buf_size - offset, "Content-Length: %zu\r\n", body_len);
@@ -1041,7 +1094,10 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     if (query_sep) {
         cwist_sstring_assign_len(req->path, path_start, query_sep - path_start);
         cwist_sstring_assign_len(req->query, query_sep + 1, path_end - (query_sep + 1));
-        cwist_query_map_parse(req->query_params, req->query->data);
+        req->query_params = cwist_query_map_create();
+        if (req->query_params) {
+            cwist_query_map_parse(req->query_params, req->query->data);
+        }
     } else {
         cwist_sstring_assign_len(req->path, path_start, path_end - path_start);
         cwist_sstring_assign_len(req->query, "", 0);

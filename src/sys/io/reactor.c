@@ -320,7 +320,6 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
                 if (errno == EINTR) continue;
                 break;
             }
-            /* Dispatch listening/accept events first, then active sockets in LRU order */
             for (int i = 0; i < n; i++) {
                 reactor_event_ctx_t *ev_ctx = (reactor_event_ctx_t *)events[i].data.ptr;
                 if (ev_ctx) {

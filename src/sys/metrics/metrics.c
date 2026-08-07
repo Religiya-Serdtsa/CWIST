@@ -21,14 +21,14 @@ struct cwist_metrics_registry {
 };
 
 static const cwist_metric_t metric_defaults[CWIST_METRIC_COUNT] = {
-    [CWIST_METRIC_URING_SQES_PENDING]   = { "cwist_io_uring_sqes_pending",   "Active io_uring SQEs waiting for kernel pickup",   CWIST_METRIC_COUNTER },
-    [CWIST_METRIC_URING_BUFFERS_ACTIVE] = { "cwist_io_uring_buffers_active", "In-flight fixed buffers in io_uring pool",         CWIST_METRIC_GAUGE   },
-    [CWIST_METRIC_STREAMS_HTTP2]        = { "cwist_streams_http2",           "Active HTTP/2 streams",                            CWIST_METRIC_GAUGE   },
-    [CWIST_METRIC_STREAMS_HTTP3]        = { "cwist_streams_http3",           "Active HTTP/3 streams",                            CWIST_METRIC_GAUGE   },
-    [CWIST_METRIC_FLOW_WINDOW_HEALTH]   = { "cwist_flow_window_health",      "Flow-control window health (0-100)",               CWIST_METRIC_GAUGE   },
-    [CWIST_METRIC_VALIDATION_ERRORS]    = { "cwist_validation_errors",       "Validation error frequency",                       CWIST_METRIC_COUNTER },
-    [CWIST_METRIC_REQUESTS_TOTAL]       = { "cwist_requests_total",          "Total HTTP requests handled",                      CWIST_METRIC_COUNTER },
-    [CWIST_METRIC_REQUEST_DURATION_NS]  = { "cwist_request_duration_ns",     "Request duration sum in nanoseconds",              CWIST_METRIC_COUNTER },
+    [CWIST_METRIC_URING_SQES_PENDING]   = { .name = "cwist_io_uring_sqes_pending",   .help = "Active io_uring SQEs waiting for kernel pickup",   .type = CWIST_METRIC_COUNTER },
+    [CWIST_METRIC_URING_BUFFERS_ACTIVE] = { .name = "cwist_io_uring_buffers_active", .help = "In-flight fixed buffers in io_uring pool",         .type = CWIST_METRIC_GAUGE   },
+    [CWIST_METRIC_STREAMS_HTTP2]        = { .name = "cwist_streams_http2",           .help = "Active HTTP/2 streams",                            .type = CWIST_METRIC_GAUGE   },
+    [CWIST_METRIC_STREAMS_HTTP3]        = { .name = "cwist_streams_http3",           .help = "Active HTTP/3 streams",                            .type = CWIST_METRIC_GAUGE   },
+    [CWIST_METRIC_FLOW_WINDOW_HEALTH]   = { .name = "cwist_flow_window_health",      .help = "Flow-control window health (0-100)",               .type = CWIST_METRIC_GAUGE   },
+    [CWIST_METRIC_VALIDATION_ERRORS]    = { .name = "cwist_validation_errors",       .help = "Validation error frequency",                       .type = CWIST_METRIC_COUNTER },
+    [CWIST_METRIC_REQUESTS_TOTAL]       = { .name = "cwist_requests_total",          .help = "Total HTTP requests handled",                      .type = CWIST_METRIC_COUNTER },
+    [CWIST_METRIC_REQUEST_DURATION_NS]  = { .name = "cwist_request_duration_ns",     .help = "Request duration sum in nanoseconds",              .type = CWIST_METRIC_COUNTER },
 };
 
 /* -------------------------------------------------------------------------
