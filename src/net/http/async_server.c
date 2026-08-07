@@ -52,7 +52,11 @@ static void async_accept_cb(int fd, void *ctx) {
 
     /* Re-arm the listening socket so we can accept the next batch. */
     if (g_reactor) {
-        cwist_reactor_add(g_reactor, fd, async_accept_cb, ctx);
+        if (atomic_load(&g_cwist_running)) {
+            cwist_reactor_add(g_reactor, fd, async_accept_cb, ctx);
+        } else {
+            cwist_reactor_stop(g_reactor);
+        }
     }
 }
 
@@ -82,6 +86,13 @@ cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
         else cwist_http_pool_destroy();
         return err;
     }
+
+#if defined(SO_REUSEPORT)
+    int reuseport = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &reuseport, sizeof(reuseport));
+#endif
+
+    g_cwist_listen_fd = server_fd;
 
     g_reactor = cwist_reactor_create();
     if (!g_reactor) {
