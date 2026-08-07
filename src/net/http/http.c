@@ -383,6 +383,46 @@ static cwist_sstring *cwist_http_sstring_create(cwist_arena_t *arena) {
 }
 
 /**
+ * @brief Prepend one header node with length, optionally bump-allocated from an arena.
+ */
+static cwist_error_t cwist_http_header_add_ex_len(cwist_http_header_node **head, cwist_arena_t *arena, const char *key, size_t key_len, const char *value, size_t value_len) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+
+    bool from_arena = false;
+    cwist_http_header_node *node = NULL;
+    if (arena) {
+        node = (cwist_http_header_node *)cwist_arena_alloc(arena, sizeof(cwist_http_header_node));
+        if (node) {
+            memset(node, 0, sizeof(cwist_http_header_node));
+            from_arena = true;
+        }
+    }
+    if (!node) {
+        node = (cwist_http_header_node *)cwist_alloc(sizeof(cwist_http_header_node));
+    }
+    if (!node) {
+        err = make_error(CWIST_ERR_JSON);
+        err.error.err_json = cJSON_CreateObject();
+        cJSON_AddStringToObject(err.error.err_json, "http_error", "Failed to allocate header");
+        return err;
+    }
+    node->arena_owned = from_arena;
+
+    node->key = cwist_http_sstring_create(arena);
+    node->value = cwist_http_sstring_create(arena);
+    node->next = NULL;
+
+    cwist_sstring_assign_len(node->key, (char *)key, key_len);
+    cwist_sstring_assign_len(node->value, (char *)value, value_len);
+
+    node->next = *head;
+    *head = node;
+
+    err.error.err_i16 = 0; // Success
+    return err;
+}
+
+/**
  * @brief Prepend one header node, optionally bump-allocated from an arena.
  * @param head Header-list head pointer to update.
  * @param arena Arena to carve the node from, or NULL for heap allocation.
@@ -1241,33 +1281,41 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
         req->keep_alive = false;
     }
 
-    // 2. Headers (Optimized: Minimal copies)
+    // 2. Headers (Optimized: Zero-copy in-place parsing using memchr and strncasecmp)
     line_start = line_end + 2; 
     while (line_start < header_end) {
-        line_end = strstr(line_start, "\r\n");
+        line_end = memchr(line_start, '\r', header_end - line_start);
         if (!line_end || line_end == line_start) break;
 
         const char *colon = memchr(line_start, ':', line_end - line_start);
         if (colon) {
-            int key_len = colon - line_start;
+            size_t key_len = colon - line_start;
             const char *val_start = colon + 1;
             while (val_start < line_end && *val_start == ' ') val_start++;
-            int val_len = line_end - val_start;
+            size_t val_len = line_end - val_start;
             
-            // Temporary NUL termination for legacy header_add
-            char key_tmp[256];
-            char val_tmp[1024];
-            if (key_len < 256 && val_len < 1024) {
-                memcpy(key_tmp, line_start, key_len); key_tmp[key_len] = '\0';
-                memcpy(val_tmp, val_start, val_len); val_tmp[val_len] = '\0';
-                
-                cwist_http_header_add_ex(&req->headers, (cwist_arena_t *)req->arena, key_tmp, val_tmp);
-                
-                if (strcasecmp(key_tmp, "Connection") == 0) {
-                    if (strcasecmp(val_tmp, "close") == 0) req->keep_alive = false;
-                    else if (strcasecmp(val_tmp, "keep-alive") == 0) req->keep_alive = true;
-                } else if (strcasecmp(key_tmp, "Content-Length") == 0) {
-                    req->content_length = (size_t)atoll(val_tmp);
+            cwist_http_header_add_ex_len(&req->headers, (cwist_arena_t *)req->arena, line_start, key_len, val_start, val_len);
+            
+            char k0 = line_start[0];
+            if (key_len == 10 && (k0 == 'C' || k0 == 'c')) {
+                if (strncasecmp(line_start, "Connection", 10) == 0) {
+                    if (val_len == 5 && strncasecmp(val_start, "close", 5) == 0) {
+                        req->keep_alive = false;
+                    } else if (val_len == 10 && strncasecmp(val_start, "keep-alive", 10) == 0) {
+                        req->keep_alive = true;
+                    }
+                }
+            } else if (key_len == 14 && (k0 == 'C' || k0 == 'c')) {
+                if (strncasecmp(line_start, "Content-Length", 14) == 0) {
+                    size_t len = 0;
+                    for (size_t i = 0; i < val_len; i++) {
+                        if (val_start[i] >= '0' && val_start[i] <= '9') {
+                            len = len * 10 + (val_start[i] - '0');
+                        } else {
+                            break;
+                        }
+                    }
+                    req->content_length = len;
                 }
             }
         }
