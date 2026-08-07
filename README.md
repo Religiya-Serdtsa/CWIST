@@ -15,9 +15,10 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk 12t 400c):
-- **CWIST**: 130230 req/s | Latency 0.08ms | RSS 11396KiB | Csw 0
-- **Axum**: 171134 req/s | Latency 2.30ms | RSS 14140KiB | Csw 0
-- **Spring Boot**: 69622 req/s | Latency 5.80ms | RSS 551596KiB | Csw 0
+- **CWIST**: 90275 req/s | Latency 0.11ms | RSS 11712KiB | Csw 0
+- **Axum**: 109798 req/s | Latency 3.58ms | RSS 16004KiB | Csw 0
+- **Gin (Go)**: 80225 req/s | Latency 6.40ms | RSS 29804KiB | Csw 0
+- **Spring Boot**: 33896 req/s | Latency 12.12ms | RSS 566032KiB | Csw 0
 
 Spring runtime env: **openjdk version "21.0.11" 2026-04-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty (event loop, virtual threads enabled)), virtual threads **on**, JVM opts `-Xms512m -Xmx512m -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
