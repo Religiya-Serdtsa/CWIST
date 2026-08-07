@@ -224,7 +224,7 @@ jobs:
             cat $TXT
           }
 
-          run_bench "CWIST" "env CWIST_C1M_MODE=1 /tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
+          run_bench "CWIST" "/tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
           run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
 
           # Spring Boot JVM fairness setup:
