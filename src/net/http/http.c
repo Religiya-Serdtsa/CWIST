@@ -276,13 +276,25 @@ const char *cwist_http_method_to_string(cwist_http_method_t method) {
  * @return Parsed enum value, or CWIST_HTTP_UNKNOWN when unsupported.
  */
 cwist_http_method_t cwist_http_string_to_method_len(const char *str, size_t len) {
-    if (len == 3 && strncmp(str, "GET", 3) == 0) return CWIST_HTTP_GET;
-    if (len == 4 && strncmp(str, "POST", 4) == 0) return CWIST_HTTP_POST;
-    if (len == 3 && strncmp(str, "PUT", 3) == 0) return CWIST_HTTP_PUT;
-    if (len == 6 && strncmp(str, "DELETE", 6) == 0) return CWIST_HTTP_DELETE;
-    if (len == 5 && strncmp(str, "PATCH", 5) == 0) return CWIST_HTTP_PATCH;
-    if (len == 4 && strncmp(str, "HEAD", 4) == 0) return CWIST_HTTP_HEAD;
-    if (len == 7 && strncmp(str, "OPTIONS", 7) == 0) return CWIST_HTTP_OPTIONS;
+    if (!str || len == 0) return CWIST_HTTP_UNKNOWN;
+    if (len == 3) {
+        /* "GET" -> 0x00544547 (Little Endian) or 0x474554 */
+        uint32_t v = 0;
+        memcpy(&v, str, 3);
+        if ((v & 0x00FFFFFF) == 0x00544547) return CWIST_HTTP_GET;
+        if ((v & 0x00FFFFFF) == 0x00545550) return CWIST_HTTP_PUT; /* "PUT" */
+    } else if (len == 4) {
+        uint32_t v = 0;
+        memcpy(&v, str, 4);
+        if (v == 0x54534F50) return CWIST_HTTP_POST; /* "POST" */
+        if (v == 0x44414548) return CWIST_HTTP_HEAD; /* "HEAD" */
+    } else if (len == 5) {
+        if (memcmp(str, "PATCH", 5) == 0) return CWIST_HTTP_PATCH;
+    } else if (len == 6) {
+        if (memcmp(str, "DELETE", 6) == 0) return CWIST_HTTP_DELETE;
+    } else if (len == 7) {
+        if (memcmp(str, "OPTIONS", 7) == 0) return CWIST_HTTP_OPTIONS;
+    }
     return CWIST_HTTP_UNKNOWN;
 }
 
