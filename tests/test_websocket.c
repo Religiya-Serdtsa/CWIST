@@ -1,6 +1,8 @@
 #include <cwist/net/websocket/websocket.h>
 #include <cwist/net/http/http.h>
 #include <cwist/core/sstring/sstring.h>
+#include <cwist/core/seq/seq.h>
+#include <cwist/core/mem/alloc.h>
 #include "../src/net/websocket/ws_utils.h"
 #include <stdio.h>
 #include <assert.h>
@@ -103,6 +105,12 @@ static void test_websocket_sequenced(void) {
     cwist_websocket *ws = cwist_websocket_upgrade(req, sv[0]);
     assert(ws != NULL);
 
+    char response_buf[1024];
+    ssize_t nbytes = read(sv[1], response_buf, sizeof(response_buf) - 1);
+    assert(nbytes > 0);
+    response_buf[nbytes] = '\0';
+    assert(strstr(response_buf, "101 Switching Protocols") != NULL);
+
     const char *message = "CWIST-sequenced-websocket-message";
     size_t msg_len = strlen(message);
     assert(cwist_websocket_send_sequenced(ws, (const uint8_t *)message, msg_len, 8) == 0);
@@ -115,7 +123,7 @@ static void test_websocket_sequenced(void) {
         assert(head[0] == 0x82); /* FIN binary, server does not mask */
         assert((head[1] & 0x80) == 0);
         uint8_t plen = head[1] & 0x7f;
-        uint8_t payload[64];
+        uint8_t payload[128];
         assert(read(sv[1], payload, plen) == plen);
         cwist_seq_chunk_t chunk;
         assert(cwist_seq_chunk_parse(payload, plen, &chunk));

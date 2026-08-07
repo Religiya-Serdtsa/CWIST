@@ -406,8 +406,9 @@ cwist_jwt_chunk_t *cwist_jwt_split_chunks(const char *token,
         msg.chunks[i] = NULL; /* ownership transferred */
     }
 
+    size_t count = msg.count;
     cwist_seq_message_free(&msg);
-    *out_count = msg.count;
+    *out_count = count;
     return chunks;
 }
 
