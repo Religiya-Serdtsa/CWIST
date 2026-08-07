@@ -96,19 +96,15 @@ long get_cpu_cores(void) {
 }
 
 long get_optimal_thread_count(void) {
-    /* Scale with cores but cap at a sane default.  C1M mode historically
-     * used cores*32, which exhausts resources on modest hardware and adds
-     * scheduling overhead without improving throughput.  Allow explicit
-     * override via CWIST_WORKER_THREADS. */
     const char *env = getenv("CWIST_WORKER_THREADS");
     if (env && env[0]) {
         long override = atol(env);
         if (override > 0) return override;
     }
     long cores = get_cpu_cores();
-    long count = cores * 4;
-    if (count < 16) count = 16;
-    if (count > 128) count = 128;
+    long count = cores;
+    if (count < 4) count = 4;
+    if (count > 32) count = 32;
     return count;
 }
 
@@ -438,8 +434,8 @@ cwist_http_request *cwist_http_request_create(void) {
     req->method = CWIST_HTTP_GET; // Default
     req->path = cwist_sstring_create();
     req->query = cwist_sstring_create();
-    req->query_params = cwist_query_map_create();
-    req->path_params = cwist_query_map_create();
+    req->query_params = NULL;
+    req->path_params = NULL;
     req->version = cwist_sstring_create();
     req->headers = NULL;
     req->body = cwist_sstring_create();
@@ -447,7 +443,7 @@ cwist_http_request *cwist_http_request_create(void) {
     req->client_fd = -1;
     req->app = NULL;
     req->db = NULL;
-    req->flash = cwist_query_map_create();
+    req->flash = NULL;
     req->upgraded = false;
     req->content_length = 0;
     req->stream_id = 0;
@@ -1041,7 +1037,10 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     if (query_sep) {
         cwist_sstring_assign_len(req->path, path_start, query_sep - path_start);
         cwist_sstring_assign_len(req->query, query_sep + 1, path_end - (query_sep + 1));
-        cwist_query_map_parse(req->query_params, req->query->data);
+        req->query_params = cwist_query_map_create();
+        if (req->query_params) {
+            cwist_query_map_parse(req->query_params, req->query->data);
+        }
     } else {
         cwist_sstring_assign_len(req->path, path_start, path_end - path_start);
         cwist_sstring_assign_len(req->query, "", 0);

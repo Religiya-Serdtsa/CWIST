@@ -2189,12 +2189,17 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
         }
         
         struct timespec start, end;
-        clock_gettime(CLOCK_MONOTONIC, &start);
+        uint64_t duration_ms = 0;
+        if (app->bdr_ctx) {
+            clock_gettime(CLOCK_MONOTONIC, &start);
+        }
 
         internal_route_handler(app, req, res);
         
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        uint64_t duration_ms = (end.tv_sec - start.tv_sec) * 1000 + (end.tv_nsec - start.tv_nsec) / 1000000;
+        if (app->bdr_ctx) {
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            duration_ms = (end.tv_sec - start.tv_sec) * 1000 + (end.tv_nsec - start.tv_nsec) / 1000000;
+        }
 
         bool keep_alive = req->keep_alive && res->keep_alive;
         bool upgraded = req->upgraded;
@@ -2207,28 +2212,23 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
             }
             
             // --- Big Dumb Reply (Learn) ---
-            bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
-            bool endpoint_file = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FILE);
-            
-            /* Scale latency threshold using Lattice priority_weight (Jeungseung Gaebang) */
-            uint64_t scaled_threshold = (uint64_t)app->bdr_ctx->latency_threshold_ms;
-            if (priority_weight > 50) {
-                scaled_threshold = scaled_threshold * (100 - priority_weight) / 100;
-            }
+            if (app->bdr_ctx) {
+                bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
+                bool endpoint_file = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FILE);
+                
+                uint64_t scaled_threshold = (uint64_t)app->bdr_ctx->latency_threshold_ms;
+                if (priority_weight > 50) {
+                    scaled_threshold = scaled_threshold * (100 - priority_weight) / 100;
+                }
 
-            if (app->bdr_ctx &&
-                req->method == CWIST_HTTP_GET &&
-                !endpoint_file &&
-                (endpoint_fixed || duration_ms > scaled_threshold)) {
-                // Too slow! Cache it.
-                // We need to serialize the response we just sent.
-                // Note: This duplicates serialization work (once in send_response, once here).
-                // Optimization: send_response could return the blob, or we serialize first then send.
-                // For now, re-serialize for BDR.
-                cwist_sstring *serialized = cwist_http_stringify_response(res);
-                if (serialized) {
-                     cwist_bdr_put(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
-                     cwist_sstring_destroy(serialized);
+                if (req->method == CWIST_HTTP_GET &&
+                    !endpoint_file &&
+                    (endpoint_fixed || duration_ms > scaled_threshold)) {
+                    cwist_sstring *serialized = cwist_http_stringify_response(res);
+                    if (serialized) {
+                         cwist_bdr_put(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
+                         cwist_sstring_destroy(serialized);
+                    }
                 }
             }
             // ------------------------------
