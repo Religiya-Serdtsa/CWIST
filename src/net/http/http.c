@@ -1146,7 +1146,10 @@ cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) 
 
     int flags = 0;
     #if defined(MSG_NOSIGNAL)
-    flags = MSG_NOSIGNAL;
+    flags |= MSG_NOSIGNAL;
+    #endif
+    #if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
     #endif
 
     if (cwist_http_sendmsg_all(client_fd, iov, iov_cnt, flags) != 0) {
@@ -1406,18 +1409,17 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
     char *header_end = NULL;
 
     // 1. Read until headers are complete
-    while (!(header_end = strstr(read_buf, "\r\n\r\n"))) {
+    while (!(header_end = memmem(read_buf, total_received, "\r\n\r\n", 4))) {
         if (total_received >= buf_size - 1) {
-            // Buffer full, but headers not complete
             return NULL;
         }
 
-        ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, 0);
+        ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, MSG_DONTWAIT);
         if (bytes < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
                 int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-                if (ret <= 0) return NULL; // Timeout or error
+                if (ret <= 0) return NULL;
                 continue;
             }
             if (errno == EINTR) continue;
