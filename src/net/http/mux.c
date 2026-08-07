@@ -20,186 +20,6 @@ typedef struct {
     uint64_t lo;
 } cwist_mux_signature;
 
-/* Orthogonal byte-permutation tables for segment mixing. */
-static const uint8_t MUX_PERM_TABLE_A[4][4] = {
-    {0, 1, 2, 3},
-    {1, 2, 3, 0},
-    {2, 3, 0, 1},
-    {3, 0, 1, 2}
-};
-
-static const uint8_t MUX_PERM_TABLE_B[4][4] = {
-    {0, 1, 2, 3},
-    {3, 0, 1, 2},
-    {1, 2, 3, 0},
-    {2, 3, 0, 1}
-};
-
-/* 3×3 routing hash slot lookup table for method-path grid indexing. */
-static const uint8_t CWIST_ROUTING_HASH_SLOT[3][3] = {
-    {8, 1, 6},
-    {3, 5, 7},
-    {4, 9, 2}
-};
-
-/* Coefficient matrix for the linear solver. */
-static const double MUX_COEFF_MATRIX[3][3] = {
-    {1.0, 1.0, 1.0},
-    {2.0, 3.0, 5.0},
-    {5.0, 3.0, 2.0}
-};
-
-/**
- * @brief Rotate a 64-bit integer left by the requested number of bits.
- * @param v Input value.
- * @param r Rotation width in the inclusive range [0, 63].
- * @return Rotated value used by the signature mixer.
- */
-static inline uint64_t mux_rotl64(uint64_t v, unsigned int r) {
-    return (v << r) | (v >> (64U - r));
-}
-
-/**
- * @brief Fold two 2-bit symbols into a compact 4-bit permutation code.
- * @param lhs First symbol, usually the route byte.
- * @param rhs Second symbol, usually the segment-relative position.
- * @return Merged nibble used to perturb the route signature.
- */
-static uint8_t mux_byte_permute(uint8_t lhs, uint8_t rhs) {
-    uint8_t row = lhs & 0x3;
-    uint8_t col = rhs & 0x3;
-    uint8_t a = MUX_PERM_TABLE_A[row][col];
-    uint8_t b = MUX_PERM_TABLE_B[col][row];
-    return (uint8_t)((a << 2) | b);
-}
-
-/**
- * @brief Mix one slash-delimited path segment into the route signature.
- * @param sig Accumulator updated in place.
- * @param segment Raw segment bytes without the separating slash.
- * @param len Number of bytes in @p segment.
- * @param seg_idx Zero-based segment index within the path.
- */
-static void cwist_mux_mix_segment(cwist_mux_signature *sig, const char *segment, size_t len, size_t seg_idx) {
-    uint64_t acc = 0xA0761D6478BD642FULL ^ ((uint64_t)len << (seg_idx & 15));
-    for (size_t i = 0; i < len; ++i) {
-        uint8_t ch = (uint8_t)segment[i];
-        uint8_t latin = mux_byte_permute(ch, (uint8_t)(i + seg_idx));
-        uint64_t delta = ((uint64_t)latin << 48) |
-                         ((uint64_t)ch << 24) |
-                         ((uint64_t)(len - i) << 8) |
-                         (uint64_t)seg_idx;
-        acc ^= mux_rotl64(delta, (unsigned int)(((i * 11) + seg_idx * 5) & 63));
-    }
-    sig->hi ^= mux_rotl64(acc ^ sig->lo, (unsigned int)(((seg_idx * 13) + 7) & 63));
-    sig->lo += mux_rotl64(acc + sig->hi, (unsigned int)(((seg_idx * 17) + 3) & 63));
-}
-
-/* --- Linear system helpers for router weight derivation --- */
-
-/**
- * @brief Solve a 3×3 linear system via Gaussian elimination with partial pivoting.
- * @param matrix Coefficient matrix (row-major order).
- * @param rhs Right-hand side vector.
- * @param out Solution vector written when the system is non-singular.
- * @return true when a stable solution was found.
- */
-static bool mux_solve_linear3(const double matrix[3][3], const double rhs[3], double out[3]) {
-    double aug[3][4];
-    for (size_t r = 0; r < 3; ++r) {
-        for (size_t c = 0; c < 3; ++c) {
-            aug[r][c] = matrix[r][c];
-        }
-        aug[r][3] = rhs[r];
-    }
-
-    for (size_t pivot = 0; pivot < 3; ++pivot) {
-        size_t best = pivot;
-        double best_abs = fabs(aug[pivot][pivot]);
-        for (size_t r = pivot + 1; r < 3; ++r) {
-            double val = fabs(aug[r][pivot]);
-            if (val > best_abs) {
-                best_abs = val;
-                best = r;
-            }
-        }
-        if (best_abs < 1e-9) {
-            return false;
-        }
-        if (best != pivot) {
-            for (size_t c = pivot; c < 4; ++c) {
-                double tmp = aug[pivot][c];
-                aug[pivot][c] = aug[best][c];
-                aug[best][c] = tmp;
-            }
-        }
-        double inv = 1.0 / aug[pivot][pivot];
-        for (size_t c = pivot; c < 4; ++c) {
-            aug[pivot][c] *= inv;
-        }
-        for (size_t r = 0; r < 3; ++r) {
-            if (r == pivot) continue;
-            double factor = aug[r][pivot];
-            for (size_t c = pivot; c < 4; ++c) {
-                aug[r][c] -= factor * aug[pivot][c];
-            }
-        }
-    }
-
-    for (size_t i = 0; i < 3; ++i) {
-        out[i] = aug[i][3];
-    }
-    return true;
-}
-
-/**
- * @brief Derive routing coefficients from the signature.
- * @param sig Route signature.
- * @param coeffs Output vector containing the solved weights.
- */
-static void mux_derive_coeffs(const cwist_mux_signature *sig, double coeffs[3]) {
-    double rhs[3] = {
-        1.0 + (double)(sig->hi & 0xFFFFULL),
-        1.0 + (double)((sig->lo >> 16ULL) & 0xFFFFULL),
-        1.0 + (double)((((sig->hi >> 32ULL) ^ sig->lo) & 0xFFFFULL))
-    };
-
-    if (!mux_solve_linear3(MUX_COEFF_MATRIX, rhs, coeffs)) {
-        coeffs[0] = rhs[0];
-        coeffs[1] = rhs[1];
-        coeffs[2] = rhs[2];
-    }
-}
-
-/**
- * @brief Select a routing hash slot from the signature.
- */
-static uint8_t cwist_routing_hash_slot(const cwist_mux_signature *sig) {
-    size_t row = (size_t)((sig->hi ^ sig->lo) % 3ULL);
-    size_t col = (size_t)(((mux_rotl64(sig->hi, 17) ^ (sig->lo >> 7)) % 3ULL));
-    return CWIST_ROUTING_HASH_SLOT[row][col];
-}
-
-/**
- * @brief Iterative magnitude refinement (Newton-Raphson-style).
- */
-static double mux_refine_magnitude(double guess, double target) {
-    double g = fabs(guess) + 1.0;
-    double t = fabs(target) + 1.0;
-    for (int i = 0; i < 2; ++i) {
-        g = 0.5 * (g + t / g);
-    }
-    return g;
-}
-
-/**
- * @brief Predict next state with a single-step linear extrapolation.
- */
-static double mux_predict_state(double state, double slope) {
-    const double h = 0.125; /* Small integration step. */
-    return state + slope * h;
-}
-
 /**
  * @brief Derive the lookup signature for an HTTP method and path pair.
  * @param method HTTP verb associated with the route.
@@ -207,31 +27,60 @@ static double mux_predict_state(double state, double slope) {
  * @return Two-lane signature suitable for bucket selection and fast equality checks.
  */
 static cwist_mux_signature cwist_mux_signature_from_path(cwist_http_method_t method, const char *path) {
-    cwist_mux_signature sig = {
-        .hi = 0x6a09e667f3bcc909ULL ^ ((uint64_t)method * 0x9e3779b97f4a7c15ULL),
-        .lo = 0xbb67ae8584caa73bULL ^ (((uint64_t)method << 40) | 0x100000001b3ULL)
-    };
+    uint64_t hi = 14695981039346656037ULL;
+    uint64_t lo = 0xcbf29ce484222325ULL;
 
-    if (!path) {
-        cwist_mux_mix_segment(&sig, "", 0, 0);
-    } else {
-        size_t seg_idx = 0;
-        const char *cursor = path;
-        while (*cursor) {
-            while (*cursor == '/') cursor++;
-            const char *start = cursor;
-            while (*cursor && *cursor != '/') cursor++;
-            size_t len = (size_t)(cursor - start);
-            cwist_mux_mix_segment(&sig, start, len, seg_idx++);
-            if (!*cursor) break;
-        }
-        if (seg_idx == 0) {
-            cwist_mux_mix_segment(&sig, "", 0, 0);
-        }
+    const uint64_t prime_hi = 1099511628211ULL;        /* FNV Prime 64 */
+    const uint64_t prime_lo = 0x9e3779b185ebca87ULL;   /* SplitMix Prime */
+
+    /* 1. Method hashing (single pass) */
+    const uint8_t *m_ptr = (const uint8_t *)&method;
+    for (size_t i = 0; i < sizeof(method); ++i) {
+        hi = (hi ^ m_ptr[i]) * prime_hi;
+        lo = (lo ^ m_ptr[i]) * prime_lo;
     }
-    sig.hi ^= mux_rotl64(sig.lo, 29);
-    sig.lo ^= mux_rotl64(sig.hi, 19);
-    return sig;
+
+    /* 2. Path normalization and single-pass hashing */
+    if (!path) {
+        path = "/";
+    }
+
+    size_t seg_count = 0;
+    const char *cursor = path;
+
+    while (*cursor) {
+        while (*cursor == '/') {
+            cursor++;
+        }
+        if (!*cursor) {
+            break;
+        }
+
+        const char *start = cursor;
+        while (*cursor && *cursor != '/') {
+            cursor++;
+        }
+
+        /* Inject normalized segment delimiter '/' */
+        hi = (hi ^ '/') * prime_hi;
+        lo = (lo ^ '/') * prime_lo;
+
+        /* Hash segment bytes */
+        for (const char *p = start; p < cursor; ++p) {
+            uint8_t b = (uint8_t)*p;
+            hi = (hi ^ b) * prime_hi;
+            lo = (lo ^ b) * prime_lo;
+        }
+        seg_count++;
+    }
+
+    /* Handle root path ('/') or empty path */
+    if (seg_count == 0) {
+        hi = (hi ^ '/') * prime_hi;
+        lo = (lo ^ '/') * prime_lo;
+    }
+
+    return (cwist_mux_signature) { .hi = hi, .lo = lo };
 }
 
 /**
@@ -241,21 +90,16 @@ static cwist_mux_signature cwist_mux_signature_from_path(cwist_http_method_t met
  * @return Stable bucket index in the router's fixed bucket array.
  */
 static size_t cwist_mux_bucket_index(const cwist_mux_router *router, const cwist_mux_signature *sig) {
-    uint8_t hash_slot = cwist_routing_hash_slot(sig);
-    double coeffs[3];
-    mux_derive_coeffs(sig, coeffs);
+    uint64_t hash = sig->hi ^ (sig->lo + 0x9e3779b97f4a7c15ULL);
 
-    double ratio_mix = coeffs[0] * 7.0 + coeffs[1] * 5.0 + coeffs[2] * 3.0;
-    double refined = mux_refine_magnitude(ratio_mix, (double)(sig->hi | 1ULL));
-    double slope = ((double)((sig->hi >> 8ULL) & 0xFFULL) - (double)((sig->lo >> 8ULL) & 0xFFULL)) / 64.0;
-    double predicted = mux_predict_state(refined, slope);
-    if (predicted < 0.0) {
-        predicted = -predicted + (double)hash_slot;
-    }
+    /* SplitMix64-style finalizer to maximize avalanche effect. */
+    hash ^= hash >> 30;
+    hash *= 0xbf58476d1ce4e5b9ULL;
+    hash ^= hash >> 27;
+    hash *= 0x94d049bb133111ebULL;
+    hash ^= hash >> 31;
 
-    uint64_t mix = ((uint64_t)predicted) ^ mux_rotl64(sig->hi + sig->lo, hash_slot % 61U);
-    mix ^= mux_rotl64(((uint64_t)hash_slot * 0x9e3779b185ebca87ULL), hash_slot % 31U);
-    return (size_t)(mix % router->bucket_count);
+    return (size_t)(hash % router->bucket_count);
 }
 
 /* --- Mux Router Implementation --- */
