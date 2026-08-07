@@ -70,6 +70,7 @@ typedef struct cwist_http_header_node {
     cwist_sstring *key;
     cwist_sstring *value;
     struct cwist_http_header_node *next;
+    bool arena_owned;   ///< True when the node lives in a request arena (freed with the arena).
 } cwist_http_header_node;
 
 typedef struct cwist_http_request {
@@ -94,6 +95,7 @@ typedef struct cwist_http_request {
     cwist_query_map *flash; ///< Flash messages for this request (one-time read).
     void *session;          ///< cwist_session_t pointer set by session middleware.
     char *csrf_token;       ///< CSRF token populated by csrf middleware.
+    void *arena;            ///< Per-request arena for bump-allocated structs (internal).
 } cwist_http_request;
 
 typedef void (*cwist_http_body_cleanup_fn)(const void *ptr, size_t len, void *ctx);
@@ -128,6 +130,8 @@ typedef struct cwist_http_response {
     
     /// Alt-Svc header for HTTP/3 upgrade advertisement
     char *alt_svc;
+
+    void *arena;            ///< Per-response arena for bump-allocated structs (internal).
 } cwist_http_response;
 
 /** --- API Functions --- */

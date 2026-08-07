@@ -2037,7 +2037,9 @@ cwist_error_t cwist_http2_serve_connection(
                     }
                 }
                 if (flags & CWIST_HTTP2_FLAG_END_STREAM) {
-                    bool sequence_complete = !hc.sequenced_data;
+                    /* No assembler means no sequenced chunks ever arrived;
+                     * an empty DATA END_STREAM is a complete empty body. */
+                    bool sequence_complete = !hc.sequenced_data || !s->body_assembler;
                     if (hc.sequenced_data && s->body_assembler) {
                         const uint8_t *assembled = NULL;
                         size_t assembled_len = 0;

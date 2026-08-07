@@ -1,11 +1,11 @@
 # Web Server Benchmark Methodology
 
-This document describes exactly how the CWIST vs Axum vs Spring Boot comparison in
+This document describes exactly how the CWIST vs Axum vs Gin vs Spring Boot comparison in
 `benchmarks/webserver.json` (rendered into `docs/webserver-benchmark-trends.svg`) is
 produced, so every published number can be reproduced and audited.
 
 The suite runs in GitHub Actions (`web-server-benchmark` job in
-`.github/workflows/bsd-kqueue-benchmarks.yml`) on `ubuntu-latest`. All three servers are
+`.github/workflows/bsd-kqueue-benchmarks.yml`) on `ubuntu-latest`. All four servers are
 minimal `GET / -> "Hello, World!"` applications generated inline by the workflow; no
 framework-specific tuning is applied beyond what is documented here.
 
@@ -13,7 +13,7 @@ framework-specific tuning is applied beyond what is documented here.
 
 | Phase | Command | Purpose |
 |---|---|---|
-| Warmup | `wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/` | Discarded. Lets JIT-tiered runtimes (JVM) reach steady state. Applied identically to all three servers. |
+| Warmup | `wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/` | Discarded. Lets JIT-tiered runtimes (JVM) reach steady state. Applied identically to all four servers. |
 | Measurement | `wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/` | Recorded: `Requests/sec`, avg `Latency`. |
 
 - Server startup wait is a readiness loop (`curl` poll, up to 90s for the JVM), not a fixed sleep.
@@ -25,12 +25,19 @@ framework-specific tuning is applied beyond what is documented here.
 
 - Built from the checked-out commit: `make`, then the bench server linked against
   `libcwist.a` with `gcc -O3`.
-- Listens on port `8081`.
+- Listens on port `9091`.
 
 ## Axum
 
 - `axum = "0.7"`, `tokio = "1"` (`full` features), `cargo build --release`.
-- Listens on port `8082`.
+- Listens on port `9092`.
+
+## Gin (Go)
+
+- `github.com/gin-gonic/gin` **v1.10.0** on the Go toolchain provisioned by
+  `actions/setup-go` (Go **1.22**), `go build` with `gin.ReleaseMode` and the
+  default `net/http` server underneath.
+- Listens on port `9094`.
 
 ## Spring Boot (JVM fairness configuration)
 
@@ -54,7 +61,7 @@ instead of a bounded platform-thread pool.
 | JVM options | `-Xms512m -Xmx512m` (fixed heap, no resize noise during measurement) |
 | AOT cache | **CDS** — training run with `-XX:ArchiveClassesAtExit=app.jsa` (clean shutdown via SIGTERM), measured run replays `-XX:SharedArchiveFile=app.jsa` |
 | Warmup | 10s `wrk` run, discarded (see above) |
-| Port | `8080` |
+| Port | `9093` |
 
 The full Spring run command is:
 
@@ -70,6 +77,10 @@ to the numbers, so a result is never an isolated req/s figure:
 ```json
 {
   "wrk_profile": "wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)",
+  "go_env": {
+    "go_version": "go version go1.22.x linux/amd64",
+    "framework": "Gin v1.10.0 (gin-gonic/gin, release mode)"
+  },
   "spring_env": {
     "java_version": "openjdk version \"21.x\" ... (Temurin)",
     "spring_boot_version": "3.2.3",
