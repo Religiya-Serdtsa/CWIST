@@ -3283,7 +3283,9 @@ int cwist_app_listen(cwist_app *app, int port) {
     }
 
     printf("[CWIST] Draining connections for %d seconds...\n", g_cwist_drain_timeout_sec);
-    sleep(g_cwist_drain_timeout_sec);
+    if (is_worker_child || workers == 1) {
+        sleep(g_cwist_drain_timeout_sec);
+    }
 
     /* Parent process reaps worker children so they do not become zombies. */
     if (!is_worker_child && workers > 1) {

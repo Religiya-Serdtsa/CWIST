@@ -51,20 +51,45 @@ typedef struct {
 } reactor_impl_t;
 #endif
 
-struct cwist_reactor {
-    reactor_impl_t impl;
-    bool running;
-};
+#define MAX_REACTOR_EVENTS 4096
 
 typedef struct {
     int fd;
     cwist_reactor_cb_t cb;
     void *ctx;
+    bool in_use;
 } reactor_event_ctx_t;
+
+struct cwist_reactor {
+    reactor_impl_t impl;
+    bool running;
+    reactor_event_ctx_t event_pool[MAX_REACTOR_EVENTS];
+};
+
+static reactor_event_ctx_t *alloc_reactor_ctx(cwist_reactor_t *r, int fd, cwist_reactor_cb_t cb, void *ctx) {
+    if (!r) return NULL;
+    for (int i = 0; i < MAX_REACTOR_EVENTS; i++) {
+        if (!r->event_pool[i].in_use) {
+            r->event_pool[i].fd = fd;
+            r->event_pool[i].cb = cb;
+            r->event_pool[i].ctx = ctx;
+            r->event_pool[i].in_use = true;
+            return &r->event_pool[i];
+        }
+    }
+    return NULL;
+}
+
+static void free_reactor_ctx(reactor_event_ctx_t *ev_ctx) {
+    if (ev_ctx) {
+        ev_ctx->in_use = false;
+    }
+}
 
 cwist_reactor_t *cwist_reactor_create(void) {
     cwist_reactor_t *r = cwist_alloc(sizeof(cwist_reactor_t));
     if (!r) return NULL;
+    memset(r, 0, sizeof(cwist_reactor_t));
     r->running = false;
 
 #ifdef __linux__
@@ -139,18 +164,15 @@ void cwist_reactor_destroy(cwist_reactor_t *reactor) {
 
 bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, void *ctx) {
     if (!reactor || fd < 0) return false;
-    reactor_event_ctx_t *ev_ctx = cwist_alloc(sizeof(reactor_event_ctx_t));
+    reactor_event_ctx_t *ev_ctx = alloc_reactor_ctx(reactor, fd, cb, ctx);
     if (!ev_ctx) return false;
-    ev_ctx->fd = fd;
-    ev_ctx->cb = cb;
-    ev_ctx->ctx = ctx;
 
 #ifdef __linux__
     if (!reactor->impl.use_epoll) {
         uint32_t tail = *reactor->impl.sq_tail;
         uint32_t head = __atomic_load_n(reactor->impl.sq_head, __ATOMIC_ACQUIRE);
         if (tail - head >= reactor->impl.sq_entries) {
-            cwist_free(ev_ctx);
+            free_reactor_ctx(ev_ctx);
             return false;
         }
         uint32_t index = tail & *reactor->impl.sq_ring_mask;
@@ -165,7 +187,7 @@ bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, 
         __atomic_store_n(reactor->impl.sq_tail, tail + 1, __ATOMIC_RELEASE);
         if (sys_io_uring_enter(reactor->impl.ring_fd, 1, 0, 0, NULL) < 0) {
             __atomic_store_n(reactor->impl.sq_tail, tail, __ATOMIC_RELEASE);
-            cwist_free(ev_ctx);
+            free_reactor_ctx(ev_ctx);
             return false;
         }
         return true;
@@ -181,31 +203,33 @@ bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, 
                 return true;
             }
         }
-        cwist_free(ev_ctx);
+        free_reactor_ctx(ev_ctx);
         return false;
     }
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     struct kevent change;
     EV_SET(&change, fd, EVFILT_READ, EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 0, ev_ctx);
-    return kevent(reactor->impl.kq_fd, &change, 1, NULL, 0, NULL) == 0;
+    if (kevent(reactor->impl.kq_fd, &change, 1, NULL, 0, NULL) == 0) {
+        return true;
+    }
+    free_reactor_ctx(ev_ctx);
+    return false;
 #endif
+    free_reactor_ctx(ev_ctx);
     return false;
 }
 
 bool cwist_reactor_mod(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, void *ctx) {
     if (!reactor || fd < 0) return false;
-    reactor_event_ctx_t *ev_ctx = cwist_alloc(sizeof(reactor_event_ctx_t));
+    reactor_event_ctx_t *ev_ctx = alloc_reactor_ctx(reactor, fd, cb, ctx);
     if (!ev_ctx) return false;
-    ev_ctx->fd = fd;
-    ev_ctx->cb = cb;
-    ev_ctx->ctx = ctx;
 
 #ifdef __linux__
     if (!reactor->impl.use_epoll) {
         uint32_t tail = *reactor->impl.sq_tail;
         uint32_t head = __atomic_load_n(reactor->impl.sq_head, __ATOMIC_ACQUIRE);
         if (tail - head >= reactor->impl.sq_entries) {
-            cwist_free(ev_ctx);
+            free_reactor_ctx(ev_ctx);
             return false;
         }
         uint32_t index = tail & *reactor->impl.sq_ring_mask;
@@ -220,7 +244,7 @@ bool cwist_reactor_mod(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, 
         __atomic_store_n(reactor->impl.sq_tail, tail + 1, __ATOMIC_RELEASE);
         if (sys_io_uring_enter(reactor->impl.ring_fd, 1, 0, 0, NULL) < 0) {
             __atomic_store_n(reactor->impl.sq_tail, tail, __ATOMIC_RELEASE);
-            cwist_free(ev_ctx);
+            free_reactor_ctx(ev_ctx);
             return false;
         }
         return true;
@@ -231,14 +255,19 @@ bool cwist_reactor_mod(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, 
         if (epoll_ctl(reactor->impl.epoll_fd, EPOLL_CTL_MOD, fd, &ev) == 0) {
             return true;
         }
-        cwist_free(ev_ctx);
+        free_reactor_ctx(ev_ctx);
         return false;
     }
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     struct kevent change;
     EV_SET(&change, fd, EVFILT_READ, EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 0, ev_ctx);
-    return kevent(reactor->impl.kq_fd, &change, 1, NULL, 0, NULL) == 0;
+    if (kevent(reactor->impl.kq_fd, &change, 1, NULL, 0, NULL) == 0) {
+        return true;
+    }
+    free_reactor_ctx(ev_ctx);
+    return false;
 #endif
+    free_reactor_ctx(ev_ctx);
     return false;
 }
 
@@ -247,8 +276,6 @@ bool cwist_reactor_del(cwist_reactor_t *reactor, int fd) {
 
 #ifdef __linux__
     if (!reactor->impl.use_epoll) {
-        /* Cancel any pending poll request for this fd.  The original
-         * request's CQE (with -ECANCELED) will free the ev_ctx. */
         uint32_t tail = *reactor->impl.sq_tail;
         uint32_t head = __atomic_load_n(reactor->impl.sq_head, __ATOMIC_ACQUIRE);
         if (tail - head >= reactor->impl.sq_entries) return false;
@@ -294,8 +321,6 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
             uint32_t head = __atomic_load_n(reactor->impl.cq_head, __ATOMIC_ACQUIRE);
             uint32_t tail = *reactor->impl.cq_tail;
             if (head == tail) {
-                /* Spurious wakeup or no event ready. Sleep briefly instead of
-                 * tight-looping back into the syscall. */
                 usleep(1000);
                 continue;
             }
@@ -306,7 +331,7 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
                     if (cqe->res >= 0) {
                         ev_ctx->cb(ev_ctx->fd, ev_ctx->ctx);
                     }
-                    cwist_free(ev_ctx);
+                    free_reactor_ctx(ev_ctx);
                 }
                 head++;
             }
@@ -315,7 +340,7 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
     } else {
         struct epoll_event events[1024];
         while (reactor->running && atomic_load(&g_cwist_running)) {
-            int n = epoll_wait(reactor->impl.epoll_fd, events, 1024, -1);
+            int n = epoll_wait(reactor->impl.epoll_fd, events, 1024, 100);
             if (n < 0) {
                 if (errno == EINTR) continue;
                 break;
@@ -324,7 +349,7 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
                 reactor_event_ctx_t *ev_ctx = (reactor_event_ctx_t *)events[i].data.ptr;
                 if (ev_ctx) {
                     ev_ctx->cb(ev_ctx->fd, ev_ctx->ctx);
-                    cwist_free(ev_ctx);
+                    free_reactor_ctx(ev_ctx);
                 }
             }
         }
@@ -341,7 +366,7 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
             reactor_event_ctx_t *ev_ctx = (reactor_event_ctx_t *)events[i].udata;
             if (ev_ctx) {
                 ev_ctx->cb(ev_ctx->fd, ev_ctx->ctx);
-                cwist_free(ev_ctx);
+                free_reactor_ctx(ev_ctx);
             }
         }
     }

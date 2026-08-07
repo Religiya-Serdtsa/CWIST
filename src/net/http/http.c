@@ -137,10 +137,12 @@ static http_thread_worker_t *g_workers = NULL;
 
 static void *http_pool_worker(void *arg) {
     http_thread_worker_t *w = (http_thread_worker_t *)arg;
-    /* Bind this thread to the lattice worker ID for deterministic slot selection. */
     ttak_net_lattice_set_worker_id(w->worker_id);
 
+    http_pool_task_t batch[16];
+
     while (1) {
+        size_t batch_count = 0;
         pthread_mutex_lock(&w->mutex);
         while (w->count == 0 && !w->shutdown) {
             pthread_cond_wait(&w->cond_not_empty, &w->mutex);
@@ -149,13 +151,20 @@ static void *http_pool_worker(void *arg) {
             pthread_mutex_unlock(&w->mutex);
             break;
         }
-        http_pool_task_t task = w->queue[w->head];
-        w->head = (w->head + 1) % HTTP_TASKS_PER_THREAD;
-        w->count--;
-        pthread_cond_signal(&w->cond_not_full);
+
+        while (w->count > 0 && batch_count < 16) {
+            batch[batch_count++] = w->queue[w->head];
+            w->head = (w->head + 1) % HTTP_TASKS_PER_THREAD;
+            w->count--;
+        }
+        if (batch_count > 0) {
+            pthread_cond_signal(&w->cond_not_full);
+        }
         pthread_mutex_unlock(&w->mutex);
 
-        task.handler_func(task.client_fd, task.ctx);
+        for (size_t i = 0; i < batch_count; i++) {
+            batch[i].handler_func(batch[i].client_fd, batch[i].ctx);
+        }
     }
     return NULL;
 }
@@ -272,24 +281,42 @@ const char *cwist_http_method_to_string(cwist_http_method_t method) {
     }
 }
 
-/**
- * @brief Parse a method token into CWIST's HTTP method enum.
- * @param method_str Raw method token from the request line.
- * @return Parsed enum value, or CWIST_HTTP_UNKNOWN when unsupported.
- */
+#define MAKE_MAGIC4(a, b, c, d) \
+    ((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
+
+#define MAGIC_GET  MAKE_MAGIC4('G', 'E', 'T', ' ')
+#define MAGIC_POST MAKE_MAGIC4('P', 'O', 'S', 'T')
+#define MAGIC_PUT  MAKE_MAGIC4('P', 'U', 'T', ' ')
+#define MAGIC_DELE MAKE_MAGIC4('D', 'E', 'L', 'E')
+#define MAGIC_HEAD MAKE_MAGIC4('H', 'E', 'A', 'D')
+
 cwist_http_method_t cwist_http_string_to_method_len(const char *str, size_t len) {
     if (!str || len == 0) return CWIST_HTTP_UNKNOWN;
+    
+    /* Ultra-fast path: SWAR 4-byte magic lookup for GET, POST, PUT, DELETE, HEAD */
+    if (len >= 3) {
+        uint32_t m = 0;
+        memcpy(&m, str, sizeof(uint32_t));
+        switch (m) {
+            case MAGIC_GET:  return CWIST_HTTP_GET;
+            case MAGIC_POST: return CWIST_HTTP_POST;
+            case MAGIC_PUT:  return CWIST_HTTP_PUT;
+            case MAGIC_DELE: if (len >= 6 && memcmp(str, "DELETE", 6) == 0) return CWIST_HTTP_DELETE; break;
+            case MAGIC_HEAD: if (len == 4) return CWIST_HTTP_HEAD; break;
+            default: break;
+        }
+    }
+
     if (len == 3) {
-        /* "GET" -> 0x00544547 (Little Endian) or 0x474554 */
         uint32_t v = 0;
         memcpy(&v, str, 3);
         if ((v & 0x00FFFFFF) == 0x00544547) return CWIST_HTTP_GET;
-        if ((v & 0x00FFFFFF) == 0x00545550) return CWIST_HTTP_PUT; /* "PUT" */
+        if ((v & 0x00FFFFFF) == 0x00545550) return CWIST_HTTP_PUT;
     } else if (len == 4) {
         uint32_t v = 0;
         memcpy(&v, str, 4);
-        if (v == 0x54534F50) return CWIST_HTTP_POST; /* "POST" */
-        if (v == 0x44414548) return CWIST_HTTP_HEAD; /* "HEAD" */
+        if (v == 0x54534F50) return CWIST_HTTP_POST;
+        if (v == 0x44414548) return CWIST_HTTP_HEAD;
     } else if (len == 5) {
         if (memcmp(str, "PATCH", 5) == 0) return CWIST_HTTP_PATCH;
     } else if (len == 6) {
