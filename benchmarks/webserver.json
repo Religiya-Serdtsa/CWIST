@@ -205,5 +205,38 @@
       "virtual_threads": false,
       "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
     }
+  },
+  {
+    "timestamp": "2026-08-07T07:50:33.363766+00:00",
+    "cwist_rps": 152262.55,
+    "cwist_lat_ms": 0.06945,
+    "cwist_rss_kib": 12072.0,
+    "cwist_csw": 0.0,
+    "axum_rps": 191984.95,
+    "axum_lat_ms": 2.07,
+    "axum_rss_kib": 17236.0,
+    "axum_csw": 0.0,
+    "gin_rps": 152130.79,
+    "gin_lat_ms": 3.2,
+    "gin_rss_kib": 29704.0,
+    "gin_csw": 0.0,
+    "spring_rps": 121277.82,
+    "spring_lat_ms": 3.25,
+    "spring_rss_kib": 1236608.0,
+    "spring_csw": 0.0,
+    "wrk_profile": "wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)",
+    "runner_hw": "4 vCPU | AMD EPYC 9V45 96-Core Processor",
+    "go_env": {
+      "go_version": "go version go1.22.12 linux/amd64",
+      "framework": "Gin v1.10.0 (gin-gonic/gin, release mode)"
+    },
+    "spring_env": {
+      "java_version": "openjdk version \"21.0.11\" 2026-04-21 LTS",
+      "spring_boot_version": "3.2.3",
+      "stack": "Spring WebFlux + Reactor Netty (optimized event loop, virtual threads disabled)",
+      "jvm_opts": "-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:+AlwaysPreTouch -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)",
+      "virtual_threads": false,
+      "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
+    }
   }
 ]
