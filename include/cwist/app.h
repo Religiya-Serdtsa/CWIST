@@ -11,6 +11,7 @@
 #include <cwist/macros.h>
 
 #include <cwist/websocket.h>
+#include <cwist/sys/app/endpoint_opts.h>
 
 /* Forward declaration for the database handle */
 typedef struct cwist_db cwist_db;
@@ -197,6 +198,36 @@ void cwist_app_post(cwist_app *app, const char *path, cwist_handler_func handler
  * @brief Register a WebSocket route.
  */
 void cwist_app_ws(cwist_app *app, const char *path, cwist_ws_handler_func handler);
+
+/**
+ * @brief Register a GET route with behavior options.
+ */
+void cwist_app_get_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+
+/**
+ * @brief Register a POST route with behavior options.
+ */
+void cwist_app_post_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+
+/**
+ * @brief Register a PUT route with behavior options.
+ */
+void cwist_app_put_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+
+/**
+ * @brief Register a DELETE route with behavior options.
+ */
+void cwist_app_delete_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+
+/**
+ * @brief Register a PATCH route with behavior options.
+ */
+void cwist_app_patch_opt(cwist_app *app, const char *path, cwist_handler_func handler, cwist_endpoint_opt_t opts);
+
+/**
+ * @brief Register a WebSocket route with behavior options.
+ */
+void cwist_app_ws_opt(cwist_app *app, const char *path, cwist_ws_handler_func handler, cwist_endpoint_opt_t opts);
 
 /**
  * @brief Enable Prometheus /metrics endpoint.
