@@ -14,7 +14,7 @@
 #include <stddef.h>
 
 /** @brief Default capacity of one arena generation buffer. */
-#define CWIST_ARENA_DEFAULT_GENERATION_BYTES (32 * 1024)
+#define CWIST_ARENA_DEFAULT_GENERATION_BYTES (16 * 1024)
 
 typedef struct cwist_arena cwist_arena_t;
 

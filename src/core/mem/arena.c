@@ -24,7 +24,7 @@
 #include <ttak/timing/timing.h>
 
 /** @brief Maximum recycled generation buffers retained per thread. */
-#define CWIST_ARENA_CACHE_MAX 8
+#define CWIST_ARENA_CACHE_MAX 4
 
 struct cwist_arena {
     ttak_arena_generation_t gen;   /**< Active generation descriptor. */
