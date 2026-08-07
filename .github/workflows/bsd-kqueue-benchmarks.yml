@@ -60,7 +60,7 @@ jobs:
           path: benchmark-${{ runner.os }}.json
 
   web-server-benchmark:
-    name: web server benchmark (CWIST vs Axum vs Spring)
+    name: web server benchmark (CWIST vs Axum vs Spring vs Gin)
     if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     steps:
@@ -71,6 +71,10 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
       - name: Install dependencies & wrk
         run: |
           sudo apt-get update
@@ -117,7 +121,29 @@ jobs:
           }
           EOF
 
-          # 3. Spring Boot Minimal HTTP Web Server
+          # 3. Gin (Go) Minimal HTTP Web Server
+          mkdir -p /tmp/gin_bench && cd /tmp/gin_bench
+          cat << 'EOF' > go.mod
+          module gin_server
+
+          go 1.22
+
+          require github.com/gin-gonic/gin v1.10.0
+          EOF
+          cat << 'EOF' > main.go
+          package main
+
+          import "github.com/gin-gonic/gin"
+
+          func main() {
+              gin.SetMode(gin.ReleaseMode)
+              r := gin.New()
+              r.GET("/", func(c *gin.Context) { c.String(200, "Hello, World!") })
+              r.Run("127.0.0.1:9094")
+          }
+          EOF
+
+          # 4. Spring Boot Minimal HTTP Web Server
           mkdir -p /tmp/spring_bench && cd /tmp/spring_bench
           cat << 'EOF' > pom.xml
           <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -180,6 +206,7 @@ jobs:
           gcc -O3 -I./include -I./lib -I./lib/libttak/include -o /tmp/cwist_server /tmp/cwist_server.c libcwist.a -pthread -ldl -lm -lstdc++ -lz -lzstd lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec
 
           cd /tmp/axum_bench && cargo build --release
+          cd /tmp/gin_bench && go mod tidy && go build -o gin_server .
           cd /tmp/spring_bench && mvn -q package -DskipTests
 
           # Helper function for process stats before/after wrk test.
@@ -226,6 +253,7 @@ jobs:
 
           run_bench "CWIST" "/tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
           run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
+          run_bench "Gin" "/tmp/gin_bench/gin_server" 9094 "/tmp/gin.txt" "/tmp/gin_stat.txt" 10
 
           # Spring Boot JVM fairness setup:
           #  - fixed heap to avoid resize noise during measurement
@@ -257,6 +285,8 @@ jobs:
           export SPRING_STACK="Spring WebFlux + Reactor Netty (event loop, virtual threads enabled)"
           export SPRING_JVM_OPTS_RECORDED="$SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE (CDS AOT cache)"
           export SPRING_VIRTUAL_THREADS="true"
+          export GO_VERSION_RECORDED="$(go version)"
+          export GIN_FRAMEWORK="Gin v1.10.0 (gin-gonic/gin, release mode)"
           export WRK_PROFILE="wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)"
 
           python3 - <<'PY'
@@ -297,6 +327,9 @@ jobs:
           axum_rps, axum_lat = parse_wrk("/tmp/axum.txt")
           axum_rss, axum_csw = parse_stat("/tmp/axum_stat.txt")
 
+          gin_rps, gin_lat = parse_wrk("/tmp/gin.txt")
+          gin_rss, gin_csw = parse_stat("/tmp/gin_stat.txt")
+
           spring_rps, spring_lat = parse_wrk("/tmp/spring.txt")
           spring_rss, spring_csw = parse_stat("/tmp/spring_stat.txt")
 
@@ -304,9 +337,14 @@ jobs:
               "timestamp": datetime.now(timezone.utc).isoformat(),
               "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
               "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
+              "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
               "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_rss_kib": spring_rss, "spring_csw": spring_csw,
               "wrk_profile": os.environ.get("WRK_PROFILE", ""),
               "runner_hw": os.environ.get("RUNNER_HW", ""),
+              "go_env": {
+                  "go_version": os.environ.get("GO_VERSION_RECORDED", ""),
+                  "framework": os.environ.get("GIN_FRAMEWORK", "")
+              },
               "spring_env": {
                   "java_version": os.environ.get("SPRING_JAVA_VERSION", ""),
                   "spring_boot_version": os.environ.get("SPRING_BOOT_VERSION", ""),
