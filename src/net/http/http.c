@@ -110,7 +110,9 @@ long get_optimal_thread_count(void) {
     return count;
 }
 
-#define HTTP_TASKS_PER_THREAD 32768
+/* Bounded per-worker ring: 4096 slots (~96 KiB) keeps the queue cache-resident
+ * and caps worst-case RSS; producers block on cond_not_full under backpressure. */
+#define HTTP_TASKS_PER_THREAD 4096
 
 typedef struct {
     int client_fd;
@@ -515,26 +517,9 @@ void cwist_http_header_free_all(cwist_http_header_node *head) {
 }
 
 /**
- * @brief Check whether a header key names the Connection header.
- * @param key Header key to inspect.
- * @return true when the key is "connection" ignoring case.
+ * @brief Copy the cached RFC 7231 IMF-fixdate string for the current second.
+ * @param out_buf Destination buffer; receives 29 date bytes plus NUL.
  */
-static bool header_key_is_connection(const char *key) {
-    if (!key) return false;
-    return strcasecmp(key, "connection") == 0;
-}
-
-static bool headers_have_date(cwist_http_header_node *head) {
-    cwist_http_header_node *curr = head;
-    while (curr) {
-        if (curr->key && curr->key->data && curr->key->size == 4 && strcasecmp(curr->key->data, "date") == 0) {
-            return true;
-        }
-        curr = curr->next;
-    }
-    return false;
-}
-
 static void cwist_get_cached_date_header(char out_buf[36]) {
     static _Atomic time_t g_last_sec = 0;
     static char g_date_str[36] = {0};
@@ -558,16 +543,6 @@ static void cwist_get_cached_date_header(char out_buf[36]) {
     }
     memcpy(out_buf, g_date_str, 30);
     out_buf[29] = '\0';
-}
-static bool headers_have_connection(cwist_http_header_node *head) {
-    cwist_http_header_node *curr = head;
-    while (curr) {
-        if (curr->key && curr->key->data && header_key_is_connection(curr->key->data)) {
-            return true;
-        }
-        curr = curr->next;
-    }
-    return false;
 }
 
 /* --- Request Lifecycle --- */
@@ -933,49 +908,77 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
         }
     }
 
-    // Headers
+    // Headers: memcpy with known sstring lengths (no snprintf/strlen overhead),
+    // detecting Date/Content-Length/Connection in the same single pass with a
+    // length + first-byte filter before falling back to strcasecmp.
+    bool have_date = false, have_clen = false, have_conn = false;
     cwist_http_header_node *curr = res->headers;
     while (curr) {
         if (curr->key->data && curr->value->data) {
-            if (offset < buf_size) {
-                int n = snprintf(buf + offset, buf_size - offset, "%s: %s\r\n", curr->key->data, curr->value->data);
-                if (n > 0) {
-                    offset += n;
-                    if (offset > buf_size) offset = buf_size;
-                }
+            size_t klen = curr->key->size;
+            size_t vlen = curr->value->size;
+            if (offset + klen + 2 + vlen + 2 <= buf_size) {
+                memcpy(buf + offset, curr->key->data, klen);
+                buf[offset + klen] = ':';
+                buf[offset + klen + 1] = ' ';
+                memcpy(buf + offset + klen + 2, curr->value->data, vlen);
+                buf[offset + klen + 2 + vlen] = '\r';
+                buf[offset + klen + 2 + vlen + 1] = '\n';
+                offset += klen + vlen + 4;
+            }
+            char k0 = curr->key->data[0];
+            if (klen == 4 && (k0 == 'D' || k0 == 'd')) {
+                if (strcasecmp(curr->key->data, "date") == 0) have_date = true;
+            } else if (klen == 14 && (k0 == 'C' || k0 == 'c')) {
+                if (strcasecmp(curr->key->data, "content-length") == 0) have_clen = true;
+            } else if (klen == 10 && (k0 == 'C' || k0 == 'c')) {
+                if (strcasecmp(curr->key->data, "connection") == 0) have_conn = true;
             }
         }
         curr = curr->next;
     }
 
-    if (!headers_have_date(res->headers)) {
+    if (!have_date && offset + 37 <= buf_size) {
         char date_str[36];
-        cwist_get_cached_date_header(date_str);
-        if (offset < buf_size) {
-            int n = snprintf(buf + offset, buf_size - offset, "Date: %s\r\n", date_str);
-            if (n > 0) {
-                offset += n;
-                if (offset > buf_size) offset = buf_size;
-            }
+        cwist_get_cached_date_header(date_str); /* 29 bytes, NUL-terminated */
+        memcpy(buf + offset, "Date: ", 6);
+        memcpy(buf + offset + 6, date_str, 29);
+        buf[offset + 35] = '\r';
+        buf[offset + 36] = '\n';
+        offset += 37;
+    }
+
+    if (!have_clen) {
+        /* Fast integer to ascii without snprintf overhead */
+        char num_buf[20];
+        char *p = num_buf + sizeof(num_buf);
+        size_t tmp_len = body_len;
+        do {
+            *--p = '0' + (tmp_len % 10);
+            tmp_len /= 10;
+        } while (tmp_len > 0);
+        size_t num_len = (size_t)((num_buf + sizeof(num_buf)) - p);
+        if (offset + 16 + num_len + 2 <= buf_size) {
+            memcpy(buf + offset, "Content-Length: ", 16);
+            memcpy(buf + offset + 16, p, num_len);
+            buf[offset + 16 + num_len] = '\r';
+            buf[offset + 16 + num_len + 1] = '\n';
+            offset += 16 + num_len + 2;
         }
     }
 
-    if (!headers_have_content_length(res->headers)) {
-        if (offset < buf_size) {
-            int n = snprintf(buf + offset, buf_size - offset, "Content-Length: %zu\r\n", body_len);
-            if (n > 0) {
-                offset += n;
-                if (offset > buf_size) offset = buf_size;
+    if (!have_conn) {
+        if (res->keep_alive) {
+            static const char conn_ka[] = "Connection: keep-alive\r\n";
+            if (offset + sizeof(conn_ka) - 1 <= buf_size) {
+                memcpy(buf + offset, conn_ka, sizeof(conn_ka) - 1);
+                offset += sizeof(conn_ka) - 1;
             }
-        }
-    }
-
-    if (!headers_have_connection(res->headers)) {
-        if (offset < buf_size) {
-            int n = snprintf(buf + offset, buf_size - offset, "Connection: %s\r\n", res->keep_alive ? "keep-alive" : "close");
-            if (n > 0) {
-                offset += n;
-                if (offset > buf_size) offset = buf_size;
+        } else {
+            static const char conn_cl[] = "Connection: close\r\n";
+            if (offset + sizeof(conn_cl) - 1 <= buf_size) {
+                memcpy(buf + offset, conn_cl, sizeof(conn_cl) - 1);
+                offset += sizeof(conn_cl) - 1;
             }
         }
     }
@@ -990,12 +993,9 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
         }
     }
 
-    if (offset < buf_size) {
-        int n = snprintf(buf + offset, buf_size - offset, "\r\n");
-        if (n > 0) {
-            offset += n;
-            if (offset > buf_size) offset = buf_size;
-        }
+    if (offset + 2 <= buf_size) {
+        buf[offset++] = '\r';
+        buf[offset++] = '\n';
     }
     return offset;
 }
