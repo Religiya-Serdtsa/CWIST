@@ -26,8 +26,12 @@ package "HTTP Core" {
 
 package "Mux Router" {
     class cwist_mux_router {
-        - routes: cwist_mux_route* (Linked List or Trie)
+        - routes: cwist_mux_route* (Linked List of all routes)
         - global_middlewares: cwist_middleware*
+        - bucket_count: size_t
+        - buckets: cwist_mux_route** (Array of exact-match bucket pointers)
+        - param_routes: cwist_mux_route* (Head of parametric routes list)
+        - wildcard_routes: cwist_mux_route* (Head of wildcard routes list)
         .. methods ..
         + create(): cwist_mux_router*
         + handle(method, path, handler): void
@@ -36,8 +40,15 @@ package "Mux Router" {
 
     class cwist_mux_route {
         + method: cwist_http_method_t
-        + pattern: cwist_sstring*
+        + path: cwist_sstring*
         + handler: cwist_http_handler_func
+        + signature_hi: uint64_t
+        + signature_lo: uint64_t
+        + is_parametric: bool
+        + is_wildcard: bool
+        + middleware: cwist_mux_middleware_node*
+        + bucket_next: cwist_mux_route*
+        + param_next: cwist_mux_route*
         + next: cwist_mux_route*
     }
 
@@ -83,11 +94,12 @@ end note
 
 note bottom of cwist_mux_router
   Router Logic:
-  1. Iterate through routes
-  2. Check if req.method == route.method
-  3. Check if req.path matches route.pattern (exact match for basic)
-  4. If match, call route.handler(req, res)
-  5. If no match, return 404
+  1. Generate 128-bit route signature from method and path in a single pass using FNV-1a.
+  2. Compute bucket index via SplitMix64 finalizer and modulo bucket_count.
+  3. Try O(1) exact match in the computed bucket.
+  4. If exact match fails, fallback to linear search for parametric routes.
+  5. If parametric fails, fallback to wildcard routes.
+  6. Execute matched handler and its middleware chain.
 end note
 
 @enduml
