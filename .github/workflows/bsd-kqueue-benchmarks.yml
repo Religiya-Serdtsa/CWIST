@@ -2,8 +2,9 @@ name: BSD kqueue, tests, and benchmarks
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
   pull_request:
+    branches: [main, master, dev]
   workflow_dispatch:
 
 permissions:
@@ -86,7 +87,7 @@ jobs:
           int main(void) {
               cwist_app *app = cwist_app_create();
               cwist_app_get(app, "/", handle_root);
-              cwist_app_listen(app, 8081);
+              cwist_app_listen(app, 9091);
               cwist_app_destroy(app);
               return 0;
           }
@@ -111,7 +112,7 @@ jobs:
           #[tokio::main]
           async fn main() {
               let app = Router::new().route("/", get(|| async { "Hello, World!" }));
-              let listener = tokio::net::TcpListener::bind("127.0.0.1:8082").await.unwrap();
+              let listener = tokio::net::TcpListener::bind("127.0.0.1:9092").await.unwrap();
               axum::serve(listener, app).await.unwrap();
           }
           EOF
@@ -223,8 +224,8 @@ jobs:
             cat $TXT
           }
 
-          run_bench "CWIST" "/tmp/cwist_server" 8081 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
-          run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 8082 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
+          run_bench "CWIST" "/tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
+          run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
 
           # Spring Boot JVM fairness setup:
           #  - fixed heap to avoid resize noise during measurement
@@ -234,16 +235,16 @@ jobs:
           SPRING_CDS_ARCHIVE=/tmp/spring_bench/app.jsa
 
           java $SPRING_JVM_OPTS -XX:ArchiveClassesAtExit=$SPRING_CDS_ARCHIVE \
-            -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar &
+            -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093 &
           TRAIN_PID=$!
           for i in $(seq 1 90); do
-            curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 && break
+            curl -sf http://127.0.0.1:9093/ > /dev/null 2>&1 && break
             sleep 1
           done
           kill -TERM $TRAIN_PID 2>/dev/null || true
           wait $TRAIN_PID 2>/dev/null || true
 
-          run_bench "Spring Boot" "java $SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar" 8080 "/tmp/spring.txt" "/tmp/spring_stat.txt" 90
+          run_bench "Spring Boot" "java $SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093" 9093 "/tmp/spring.txt" "/tmp/spring_stat.txt" 90
 
           # Result JSON must land in the workspace so upload-artifact can find it
           # (the shell is still sitting in /tmp/spring_bench from the maven build).
@@ -326,7 +327,7 @@ jobs:
 
   publish-benchmark-report:
     needs: [bsd-kqueue, benchmark, web-server-benchmark]
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.event_name == 'push' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
