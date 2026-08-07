@@ -10,6 +10,7 @@
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/mem/arena.h>
 #include <cwist/sys/app/shutdown.h>
 #include <ttak/mols_control.h>
 #include <ttak/net/lattice.h>
@@ -306,25 +307,86 @@ cwist_http_method_t cwist_http_string_to_method(const char *method_str) {
 /* --- Header Manipulation --- */
 
 /**
- * @brief Prepend one header node to the linked-list header collection.
+ * @brief Allocate a fixed-size struct from an arena, falling back to the heap.
+ * @param arena Request/response arena, or NULL for plain heap allocation.
+ * @param size Struct size in bytes.
+ * @return Zeroed memory block, or NULL when both paths fail.
+ */
+static void *cwist_http_struct_alloc(cwist_arena_t *arena, size_t size) {
+    void *p = arena ? cwist_arena_alloc(arena, size) : NULL;
+    if (p) {
+        memset(p, 0, size);
+        return p;
+    }
+    return cwist_alloc(size);
+}
+
+/**
+ * @brief Create an sstring whose struct lives in an arena when possible.
+ *
+ * The character buffer still comes from the heap (cwist_realloc); only the
+ * fixed-size cwist_sstring struct is bump-allocated. Arena-owned structs get
+ * owns_storage = false so cwist_sstring_destroy releases the buffer but
+ * leaves the struct to the arena.
+ */
+static cwist_sstring *cwist_http_sstring_create(cwist_arena_t *arena) {
+    bool from_arena = false;
+    cwist_sstring *str = NULL;
+    if (arena) {
+        str = (cwist_sstring *)cwist_arena_alloc(arena, sizeof(cwist_sstring));
+        if (str) from_arena = true;
+    }
+    if (!str) {
+        str = (cwist_sstring *)cwist_alloc(sizeof(cwist_sstring));
+    }
+    if (!str) return NULL;
+
+    memset(str, 0, sizeof(cwist_sstring));
+    str->is_fixed = false;
+    str->owns_storage = !from_arena;
+    str->size = 0;
+    str->data = NULL;
+    str->get_size = cwist_sstring_get_size;
+    str->compare = cwist_sstring_compare_sstring;
+    str->copy = cwist_sstring_copy_sstring;
+    str->append = cwist_sstring_append_sstring;
+
+    return str;
+}
+
+/**
+ * @brief Prepend one header node, optionally bump-allocated from an arena.
  * @param head Header-list head pointer to update.
+ * @param arena Arena to carve the node from, or NULL for heap allocation.
  * @param key Header name to store.
  * @param value Header value to store.
  * @return Tagged CWIST error describing success or allocation failure.
  */
-cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *key, const char *value) {
+static cwist_error_t cwist_http_header_add_ex(cwist_http_header_node **head, cwist_arena_t *arena, const char *key, const char *value) {
     cwist_error_t err = make_error(CWIST_ERR_INT16);
-    
-    cwist_http_header_node *node = (cwist_http_header_node *)cwist_alloc(sizeof(cwist_http_header_node));
+
+    bool from_arena = false;
+    cwist_http_header_node *node = NULL;
+    if (arena) {
+        node = (cwist_http_header_node *)cwist_arena_alloc(arena, sizeof(cwist_http_header_node));
+        if (node) {
+            memset(node, 0, sizeof(cwist_http_header_node));
+            from_arena = true;
+        }
+    }
+    if (!node) {
+        node = (cwist_http_header_node *)cwist_alloc(sizeof(cwist_http_header_node));
+    }
     if (!node) {
         err = make_error(CWIST_ERR_JSON);
         err.error.err_json = cJSON_CreateObject();
         cJSON_AddStringToObject(err.error.err_json, "http_error", "Failed to allocate header");
         return err;
     }
+    node->arena_owned = from_arena;
 
-    node->key = cwist_sstring_create();
-    node->value = cwist_sstring_create();
+    node->key = cwist_http_sstring_create(arena);
+    node->value = cwist_http_sstring_create(arena);
     node->next = NULL;
 
     cwist_sstring_assign(node->key, (char *)key);
@@ -335,6 +397,17 @@ cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *k
 
     err.error.err_i16 = 0; // Success
     return err;
+}
+
+/**
+ * @brief Prepend one header node to the linked-list header collection.
+ * @param head Header-list head pointer to update.
+ * @param key Header name to store.
+ * @param value Header value to store.
+ * @return Tagged CWIST error describing success or allocation failure.
+ */
+cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *key, const char *value) {
+    return cwist_http_header_add_ex(head, NULL, key, value);
 }
 
 /**
@@ -364,18 +437,19 @@ char *cwist_http_header_get(cwist_http_header_node *head, const char *key) {
  */
 void cwist_http_response_add_security_headers(cwist_http_response *res) {
     if (!res) return;
+    cwist_arena_t *arena = (cwist_arena_t *)res->arena;
 
     if (!cwist_http_header_get(res->headers, "X-Frame-Options")) {
-        cwist_http_header_add(&res->headers, "X-Frame-Options", "DENY");
+        cwist_http_header_add_ex(&res->headers, arena, "X-Frame-Options", "DENY");
     }
     if (!cwist_http_header_get(res->headers, "X-Content-Type-Options")) {
-        cwist_http_header_add(&res->headers, "X-Content-Type-Options", "nosniff");
+        cwist_http_header_add_ex(&res->headers, arena, "X-Content-Type-Options", "nosniff");
     }
     if (!cwist_http_header_get(res->headers, "Referrer-Policy")) {
-        cwist_http_header_add(&res->headers, "Referrer-Policy", "strict-origin-when-cross-origin");
+        cwist_http_header_add_ex(&res->headers, arena, "Referrer-Policy", "strict-origin-when-cross-origin");
     }
     if (!cwist_http_header_get(res->headers, "Content-Security-Policy")) {
-        cwist_http_header_add(&res->headers, "Content-Security-Policy",
+        cwist_http_header_add_ex(&res->headers, arena, "Content-Security-Policy",
             "default-src 'self'; "
             "script-src 'self' https://cdnjs.cloudflare.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
@@ -388,10 +462,10 @@ void cwist_http_response_add_security_headers(cwist_http_response *res) {
             "object-src 'none';");
     }
     if (!cwist_http_header_get(res->headers, "Cross-Origin-Resource-Policy")) {
-        cwist_http_header_add(&res->headers, "Cross-Origin-Resource-Policy", "same-origin");
+        cwist_http_header_add_ex(&res->headers, arena, "Cross-Origin-Resource-Policy", "same-origin");
     }
     if (!cwist_http_header_get(res->headers, "Strict-Transport-Security")) {
-        cwist_http_header_add(&res->headers, "Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+        cwist_http_header_add_ex(&res->headers, arena, "Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     }
 }
 
@@ -405,7 +479,9 @@ void cwist_http_header_free_all(cwist_http_header_node *head) {
         cwist_http_header_node *next = curr->next;
         cwist_sstring_destroy(curr->key);
         cwist_sstring_destroy(curr->value);
-        cwist_free(curr);
+        if (!curr->arena_owned) {
+            cwist_free(curr);
+        }
         curr = next;
     }
 }
@@ -473,17 +549,21 @@ static bool headers_have_connection(cwist_http_header_node *head) {
  * @return Newly allocated request, or NULL on allocation failure.
  */
 cwist_http_request *cwist_http_request_create(void) {
-    cwist_http_request *req = (cwist_http_request *)cwist_alloc(sizeof(cwist_http_request));
-    if (!req) return NULL;
+    cwist_arena_t *arena = cwist_arena_create(0);
+    cwist_http_request *req = (cwist_http_request *)cwist_http_struct_alloc(arena, sizeof(cwist_http_request));
+    if (!req) {
+        cwist_arena_destroy(arena);
+        return NULL;
+    }
 
     req->method = CWIST_HTTP_GET; // Default
-    req->path = cwist_sstring_create();
-    req->query = cwist_sstring_create();
+    req->path = cwist_http_sstring_create(arena);
+    req->query = cwist_http_sstring_create(arena);
     req->query_params = NULL;
     req->path_params = NULL;
-    req->version = cwist_sstring_create();
+    req->version = cwist_http_sstring_create(arena);
     req->headers = NULL;
-    req->body = cwist_sstring_create();
+    req->body = cwist_http_sstring_create(arena);
     req->keep_alive = true;
     req->client_fd = -1;
     req->app = NULL;
@@ -494,6 +574,7 @@ cwist_http_request *cwist_http_request_create(void) {
     req->stream_id = 0;
     req->private_data = NULL;
     req->endpoint_opts = CWIST_ENDPOINT_DEFAULT;
+    req->arena = arena;
 
     // Defaults
     cwist_sstring_assign(req->version, "HTTP/1.1");
@@ -580,6 +661,7 @@ cwist_sstring* cwist_get_client_ip_from_fd(int fd) {
  */
 void cwist_http_request_destroy(cwist_http_request *req) {
     if (req) {
+        cwist_arena_t *arena = (cwist_arena_t *)req->arena;
         cwist_sstring_destroy(req->path);
         cwist_sstring_destroy(req->query);
         cwist_query_map_destroy(req->query_params);
@@ -590,7 +672,12 @@ void cwist_http_request_destroy(cwist_http_request *req) {
         cwist_session_destroy(req->session);
         cwist_free(req->csrf_token);
         cwist_http_header_free_all(req->headers);
-        cwist_free(req);
+        if (!arena || !cwist_arena_owns(arena, req)) {
+            cwist_free(req);
+        }
+        /* Releases every arena-carved struct (request, sstrings, header
+         * nodes) in one shot; heap-owned buffers were freed above. */
+        cwist_arena_destroy(arena);
     }
 }
 
@@ -633,14 +720,18 @@ static void cwist_http_response_release_ptr_body(cwist_http_response *res) {
  * @return Newly allocated response, or NULL on allocation failure.
  */
 cwist_http_response *cwist_http_response_create(void) {
-    cwist_http_response *res = (cwist_http_response *)cwist_alloc(sizeof(cwist_http_response));
-    if (!res) return NULL;
+    cwist_arena_t *arena = cwist_arena_create(0);
+    cwist_http_response *res = (cwist_http_response *)cwist_http_struct_alloc(arena, sizeof(cwist_http_response));
+    if (!res) {
+        cwist_arena_destroy(arena);
+        return NULL;
+    }
 
-    res->version = cwist_sstring_create();
+    res->version = cwist_http_sstring_create(arena);
     res->status_code = CWIST_HTTP_OK;
-    res->status_text = cwist_sstring_create();
+    res->status_text = cwist_http_sstring_create(arena);
     res->headers = NULL;
-    res->body = cwist_sstring_create();
+    res->body = cwist_http_sstring_create(arena);
     res->endpoint_opts = CWIST_ENDPOINT_DEFAULT;
     res->keep_alive = true;
     res->is_ptr_body = false;
@@ -653,6 +744,7 @@ cwist_http_response *cwist_http_response_create(void) {
     res->file_stream_len = 0;
     res->file_stream_offset = 0;
     res->file_stream_auto_close = false;
+    res->arena = arena;
 
     // Defaults
     cwist_sstring_assign(res->version, "HTTP/1.1");
@@ -669,6 +761,7 @@ cwist_http_response *cwist_http_response_create(void) {
  */
 void cwist_http_response_destroy(cwist_http_response *res) {
     if (res) {
+        cwist_arena_t *arena = (cwist_arena_t *)res->arena;
         cwist_http_response_release_ptr_body(res);
         cwist_http_response_release_file_stream(res);
         cwist_sstring_destroy(res->version);
@@ -676,7 +769,10 @@ void cwist_http_response_destroy(cwist_http_response *res) {
         cwist_sstring_destroy(res->body);
         cwist_http_header_free_all(res->headers);
         cwist_free(res->alt_svc);
-        cwist_free(res);
+        if (!arena || !cwist_arena_owns(arena, res)) {
+            cwist_free(res);
+        }
+        cwist_arena_destroy(arena);
     }
 }
 
@@ -1130,7 +1226,7 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
                 memcpy(key_tmp, line_start, key_len); key_tmp[key_len] = '\0';
                 memcpy(val_tmp, val_start, val_len); val_tmp[val_len] = '\0';
                 
-                cwist_http_header_add(&req->headers, key_tmp, val_tmp);
+                cwist_http_header_add_ex(&req->headers, (cwist_arena_t *)req->arena, key_tmp, val_tmp);
                 
                 if (strcasecmp(key_tmp, "Connection") == 0) {
                     if (strcasecmp(val_tmp, "close") == 0) req->keep_alive = false;
