@@ -110,9 +110,7 @@ long get_optimal_thread_count(void) {
     return count;
 }
 
-/* Bounded per-worker ring: 4096 slots (~96 KiB) keeps the queue cache-resident
- * and caps worst-case RSS; producers block on cond_not_full under backpressure. */
-#define HTTP_TASKS_PER_THREAD 4096
+#define HTTP_TASKS_PER_THREAD 32768
 
 typedef struct {
     int client_fd;
