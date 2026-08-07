@@ -1284,7 +1284,7 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     // 2. Headers (Optimized: Zero-copy in-place parsing using memchr and strncasecmp)
     line_start = line_end + 2; 
     while (line_start < header_end) {
-        line_end = memchr(line_start, '\r', header_end - line_start);
+        line_end = memchr(line_start, '\r', header_end + 2 - line_start);
         if (!line_end || line_end == line_start) break;
 
         const char *colon = memchr(line_start, ':', line_end - line_start);
