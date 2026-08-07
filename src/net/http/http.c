@@ -34,6 +34,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #ifdef __linux__
@@ -1278,12 +1279,15 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
         char *crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
         while (!crlf) {
             if (*avail >= buf_cap - 1) return -1;
-            struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
-            int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-            if (ret <= 0) return -1;
             ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
             if (bytes < 0) {
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+                    int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                    if (ret <= 0) return -1;
+                    continue;
+                }
+                if (errno == EINTR) continue;
                 return -1;
             }
             if (bytes == 0) return -1;
@@ -1305,12 +1309,15 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
                 char *trailer_crlf = memmem(buf + offset, *avail - offset, "\r\n", 2);
                 if (!trailer_crlf) {
                     if (*avail >= buf_cap - 1) return -1;
-                    struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
-                    int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-                    if (ret <= 0) return -1;
                     ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
                     if (bytes < 0) {
-                        if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+                            int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                            if (ret <= 0) return -1;
+                            continue;
+                        }
+                        if (errno == EINTR) continue;
                         return -1;
                     }
                     if (bytes == 0) return -1;
@@ -1332,12 +1339,15 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
 
         while (*avail - offset < chunk_size + 2) {
             if (*avail >= buf_cap - 1) return -1;
-            struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
-            int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-            if (ret <= 0) return -1;
             ssize_t bytes = recv(client_fd, buf + *avail, buf_cap - 1 - *avail, 0);
             if (bytes < 0) {
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+                    int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                    if (ret <= 0) return -1;
+                    continue;
+                }
+                if (errno == EINTR) continue;
                 return -1;
             }
             if (bytes == 0) return -1;
@@ -1369,13 +1379,15 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             return NULL;
         }
 
-        struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
-        int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-        if (ret <= 0) return NULL; // Timeout or error
-
         ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, 0);
         if (bytes < 0) {
-            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                if (ret <= 0) return NULL; // Timeout or error
+                continue;
+            }
+            if (errno == EINTR) continue;
             return NULL;
         }
         if (bytes == 0) return NULL;
@@ -1408,17 +1420,19 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         size_t current_body_len = to_copy;
 
         while (current_body_len < (size_t)req->content_length) {
-            struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
-            int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-            if (ret <= 0) {
-                cwist_free(body);
-                cwist_http_request_destroy(req);
-                return NULL;
-            }
-
             ssize_t bytes = recv(client_fd, body + current_body_len, (size_t)req->content_length - current_body_len, 0);
             if (bytes < 0) {
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
+                    int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
+                    if (ret <= 0) {
+                        cwist_free(body);
+                        cwist_http_request_destroy(req);
+                        return NULL;
+                    }
+                    continue;
+                }
+                if (errno == EINTR) continue;
                 cwist_free(body);
                 cwist_http_request_destroy(req);
                 return NULL;
@@ -1812,6 +1826,9 @@ cwist_error_t cwist_accept_socket(int server_fd, struct sockaddr *sockv4, void (
       memcpy(sockv4, &peer_addr, sizeof(peer_addr));
     }
 
+    int nodelay = 1;
+    setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
+
     handler_func(client_fd, ctx);
   }
 
@@ -1848,6 +1865,8 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
                 err.error.err_i16 = -1;
                 return err;
             }
+            int nodelay = 1;
+            setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
             handle_client_forking(client_fd, handler, ctx);
         }
     }
@@ -1870,6 +1889,8 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
                 cwist_http_pool_destroy();
                 return err;
             }
+            int nodelay = 1;
+            setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
             cwist_http_pool_submit(client_fd, handler, ctx);
         }
         cwist_http_pool_destroy();
@@ -1907,6 +1928,8 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
                     while (1) {
                         int client_fd = accept(server_fd, NULL, NULL);
                         if (client_fd >= 0) {
+                            int nodelay = 1;
+                            setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
                             handler(client_fd, ctx);
                         } else {
                             int accept_err = errno;
@@ -1961,6 +1984,8 @@ epoll_exit:
                     while (1) {
                         int client_fd = accept(server_fd, NULL, NULL);
                         if (client_fd >= 0) {
+                            int nodelay = 1;
+                            setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
                             handler(client_fd, ctx);
                         } else {
                             int accept_err = errno;

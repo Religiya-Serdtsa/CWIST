@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
@@ -3067,6 +3068,9 @@ int cwist_app_multiport(cwist_app **app_ref, unsigned short public_port, cwist_m
                     }
                     continue;
                 }
+
+                int nodelay = 1;
+                setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
                 cwist_app *port_app = cwist_multiport_bound_app(group, app, bind_ports[i]);
                 if (port_app->use_ssl) {

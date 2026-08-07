@@ -90,7 +90,7 @@ jobs:
           }
           int main(void) {
               cwist_app *app = cwist_app_create();
-              cwist_app_get(app, "/", handle_root);
+              cwist_app_get_opt(app, "/", handle_root, CWIST_ENDPOINT_FIXED);
               cwist_app_listen(app, 9091);
               cwist_app_destroy(app);
               return 0;
@@ -175,11 +175,11 @@ jobs:
           </project>
           EOF
           # Spring WebFlux runs on the Reactor Netty event loop, and virtual
-          # threads (Project Loom, Java 21) are additionally enabled so any
-          # blocking dispatch off the event loop runs on Loom carriers.
+          # threads are disabled since the hello world handler is non-blocking,
+          # avoiding unnecessary Loom career thread context-switching overhead.
           mkdir -p src/main/java/com/example src/main/resources
           cat << 'EOF' > src/main/resources/application.properties
-          spring.threads.virtual.enabled=true
+          spring.threads.virtual.enabled=false
           EOF
           cat << 'EOF' > src/main/java/com/example/Application.java
           package com.example;
@@ -255,11 +255,14 @@ jobs:
           run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
           run_bench "Gin" "/tmp/gin_bench/gin_server" 9094 "/tmp/gin.txt" "/tmp/gin_stat.txt" 10
 
-          # Spring Boot JVM fairness setup:
-          #  - fixed heap to avoid resize noise during measurement
+          # Spring Boot JVM optimal tuning:
+          #  - 1024m heap to reduce GC collection pressure
+          #  - UseParallelGC for absolute highest throughput on simple benchmarks
+          #  - AlwaysPreTouch to avoid page faults during measurement
+          #  - Pooled bytebufs and disabled Netty leak detection for peak Netty performance
           #  - CDS (Class Data Sharing) AOT cache trained from a real boot, then
           #    replayed via -XX:SharedArchiveFile for representative startup/warmup
-          SPRING_JVM_OPTS="-Xms512m -Xmx512m"
+          SPRING_JVM_OPTS="-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:+AlwaysPreTouch -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled"
           SPRING_CDS_ARCHIVE=/tmp/spring_bench/app.jsa
 
           java $SPRING_JVM_OPTS -XX:ArchiveClassesAtExit=$SPRING_CDS_ARCHIVE \
@@ -282,9 +285,9 @@ jobs:
           export RUNNER_HW="$(nproc) vCPU | $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
           export SPRING_JAVA_VERSION="$(java -version 2>&1 | head -1)"
           export SPRING_BOOT_VERSION="3.2.3"
-          export SPRING_STACK="Spring WebFlux + Reactor Netty (event loop, virtual threads enabled)"
+          export SPRING_STACK="Spring WebFlux + Reactor Netty (optimized event loop, virtual threads disabled)"
           export SPRING_JVM_OPTS_RECORDED="$SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE (CDS AOT cache)"
-          export SPRING_VIRTUAL_THREADS="true"
+          export SPRING_VIRTUAL_THREADS="false"
           export GO_VERSION_RECORDED="$(go version)"
           export GIN_FRAMEWORK="Gin v1.10.0 (gin-gonic/gin, release mode)"
           export WRK_PROFILE="wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)"
