@@ -719,6 +719,32 @@ static size_t serialize_headers(cwist_http_response *res, char *buf, size_t buf_
     } else if (res->body) {
         body_len = res->body->size;
     }
+
+    /* Fast path for default HTTP/1.1 200 OK response with no custom headers */
+    if (res->status_code == 200 && !res->headers && !res->alt_svc && buf_size >= 128) {
+        /* "HTTP/1.1 200 OK\r\nContent-Length: " + body_len + "\r\nConnection: " + keep_alive + "\r\n\r\n" */
+        static const char status_prefix[] = "HTTP/1.1 200 OK\r\nContent-Length: ";
+        memcpy(buf, status_prefix, sizeof(status_prefix) - 1);
+        size_t offset = sizeof(status_prefix) - 1;
+
+        /* Fast integer to ascii */
+        char num_buf[32];
+        int num_len = snprintf(num_buf, sizeof(num_buf), "%zu", body_len);
+        memcpy(buf + offset, num_buf, num_len);
+        offset += num_len;
+
+        if (res->keep_alive) {
+            static const char conn_ka[] = "\r\nConnection: keep-alive\r\n\r\n";
+            memcpy(buf + offset, conn_ka, sizeof(conn_ka) - 1);
+            offset += sizeof(conn_ka) - 1;
+        } else {
+            static const char conn_cl[] = "\r\nConnection: close\r\n\r\n";
+            memcpy(buf + offset, conn_cl, sizeof(conn_cl) - 1);
+            offset += sizeof(conn_cl) - 1;
+        }
+        return offset;
+    }
+
     size_t offset = 0;
     
     // Status Line

@@ -22,17 +22,16 @@ static bool app_use_https(const cwist_app *app) {
 
 static void async_accept_cb(int fd, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
+    int client_fd;
+#if defined(__linux__)
+    while ((client_fd = accept4(fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC)) >= 0) {
+#else
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);
-    int client_fd;
-
     while ((client_fd = accept(fd, (struct sockaddr*)&addr, &len)) >= 0) {
         int fl = fcntl(client_fd, F_GETFL, 0);
-        if (fl < 0 || fcntl(client_fd, F_SETFL, fl | O_NONBLOCK) < 0) {
-            perror("[async] Failed to set client socket non-blocking");
-            close(client_fd);
-            continue;
-        }
+        if (fl >= 0) fcntl(client_fd, F_SETFL, fl | O_NONBLOCK);
+#endif
 
         if (app_use_https(app)) {
             https_pool_submit(client_fd, app->ssl_ctx, app->https_request_handler, app);
