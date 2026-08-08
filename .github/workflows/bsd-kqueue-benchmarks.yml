@@ -84,6 +84,8 @@ jobs:
           # 1. CWIST Minimal HTTP Web Server
           cat << 'EOF' > /tmp/cwist_server.c
           #include <cwist/app.h>
+          #include <cwist/sys/app/app.h>
+          #include <cwist/sys/app/endpoint_opts.h>
           static void handle_root(cwist_http_request *req, cwist_http_response *res) {
               (void)req;
               cwist_sstring_assign(res->body, "Hello, World!");
@@ -361,10 +363,16 @@ jobs:
           with open("webserver-result.json", "w") as f:
               json.dump(data, f)
           PY
+      - name: Copy raw benchmark output
+        run: |
+          mkdir -p raw_logs
+          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt raw_logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: webserver-result
-          path: webserver-result.json
+          path: |
+            webserver-result.json
+            raw_logs/
 
   publish-benchmark-report:
     needs: [bsd-kqueue, benchmark, web-server-benchmark]
