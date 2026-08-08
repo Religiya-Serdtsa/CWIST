@@ -506,6 +506,9 @@ static cwist_route_entry *cwist_route_table_lookup(cwist_route_table *table, cwi
 
 static cwist_route_entry *cwist_route_table_match_params(cwist_route_table *table, cwist_http_request *req) {
     if (!table || !req || !req->path || !req->path->data) return NULL;
+    if (!req->path_params) {
+        req->path_params = cwist_query_map_create();
+    }
     cwist_route_entry *curr = table->param_routes;
     while (curr) {
         if (curr->method == req->method) {
@@ -2030,14 +2033,6 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
         return;
     }
 
-    cwist_static_request_info static_info = {0};
-    if (cwist_prepare_static(app, req, &static_info)) {
-        req->endpoint_opts = CWIST_ENDPOINT_FILE;
-        if (res) res->endpoint_opts = req->endpoint_opts;
-        execute_chain(app, req, res, cwist_static_handler, &static_info);
-        return;
-    }
-
     if (!found_route) {
         found_route = cwist_route_table_match_params(app->router, req);
     }
@@ -2046,14 +2041,23 @@ static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwis
         req->endpoint_opts = found_route->opts ? found_route->opts : CWIST_ENDPOINT_DEFAULT;
         if (res) res->endpoint_opts = req->endpoint_opts;
         execute_chain(app, req, res, found_route->handler, NULL);
+        return;
+    }
+
+    cwist_static_request_info static_info = {0};
+    if (cwist_prepare_static(app, req, &static_info)) {
+        req->endpoint_opts = CWIST_ENDPOINT_FILE;
+        if (res) res->endpoint_opts = req->endpoint_opts;
+        execute_chain(app, req, res, cwist_static_handler, &static_info);
+        return;
+    }
+
+    cwist_error_handler_func eh = cwist_app_find_error_handler(app, CWIST_HTTP_NOT_FOUND);
+    if (eh) {
+        eh(req, res, CWIST_HTTP_NOT_FOUND);
     } else {
-        cwist_error_handler_func eh = cwist_app_find_error_handler(app, CWIST_HTTP_NOT_FOUND);
-        if (eh) {
-            eh(req, res, CWIST_HTTP_NOT_FOUND);
-        } else {
-            res->status_code = CWIST_HTTP_NOT_FOUND;
-            cwist_sstring_assign(res->body, "404 Not Found");
-        }
+        res->status_code = CWIST_HTTP_NOT_FOUND;
+        cwist_sstring_assign(res->body, "404 Not Found");
     }
 }
 
