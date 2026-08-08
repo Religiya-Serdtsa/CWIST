@@ -7,9 +7,10 @@ static void handle_token(cwist_http_request *req, cwist_http_response *res) {
 
     cJSON *payload = cJSON_CreateObject();
     cJSON_AddStringToObject(payload, "user", "admin");
-    cJSON_AddNumberToObject(payload, "exp", 1999999999);
 
-    char *token = cwist_jwt_sign(payload, secret);
+    char *json_str = cJSON_PrintUnformatted(payload);
+    char *token = cwist_jwt_sign(json_str, secret, 3600);
+    free(json_str);
     cJSON_Delete(payload);
 
     if (token) {

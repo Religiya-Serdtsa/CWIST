@@ -1,5 +1,5 @@
 #include <cwist/app.h>
-#include <cwist/core/db/db.h>
+#include <cwist/core/db/sql.h>
 
 static void handle_db(cwist_http_request *req, cwist_http_response *res) {
     (void)req;

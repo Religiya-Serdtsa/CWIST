@@ -1,9 +1,9 @@
 #include <cwist/app.h>
 #include <stdio.h>
 
-static void logging_middleware(cwist_http_request *req, cwist_http_response *res) {
-    (void)res;
+static void logging_middleware(cwist_http_request *req, cwist_http_response *res, cwist_handler_func next) {
     printf("[LOG] Processing request path: %s\n", req->path ? req->path->data : "/");
+    if (next) next(req, res);
 }
 
 static void handle_dashboard(cwist_http_request *req, cwist_http_response *res) {
