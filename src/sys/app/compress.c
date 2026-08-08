@@ -353,7 +353,9 @@ static void remove_header(cwist_http_header_node **head, const char *key) {
             *curr = (*curr)->next;
             cwist_sstring_destroy(to_free->key);
             cwist_sstring_destroy(to_free->value);
-            cwist_free(to_free);
+            if (!to_free->arena_owned) {
+                cwist_free(to_free);
+            }
             continue;
         }
         curr = &(*curr)->next;
