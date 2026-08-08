@@ -7,4 +7,4 @@ include_directories(../../include ../../lib ../../lib/libttak/include)
 link_directories(../../ ../../lib/cjson ../../lib/libttak/lib ../../lib/uriparser/build)
 
 add_executable(tut09 main.c)
-target_link_libraries(tut09 PRIVATE cwist cjson ttak pthread dl uriparser stdc++ m z)
+target_link_libraries(tut09 PRIVATE cwist cjson ttak pthread dl uriparser stdc++ m z curl)
