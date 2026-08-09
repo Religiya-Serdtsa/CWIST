@@ -15,6 +15,7 @@
 
 typedef struct cwist_https_context {
     SSL_CTX *ctx;
+    void *ticket_key; ///< Shared session-ticket key material (forked workers inherit it)
 } cwist_https_context;
 
 typedef struct cwist_https_connection {
@@ -54,7 +55,8 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn);
 
 /**
  * Serialize an HTTP response and send it over the SSL connection.
- * Uses cwist_http_stringify_response internally.
+ * Streams the header block and body separately (zero-copy; no intermediate
+ * serialization blob) and supports pointer bodies and file streams.
  */
 cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http_response *res);
 

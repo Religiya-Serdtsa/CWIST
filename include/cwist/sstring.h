@@ -12,6 +12,8 @@
 typedef struct cwist_sstring {
   char   *data;  ///< please access this data if raw handling is necessary
   bool   is_fixed;
+  bool   owns_storage;
+  bool   borrows_buffer; ///< data is borrowed (static/arena); never freed, detached on mutation
   size_t size;
   size_t (*get_size)(struct cwist_sstring *str);
   int     (*compare )(struct cwist_sstring *left, const struct cwist_sstring *right); ///< should mimic strcmp, internally use strncmp
@@ -45,6 +47,16 @@ cwist_error_t cwist_sstring_append_len(cwist_sstring *str, const char *data, siz
  * @brief Assign raw bytes with length.
  */
 cwist_error_t cwist_sstring_assign_len(cwist_sstring *str, const char *data, size_t len);
+
+/**
+ * @brief Borrow an external buffer without copying; detached to heap on first mutation.
+ */
+cwist_error_t cwist_sstring_borrow(cwist_sstring *str, const char *data, size_t len);
+
+/**
+ * @brief Adopt a cwist_alloc'd heap buffer, taking ownership without copying.
+ */
+cwist_error_t cwist_sstring_adopt_len(cwist_sstring *str, char *buf, size_t len);
 
 /**
  * @brief Initialize an sstring.

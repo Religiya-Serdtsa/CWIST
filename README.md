@@ -165,21 +165,38 @@ graceful process shutdown.
 
 ## Linking
 
-When you link against `libcwist.a`, you must supply the following flags.
-Because CWIST is a **static** archive, the linker needs all transitive
-dependencies to be listed explicitly by the application.
+CWIST's `libcwist.a` is a **thin static archive**: it contains only CWIST
+objects.  `make install PREFIX=/opt/cwist` installs its built external
+submodules separately in `/opt/cwist/lib/cwist`, and installs their public
+headers in `/opt/cwist/include/cwist/vendor`.
+
+Compile against both header directories and link against both library
+directories.  This keeps third-party archives independently replaceable and
+avoids duplicate symbols from a merged (fat) archive.
+
+```sh
+gcc -I/opt/cwist/include -I/opt/cwist/include/cwist/vendor main.c \
+    -L/opt/cwist/lib -L/opt/cwist/lib/cwist -lcwist \
+    -llsquic -lssl -lcrypto -lnats_static -lttak -lcjson -luriparser \
+    -lz -lzstd -ldl -lpthread -lm -lstdc++
+```
+
+`DESTDIR` is supported for staged packages, for example
+`make install PREFIX=/usr DESTDIR=/tmp/cwist-package`.
+
+The order above is important for static linking: CWIST comes first, followed
+by its dependencies.
 
 ### Required flags (always needed)
 
 | Flag | Provides |
 |------|----------|
 | `-lcwist` | The framework itself |
-| `-lssl -lcrypto` | TLS (BoringSSL or OpenSSL) |
+| `-llsquic -lssl -lcrypto` | HTTP/3/QUIC and TLS (bundled BoringSSL) |
 | `-lz` | zlib — gzip/deflate compression and internal use |
 | `-lzstd` | Zstandard — payload compression (preferred algorithm) |
 | `-lbrotlienc -lbrotlicommon` | Brotli — payload compression |
-| `-luriparser` | URI parsing |
-| `-lcjson` | JSON handling |
+| `-lnats_static -lttak -luriparser -lcjson` | Bundled NATS, libttak, URI parsing, and JSON |
 | `-ldl` | Dynamic loading (RDBMS auto-mount) |
 | `-lpthread` | POSIX threads |
 | `-lm` | Math (used by libttak) |
