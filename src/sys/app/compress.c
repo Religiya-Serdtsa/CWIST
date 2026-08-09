@@ -247,8 +247,10 @@ const cwist_compress_backend *cwist_compress_backend_brotli(void) {
 
 typedef struct {
     ZSTD_CStream *cstream;
-    char         *out_buf;  /**< Intermediate output ring buffer. */
-    size_t        out_cap;
+    char         *accum;
+    size_t        accum_len;
+    size_t        accum_cap;
+    char         *out;
     size_t        out_len;
     size_t        out_pos;
 } cwist_zstd_state_t;
@@ -264,32 +266,71 @@ static int zstd_init(void **state) {
     return 0;
 }
 
+static int zstd_ensure_accum(cwist_zstd_state_t *zs, size_t need) {
+    size_t required = zs->accum_len + need;
+    if (required > zs->accum_cap) {
+        size_t new_cap = zs->accum_cap ? zs->accum_cap * 2 : 4096;
+        while (new_cap < required) new_cap *= 2;
+        char *tmp = (char *)realloc(zs->accum, new_cap);
+        if (!tmp) return -1;
+        zs->accum = tmp;
+        zs->accum_cap = new_cap;
+    }
+    return 0;
+}
+
 static int zstd_compress(void *state, const char *in, size_t in_len,
                          char *out, size_t *out_len, int flush) {
     cwist_zstd_state_t *zs = (cwist_zstd_state_t *)state;
     if (!zs || !out || !out_len) return -1;
 
-    ZSTD_inBuffer  ib = { in, in_len, 0 };
-    ZSTD_outBuffer ob = { out, *out_len, 0 };
-
-    size_t rc;
-    if (flush) {
-        /* Finalize the frame on the last chunk. */
-        rc = ZSTD_compressStream2(zs->cstream, &ob, &ib, ZSTD_e_end);
-    } else {
-        rc = ZSTD_compressStream2(zs->cstream, &ob, &ib, ZSTD_e_continue);
+    if (!flush) {
+        if (in_len == 0) { *out_len = 0; return 0; }
+        if (zstd_ensure_accum(zs, in_len) != 0) return -1;
+        memcpy(zs->accum + zs->accum_len, in, in_len);
+        zs->accum_len += in_len;
+        *out_len = 0;
+        return 0;
     }
-    if (ZSTD_isError(rc)) return -1;
-    *out_len = ob.pos;
+
+    size_t total_in_len = zs->accum_len + in_len;
+    char *total_in = (char *)malloc(total_in_len);
+    if (!total_in) return -1;
+    if (zs->accum_len > 0) memcpy(total_in, zs->accum, zs->accum_len);
+    if (in_len > 0) memcpy(total_in + zs->accum_len, in, in_len);
+
+    size_t out_cap = ZSTD_compressBound(total_in_len);
+    char *out_buf = (char *)malloc(out_cap);
+    if (!out_buf) { free(total_in); return -1; }
+
+    ZSTD_inBuffer  ib = { total_in, total_in_len, 0 };
+    ZSTD_outBuffer ob = { out_buf, out_cap, 0 };
+
+    size_t rc = ZSTD_compressStream2(zs->cstream, &ob, &ib, ZSTD_e_end);
+    free(total_in);
+    if (ZSTD_isError(rc)) { free(out_buf); return -1; }
+
+    zs->accum_len = 0;
+    free(zs->out);
+    zs->out = out_buf;
+    zs->out_len = ob.pos;
+    zs->out_pos = 0;
+
+    size_t to_copy = (ob.pos < *out_len) ? ob.pos : *out_len;
+    memcpy(out, out_buf, to_copy);
+    zs->out_pos = to_copy;
+    *out_len = to_copy;
     return 0;
 }
 
 static int zstd_finish(void *state, char *out, size_t *out_len) {
-    /* ZSTD_e_end already fully flushes the frame in zstd_compress(flush=1),
-       so there are no trailing bytes left to emit here. */
-    (void)state;
-    (void)out;
-    *out_len = 0;
+    cwist_zstd_state_t *zs = (cwist_zstd_state_t *)state;
+    if (!zs || !out || !out_len) return -1;
+    size_t remaining = zs->out_len - zs->out_pos;
+    size_t to_copy = (remaining < *out_len) ? remaining : *out_len;
+    if (to_copy > 0) memcpy(out, zs->out + zs->out_pos, to_copy);
+    zs->out_pos += to_copy;
+    *out_len = to_copy;
     return 0;
 }
 
@@ -297,7 +338,8 @@ static void zstd_cleanup(void *state) {
     cwist_zstd_state_t *zs = (cwist_zstd_state_t *)state;
     if (!zs) return;
     if (zs->cstream) ZSTD_freeCStream(zs->cstream);
-    free(zs->out_buf);
+    free(zs->accum);
+    free(zs->out);
     free(zs);
 }
 
