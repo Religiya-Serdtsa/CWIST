@@ -105,8 +105,7 @@ static void *https_pool_worker(void *arg) {
         pthread_cond_signal(&g_https_pool.cond_not_full);
         pthread_mutex_unlock(&g_https_pool.mutex);
 
-        // We can reuse the existing https_thread_handler logic by wrapping the task
-        struct https_thread_payload *payload = malloc(sizeof(*payload));
+        struct https_thread_payload *payload = cwist_alloc(sizeof(*payload));
         if (payload) {
             payload->client_fd = task.client_fd;
             payload->ctx = task.ctx;
@@ -717,7 +716,7 @@ static void *https_thread_handler(void *arg) {
         close(payload->client_fd);
     }
     
-    free(payload);
+    cwist_free(payload);
     return NULL;
 }
 
