@@ -15,12 +15,12 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk 12t 400c):
-- **CWIST**: 100916 req/s | Latency 0.10ms | RSS 11872KiB | Csw 0
-- **Axum**: 118211 req/s | Latency 3.32ms | RSS 17128KiB | Csw 0
-- **Gin (Go)**: 78875 req/s | Latency 6.59ms | RSS 29996KiB | Csw 0
-- **Spring Boot**: 47240 req/s | Latency 8.34ms | RSS 1267980KiB | Csw 0
+- **CWIST**: 199846 req/s | Latency 0.06ms | RSS 12004KiB | Csw 0
+- **Axum**: 194703 req/s | Latency 2.04ms | RSS 17408KiB | Csw 0
+- **Gin (Go)**: 142235 req/s | Latency 5.05ms | RSS 29540KiB | Csw 0
+- **Spring Boot**: 102737 req/s | Latency 3.89ms | RSS 1235884KiB | Csw 0
 
-Spring runtime env: **openjdk version "21.0.11" 2026-04-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty (optimized event loop, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:+AlwaysPreTouch -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
+Spring runtime env: **openjdk version "21.0.12" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (optimized event loop pinned to nproc, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:GCTimeRatio=99 -XX:+AlwaysPreTouch -Djava.security.egd=file:/dev/urandom -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -Dio.netty.buffer.checkBounds=false -Dio.netty.buffer.checkAccessible=false -Dreactor.netty.ioWorkerCount=4 -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
 ![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)
 <!-- WEBSERVER_BENCHMARKS:END -->
