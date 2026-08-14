@@ -420,7 +420,7 @@ static void cwist_mw_compress_handler(cwist_http_request *req, cwist_http_respon
     if (backend->init(&state) != 0) return;
 
     size_t out_cap = res->body->size + 256;
-    char *out_buf = (char *)malloc(out_cap);
+    char *out_buf = (char *)cwist_malloc(out_cap);
     if (!out_buf) {
         backend->cleanup(state);
         return;
@@ -437,7 +437,7 @@ static void cwist_mw_compress_handler(cwist_http_request *req, cwist_http_respon
         if (chunk_out == 0) {
             /* Grow output buffer */
             size_t new_cap = out_cap * 2;
-            char *new_buf = (char *)realloc(out_buf, new_cap);
+            char *new_buf = (char *)cwist_realloc(out_buf, new_cap);
             if (!new_buf) { ok = 0; break; }
             out_buf = new_buf;
             out_cap = new_cap;
@@ -458,7 +458,7 @@ static void cwist_mw_compress_handler(cwist_http_request *req, cwist_http_respon
         size_t tail = out_cap - total_out;
         if (tail == 0) {
             size_t new_cap = out_cap + 256;
-            char *new_buf = (char *)realloc(out_buf, new_cap);
+            char *new_buf = (char *)cwist_realloc(out_buf, new_cap);
             if (new_buf) {
                 out_buf = new_buf;
                 out_cap = new_cap;
@@ -481,8 +481,7 @@ static void cwist_mw_compress_handler(cwist_http_request *req, cwist_http_respon
         cwist_http_header_add(&res->headers, "Content-Encoding", backend->encoding_name);
         remove_header(&res->headers, "Content-Length");
     }
-
-    free(out_buf);
+    cwist_free(out_buf);
 }
 
 cwist_middleware_func cwist_mw_compress(size_t min_body_size) {
