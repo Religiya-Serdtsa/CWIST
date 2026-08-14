@@ -15,6 +15,7 @@ typedef struct cwist_sstring {
   char   *data;  ///< Access directly only when raw handling is necessary.
   bool   is_fixed;
   bool   owns_storage;
+  bool   borrows_buffer; ///< data points at storage owned elsewhere (static/arena); never freed or realloc'd in place
   size_t size;
   size_t (*get_size)(struct cwist_sstring *str);
   int    (*compare )(struct cwist_sstring *left, const struct cwist_sstring *right); ///< Should mimic `strcmp`, internally use `strncmp`.
@@ -47,6 +48,25 @@ cwist_error_t cwist_sstring_append_len(cwist_sstring *str, const char *data, siz
  * @brief Assign raw bytes with length.
  */
 cwist_error_t cwist_sstring_assign_len(cwist_sstring *str, const char *data, size_t len);
+
+/**
+ * @brief Borrow an external buffer without copying.
+ *
+ * The sstring points at @p data (which must outlive the sstring, e.g. a
+ * string literal or arena chunk) and never frees it. The first mutating call
+ * transparently detaches the contents into owned heap storage, so borrowed
+ * strings stay fully mutable from the caller's perspective.
+ */
+cwist_error_t cwist_sstring_borrow(cwist_sstring *str, const char *data, size_t len);
+
+/**
+ * @brief Adopt a heap buffer, taking ownership without copying.
+ *
+ * @p buf must come from cwist_alloc (or compatible) with room for a NUL at
+ * @p buf[len]; the sstring frees it on destroy/reassign. The previous
+ * contents are released.
+ */
+cwist_error_t cwist_sstring_adopt_len(cwist_sstring *str, char *buf, size_t len);
 
 /**
  * @brief Initialize an sstring.

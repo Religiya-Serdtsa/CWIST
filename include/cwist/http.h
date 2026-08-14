@@ -127,6 +127,12 @@ cwist_sstring *cwist_http_stringify_response(cwist_http_response *res);
  */
 cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res);
 
+/**
+ * @brief Serialize only the status line and headers into a caller buffer.
+ * @return Number of bytes written.
+ */
+size_t cwist_http_serialize_headers(cwist_http_response *res, char *buf, size_t buf_size);
+
 /** @} */
 
 /** @name Header Manipulation */

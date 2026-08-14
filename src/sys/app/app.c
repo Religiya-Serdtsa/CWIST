@@ -2099,27 +2099,44 @@ bool cwist_https_upgrade_handler(cwist_https_connection *conn, cwist_http_reques
 
 static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
-    cwist_http_request *req = cwist_https_receive_request(conn);
-    if (!req) return;
-    req->app = app;
-    req->db = app->db;
-    
-    cwist_http_response *res = cwist_http_response_create();
-    internal_route_handler(app, req, res);
-    
-    cwist_https_send_response(conn, res);
-    
-    bool detached = false;
-    if (req->upgraded) {
-        detached = cwist_https_upgrade_handler(conn, req, res);
-        if (detached) {
-            conn->ssl = NULL;
-            conn->fd = -1;
+
+    /* HTTP/1.1 keep-alive loop: previously every request paid a full TCP
+     * accept + TLS handshake + teardown because the connection closed after
+     * a single response. cwist_https_receive_request bounds each header read
+     * with CWIST_HTTP_HEADERS_TIMEOUT_MS, so idle keep-alive connections are
+     * reaped automatically. */
+    while (true) {
+        cwist_http_request *req = cwist_https_receive_request(conn);
+        if (!req) return;
+        req->app = app;
+        req->db = app->db;
+
+        cwist_http_response *res = cwist_http_response_create();
+        if (!res) {
+            cwist_http_request_destroy(req);
+            return;
         }
+        internal_route_handler(app, req, res);
+
+        bool keep_alive = req->keep_alive && res->keep_alive;
+        bool upgraded = req->upgraded;
+
+        cwist_https_send_response(conn, res);
+
+        bool detached = false;
+        if (upgraded) {
+            detached = cwist_https_upgrade_handler(conn, req, res);
+            if (detached) {
+                conn->ssl = NULL;
+                conn->fd = -1;
+            }
+        }
+
+        cwist_http_response_destroy(res);
+        cwist_http_request_destroy(req);
+
+        if (!keep_alive || upgraded) return;
     }
-    
-    cwist_http_response_destroy(res);
-    cwist_http_request_destroy(req);
 }
 
 static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx) {
@@ -3211,6 +3228,8 @@ int cwist_app_listen(cwist_app *app, int port) {
     }
     if (workers < 1) workers = 1;
     bool is_worker_child = false;
+    pid_t worker_pids[workers > 1 ? workers - 1 : 1];
+    size_t worker_count = 0;
     for (int i = 1; i < workers; i++) {
         pid_t pid = fork();
         if (pid == 0) {
@@ -3219,6 +3238,8 @@ int cwist_app_listen(cwist_app *app, int port) {
         } else if (pid < 0) {
             perror("fork worker failed");
             break;
+        } else {
+            worker_pids[worker_count++] = pid;
         }
     }
 
@@ -3296,7 +3317,13 @@ int cwist_app_listen(cwist_app *app, int port) {
 
     /* Parent process reaps worker children so they do not become zombies. */
     if (!is_worker_child && workers > 1) {
-        for (int i = 1; i < workers; i++) {
+        /* SIGTERM is delivered to the supervisor only.  Ask every worker to
+         * leave its inherited accept loop before waiting for it; otherwise a
+         * supervisor shutdown can block indefinitely. */
+        for (size_t i = 0; i < worker_count; i++) {
+            kill(worker_pids[i], SIGTERM);
+        }
+        for (size_t i = 0; i < worker_count; i++) {
             int status;
             wait(&status);
         }

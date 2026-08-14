@@ -8,6 +8,9 @@
 #include "tls_chain.h"
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/rand.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -217,6 +220,15 @@ static void cwist_https_apply_base_tls_defaults(SSL_CTX *ssl_ctx) {
     SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_RENEGOTIATION);
 #endif
     SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
+
+    /* Session resumption. TLS 1.3 tickets are stateless and already on by
+     * default; this additionally enables the server-side session cache for
+     * TLS 1.2 session IDs and sets the session-id context without which
+     * OpenSSL refuses to resume cached sessions. Combined with HTTP/1.1
+     * keep-alive this removes most full (asymmetric) handshakes. */
+    SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
+    SSL_CTX_set_session_id_context(ssl_ctx, (const unsigned char *)"cwist-v1", 8);
+    SSL_CTX_set_timeout(ssl_ctx, 300);
 }
 
 static cwist_error_t cwist_https_apply_http2_tls_profile(SSL_CTX *ssl_ctx) {
@@ -277,6 +289,78 @@ static int cwist_https_alpn_select_cb(SSL *ssl,
 }
 
 /* --- Context Management --- */
+
+/* --- Shared session ticket key -------------------------------------------
+ * cwist_app_listen() forks one worker per CPU core. BoringSSL/OpenSSL
+ * generate their internal session-ticket keys lazily on first use, i.e.
+ * AFTER the fork, so every worker would mint its own key and tickets issued
+ * by one worker could never be resumed on another (SO_REUSEPORT scatters
+ * connections across workers). Instead we generate one random key at
+ * context creation (in the parent, pre-fork) and install an explicit
+ * ticket-key callback; every forked worker inherits identical key material
+ * and tickets resume regardless of which worker accepts the connection.
+ *
+ * Trade-off: the key lives for the process lifetime (no rotation), which is
+ * the standard pre-fork server model (same as a fixed nginx ticket key).
+ * ------------------------------------------------------------------------- */
+typedef struct cwist_tls_ticket_key {
+    unsigned char name[16];     /* key_name sent in the ticket */
+    unsigned char aes_key[32];  /* AES-256-CBC encryption key  */
+    unsigned char hmac_key[32]; /* HMAC-SHA-256 MAC key        */
+} cwist_tls_ticket_key;
+
+static int g_ticket_key_ex_data_idx = -1;
+static pthread_once_t g_ticket_key_ex_data_once = PTHREAD_ONCE_INIT;
+
+static void cwist_tls_ticket_key_ex_data_init(void) {
+    g_ticket_key_ex_data_idx = SSL_CTX_get_ex_new_index(0, NULL, NULL, NULL, NULL);
+}
+
+static int cwist_tls_ticket_key_cb(SSL *ssl, uint8_t *key_name, uint8_t *iv,
+                                   EVP_CIPHER_CTX *ectx, HMAC_CTX *hctx, int encrypt) {
+    SSL_CTX *ssl_ctx = ssl ? SSL_get_SSL_CTX(ssl) : NULL;
+    const cwist_tls_ticket_key *key = NULL;
+    if (ssl_ctx && g_ticket_key_ex_data_idx >= 0) {
+        key = (const cwist_tls_ticket_key *)SSL_CTX_get_ex_data(ssl_ctx, g_ticket_key_ex_data_idx);
+    }
+    if (!key) return 0;
+
+    if (encrypt) {
+        memcpy(key_name, key->name, sizeof(key->name));
+        if (RAND_bytes(iv, 16) != 1) return 0;
+        if (EVP_EncryptInit_ex(ectx, EVP_aes_256_cbc(), NULL, key->aes_key, iv) != 1) return 0;
+        if (HMAC_Init_ex(hctx, key->hmac_key, sizeof(key->hmac_key), EVP_sha256(), NULL) != 1) return 0;
+        return 1;
+    }
+
+    if (memcmp(key_name, key->name, sizeof(key->name)) != 0) {
+        return 0; /* Unknown key: decline the ticket, do a full handshake. */
+    }
+    if (EVP_DecryptInit_ex(ectx, EVP_aes_256_cbc(), NULL, key->aes_key, iv) != 1) return 0;
+    if (HMAC_Init_ex(hctx, key->hmac_key, sizeof(key->hmac_key), EVP_sha256(), NULL) != 1) return 0;
+    return 1;
+}
+
+/**
+ * @brief Generate the shared ticket key and arm the ticket-key callback.
+ * @param ssl_ctx Context being configured.
+ * @param out_key Receives ownership of the key material (freed by the caller).
+ */
+static void cwist_tls_setup_shared_ticket_key(SSL_CTX *ssl_ctx, void **out_key) {
+    *out_key = NULL;
+    pthread_once(&g_ticket_key_ex_data_once, cwist_tls_ticket_key_ex_data_init);
+    if (g_ticket_key_ex_data_idx < 0) return;
+
+    cwist_tls_ticket_key *key = (cwist_tls_ticket_key *)cwist_alloc(sizeof(*key));
+    if (!key) return;
+    if (RAND_bytes((uint8_t *)key, sizeof(*key)) != 1) {
+        cwist_free(key);
+        return; /* Fall back to the library-internal (per-worker) keys. */
+    }
+    SSL_CTX_set_ex_data(ssl_ctx, g_ticket_key_ex_data_idx, key);
+    SSL_CTX_set_tlsext_ticket_key_cb(ssl_ctx, cwist_tls_ticket_key_cb);
+    *out_key = key;
+}
 
 cwist_error_t cwist_https_init_context(cwist_https_context **ctx, const char *cert_path, const char *key_path) {
     return cwist_https_init_context_with_options(ctx, cert_path, key_path, NULL, NULL);
@@ -356,6 +440,11 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
     (*ctx)->ctx = ssl_ctx;
     (*ctx)->http2_enabled = enable_http2;
     (*ctx)->http3_enabled = enable_http3;
+    (*ctx)->ticket_key = NULL;
+
+    /* Pre-fork shared ticket key so every forked worker can resume tickets
+     * issued by any other worker. Must run before workers are forked. */
+    cwist_tls_setup_shared_ticket_key(ssl_ctx, &(*ctx)->ticket_key);
 
     SSL_CTX_set_alpn_select_cb(ssl_ctx,
                                cwist_https_alpn_select_cb,
@@ -374,8 +463,14 @@ void cwist_https_destroy_context(cwist_https_context *ctx) {
         if (ctx->ctx) {
             SSL_CTX_free(ctx->ctx);
         }
+        if (ctx->ticket_key) {
+            /* Scrub key material before releasing it. */
+            OPENSSL_cleanse(ctx->ticket_key, sizeof(cwist_tls_ticket_key));
+            cwist_free(ctx->ticket_key);
+        }
         cwist_free(ctx);
-        EVP_cleanup();
+        /* EVP_cleanup() intentionally not called: it is deprecated since
+         * OpenSSL 1.1.0 and tears down global state other code may use. */
     }
 }
 
@@ -506,7 +601,16 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
     /* Total deadline for assembling the request headers. */
     uint64_t headers_deadline = cwist_https_now_ms() + CWIST_HTTP_HEADERS_TIMEOUT_MS;
 
-    while (!(header_end = strstr(conn->read_buf, "\r\n\r\n"))) {
+    /* Rescanning from offset 0 on every read is O(n^2) over dribbled
+     * headers; resume 3 bytes back so a terminator split across two reads
+     * is still found. */
+    size_t scan_from = 0;
+
+    while (1) {
+        header_end = strstr(conn->read_buf + scan_from, "\r\n\r\n");
+        if (header_end) break;
+        scan_from = total_received > 3 ? total_received - 3 : 0;
+
         if (total_received >= CWIST_HTTP_READ_BUFFER_SIZE - 1) {
             return NULL;
         }
@@ -606,8 +710,8 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
             body_idle_start = cwist_https_now_ms();
         }
         body[req->content_length] = '\0';
-        cwist_sstring_assign_len(req->body, body, req->content_length);
-        cwist_free(body);
+        /* Adopt the filled buffer: one allocation, zero copies. */
+        cwist_sstring_adopt_len(req->body, body, req->content_length);
 
         if (body_received > req->content_length) {
             size_t leftover_len = body_received - req->content_length;
@@ -630,7 +734,42 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
 }
 
 /**
+ * @brief Write a full buffer over TLS, retrying through WANT_READ/WANT_WRITE.
+ * @param conn Active HTTPS connection wrapper.
+ * @param buf Bytes to write.
+ * @param len Number of bytes to write.
+ * @return 0 on success, -1 on timeout or fatal SSL error.
+ */
+static int cwist_ssl_write_all(cwist_https_connection *conn, const char *buf, size_t len) {
+    size_t off = 0;
+    while (off < len) {
+        /* SSL_write takes an int; cap each call well below INT_MAX. */
+        size_t left = len - off;
+        int chunk = left > 0x3fffffff ? 0x3fffffff : (int)left;
+        int sent = SSL_write(conn->ssl, buf + off, chunk);
+        if (sent <= 0) {
+            int ssl_err = SSL_get_error(conn->ssl, sent);
+            if (ssl_err == SSL_ERROR_WANT_WRITE || ssl_err == SSL_ERROR_WANT_READ) {
+                if (cwist_ssl_wait(conn->fd, ssl_err, CWIST_HTTP_TIMEOUT_MS) != 0) {
+                    return -1;
+                }
+                continue;
+            }
+            return -1;
+        }
+        off += (size_t)sent;
+    }
+    return 0;
+}
+
+/**
  * @brief Serialize an HTTP response and send it over an active TLS connection.
+ *
+ * Zero-copy counterpart of the plaintext send path: the header block is
+ * serialized into a stack buffer and written first, then the body is
+ * streamed straight from its origin (pointer body, sstring, or file stream)
+ * instead of materializing one contiguous heap blob.
+ *
  * @param conn Active HTTPS connection wrapper.
  * @param res Response object to serialize.
  * @return Tagged CWIST error describing success or failure.
@@ -660,40 +799,52 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
         cwist_http_header_add(&res->headers, "Alt-Svc", alt_svc);
     }
 
-    // 1. Serialize using existing HTTP logic
-    cwist_sstring *response_str = cwist_http_stringify_response(res);
-    if (!response_str) {
-        err.error.err_i16 = -1;
-        return err;
+    // 1. Headers onto a stack buffer, then straight onto the wire
+    char header_buf[CWIST_HTTP_MAX_HEADER_SIZE];
+    size_t header_len = cwist_http_serialize_headers(res, header_buf, sizeof(header_buf));
+    if (cwist_ssl_write_all(conn, header_buf, header_len) != 0) {
+        return make_ssl_error("SSL header write failed");
     }
 
-    // 2. Send over SSL
-    const char *p = response_str->data;
-    int left = (int)response_str->size;
-    int total_sent = 0;
-
-    err.error.err_i16 = 0; // Assume success initially
-
-    while (left > 0) {
-        int sent = SSL_write(conn->ssl, p, left);
-        if (sent <= 0) {
-            int ssl_err = SSL_get_error(conn->ssl, sent);
-            if (ssl_err == SSL_ERROR_WANT_WRITE || ssl_err == SSL_ERROR_WANT_READ) {
-                if (cwist_ssl_wait(conn->fd, ssl_err, CWIST_HTTP_TIMEOUT_MS) != 0) {
-                    err = make_ssl_error("SSL write timed out or socket error");
-                    break;
-                }
-                continue; // Retry
-            }
-            err = make_ssl_error("SSL write failed");
-            break;
+    // 2. Body streamed from its origin; no intermediate serialization
+    const char *body_ptr = NULL;
+    size_t body_len = 0;
+    if (res->is_ptr_body) {
+        body_ptr = (const char *)res->ptr_body;
+        body_len = res->ptr_body_len;
+    } else if (res->body && res->body->data) {
+        body_ptr = res->body->data;
+        body_len = res->body->size;
+    }
+    if (body_ptr && body_len > 0) {
+        if (cwist_ssl_write_all(conn, body_ptr, body_len) != 0) {
+            return make_ssl_error("SSL body write failed");
         }
-        p += sent;
-        left -= sent;
-        total_sent += sent;
     }
 
-    cwist_sstring_destroy(response_str);
+    // 3. File streams cannot use sendfile() through userland TLS; chunk them
+    if (res->use_file_stream && res->file_stream_fd >= 0) {
+        char fbuf[65536];
+        size_t remaining = res->file_stream_len;
+        off_t offset = res->file_stream_offset;
+        while (remaining > 0) {
+            size_t to_read = remaining < sizeof(fbuf) ? remaining : sizeof(fbuf);
+            ssize_t n = pread(res->file_stream_fd, fbuf, to_read, offset);
+            if (n < 0) {
+                if (errno == EINTR) continue;
+                return make_ssl_error("file stream read failed");
+            }
+            if (n == 0) break;
+            if (cwist_ssl_write_all(conn, fbuf, (size_t)n) != 0) {
+                return make_ssl_error("SSL file stream write failed");
+            }
+            offset += n;
+            remaining -= (size_t)n;
+        }
+        res->file_stream_offset = offset;
+    }
+
+    err.error.err_i16 = 0;
     return err;
 }
 
