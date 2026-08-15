@@ -331,13 +331,21 @@ cwist_jwt_claims *cwist_jwt_verify(const char *token, const char *secret) {
 
     if (!json) return NULL;
 
-    /* --- Validate "exp" claim if present ---------------------------------- */
+    /* --- Validate "exp" and "nbf" claims with leeway for clock skew/high-RTT --- */
+    #define CWIST_JWT_TIME_LEEWAY 300
+    time_t now = time(NULL);
     cJSON *exp_item = cJSON_GetObjectItemCaseSensitive(json, "exp");
     if (exp_item && cJSON_IsNumber(exp_item)) {
-        time_t now = time(NULL);
-        if ((time_t)exp_item->valuedouble < now) {
+        if ((time_t)exp_item->valuedouble + CWIST_JWT_TIME_LEEWAY < now) {
             cJSON_Delete(json);
             return NULL; /* token expired */
+        }
+    }
+    cJSON *nbf_item = cJSON_GetObjectItemCaseSensitive(json, "nbf");
+    if (nbf_item && cJSON_IsNumber(nbf_item)) {
+        if ((time_t)nbf_item->valuedouble - CWIST_JWT_TIME_LEEWAY > now) {
+            cJSON_Delete(json);
+            return NULL; /* token not yet valid */
         }
     }
 
