@@ -958,9 +958,9 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
                 }
 
                 if (range_start > range_end || range_start >= file->size) {
-                    range_valid = false;
+                    (void)range_valid;
                     res->status_code = CWIST_HTTP_RANGE_NOT_SATISFIABLE;
-                    char cr[64];
+                    char cr[128];
                     snprintf(cr, sizeof(cr), "bytes */%zu", file->size);
                     cwist_http_header_add(&res->headers, "Content-Range", cr);
                     cwist_sstring_assign(res->body, "");
@@ -969,7 +969,7 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
                     send_offset = range_start;
                     send_len = range_end - range_start + 1;
                     res->status_code = CWIST_HTTP_PARTIAL_CONTENT;
-                    char cr[64];
+                    char cr[128];
                     snprintf(cr, sizeof(cr), "bytes %zu-%zu/%zu", range_start, range_end, file->size);
                     cwist_http_header_add(&res->headers, "Content-Range", cr);
                 }
@@ -1784,6 +1784,7 @@ void cwist_app_get(cwist_app *app, const char *path, cwist_handler_func handler)
 #include <cwist/sys/metrics/metrics.h>
 
 static void cwist_metrics_route_handler(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
     cwist_metrics_serve_http(res);
 }
 
@@ -1793,16 +1794,19 @@ void cwist_app_enable_metrics(cwist_app *app) {
 }
 
 static void cwist_healthz_route_handler(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
     cwist_app_healthz(res);
 }
 
 static void cwist_liveness_route_handler(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
     res->status_code = CWIST_HTTP_OK;
     cwist_sstring_assign(res->body, "{\"status\":\"alive\"}");
     cwist_http_header_add(&res->headers, "Content-Type", "application/json");
 }
 
 static void cwist_readiness_route_handler(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
     cwist_app_healthz(res);
 }
 
