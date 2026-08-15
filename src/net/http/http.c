@@ -12,6 +12,7 @@
 #include <cwist/core/mem/alloc.h>
 #include <cwist/core/mem/arena.h>
 #include <cwist/sys/app/shutdown.h>
+#include <cwist/sys/io/reactor.h>
 #include <ttak/mols_control.h>
 #include <ttak/net/lattice.h>
 #include <ttak/priority/scheduler.h>
@@ -114,21 +115,8 @@ long get_optimal_thread_count(void) {
 #define HTTP_TASKS_PER_THREAD 32768
 
 typedef struct {
-    int client_fd;
-    void (*handler_func)(int, void *);
-    void *ctx;
-} http_pool_task_t;
-
-typedef struct {
     pthread_t thread;
-    http_pool_task_t *queue;
-    size_t head;
-    size_t tail;
-    size_t count;
-    pthread_mutex_t mutex;
-    pthread_cond_t cond_not_empty;
-    pthread_cond_t cond_not_full;
-    int shutdown;
+    cwist_reactor_t *reactor;
     uint32_t worker_id;
 } http_thread_worker_t;
 
@@ -136,37 +124,27 @@ static size_t g_rr_index = 0;
 static long g_http_thread_count;
 static http_thread_worker_t *g_workers = NULL;
 
+typedef struct {
+    int client_fd;
+    void (*handler_func)(int, void *);
+    void *ctx;
+    cwist_reactor_t *reactor;
+} http_conn_ctx_t;
+
+static void http_conn_event_cb(int fd, void *ctx) {
+    http_conn_ctx_t *c = (http_conn_ctx_t *)ctx;
+    void (*handler)(int, void *) = c->handler_func;
+    void *user_ctx = c->ctx;
+
+    handler(fd, user_ctx);
+    cwist_free(c);
+}
+
 static void *http_pool_worker(void *arg) {
     http_thread_worker_t *w = (http_thread_worker_t *)arg;
     ttak_net_lattice_set_worker_id(w->worker_id);
 
-    http_pool_task_t batch[16];
-
-    while (1) {
-        size_t batch_count = 0;
-        pthread_mutex_lock(&w->mutex);
-        while (w->count == 0 && !w->shutdown) {
-            pthread_cond_wait(&w->cond_not_empty, &w->mutex);
-        }
-        if (w->shutdown && w->count == 0) {
-            pthread_mutex_unlock(&w->mutex);
-            break;
-        }
-
-        while (w->count > 0 && batch_count < 16) {
-            batch[batch_count++] = w->queue[w->head];
-            w->head = (w->head + 1) % HTTP_TASKS_PER_THREAD;
-            w->count--;
-        }
-        if (batch_count > 0) {
-            pthread_cond_signal(&w->cond_not_full);
-        }
-        pthread_mutex_unlock(&w->mutex);
-
-        for (size_t i = 0; i < batch_count; i++) {
-            batch[i].handler_func(batch[i].client_fd, batch[i].ctx);
-        }
-    }
+    cwist_reactor_run(w->reactor);
     return NULL;
 }
 
@@ -175,13 +153,10 @@ int cwist_http_pool_init(void) {
     g_workers = cwist_alloc(g_http_thread_count * sizeof(http_thread_worker_t));
     g_rr_index = 0;
     memset(g_workers, 0, g_http_thread_count * sizeof(http_thread_worker_t));
-    for (int i = 0; i < get_optimal_thread_count(); i++) {
-        g_workers[i].queue = cwist_alloc(HTTP_TASKS_PER_THREAD * sizeof(http_pool_task_t));
-        if (!g_workers[i].queue) return -1;
-        
-        pthread_mutex_init(&g_workers[i].mutex, NULL);
-        pthread_cond_init(&g_workers[i].cond_not_empty, NULL);
-        pthread_cond_init(&g_workers[i].cond_not_full, NULL);
+
+    for (int i = 0; i < g_http_thread_count; i++) {
+        g_workers[i].reactor = cwist_reactor_create();
+        if (!g_workers[i].reactor) return -1;
         g_workers[i].worker_id = (uint32_t)i;
         if (pthread_create(&g_workers[i].thread, NULL, http_pool_worker, &g_workers[i]) != 0) {
             return -1;
@@ -194,59 +169,44 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
     /* Deterministic worker selection using Choi Seok-jeong's MOLS to minimize cache bouncing. */
     uint16_t node_id = (uint16_t)(client_fd % TTAK_MOLS_NODE_COUNT);
     uint32_t mixed = ttak_apply_mols_control(node_id, (uint32_t)g_rr_index);
-    size_t worker_idx = mixed % get_optimal_thread_count();
+    size_t worker_idx = mixed % (size_t)g_http_thread_count;
 
-    g_rr_index = (g_rr_index + 1) % get_optimal_thread_count();
-    
+    g_rr_index = (g_rr_index + 1) % (size_t)g_http_thread_count;
+
     http_thread_worker_t *w = &g_workers[worker_idx];
 
-    pthread_mutex_lock(&w->mutex);
-    while (w->count >= HTTP_TASKS_PER_THREAD && !w->shutdown) {
-        pthread_cond_wait(&w->cond_not_full, &w->mutex);
-    }
-    if (w->shutdown) {
-        pthread_mutex_unlock(&w->mutex);
+    http_conn_ctx_t *c = cwist_alloc(sizeof(http_conn_ctx_t));
+    if (!c) {
         close(client_fd);
         return;
     }
-    w->queue[w->tail].client_fd = client_fd;
-    w->queue[w->tail].handler_func = handler;
-    w->queue[w->tail].ctx = ctx;
-    w->tail = (w->tail + 1) % HTTP_TASKS_PER_THREAD;
-    w->count++;
-    pthread_cond_signal(&w->cond_not_empty);
-    pthread_mutex_unlock(&w->mutex);
-}
-void cwist_http_pool_destroy(void) {
-    for (int i = 0; i < get_optimal_thread_count(); i++) {
-        pthread_mutex_lock(&g_workers[i].mutex);
-        g_workers[i].shutdown = 1;
-        pthread_cond_broadcast(&g_workers[i].cond_not_empty);
-        pthread_mutex_unlock(&g_workers[i].mutex);
-    }
-    for (int i = 0; i < get_optimal_thread_count(); i++) {
-#if defined(__linux__)
-        struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += g_cwist_drain_timeout_sec;
-        int rc = pthread_timedjoin_np(g_workers[i].thread, NULL, &ts);
-        if (rc == ETIMEDOUT) {
-            pthread_cancel(g_workers[i].thread);
-            pthread_join(g_workers[i].thread, NULL);
-        }
-#else
-        pthread_join(g_workers[i].thread, NULL);
-#endif
-        pthread_mutex_destroy(&g_workers[i].mutex);
-        pthread_cond_destroy(&g_workers[i].cond_not_empty);
-        pthread_cond_destroy(&g_workers[i].cond_not_full);
-        if (g_workers[i].queue) {
-            cwist_free(g_workers[i].queue);
-        }
-    }
+    c->client_fd = client_fd;
+    c->handler_func = handler;
+    c->ctx = ctx;
+    c->reactor = w->reactor;
 
+    if (!cwist_reactor_add(w->reactor, client_fd, http_conn_event_cb, c)) {
+        close(client_fd);
+        cwist_free(c);
+    }
+}
+
+void cwist_http_pool_destroy(void) {
+    if (!g_workers) return;
+    for (int i = 0; i < g_http_thread_count; i++) {
+        if (g_workers[i].reactor) {
+            cwist_reactor_stop(g_workers[i].reactor);
+        }
+    }
+    for (int i = 0; i < g_http_thread_count; i++) {
+        pthread_join(g_workers[i].thread, NULL);
+        if (g_workers[i].reactor) {
+            cwist_reactor_destroy(g_workers[i].reactor);
+            g_workers[i].reactor = NULL;
+        }
+    }
     cwist_free(g_workers);
-    g_workers = nullptr;
+    g_workers = NULL;
     g_http_thread_count = 0;
 }
 /* --- End Thread Pool --- */
