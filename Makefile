@@ -41,7 +41,11 @@ PERF_WARNINGS = -Wextra
 CLANG_STACK_FLAGS = -O3 -ffast-math -g \
                     -falign-functions=32 \
                     -fomit-frame-pointer \
-                    -finline-functions
+                    -finline-functions \
+                    -fvectorize \
+                    -fslp-vectorize \
+                    -fstrict-aliasing \
+                    -funroll-loops
 ifeq ($(UNAME_S),Linux)
     CLANG_STACK_FLAGS += -fno-plt -fno-semantic-interposition
 endif
@@ -56,7 +60,8 @@ GCC_STACK_FLAGS = -Ofast -g \
                   -fno-semantic-interposition \
                   -fomit-frame-pointer \
                   -finline-functions \
-                  -fipa-pta
+                  -fstrict-aliasing \
+                  -funroll-loops
 
 ifeq ($(BUILD_PROFILE),tcc)
     CFLAGS = $(COMMON_CFLAGS) $(TCC_STACK_FLAGS) -ftls-model=global-dynamic
