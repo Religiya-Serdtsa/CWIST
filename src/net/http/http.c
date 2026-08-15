@@ -140,8 +140,11 @@ static void http_conn_event_cb(int fd, void *ctx) {
     cwist_free(c);
 }
 
+static _Thread_local http_thread_worker_t *t_current_worker = NULL;
+
 static void *http_pool_worker(void *arg) {
     http_thread_worker_t *w = (http_thread_worker_t *)arg;
+    t_current_worker = w;
     ttak_net_lattice_set_worker_id(w->worker_id);
 
     cwist_reactor_run(w->reactor);
@@ -189,6 +192,23 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
         close(client_fd);
         cwist_free(c);
     }
+}
+
+bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), void *ctx) {
+    if (!t_current_worker || !t_current_worker->reactor || client_fd < 0) return false;
+
+    http_conn_ctx_t *c = cwist_alloc(sizeof(http_conn_ctx_t));
+    if (!c) return false;
+    c->client_fd = client_fd;
+    c->handler_func = handler;
+    c->ctx = ctx;
+    c->reactor = t_current_worker->reactor;
+
+    if (!cwist_reactor_add(t_current_worker->reactor, client_fd, http_conn_event_cb, c)) {
+        cwist_free(c);
+        return false;
+    }
+    return true;
 }
 
 void cwist_http_pool_destroy(void) {
@@ -835,8 +855,6 @@ cwist_http_response *cwist_http_response_create(void) {
     // Defaults (borrowed statics; handlers may overwrite via regular assign)
     cwist_sstring_borrow(res->version, "HTTP/1.1", 8);
     cwist_sstring_borrow(res->status_text, "OK", 2);
-
-    cwist_http_response_add_security_headers(res);
 
     return res;
 }
@@ -1550,6 +1568,9 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, MSG_DONTWAIT);
         if (bytes < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (total_received == 0) {
+                    return NULL;
+                }
                 struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
                 int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
                 if (ret <= 0) return NULL;

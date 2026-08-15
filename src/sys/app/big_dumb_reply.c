@@ -579,7 +579,81 @@ void cwist_bdr_put(cwist_bdr_t *bdr, const char *method, const char *path, const
     bdr_guardrails(bdr);
 
     pthread_mutex_unlock(&bdr->lock);
+}
 
+void cwist_bdr_put_fixed(cwist_bdr_t *bdr, const char *method, const char *path, const void *data, size_t len) {
+    if (!bdr || !method || !path || !data || len == 0) return;
+    if (strcmp(method, "GET") != 0) return;
+
+    pthread_mutex_lock(&bdr->lock);
+    bdr_check_ram(bdr);
+
+    uint64_t req_h = bdr_hash(method, path);
+    uint64_t res_h = bdr_hash_data(data, len);
+
+    if (bdr->is_disk_mode) {
+        sqlite3_stmt *stmt;
+        sqlite3_prepare_v2(bdr->disk_db, "INSERT OR REPLACE INTO bdr (hash, blob) VALUES (?, ?);", -1, &stmt, NULL);
+        sqlite3_bind_int64(stmt, 1, req_h);
+        sqlite3_bind_blob(stmt, 2, data, len, SQLITE_STATIC);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        bdr_guardrails(bdr);
+        pthread_mutex_unlock(&bdr->lock);
+        return;
+    }
+
+    size_t idx = req_h % bdr->bucket_count;
+    bdr_entry_t *curr = bdr->buckets[idx];
+    while (curr) {
+        if (curr->request_hash == req_h) {
+            void *blob = cwist_alloc(len);
+            if (blob) {
+                memcpy(blob, data, len);
+                bdr_release_blob(bdr, curr);
+                curr->response_blob = blob;
+                curr->len = len;
+                curr->response_hash = res_h;
+                curr->is_stable = true;
+                curr->hits = 0;
+                curr->created_at = time(NULL);
+                bdr->current_bytes += len;
+                bdr_guardrails(bdr);
+            }
+            pthread_mutex_unlock(&bdr->lock);
+            return;
+        }
+        curr = curr->next;
+    }
+
+    bdr_entry_t *entry = cwist_alloc(sizeof(bdr_entry_t));
+    if (!entry) {
+        pthread_mutex_unlock(&bdr->lock);
+        return;
+    }
+
+    void *blob = cwist_alloc(len);
+    if (!blob) {
+        cwist_free(entry);
+        pthread_mutex_unlock(&bdr->lock);
+        return;
+    }
+    memcpy(blob, data, len);
+
+    entry->request_hash = req_h;
+    entry->response_hash = res_h;
+    entry->is_stable = true;
+    entry->response_blob = blob;
+    entry->len = len;
+    entry->hits = 0;
+    entry->created_at = time(NULL);
+    bdr->current_bytes += len;
+
+    entry->next = bdr->buckets[idx];
+    bdr->buckets[idx] = entry;
+
+    bdr_guardrails(bdr);
+    pthread_mutex_unlock(&bdr->lock);
 }
 
 void cwist_bdr_set_limits(cwist_bdr_t *bdr, size_t max_bytes, time_t max_entry_age_sec, uint64_t revalidate_hits) {

@@ -226,6 +226,7 @@ int headers_have_content_length(cwist_http_header_node *headers);
 
 int cwist_http_pool_init(void);
 void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx);
+bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), void *ctx);
 void cwist_http_pool_destroy(void);
 
 extern const int CWIST_CREATE_SOCKET_FAILED;
