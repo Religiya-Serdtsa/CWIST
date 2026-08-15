@@ -63,39 +63,41 @@
 
 long get_cpu_cores(void) {
 #if defined(_WIN32) || defined(_WIN64)
-    /* Windows Environment */
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
     return (long)sysinfo.dwNumberOfProcessors;
-
+#elif defined(__linux__)
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    if (sched_getaffinity(0, sizeof(cpuset), &cpuset) == 0) {
+        int count = CPU_COUNT(&cpuset);
+        if (count > 0) return (long)count;
+    }
+#if defined(_SC_NPROCESSORS_ONLN)
+    long nproc = sysconf(_SC_NPROCESSORS_ONLN);
+    if (nproc > 0) return nproc;
+#endif
+    return 1;
 #elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
-    /* BSD Variant - Query kernel MIB tree directly via sysctl */
     int mib[2];
     int nproc = 0;
     size_t len = sizeof(nproc);
-
     mib[0] = CTL_HW;
 #if defined(HW_NCPUONLINE)
-    /* OpenBSD/FreeBSD preferred: returns counts of actual online cores */
     mib[1] = HW_NCPUONLINE;
 #else
-    /* Fallback for older BSD kernels */
     mib[1] = HW_NCPU;
 #endif
-
     if (sysctl(mib, 2, &nproc, &len, NULL, 0) == 0) {
         return (long)nproc;
     }
     return 4;
-
 #elif defined(_SC_NPROCESSORS_ONLN)
-    /* Linux / Unix POSIX standard */
     long nproc = sysconf(_SC_NPROCESSORS_ONLN);
-    return (nproc >= 4) ? nproc : 4;
-
+    if (nproc > 0) return nproc;
+    return 1;
 #else
-    /* Fallback value for undetermined architecture */
-    return 4;
+    return 1;
 #endif
 }
 

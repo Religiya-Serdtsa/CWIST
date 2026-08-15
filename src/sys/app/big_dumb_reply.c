@@ -357,11 +357,21 @@ static const void *bdr_get_locked(cwist_bdr_t *bdr, const char *method, const ch
 }
 
 const void *cwist_bdr_get(cwist_bdr_t *bdr, const char *method, const char *path, size_t *out_len) {
-    if (!bdr) return NULL;
-    pthread_mutex_lock(&bdr->lock);
-    const void *blob = bdr_get_locked(bdr, method, path, out_len);
-    pthread_mutex_unlock(&bdr->lock);
-    return blob;
+    if (!bdr || !method || !path || bdr->is_disk_mode) return NULL;
+    uint64_t req_h = bdr_hash(method, path);
+    size_t idx = req_h % bdr->bucket_count;
+    bdr_entry_t *curr = __atomic_load_n(&bdr->buckets[idx], __ATOMIC_ACQUIRE);
+    while (curr) {
+        if (curr->request_hash == req_h) {
+            if (curr->is_stable && curr->response_blob) {
+                if (out_len) *out_len = curr->len;
+                return curr->response_blob;
+            }
+            return NULL;
+        }
+        curr = curr->next;
+    }
+    return NULL;
 }
 
 void *cwist_bdr_copy_get(cwist_bdr_t *bdr, const char *method, const char *path, size_t *out_len) {
@@ -572,9 +582,8 @@ void cwist_bdr_put(cwist_bdr_t *bdr, const char *method, const char *path, const
 
     
 
-    entry->next = bdr->buckets[idx];
-
-    bdr->buckets[idx] = entry;
+    entry->next = __atomic_load_n(&bdr->buckets[idx], __ATOMIC_RELAXED);
+    __atomic_store_n(&bdr->buckets[idx], entry, __ATOMIC_RELEASE);
 
     bdr_guardrails(bdr);
 
@@ -649,8 +658,8 @@ void cwist_bdr_put_fixed(cwist_bdr_t *bdr, const char *method, const char *path,
     entry->created_at = time(NULL);
     bdr->current_bytes += len;
 
-    entry->next = bdr->buckets[idx];
-    bdr->buckets[idx] = entry;
+    entry->next = __atomic_load_n(&bdr->buckets[idx], __ATOMIC_RELAXED);
+    __atomic_store_n(&bdr->buckets[idx], entry, __ATOMIC_RELEASE);
 
     bdr_guardrails(bdr);
     pthread_mutex_unlock(&bdr->lock);
