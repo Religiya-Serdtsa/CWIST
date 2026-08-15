@@ -215,7 +215,7 @@ jobs:
           # Build servers
           cd $GITHUB_WORKSPACE
           make
-          gcc -O3 -fno-plt -falign-functions=32 -falign-loops=32 -fno-semantic-interposition -I./include -I./lib -I./lib/libttak/include -o /tmp/cwist_server /tmp/cwist_server.c libcwist.a lib/cnats/build/lib/libnats_static.a lib/libttak/lib/libttak.a lib/cjson/libcjson.a lib/uriparser/build/liburiparser.a lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec -pthread -ldl -lm -lstdc++ -lz -lzstd
+          gcc -Ofast -fno-plt -falign-functions=32 -falign-loops=32 -falign-jumps=32 -falign-labels=32 -fno-semantic-interposition -fomit-frame-pointer -finline-functions -fipa-pta -I./include -I./lib -I./lib/libttak/include -o /tmp/cwist_server /tmp/cwist_server.c libcwist.a lib/cnats/build/lib/libnats_static.a lib/libttak/lib/libttak.a lib/cjson/libcjson.a lib/uriparser/build/liburiparser.a lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec -pthread -ldl -lm -lstdc++ -lz -lzstd
 
           cd /tmp/axum_bench && cargo build --release
           cd /tmp/gin_bench && go mod tidy && go build -o gin_server .
