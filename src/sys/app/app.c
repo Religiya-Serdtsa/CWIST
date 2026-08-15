@@ -1347,6 +1347,10 @@ static void mw_next_wrapper(cwist_http_request *req, cwist_http_response *res) {
  * @param handler_data Reserved handler payload slot.
  */
 static void execute_chain(cwist_app *app, cwist_http_request *req, cwist_http_response *res, cwist_handler_func final_handler, void *handler_data) {
+    if (__builtin_expect(!app->middlewares, 1)) {
+        if (final_handler) final_handler(req, res);
+        return;
+    }
     mw_executor_ctx ctx = { app->middlewares, final_handler, handler_data };
     req->private_data = &ctx;
     mw_next_wrapper(req, res);

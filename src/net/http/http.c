@@ -15,6 +15,7 @@
 #include <ttak/mols_control.h>
 #include <ttak/net/lattice.h>
 #include <ttak/priority/scheduler.h>
+#include "simd_parser.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -1330,63 +1331,72 @@ cwist_sstring *cwist_http_stringify_response(cwist_http_response *res) {
  * @param raw_request NUL-terminated request buffer containing headers and optional body.
  * @return Parsed request object, or NULL on malformed input.
  */
-cwist_http_request *cwist_http_parse_request(const char *raw_request) {
-    if (!raw_request) return NULL;
+/**
+ * @brief Internal helper to parse request when header_end is already known.
+ */
+static cwist_http_request *cwist_http_parse_request_with_header_end(const char *raw_request, const char *header_end) {
+    if (!raw_request || !header_end) return NULL;
 
-    cwist_http_request *req = cwist_http_request_create();
-    if (!req) return NULL;
-    
     const char *line_start = raw_request;
-    const char *header_end = strstr(raw_request, "\r\n\r\n");
-    if (!header_end) {
-        cwist_http_request_destroy(req);
-        return NULL;
-    }
-
-    const char *line_end = strstr(line_start, "\r\n");
+    const char *line_end = cwist_simd_find_crlf(line_start, (size_t)(header_end - line_start + 2));
     if (!line_end || line_end > header_end) { 
-        cwist_http_request_destroy(req); 
         return NULL; 
     }
 
-    // 1. Request Line (Optimized: No intermediate allocation)
-    const char *sp1 = strchr(line_start, ' ');
-    if (!sp1 || sp1 > line_end) { cwist_http_request_destroy(req); return NULL; }
-    const char *sp2 = strchr(sp1 + 1, ' ');
-    if (!sp2 || sp2 > line_end) { cwist_http_request_destroy(req); return NULL; }
+    cwist_http_request *req = cwist_http_request_create();
+    if (!req) return NULL;
 
-    req->method = cwist_http_string_to_method_len(line_start, sp1 - line_start);
-    
-    const char *path_start = sp1 + 1;
-    const char *path_end = sp2;
-    const char *query_sep = memchr(path_start, '?', path_end - path_start);
-    
-    if (query_sep) {
-        cwist_http_sstring_assign_arena(req->path, (cwist_arena_t *)req->arena, path_start, (size_t)(query_sep - path_start));
-        cwist_http_sstring_assign_arena(req->query, (cwist_arena_t *)req->arena, query_sep + 1, (size_t)(path_end - (query_sep + 1)));
-        req->query_params = cwist_query_map_create_in_arena(req->arena);
-        if (req->query_params) {
-            cwist_query_map_parse(req->query_params, req->query->data);
-        }
-    } else {
-        cwist_http_sstring_assign_arena(req->path, (cwist_arena_t *)req->arena, path_start, (size_t)(path_end - path_start));
-        cwist_http_sstring_assign_arena(req->query, (cwist_arena_t *)req->arena, "", 0);
-    }
-
-    cwist_http_sstring_assign_arena(req->version, (cwist_arena_t *)req->arena, sp2 + 1, (size_t)(line_end - (sp2 + 1)));
-    if (strncmp(sp2 + 1, "HTTP/1.1", 8) == 0) {
+    // Fast path for root GET / HTTP/1.1\r\n
+    if (line_start[0] == 'G' && line_start[1] == 'E' && line_start[2] == 'T' &&
+        line_start[3] == ' ' && line_start[4] == '/' && line_start[5] == ' ' &&
+        line_start[6] == 'H' && line_start[7] == 'T' && line_start[8] == 'T' &&
+        line_start[9] == 'P' && line_start[10] == '/' && line_start[11] == '1' &&
+        line_start[12] == '.' && line_start[13] == '1' && line_end == line_start + 14) {
+        req->method = CWIST_HTTP_GET;
+        cwist_sstring_borrow(req->path, "/", 1);
+        cwist_sstring_borrow(req->query, "", 0);
+        cwist_sstring_borrow(req->version, "HTTP/1.1", 8);
         req->keep_alive = true;
     } else {
-        req->keep_alive = false;
+        // 1. Request Line (Optimized: SIMD space search)
+        const char *sp1 = cwist_simd_find_char(line_start, (size_t)(line_end - line_start), ' ');
+        if (!sp1 || sp1 > line_end) { cwist_http_request_destroy(req); return NULL; }
+        const char *sp2 = cwist_simd_find_char(sp1 + 1, (size_t)(line_end - (sp1 + 1)), ' ');
+        if (!sp2 || sp2 > line_end) { cwist_http_request_destroy(req); return NULL; }
+
+        req->method = cwist_http_string_to_method_len(line_start, sp1 - line_start);
+        
+        const char *path_start = sp1 + 1;
+        const char *path_end = sp2;
+        const char *query_sep = (const char *)memchr(path_start, '?', (size_t)(path_end - path_start));
+        
+        if (query_sep) {
+            cwist_http_sstring_assign_arena(req->path, (cwist_arena_t *)req->arena, path_start, (size_t)(query_sep - path_start));
+            cwist_http_sstring_assign_arena(req->query, (cwist_arena_t *)req->arena, query_sep + 1, (size_t)(path_end - (query_sep + 1)));
+            req->query_params = cwist_query_map_create_in_arena(req->arena);
+            if (req->query_params) {
+                cwist_query_map_parse(req->query_params, req->query->data);
+            }
+        } else {
+            cwist_http_sstring_assign_arena(req->path, (cwist_arena_t *)req->arena, path_start, (size_t)(path_end - path_start));
+            cwist_http_sstring_assign_arena(req->query, (cwist_arena_t *)req->arena, "", 0);
+        }
+
+        cwist_http_sstring_assign_arena(req->version, (cwist_arena_t *)req->arena, sp2 + 1, (size_t)(line_end - (sp2 + 1)));
+        if (strncmp(sp2 + 1, "HTTP/1.1", 8) == 0) {
+            req->keep_alive = true;
+        } else {
+            req->keep_alive = false;
+        }
     }
 
-    // 2. Headers (Optimized: Zero-copy in-place parsing using memchr and strncasecmp)
+    // 2. Headers (SIMD colon and CRLF scanning + SWAR)
     line_start = line_end + 2; 
     while (line_start < header_end) {
-        line_end = memchr(line_start, '\r', header_end + 2 - line_start);
+        line_end = cwist_simd_find_crlf(line_start, (size_t)(header_end + 2 - line_start));
         if (!line_end || line_end == line_start) break;
 
-        const char *colon = memchr(line_start, ':', line_end - line_start);
+        const char *colon = cwist_simd_find_char(line_start, (size_t)(line_end - line_start), ':');
         if (colon) {
             size_t key_len = colon - line_start;
             const char *val_start = colon + 1;
@@ -1397,11 +1407,17 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
             
             char k0 = line_start[0];
             if (key_len == 10 && (k0 == 'C' || k0 == 'c')) {
-                if (strncasecmp(line_start, "Connection", 10) == 0) {
-                    if (val_len == 5 && strncasecmp(val_start, "close", 5) == 0) {
-                        req->keep_alive = false;
-                    } else if (val_len == 10 && strncasecmp(val_start, "keep-alive", 10) == 0) {
-                        req->keep_alive = true;
+                uint64_t w0;
+                memcpy(&w0, line_start, 8);
+                if ((w0 | 0x2020202020202020ULL) == 0x697463656e6e6f63ULL) { /* "connecti" */
+                    uint16_t w1;
+                    memcpy(&w1, line_start + 8, 2);
+                    if ((w1 | 0x2020) == 0x6e6f) { /* "on" */
+                        if (val_len == 5 && (val_start[0] == 'c' || val_start[0] == 'C')) {
+                            if (strncasecmp(val_start, "close", 5) == 0) req->keep_alive = false;
+                        } else if (val_len == 10 && (val_start[0] == 'k' || val_start[0] == 'K')) {
+                            if (strncasecmp(val_start, "keep-alive", 10) == 0) req->keep_alive = true;
+                        }
                     }
                 }
             } else if (key_len == 14 && (k0 == 'C' || k0 == 'c')) {
@@ -1423,12 +1439,22 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
 
     const char *body_start = header_end + 4;
     if (*body_start != '\0') {
-        /* Pipelined body bytes already sitting in the read buffer; the
-         * receive path adopts/replaces this with the full body later. */
-        cwist_http_sstring_assign_arena(req->body, (cwist_arena_t *)req->arena, body_start, strlen(body_start));
+        size_t available = strlen(body_start);
+        size_t to_take = (req->content_length > 0 && req->content_length < available)
+                         ? req->content_length
+                         : available;
+        cwist_http_sstring_assign_arena(req->body, (cwist_arena_t *)req->arena, body_start, to_take);
     }
 
     return req;
+}
+
+cwist_http_request *cwist_http_parse_request(const char *raw_request) {
+    if (!raw_request) return NULL;
+    size_t raw_len = strlen(raw_request);
+    const char *header_end = cwist_simd_find_crlfcrlf(raw_request, raw_len);
+    if (!header_end) return NULL;
+    return cwist_http_parse_request_with_header_end(raw_request, header_end);
 }
 
 
@@ -1556,7 +1582,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
     char *header_end = NULL;
 
     // 1. Read until headers are complete
-    while (!(header_end = memmem(read_buf, total_received, "\r\n\r\n", 4))) {
+    while (!(header_end = (char *)cwist_simd_find_crlfcrlf(read_buf, total_received))) {
         if (total_received >= buf_size - 1) {
             return NULL;
         }
@@ -1577,7 +1603,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         read_buf[total_received] = '\0';
     }
 
-    cwist_http_request *req = cwist_http_parse_request(read_buf);
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(read_buf, header_end);
     if (!req) return NULL;
 
     size_t header_len = (size_t)(header_end + 4 - read_buf);
