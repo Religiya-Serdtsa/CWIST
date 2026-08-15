@@ -15,10 +15,10 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk 12t 400c):
-- **CWIST**: 111166 req/s | Latency 0.08ms | RSS 14648KiB | Csw 0
-- **Axum**: 114782 req/s | Latency 3.39ms | RSS 16148KiB | Csw 0
-- **Gin (Go)**: 79636 req/s | Latency 6.69ms | RSS 29164KiB | Csw 0
-- **Spring Boot**: 46794 req/s | Latency 8.69ms | RSS 1242464KiB | Csw 0
+- **CWIST**: 112033 req/s | Latency 0.08ms | RSS 14596KiB | Csw 0
+- **Axum**: 112995 req/s | Latency 3.48ms | RSS 15504KiB | Csw 0
+- **Gin (Go)**: 79574 req/s | Latency 6.63ms | RSS 30324KiB | Csw 0
+- **Spring Boot**: 46105 req/s | Latency 8.59ms | RSS 1235184KiB | Csw 0
 
 Spring runtime env: **openjdk version "21.0.12" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (optimized event loop pinned to nproc, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:GCTimeRatio=99 -XX:+AlwaysPreTouch -Djava.security.egd=file:/dev/urandom -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -Dio.netty.buffer.checkBounds=false -Dio.netty.buffer.checkAccessible=false -Dreactor.netty.ioWorkerCount=4 -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
