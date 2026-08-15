@@ -536,8 +536,6 @@ install: $(LIB_NAME)
 	@echo "Installing CWIST headers to $(INCLUDEDIR)/cwist..."
 	install -d $(INSTALL_INCLUDEDIR)/cwist
 	cp -R include/cwist/. $(INSTALL_INCLUDEDIR)/cwist/
-	install -d $(INSTALL_INCLUDEDIR)/wasm
-	cp -R include/wasm/. $(INSTALL_INCLUDEDIR)/wasm/
 	find $(INSTALL_INCLUDEDIR)/cwist -type d -exec chmod 755 {} \;
 	find $(INSTALL_INCLUDEDIR)/cwist -type f -exec chmod 644 {} \;
 	@echo "Installing bundled dependency headers to $(VENDOR_INCLUDEDIR)..."
@@ -558,7 +556,6 @@ uninstall:
 	rm -f $(DESTDIR)$(DEPSDIR)/liburiparser.a $(DESTDIR)$(DEPSDIR)/libcjson.a $(DESTDIR)$(DEPSDIR)/libttak.a $(DESTDIR)$(DEPSDIR)/libnats_static.a $(DESTDIR)$(DEPSDIR)/liblsquic.a $(DESTDIR)$(DEPSDIR)/libssl.a $(DESTDIR)$(DEPSDIR)/libcrypto.a
 	rmdir $(DESTDIR)$(DEPSDIR) 2>/dev/null || true
 	rm -rf $(DESTDIR)$(INCLUDEDIR)/cwist
-	rm -rf $(DESTDIR)$(INCLUDEDIR)/wasm
 	@echo "Uninstallation complete."
 
 clean:
