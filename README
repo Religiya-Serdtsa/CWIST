@@ -16,17 +16,17 @@ to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
 <!-- BENCHMARKS:START -->
-Latest automated benchmark: **Darwin** — 14.44 M leases/s, 107.55% CPU, 716352 KiB RSS.
+Latest automated benchmark: **Darwin** — 14.36 M leases/s, 102.02% CPU, 645120 KiB RSS.
 
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk 12t 400c):
-- **CWIST**: 113869 req/s | Latency 0.09ms | RSS 14604KiB | Csw 0
-- **Axum**: 119833 req/s | Latency 3.27ms | RSS 17284KiB | Csw 0
-- **Gin (Go)**: 92104 req/s | Latency 5.37ms | RSS 29904KiB | Csw 0
-- **Spring Boot**: 59202 req/s | Latency 6.70ms | RSS 1242120KiB | Csw 0
+- **CWIST**: 113919 req/s | Latency 0.09ms | RSS 14736KiB | Csw 0
+- **Axum**: 120701 req/s | Latency 3.16ms | RSS 15912KiB | Csw 0
+- **Gin (Go)**: 90566 req/s | Latency 5.69ms | RSS 30256KiB | Csw 0
+- **Spring Boot**: 63180 req/s | Latency 6.22ms | RSS 1242032KiB | Csw 0
 
 Spring runtime env: **openjdk version "21.0.12" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (optimized event loop pinned to nproc, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:GCTimeRatio=99 -XX:+AlwaysPreTouch -Djava.security.egd=file:/dev/urandom -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -Dio.netty.buffer.checkBounds=false -Dio.netty.buffer.checkAccessible=false -Dreactor.netty.ioWorkerCount=4 -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:SharedArchiveFile=/tmp/spring_bench/app.jsa (CDS AOT cache)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
