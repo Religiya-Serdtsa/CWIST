@@ -1,0 +1,13 @@
+<map id="include/cwist/sys/job/scheduler.h" name="include/cwist/sys/job/scheduler.h">
+<area shape="rect" id="Node000001" title="Background job scheduler / delayed task queue for CWIST." alt="" coords="87,5,244,45"/>
+<area shape="rect" id="Node000002" href="$d1/df5/cwist__io_8h.html" title="Platform Agnostic Async Job Queue Interface." alt="" coords="22,93,189,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="153,47,124,84,120,81,149,44"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="12,167,87,192"/>
+<area shape="poly" id="edge6_Node000001_Node000003" title=" " alt="" coords="88,44,46,64,27,78,13,95,8,109,11,125,30,155,25,158,6,127,3,109,8,92,24,74,43,59,85,39"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="120,167,203,192"/>
+<area shape="poly" id="edge4_Node000001_Node000004" title=" " alt="" coords="183,44,201,78,206,99,204,119,195,140,183,157,179,154,190,137,199,118,201,99,196,80,178,47"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="265,93,335,119"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="199,43,270,84,267,89,196,48"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="98,121,69,157,65,154,94,117"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="117,117,146,154,142,157,112,121"/>
+</map>

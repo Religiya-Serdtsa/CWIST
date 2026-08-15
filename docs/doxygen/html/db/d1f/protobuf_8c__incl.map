@@ -1,0 +1,21 @@
+<map id="src/net/grpc/protobuf.c" name="src/net/grpc/protobuf.c">
+<area shape="rect" id="Node000001" title="Small Protobuf wire&#45;format reader/writer helpers." alt="" coords="312,5,479,31"/>
+<area shape="rect" id="Node000002" href="$db/d5b/protobuf_8h.html" title="Small Protobuf wire&#45;format reader/writer helpers." alt="" coords="28,79,211,104"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="352,33,178,78,177,73,350,28"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="5,152,76,177"/>
+<area shape="poly" id="edge8_Node000001_Node000004" title=" " alt="" coords="312,23,229,27,141,37,64,54,36,66,17,80,11,94,12,109,26,139,21,142,7,110,6,93,13,77,33,61,63,49,140,32,228,22,312,18"/>
+<area shape="rect" id="Node000005" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="235,79,409,104"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="385,33,346,71,342,67,381,29"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="433,79,504,104"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="409,29,449,67,445,71,406,33"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="528,79,599,104"/>
+<area shape="poly" id="edge9_Node000001_Node000008" title=" " alt="" coords="423,28,524,71,522,76,421,33"/>
+<area shape="rect" id="Node000009" title=" " alt="" coords="623,79,693,104"/>
+<area shape="poly" id="edge10_Node000001_Node000009" title=" " alt="" coords="438,28,610,74,609,80,437,33"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="117,152,191,177"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="127,103,145,138,140,141,123,106"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="108,106,65,145,62,141,105,102"/>
+<area shape="poly" id="edge5_Node000005_Node000003" title=" " alt="" coords="296,106,195,149,193,144,294,102"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="251,152,393,177"/>
+<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="325,104,325,138,319,138,319,104"/>
+</map>

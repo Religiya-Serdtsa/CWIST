@@ -1,7 +1,9 @@
 <map id="include/cwist/sys/io/reactor.h" name="include/cwist/sys/io/reactor.h">
-<area shape="rect" id="Node000001" title=" " alt="" coords="83,5,232,45"/>
+<area shape="rect" id="Node000001" title=" " alt="" coords="163,5,312,45"/>
 <area shape="rect" id="Node000002" href="$d0/d3d/async__server_8c.html" title=" " alt="" coords="5,93,144,133"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="131,57,95,95,91,91,127,54"/>
-<area shape="rect" id="Node000003" href="$d3/d99/reactor_8c.html" title=" " alt="" coords="169,101,311,126"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="187,53,230,98,227,102,183,57"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="191,54,112,96,109,91,188,49"/>
+<area shape="rect" id="Node000003" href="$dd/d43/http_8c.html" title="Core HTTP request/response allocation, serialization, socket, and server&#45;loop helpers." alt="" coords="169,101,306,126"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="240,59,240,100,235,100,235,59"/>
+<area shape="rect" id="Node000004" href="$d3/d99/reactor_8c.html" title=" " alt="" coords="330,101,473,126"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="286,49,381,98,378,103,284,54"/>
 </map>

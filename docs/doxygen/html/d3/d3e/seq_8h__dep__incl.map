@@ -1,0 +1,17 @@
+<map id="include/cwist/core/seq/seq.h" name="include/cwist/core/seq/seq.h">
+<area shape="rect" id="Node000001" title="TCP&#45;like sequenced message fragmentation and reassembly." alt="" coords="437,5,575,45"/>
+<area shape="rect" id="Node000002" href="$d0/dd2/seq__auth_8h.html" title="Authenticated v2 envelope for CWIST sequenced payloads." alt="" coords="23,93,162,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="424,45,175,96,163,98,162,93,173,91,423,40"/>
+<area shape="rect" id="Node000004" href="$d2/d8b/seq_8c.html" title="Implementation of the CWIST sequenced&#45;message protocol." alt="" coords="186,101,325,126"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="439,52,290,103,288,98,437,47"/>
+<area shape="rect" id="Node000005" href="$d2/db0/http2_8c.html" title="Implementation of HTTP/2 protocol handler for CWIST." alt="" coords="349,101,495,126"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="480,57,436,102,432,98,476,53"/>
+<area shape="rect" id="Node000006" href="$de/daf/http3_8c.html" title="lsquic/BoringSSL&#45;based HTTP/3 server for CWIST." alt="" coords="519,101,664,126"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="536,53,581,98,578,102,533,57"/>
+<area shape="rect" id="Node000007" href="$d4/de6/websocket_8c.html" title="WebSocket handshake and frame transport helpers for CWIST handlers." alt="" coords="688,101,911,126"/>
+<area shape="poly" id="edge6_Node000001_Node000007" title=" " alt="" coords="584,47,761,98,760,103,583,52"/>
+<area shape="rect" id="Node000008" href="$d8/d80/jwt_8c.html" title="HS256 JWT signing, verification, and decoded&#45;claims access helpers." alt="" coords="935,101,1091,126"/>
+<area shape="poly" id="edge7_Node000001_Node000008" title=" " alt="" coords="590,36,924,91,961,98,960,103,923,96,589,41"/>
+<area shape="rect" id="Node000003" href="$d0/d3c/seq__auth_8c.html" title=" " alt="" coords="5,181,180,207"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="95,147,95,181,90,181,90,147"/>
+</map>

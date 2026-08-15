@@ -1,0 +1,9 @@
+<map id="include/cwist/core/mem/arena.h" name="include/cwist/core/mem/arena.h">
+<area shape="rect" id="Node000001" title="Request&#45;scoped arena allocator backed by libttak arena generations." alt="" coords="192,5,331,45"/>
+<area shape="rect" id="Node000002" href="$de/d6c/arena_8c.html" title="Request&#45;scoped arena allocator built on libttak arena generations." alt="" coords="5,93,168,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="208,53,114,96,111,91,206,49"/>
+<area shape="rect" id="Node000003" href="$dd/d43/http_8c.html" title="Core HTTP request/response allocation, serialization, socket, and server&#45;loop helpers." alt="" coords="193,93,330,119"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="264,59,264,93,259,93,259,59"/>
+<area shape="rect" id="Node000004" href="$dd/d7f/query_8c.html" title="Hash&#45;map based storage and parsing helpers for URL query parameters." alt="" coords="355,93,501,119"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="315,49,405,91,402,96,313,54"/>
+</map>

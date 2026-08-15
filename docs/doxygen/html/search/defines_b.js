@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['ws_5fguid_0',['WS_GUID',['../d4/de6/websocket_8c.html#a19b2fa8561bcd550d68b56b81d783e98',1,'websocket.c']]]
+  ['sock_5fcloexec_0',['SOCK_CLOEXEC',['../d5/dcf/orm__socket_8c.html#ac337901f5606f0cf6f8e9867ef3fc1c4',1,'orm_socket.c']]]
 ];

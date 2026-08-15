@@ -1,5 +1,9 @@
 <map id="include/cwist/core/orm/orm.h" name="include/cwist/core/orm/orm.h">
-<area shape="rect" id="Node000001" title="Tiny ORM over a SQL socket stream." alt="" coords="8,5,147,45"/>
-<area shape="rect" id="Node000002" href="$d8/d03/orm_8c.html" title="Tiny ORM client over a framed Unix socket stream." alt="" coords="5,93,149,119"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="80,59,80,93,75,93,75,59"/>
+<area shape="rect" id="Node000001" title="Tiny ORM over a SQL socket stream." alt="" coords="117,5,255,45"/>
+<area shape="rect" id="Node000002" href="$d0/d11/orm__socket_8h.html" title=" " alt="" coords="31,93,173,133"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="160,57,122,95,119,91,156,53"/>
+<area shape="rect" id="Node000004" href="$d8/d03/orm_8c.html" title="Tiny ORM client over a framed Unix socket stream." alt="" coords="198,101,342,126"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="216,53,260,98,256,102,212,57"/>
+<area shape="rect" id="Node000003" href="$d5/dcf/orm__socket_8c.html" title=" " alt="" coords="5,181,199,207"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="105,147,105,181,99,181,99,147"/>
 </map>

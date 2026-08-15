@@ -1,5 +1,5 @@
 <map id="include/cwist/sys/app/compress.h" name="include/cwist/sys/app/compress.h">
 <area shape="rect" id="Node000001" title="Compression middleware with swappable backend interface." alt="" coords="11,5,173,45"/>
-<area shape="rect" id="Node000002" href="$d0/d6b/compress_8c.html" title="Compression middleware and built&#45;in zlib backends." alt="" coords="5,93,179,119"/>
+<area shape="rect" id="Node000002" href="$d0/d6b/compress_8c.html" title="Compression middleware and built&#45;in zlib/brotli/zstd backends." alt="" coords="5,93,179,119"/>
 <area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="95,59,95,93,89,93,89,59"/>
 </map>

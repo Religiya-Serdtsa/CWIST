@@ -1,0 +1,15 @@
+<map id="include/cwist/redis.h" name="include/cwist/redis.h">
+<area shape="rect" id="Node000001" title="Public Redis client API." alt="" coords="131,5,286,31"/>
+<area shape="rect" id="Node000002" href="$d0/d39/cwist__redis_8h.html" title="Minimal in&#45;tree Redis client (RESP2) with connection pooling." alt="" coords="131,79,286,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="211,31,211,65,206,65,206,31"/>
+<area shape="rect" id="Node000003" href="$d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="71,167,213,207"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="196,121,167,157,163,154,192,117"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="238,174,313,199"/>
+<area shape="poly" id="edge6_Node000002_Node000007" title=" " alt="" coords="226,117,260,161,256,164,221,121"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="5,255,76,280"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="119,209,68,248,65,244,116,205"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="101,255,183,280"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="145,207,145,241,139,241,139,207"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="208,255,319,280"/>
+<area shape="poly" id="edge5_Node000003_Node000006" title=" " alt="" coords="173,205,235,245,233,249,170,209"/>
+</map>

@@ -1,0 +1,5 @@
+<map id="include/cwist/sys/app/csrf.h" name="include/cwist/sys/app/csrf.h">
+<area shape="rect" id="Node000001" title="CSRF protection via double&#45;submit cookie pattern." alt="" coords="5,5,167,45"/>
+<area shape="rect" id="Node000002" href="$df/d33/csrf_8c.html" title="Double&#45;submit CSRF protection." alt="" coords="19,93,153,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="89,59,89,93,83,93,83,59"/>
+</map>
