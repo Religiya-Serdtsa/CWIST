@@ -93,6 +93,11 @@ void *cwist_bdr_copy_get(cwist_bdr_t *bdr, const char *method, const char *path,
 void cwist_bdr_put(cwist_bdr_t *bdr, const char *method, const char *path, const void *data, size_t len);
 
 /**
+ * @brief Immediately cache a fixed static response on request 1.
+ */
+void cwist_bdr_put_fixed(cwist_bdr_t *bdr, const char *method, const char *path, const void *data, size_t len);
+
+/**
  * @brief Adjusts guard-rail policies for the in-memory cache.
  * @param bdr Context.
  * @param max_bytes Maximum bytes to keep in RAM (0 keeps default).

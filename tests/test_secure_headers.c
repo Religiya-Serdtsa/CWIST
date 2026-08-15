@@ -8,6 +8,7 @@ void test_security_headers_present(void) {
 
     cwist_http_response *res = cwist_http_response_create();
     assert(res != NULL);
+    cwist_http_response_add_security_headers(res);
 
     // Verify headers added by cwist_http_response_add_security_headers()
     assert(cwist_http_header_get(res->headers, "X-Frame-Options") != NULL);

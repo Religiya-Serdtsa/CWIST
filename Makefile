@@ -27,7 +27,7 @@ TCC_STACK_FLAGS = -O3 -g \
                   -fno-math-errno
 
 PERF_WARNINGS = -Wextra
-PERF_STACK_FLAGS = -O3 -g
+PERF_STACK_FLAGS = -O3 -g -fno-plt -falign-functions=32 -falign-loops=32 -fno-semantic-interposition
 
 ifeq ($(BUILD_PROFILE),tcc)
     CFLAGS = $(COMMON_CFLAGS) $(TCC_STACK_FLAGS) -ftls-model=global-dynamic

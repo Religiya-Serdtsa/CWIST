@@ -63,53 +63,84 @@
 
 long get_cpu_cores(void) {
 #if defined(_WIN32) || defined(_WIN64)
-    /* Windows Environment */
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
     return (long)sysinfo.dwNumberOfProcessors;
-
+#elif defined(__linux__)
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    if (sched_getaffinity(0, sizeof(cpuset), &cpuset) == 0) {
+        int count = CPU_COUNT(&cpuset);
+        if (count > 0) return (long)count;
+    }
+#if defined(_SC_NPROCESSORS_ONLN)
+    long nproc = sysconf(_SC_NPROCESSORS_ONLN);
+    if (nproc > 0) return nproc;
+#endif
+    return 1;
 #elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
-    /* BSD Variant - Query kernel MIB tree directly via sysctl */
     int mib[2];
     int nproc = 0;
     size_t len = sizeof(nproc);
-
     mib[0] = CTL_HW;
 #if defined(HW_NCPUONLINE)
-    /* OpenBSD/FreeBSD preferred: returns counts of actual online cores */
     mib[1] = HW_NCPUONLINE;
 #else
-    /* Fallback for older BSD kernels */
     mib[1] = HW_NCPU;
 #endif
-
     if (sysctl(mib, 2, &nproc, &len, NULL, 0) == 0) {
         return (long)nproc;
     }
     return 4;
-
 #elif defined(_SC_NPROCESSORS_ONLN)
-    /* Linux / Unix POSIX standard */
     long nproc = sysconf(_SC_NPROCESSORS_ONLN);
-    return (nproc >= 4) ? nproc : 4;
-
+    if (nproc > 0) return nproc;
+    return 1;
 #else
-    /* Fallback value for undetermined architecture */
-    return 4;
+    return 1;
 #endif
 }
 
+static unsigned int g_http_pool_core_limit = 0;
+
+void cwist_http_pool_limit_core(unsigned int limit) {
+    g_http_pool_core_limit = limit;
+}
+
 long get_optimal_thread_count(void) {
+    if (g_http_pool_core_limit > 0) {
+        return (long)g_http_pool_core_limit;
+    }
     const char *env = getenv("CWIST_WORKER_THREADS");
     if (env && env[0]) {
         long override = atol(env);
         if (override > 0) return override;
     }
+
     long cores = get_cpu_cores();
-    long count = cores;
-    if (count < 4) count = 4;
-    if (count > 32) count = 32;
-    return count;
+    if (cores < 1) cores = 1;
+
+    long workers = cores;
+    const char *w_env = getenv("CWIST_WORKERS");
+    if (w_env && w_env[0]) {
+        if (strcmp(w_env, "auto") != 0) {
+            long parsed = atol(w_env);
+            if (parsed > 0) workers = parsed;
+        }
+    }
+
+    if (workers == 1) {
+        long count = cores;
+        if (count < 4) count = 4;
+        if (count > 32) count = 32;
+        return count;
+    }
+
+    /* Dynamic thread downscaling: distribute thread budget proportionally across forked worker processes */
+    long threads_per_worker = (cores * 4) / workers;
+    if (threads_per_worker < 2) threads_per_worker = 2;
+    if (threads_per_worker > 16) threads_per_worker = 16;
+    return threads_per_worker;
 }
 
 #define HTTP_TASKS_PER_THREAD 32768
@@ -140,8 +171,11 @@ static void http_conn_event_cb(int fd, void *ctx) {
     cwist_free(c);
 }
 
+static _Thread_local http_thread_worker_t *t_current_worker = NULL;
+
 static void *http_pool_worker(void *arg) {
     http_thread_worker_t *w = (http_thread_worker_t *)arg;
+    t_current_worker = w;
     ttak_net_lattice_set_worker_id(w->worker_id);
 
     cwist_reactor_run(w->reactor);
@@ -189,6 +223,23 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
         close(client_fd);
         cwist_free(c);
     }
+}
+
+bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), void *ctx) {
+    if (!t_current_worker || !t_current_worker->reactor || client_fd < 0) return false;
+
+    http_conn_ctx_t *c = cwist_alloc(sizeof(http_conn_ctx_t));
+    if (!c) return false;
+    c->client_fd = client_fd;
+    c->handler_func = handler;
+    c->ctx = ctx;
+    c->reactor = t_current_worker->reactor;
+
+    if (!cwist_reactor_add(t_current_worker->reactor, client_fd, http_conn_event_cb, c)) {
+        cwist_free(c);
+        return false;
+    }
+    return true;
 }
 
 void cwist_http_pool_destroy(void) {
@@ -835,8 +886,6 @@ cwist_http_response *cwist_http_response_create(void) {
     // Defaults (borrowed statics; handlers may overwrite via regular assign)
     cwist_sstring_borrow(res->version, "HTTP/1.1", 8);
     cwist_sstring_borrow(res->status_text, "OK", 2);
-
-    cwist_http_response_add_security_headers(res);
 
     return res;
 }
@@ -1547,18 +1596,11 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             return NULL;
         }
 
-        ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, MSG_DONTWAIT);
-        if (bytes < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
-                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-                if (ret <= 0) return NULL;
-                continue;
-            }
-            if (errno == EINTR) continue;
+        ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, 0);
+        if (bytes <= 0) {
+            if (bytes < 0 && errno == EINTR) continue;
             return NULL;
         }
-        if (bytes == 0) return NULL;
         total_received += (size_t)bytes;
         read_buf[total_received] = '\0';
     }

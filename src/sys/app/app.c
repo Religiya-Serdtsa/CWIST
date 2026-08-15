@@ -4,12 +4,14 @@
 #include <cwist/sys/app/config.h>
 #include <cwist/sys/app/logger.h>
 #include <cwist/sys/app/shutdown.h>
+#include <cwist/sys/app/big_dumb_reply.h>
 #include <cwist/sys/app/app.h>
 #include <cwist/net/http/http.h>
 #include <cwist/net/http/https.h>
+#include <cwist/net/http/http2.h>
 #include <cwist/net/http/http3.h>
 #include <cwist/net/http/async_server.h>
-#include <cwist/net/http/http2.h>
+#include "../../net/http/simd_parser.h"
 #include <cwist/sys/health/healthz.h>
 #include <cwist/net/http/https.h>
 #include <cwist/core/sstring/sstring.h>
@@ -2185,6 +2187,52 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
     read_buf[0] = '\0';
 
     while (true) {
+        // --- Zero-Alloc Ingress Fast-Path for Cached / Fixed BDR Endpoints ---
+        if (app->bdr_ctx) {
+            while (true) {
+                if (buf_len == 0) {
+                    ssize_t bytes = recv(client_fd, read_buf, sizeof(read_buf) - 1, 0);
+                    if (bytes <= 0) {
+                        if (bytes < 0 && errno == EINTR) continue;
+                        close(client_fd);
+                        return;
+                    }
+                    buf_len = (size_t)bytes;
+                    read_buf[buf_len] = '\0';
+                }
+
+                char *hdr_end = (char *)cwist_simd_find_crlfcrlf(read_buf, buf_len);
+                if (hdr_end && (read_buf[0] == 'G' && read_buf[1] == 'E' && read_buf[2] == 'T' && read_buf[3] == ' ')) {
+                    const char *path_start = read_buf + 4;
+                    const char *path_end = (const char *)memchr(path_start, ' ', (size_t)(hdr_end - path_start));
+                    if (path_end) {
+                        char path_tmp[256];
+                        size_t plen = (size_t)(path_end - path_start);
+                        if (plen < sizeof(path_tmp)) {
+                            memcpy(path_tmp, path_start, plen);
+                            path_tmp[plen] = '\0';
+                            size_t cached_len = 0;
+                            const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", path_tmp, &cached_len);
+                            if (cached_blob && cached_len > 0) {
+                                send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
+                                size_t consumed = (size_t)(hdr_end + 4 - read_buf);
+                                if (buf_len > consumed) {
+                                    memmove(read_buf, read_buf + consumed, buf_len - consumed);
+                                    buf_len -= consumed;
+                                    read_buf[buf_len] = '\0';
+                                } else {
+                                    buf_len = 0;
+                                    read_buf[0] = '\0';
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
         cwist_http_request *req = cwist_http_receive_request(client_fd, read_buf, sizeof(read_buf), &buf_len);
         if (!req) {
             break;
@@ -2196,13 +2244,9 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
         // --- Big Dumb Reply (Read) ---
         if (app->bdr_ctx && req->method == CWIST_HTTP_GET) {
             size_t cached_len = 0;
-            void *cached_blob = cwist_bdr_copy_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
-            if (cached_blob) {
-                // BDR Hit! Blast it out.
-                send(client_fd, cached_blob, cached_len, 0); // Flags handled by socket opt ideally or just 0
-                cwist_free(cached_blob);
-                
-                // Cleanup and Loop
+            const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
+            if (cached_blob && cached_len > 0) {
+                send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
                 bool keep_alive = req->keep_alive;
                 cwist_http_request_destroy(req);
                 if (!keep_alive) break;
@@ -2217,15 +2261,16 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
             break;
         }
         
+        bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
         struct timespec start, end;
         uint64_t duration_ms = 0;
-        if (app->bdr_ctx) {
+        if (app->bdr_ctx && !endpoint_fixed) {
             clock_gettime(CLOCK_MONOTONIC, &start);
         }
 
         internal_route_handler(app, req, res);
         
-        if (app->bdr_ctx) {
+        if (app->bdr_ctx && !endpoint_fixed) {
             clock_gettime(CLOCK_MONOTONIC, &end);
             duration_ms = (end.tv_sec - start.tv_sec) * 1000 + (end.tv_nsec - start.tv_nsec) / 1000000;
         }
@@ -2242,7 +2287,6 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
             
             // --- Big Dumb Reply (Learn) ---
             if (app->bdr_ctx) {
-                bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
                 bool endpoint_file = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FILE);
                 
                 uint64_t scaled_threshold = (uint64_t)app->bdr_ctx->latency_threshold_ms;
@@ -2250,13 +2294,19 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
                     scaled_threshold = scaled_threshold * (100 - priority_weight) / 100;
                 }
 
-                if (req->method == CWIST_HTTP_GET &&
-                    !endpoint_file &&
-                    (endpoint_fixed || duration_ms > scaled_threshold)) {
-                    cwist_sstring *serialized = cwist_http_stringify_response(res);
-                    if (serialized) {
-                         cwist_bdr_put(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
-                         cwist_sstring_destroy(serialized);
+                if (req->method == CWIST_HTTP_GET && !endpoint_file) {
+                    if (endpoint_fixed) {
+                        cwist_sstring *serialized = cwist_http_stringify_response(res);
+                        if (serialized) {
+                            cwist_bdr_put_fixed(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
+                            cwist_sstring_destroy(serialized);
+                        }
+                    } else if (duration_ms > scaled_threshold) {
+                        cwist_sstring *serialized = cwist_http_stringify_response(res);
+                        if (serialized) {
+                            cwist_bdr_put(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
+                            cwist_sstring_destroy(serialized);
+                        }
                     }
                 }
             }
@@ -3244,6 +3294,14 @@ int cwist_app_listen(cwist_app *app, int port) {
             break;
         } else {
             worker_pids[worker_count++] = pid;
+        }
+    }
+
+    if (is_worker_child) {
+        close(server_fd);
+        server_fd = cwist_make_socket_ipv4(&addr, "0.0.0.0", port, 32768);
+        if (server_fd >= 0) {
+            g_cwist_listen_fd = server_fd;
         }
     }
 
