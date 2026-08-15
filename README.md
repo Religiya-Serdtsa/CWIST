@@ -344,20 +344,6 @@ if (cwist_app_auto_rdbms(app, 5432)) {
 No port-number guessing—CWIST sends a PostgreSQL StartupMessage or reads a MySQL
 Handshake initiation packet to classify the server.
 
-## Benchmark Snapshot
-
-Recorded on an AMD EPYC 7763 container (4 vCPU, Linux 6.14):
-
-| Metric | Value |
-|--------|-------|
-| Tool | ApacheBench 2.3 |
-| Command | `ab -n 100 -c 85 -k http://localhost:31744/` |
-| Requests/sec | 2,958.40 |
-| Mean latency | 0.338 ms per concurrent request |
-| Failed requests | 0 |
-
-See `BENCHMARK.txt` for the full transcript and reproducible workflow.
-
 ## Dependencies
 
 - BoringSSL (in-tree)
