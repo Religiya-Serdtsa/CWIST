@@ -17,12 +17,12 @@
 typedef struct job_node {
     cwist_job_func func;
     void *arg;
-    _Atomic(struct job_node *) next;
+    struct job_node *_Atomic next;
 } job_node_t;
 
 struct cwist_io_queue {
-    _Atomic(job_node_t *) head;
-    _Atomic(job_node_t *) tail;
+    job_node_t *_Atomic head;
+    job_node_t *_Atomic tail;
     atomic_size_t pending_jobs;
     atomic_bool running;
     pthread_mutex_t sleep_lock;

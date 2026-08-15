@@ -2214,7 +2214,11 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
                             size_t cached_len = 0;
                             const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", path_tmp, &cached_len);
                             if (cached_blob && cached_len > 0) {
-                                send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
+                                ssize_t sret = send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
+                                if (sret <= 0) {
+                                    close(client_fd);
+                                    return;
+                                }
                                 size_t consumed = (size_t)(hdr_end + 4 - read_buf);
                                 if (buf_len > consumed) {
                                     memmove(read_buf, read_buf + consumed, buf_len - consumed);
