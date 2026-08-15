@@ -99,17 +99,46 @@ long get_cpu_cores(void) {
 #endif
 }
 
+static unsigned int g_http_pool_core_limit = 0;
+
+void cwist_http_pool_limit_core(unsigned int limit) {
+    g_http_pool_core_limit = limit;
+}
+
 long get_optimal_thread_count(void) {
+    if (g_http_pool_core_limit > 0) {
+        return (long)g_http_pool_core_limit;
+    }
     const char *env = getenv("CWIST_WORKER_THREADS");
     if (env && env[0]) {
         long override = atol(env);
         if (override > 0) return override;
     }
+
     long cores = get_cpu_cores();
-    long count = cores;
-    if (count < 4) count = 4;
-    if (count > 32) count = 32;
-    return count;
+    if (cores < 1) cores = 1;
+
+    long workers = cores;
+    const char *w_env = getenv("CWIST_WORKERS");
+    if (w_env && w_env[0]) {
+        if (strcmp(w_env, "auto") != 0) {
+            long parsed = atol(w_env);
+            if (parsed > 0) workers = parsed;
+        }
+    }
+
+    if (workers == 1) {
+        long count = cores;
+        if (count < 4) count = 4;
+        if (count > 32) count = 32;
+        return count;
+    }
+
+    /* Dynamic thread downscaling: distribute thread budget proportionally across forked worker processes */
+    long threads_per_worker = (cores * 4) / workers;
+    if (threads_per_worker < 2) threads_per_worker = 2;
+    if (threads_per_worker > 16) threads_per_worker = 16;
+    return threads_per_worker;
 }
 
 #define HTTP_TASKS_PER_THREAD 32768
@@ -1565,21 +1594,11 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             return NULL;
         }
 
-        ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, MSG_DONTWAIT);
-        if (bytes < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (total_received == 0) {
-                    return NULL;
-                }
-                struct pollfd pfd = { .fd = client_fd, .events = POLLIN };
-                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
-                if (ret <= 0) return NULL;
-                continue;
-            }
-            if (errno == EINTR) continue;
+        ssize_t bytes = recv(client_fd, read_buf + total_received, buf_size - 1 - total_received, 0);
+        if (bytes <= 0) {
+            if (bytes < 0 && errno == EINTR) continue;
             return NULL;
         }
-        if (bytes == 0) return NULL;
         total_received += (size_t)bytes;
         read_buf[total_received] = '\0';
     }

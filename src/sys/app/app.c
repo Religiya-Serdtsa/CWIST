@@ -8,9 +8,10 @@
 #include <cwist/sys/app/app.h>
 #include <cwist/net/http/http.h>
 #include <cwist/net/http/https.h>
+#include <cwist/net/http/http2.h>
 #include <cwist/net/http/http3.h>
 #include <cwist/net/http/async_server.h>
-#include <cwist/net/http/http2.h>
+#include "../../net/http/simd_parser.h"
 #include <cwist/sys/health/healthz.h>
 #include <cwist/net/http/https.h>
 #include <cwist/core/sstring/sstring.h>
@@ -2185,19 +2186,57 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
     size_t buf_len = 0;
     read_buf[0] = '\0';
 
-    bool last_keep_alive = true;
-
     while (true) {
+        // --- Zero-Alloc Ingress Fast-Path for Cached / Fixed BDR Endpoints ---
+        if (app->bdr_ctx) {
+            while (true) {
+                if (buf_len == 0) {
+                    ssize_t bytes = recv(client_fd, read_buf, sizeof(read_buf) - 1, 0);
+                    if (bytes <= 0) {
+                        if (bytes < 0 && errno == EINTR) continue;
+                        close(client_fd);
+                        return;
+                    }
+                    buf_len = (size_t)bytes;
+                    read_buf[buf_len] = '\0';
+                }
+
+                char *hdr_end = (char *)cwist_simd_find_crlfcrlf(read_buf, buf_len);
+                if (hdr_end && (read_buf[0] == 'G' && read_buf[1] == 'E' && read_buf[2] == 'T' && read_buf[3] == ' ')) {
+                    const char *path_start = read_buf + 4;
+                    const char *path_end = (const char *)memchr(path_start, ' ', (size_t)(hdr_end - path_start));
+                    if (path_end) {
+                        char path_tmp[256];
+                        size_t plen = (size_t)(path_end - path_start);
+                        if (plen < sizeof(path_tmp)) {
+                            memcpy(path_tmp, path_start, plen);
+                            path_tmp[plen] = '\0';
+                            size_t cached_len = 0;
+                            const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", path_tmp, &cached_len);
+                            if (cached_blob && cached_len > 0) {
+                                send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
+                                size_t consumed = (size_t)(hdr_end + 4 - read_buf);
+                                if (buf_len > consumed) {
+                                    memmove(read_buf, read_buf + consumed, buf_len - consumed);
+                                    buf_len -= consumed;
+                                    read_buf[buf_len] = '\0';
+                                } else {
+                                    buf_len = 0;
+                                    read_buf[0] = '\0';
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
         cwist_http_request *req = cwist_http_receive_request(client_fd, read_buf, sizeof(read_buf), &buf_len);
         if (!req) {
-            if (last_keep_alive && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-                if (cwist_http_pool_rearm_current(client_fd, cwist_app_http_handler, app)) {
-                    return;
-                }
-            }
             break;
         }
-        last_keep_alive = req->keep_alive;
         req->client_fd = client_fd;
         req->app = app;
         req->db = app->db;
@@ -2237,7 +2276,6 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
         }
 
         bool keep_alive = req->keep_alive && res->keep_alive;
-        last_keep_alive = keep_alive;
         bool upgraded = req->upgraded;
         
         if (!req->upgraded) {
@@ -3256,6 +3294,14 @@ int cwist_app_listen(cwist_app *app, int port) {
             break;
         } else {
             worker_pids[worker_count++] = pid;
+        }
+    }
+
+    if (is_worker_child) {
+        close(server_fd);
+        server_fd = cwist_make_socket_ipv4(&addr, "0.0.0.0", port, 32768);
+        if (server_fd >= 0) {
+            g_cwist_listen_fd = server_fd;
         }
     }
 
