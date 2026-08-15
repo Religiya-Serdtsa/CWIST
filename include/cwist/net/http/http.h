@@ -57,10 +57,10 @@ typedef enum cwist_http_status_t {
 #define CWIST_HTTP_MAX_HEADER_SIZE (8 * 1024)
 #define CWIST_HTTP_MAX_BODY_SIZE   (10 * 1024 * 1024)
 #define CWIST_HTTP_READ_BUFFER_SIZE (16 * 1024)
-#define CWIST_HTTP_TIMEOUT_MS      5000
-#define CWIST_HTTPS_HANDSHAKE_TIMEOUT_MS 15000  /* Total TLS handshake budget */
-#define CWIST_HTTP_HEADERS_TIMEOUT_MS    60000  /* Total header read budget */
-#define CWIST_HTTP_BODY_IDLE_TIMEOUT_MS  30000  /* Abort body read after this much silence */
+#define CWIST_HTTP_TIMEOUT_MS      30000
+#define CWIST_HTTPS_HANDSHAKE_TIMEOUT_MS 45000  /* Total TLS handshake budget */
+#define CWIST_HTTP_HEADERS_TIMEOUT_MS    120000 /* Total header read budget */
+#define CWIST_HTTP_BODY_IDLE_TIMEOUT_MS  60000  /* Abort body read after this much silence */
 #define CWIST_HTTP2_IDLE_TIMEOUT_MS      300000 /* Default h2 idle budget (env overridable) */
 
 /** --- Structures --- */

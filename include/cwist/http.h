@@ -40,7 +40,7 @@ typedef enum cwist_http_status_t {
 #define CWIST_HTTP_MAX_HEADER_SIZE (8 * 1024)
 #define CWIST_HTTP_MAX_BODY_SIZE   (10 * 1024 * 1024)
 #define CWIST_HTTP_READ_BUFFER_SIZE (16 * 1024)
-#define CWIST_HTTP_TIMEOUT_MS      5000
+#define CWIST_HTTP_TIMEOUT_MS      30000
 
 /** --- Structures --- */
 
