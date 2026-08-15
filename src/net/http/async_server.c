@@ -37,9 +37,6 @@ static void async_accept_cb(int fd, void *ctx) {
         int quickack = 1;
         setsockopt(client_fd, IPPROTO_TCP, TCP_QUICKACK, &quickack, sizeof(quickack));
 #endif
-        struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
-        setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-        setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
         if (app_use_https(app)) {
             https_pool_submit(client_fd, app->ssl_ctx, app->https_request_handler, app);

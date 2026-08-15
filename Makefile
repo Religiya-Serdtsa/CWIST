@@ -1,5 +1,5 @@
-# Compiler and Flags
 CC ?= gcc
+CXX ?= g++
 FUZZ_CC ?= clang
 
 CURL_CFLAGS := $(shell pkg-config --cflags libcurl 2>/dev/null)
@@ -10,6 +10,15 @@ INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./li
 COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
 COMMON_WARNINGS = -std=c2x -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
+
+UNAME_S := $(shell uname -s)
+CC_VERSION_OUTPUT := $(shell $(CC) --version 2>/dev/null)
+IS_CLANG := $(strip $(findstring clang,$(notdir $(CC))) $(findstring Clang,$(CC_VERSION_OUTPUT)))
+ifneq (,$(IS_CLANG))
+    ifeq ($(origin CXX),default)
+        CXX = clang++
+    endif
+endif
 
 BUILD_PROFILE = perf
 ifneq (,$(findstring tcc,$(notdir $(CC))))
@@ -27,21 +36,34 @@ TCC_STACK_FLAGS = -O3 -g \
                   -fno-math-errno
 
 PERF_WARNINGS = -Wextra
-PERF_STACK_FLAGS = -Ofast -g \
-                   -fno-plt \
-                   -falign-functions=32 \
-                   -falign-loops=32 \
-                   -falign-jumps=32 \
-                   -falign-labels=32 \
-                   -fno-semantic-interposition \
-                   -fomit-frame-pointer \
-                   -finline-functions \
-                   -fipa-pta
+
+# Clang-specific aggressive optimizations (Apple Clang and LLVM Clang compatible)
+CLANG_STACK_FLAGS = -O3 -ffast-math -g \
+                    -falign-functions=32 \
+                    -fomit-frame-pointer \
+                    -finline-functions
+ifeq ($(UNAME_S),Linux)
+    CLANG_STACK_FLAGS += -fno-plt -fno-semantic-interposition
+endif
+
+# GCC-specific aggressive optimizations
+GCC_STACK_FLAGS = -Ofast -g \
+                  -fno-plt \
+                  -falign-functions=32 \
+                  -falign-loops=32 \
+                  -falign-jumps=32 \
+                  -falign-labels=32 \
+                  -fno-semantic-interposition \
+                  -fomit-frame-pointer \
+                  -finline-functions \
+                  -fipa-pta
 
 ifeq ($(BUILD_PROFILE),tcc)
     CFLAGS = $(COMMON_CFLAGS) $(TCC_STACK_FLAGS) -ftls-model=global-dynamic
+else ifneq (,$(IS_CLANG))
+    CFLAGS = $(COMMON_CFLAGS) $(PERF_WARNINGS) $(CLANG_STACK_FLAGS)
 else
-    CFLAGS = $(COMMON_CFLAGS) $(PERF_WARNINGS) $(PERF_STACK_FLAGS)
+    CFLAGS = $(COMMON_CFLAGS) $(PERF_WARNINGS) $(GCC_STACK_FLAGS)
 endif
 
 URIPARSER_DIR = lib/uriparser
@@ -94,7 +116,6 @@ SQLITE_URL = https://www.sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP)
 SQLITE_DIR = lib/sqlite3
 
 # Detect OS
-UNAME_S := $(shell uname -s)
 IO_SRC = src/sys/io/io_select.c # Default fallback
 PLATFORM_SRC =
 
