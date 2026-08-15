@@ -64,17 +64,21 @@ struct cwist_reactor {
     reactor_impl_t impl;
     bool running;
     reactor_event_ctx_t event_pool[MAX_REACTOR_EVENTS];
+    uint32_t pool_cursor;
 };
 
 static reactor_event_ctx_t *alloc_reactor_ctx(cwist_reactor_t *r, int fd, cwist_reactor_cb_t cb, void *ctx) {
     if (!r) return NULL;
-    for (int i = 0; i < MAX_REACTOR_EVENTS; i++) {
-        if (!r->event_pool[i].in_use) {
-            r->event_pool[i].fd = fd;
-            r->event_pool[i].cb = cb;
-            r->event_pool[i].ctx = ctx;
-            r->event_pool[i].in_use = true;
-            return &r->event_pool[i];
+    uint32_t start = r->pool_cursor;
+    for (uint32_t i = 0; i < MAX_REACTOR_EVENTS; i++) {
+        uint32_t idx = (start + i) % MAX_REACTOR_EVENTS;
+        if (!r->event_pool[idx].in_use) {
+            r->event_pool[idx].fd = fd;
+            r->event_pool[idx].cb = cb;
+            r->event_pool[idx].ctx = ctx;
+            r->event_pool[idx].in_use = true;
+            r->pool_cursor = (idx + 1) % MAX_REACTOR_EVENTS;
+            return &r->event_pool[idx];
         }
     }
     return NULL;
@@ -321,7 +325,6 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
             uint32_t head = __atomic_load_n(reactor->impl.cq_head, __ATOMIC_ACQUIRE);
             uint32_t tail = *reactor->impl.cq_tail;
             if (head == tail) {
-                usleep(1000);
                 continue;
             }
             while (head != tail) {
