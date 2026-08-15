@@ -1,17 +1,19 @@
 <map id="src/net/http/multipart.c" name="src/net/http/multipart.c">
-<area shape="rect" id="Node000001" title="RFC 7578 multipart/form&#45;data parser — wrapper around multipart&#45;parser&#45;c." alt="" coords="411,5,581,31"/>
+<area shape="rect" id="Node000001" title="RFC 7578 multipart/form&#45;data parser — wrapper around multipart&#45;parser&#45;c." alt="" coords="463,5,633,31"/>
 <area shape="rect" id="Node000002" href="$d0/dd6/multipart_8h.html" title="RFC 7578 multipart/form&#45;data parser." alt="" coords="5,79,192,104"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="433,33,177,79,176,74,432,28"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="476,33,185,79,184,74,475,28"/>
 <area shape="rect" id="Node000004" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="216,79,389,104"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="466,33,348,76,346,71,464,28"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="509,33,356,77,355,72,508,28"/>
 <area shape="rect" id="Node000006" title=" " alt="" coords="414,79,485,104"/>
-<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="491,32,467,69,462,66,486,30"/>
-<area shape="rect" id="Node000007" title=" " alt="" coords="509,79,576,104"/>
-<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="506,30,530,66,525,69,501,32"/>
-<area shape="rect" id="Node000008" title=" " alt="" coords="601,79,671,104"/>
-<area shape="poly" id="edge8_Node000001_Node000008" title=" " alt="" coords="520,28,602,70,600,75,517,33"/>
-<area shape="rect" id="Node000009" title=" " alt="" coords="696,79,837,104"/>
-<area shape="poly" id="edge9_Node000001_Node000009" title=" " alt="" coords="540,28,710,73,709,78,539,33"/>
+<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="534,33,478,73,475,68,531,29"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="509,79,587,104"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="551,31,551,65,545,65,545,31"/>
+<area shape="rect" id="Node000008" title=" " alt="" coords="612,79,679,104"/>
+<area shape="poly" id="edge8_Node000001_Node000008" title=" " alt="" coords="565,29,620,68,617,72,562,33"/>
+<area shape="rect" id="Node000009" title=" " alt="" coords="703,79,774,104"/>
+<area shape="poly" id="edge9_Node000001_Node000009" title=" " alt="" coords="580,28,696,71,694,76,578,33"/>
+<area shape="rect" id="Node000010" title=" " alt="" coords="799,79,940,104"/>
+<area shape="poly" id="edge10_Node000001_Node000010" title=" " alt="" coords="600,28,805,73,804,78,599,33"/>
 <area shape="rect" id="Node000003" title=" " alt="" coords="97,152,172,177"/>
 <area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="107,103,125,138,120,141,102,106"/>
 <area shape="poly" id="edge4_Node000004_Node000003" title=" " alt="" coords="277,106,176,149,174,144,275,102"/>

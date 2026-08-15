@@ -1,10 +1,7 @@
 var searchData=
 [
-  ['r0_0',['R0',['../df/db2/ws__utils_8c.html#a8ac24a09e1273548828d3cc9436f9bc7',1,'ws_utils.c']]],
-  ['r1_1',['R1',['../df/db2/ws__utils_8c.html#a2628f8af7bf67ca052200537279f855a',1,'ws_utils.c']]],
-  ['r2_2',['R2',['../df/db2/ws__utils_8c.html#a774229b80509be0e9e0a1d9819580224',1,'ws_utils.c']]],
-  ['r3_3',['R3',['../df/db2/ws__utils_8c.html#ac0b8b342432d17717ff1020d10cf0eea',1,'ws_utils.c']]],
-  ['r4_4',['R4',['../df/db2/ws__utils_8c.html#af77ddc8894422d2af2adbd4e71e55d1f',1,'ws_utils.c']]],
-  ['rol_5',['ROL',['../df/db2/ws__utils_8c.html#a3555c76a15091ea5b573174edc5ce86f',1,'ws_utils.c']]],
-  ['rotl_6',['ROTL',['../dd/d2d/siphash_8c.html#addd42b95ef425979d1d0dca095dec800',1,'siphash.c']]]
+  ['quic_5fflow_5fcontrol_5fmin_5finitial_5fwindow_0',['QUIC_FLOW_CONTROL_MIN_INITIAL_WINDOW',['../df/db2/quic__flow__control_8h.html#aab602df696fde07f823dddf8794ce08d',1,'quic_flow_control.h']]],
+  ['quic_5fframe_5fmax_5fdata_1',['QUIC_FRAME_MAX_DATA',['../dc/d43/quic__flow__control_8c.html#a11d8d36c0177065d262ee3c8145d88a2',1,'quic_flow_control.c']]],
+  ['quic_5fframe_5fmax_5fstream_5fdata_2',['QUIC_FRAME_MAX_STREAM_DATA',['../dc/d43/quic__flow__control_8c.html#afa16a344299600d1bbaf43335cd5b402',1,'quic_flow_control.c']]],
+  ['quic_5fmax_5fvarint_3',['QUIC_MAX_VARINT',['../dc/d43/quic__flow__control_8c.html#aeabf5de0b6992ee3d33eeb8b30276ae6',1,'quic_flow_control.c']]]
 ];

@@ -1,0 +1,9 @@
+<map id="src/net/http/curl_global.h" name="src/net/http/curl_global.h">
+<area shape="rect" id="Node000001" title=" " alt="" coords="211,5,393,31"/>
+<area shape="rect" id="Node000002" href="$da/d7f/curl__global_8c.html" title=" " alt="" coords="5,79,188,104"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="257,38,131,81,129,76,255,33"/>
+<area shape="rect" id="Node000003" href="$d6/d32/http__client_8c.html" title="libcurl&#45;based HTTP/1.1 and HTTP/2 client for CWIST." alt="" coords="212,79,392,104"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="305,44,305,79,299,79,299,44"/>
+<area shape="rect" id="Node000004" href="$d3/d65/tls__chain_8c.html" title=" " alt="" coords="416,79,585,104"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="348,33,469,76,467,81,346,38"/>
+</map>

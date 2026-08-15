@@ -1,66 +1,69 @@
 <map id="cwist_test_client" name="cwist_test_client">
-<area shape="rect" id="Node000001" title=" " alt="" coords="961,551,1091,576"/>
-<area shape="rect" id="Node000002" href="$dc/da0/structcwist__app.html" title="Main Application Context." alt="" coords="679,556,765,581"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="779,566,929,563,961,563,961,568,929,569,779,571"/>
-<area shape="rect" id="Node000004" href="$dd/d68/structcwist__http__request.html" title=" " alt="" coords="953,391,1099,416"/>
-<area shape="poly" id="edge14_Node000004_Node000002" title=" " alt="" coords="739,543,780,499,806,476,835,456,890,437,975,414,977,419,892,442,837,460,809,480,783,503,743,547"/>
-<area shape="rect" id="Node000003" href="$d8/d41/structcwist__middleware__node.html" title="Linked list node for middleware chain." alt="" coords="1225,471,1404,496"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="1287,507,1206,559,1154,585,1099,605,1054,613,1007,617,914,613,830,600,765,584,766,579,831,595,914,608,1007,612,1053,608,1098,599,1152,580,1204,555,1284,502"/>
-<area shape="poly" id="edge16_Node000003_Node000003" title=" " alt="" coords="1285,456,1294,447,1315,444,1332,446,1343,453,1346,462,1340,472,1336,469,1340,462,1339,456,1330,451,1315,449,1296,452,1288,460"/>
-<area shape="poly" id="edge21_Node000002_Node000004" title=" " alt="" coords="1008,429,974,463,931,495,905,506,884,510,863,513,837,521,750,558,748,553,835,515,862,508,883,505,904,501,928,490,971,459,1004,425"/>
-<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="1108,416,1202,439,1283,468,1281,473,1201,445,1107,421"/>
-<area shape="rect" id="Node000012" href="$dd/da0/structcwist__route__node.html" title=" " alt="" coords="1247,355,1383,380"/>
-<area shape="poly" id="edge18_Node000012_Node000004" title=" " alt="" coords="1112,390,1246,373,1247,378,1113,395"/>
-<area shape="rect" id="Node000017" href="$d3/d50/structcwist__error__handler__entry.html" title=" " alt="" coords="1239,714,1390,754"/>
-<area shape="poly" id="edge26_Node000017_Node000004" title=" " alt="" coords="1053,424,1077,450,1101,481,1113,506,1125,531,1167,586,1213,636,1292,712,1288,716,1209,640,1163,589,1120,534,1108,509,1096,483,1073,453,1049,427"/>
-<area shape="rect" id="Node000021" href="$d9/dae/structcwist__http3__context.html" title="HTTP/3 server context encapsulating lsquic/BoringSSL settings." alt="" coords="1238,576,1391,601"/>
-<area shape="poly" id="edge33_Node000021_Node000004" title=" " alt="" coords="1060,421,1295,574,1292,578,1057,426"/>
-<area shape="rect" id="Node000005" href="$d5/ddc/structcwist__sstring.html" title=" " alt="" coords="294,123,401,148"/>
-<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="383,153,492,209,561,240,633,265,677,275,716,279,784,278,817,278,851,281,888,290,931,308,959,326,983,348,1018,389,1014,392,980,351,955,330,928,312,887,295,850,286,816,283,784,283,715,284,676,280,631,270,559,244,490,214,381,157"/>
-<area shape="rect" id="Node000007" href="$d8/dca/struct____prim__cwist__error__t.html" title="Internal union&#45;like structure to store the actual error value." alt="" coords="643,5,801,31"/>
-<area shape="poly" id="edge7_Node000007_Node000005" title=" " alt="" coords="374,112,412,86,458,64,504,48,553,36,642,22,643,27,554,41,506,53,460,68,415,91,377,116"/>
-<area shape="rect" id="Node000010" href="$d3/d72/structcwist__http__header__node.html" title="Linked list for headers to handle multiple headers easily." alt="" coords="632,172,812,197"/>
-<area shape="poly" id="edge12_Node000010_Node000005" title=" " alt="" coords="415,141,632,170,631,176,414,147"/>
-<area shape="rect" id="Node000006" href="$d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system." alt="" coords="973,72,1079,97"/>
-<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="959,89,737,97,598,106,459,119,401,128,401,123,458,114,598,101,737,92,959,83"/>
-<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="794,31,973,71,972,76,793,36"/>
-<area shape="rect" id="Node000008" href="$dd/d72/structcwist__query__map.html" title=" " alt="" coords="654,329,790,355"/>
-<area shape="poly" id="edge8_Node000004_Node000008" title=" " alt="" coords="804,351,930,374,983,388,982,393,929,379,803,356"/>
-<area shape="rect" id="Node000009" href="$d1/d8f/structcwist__query__bucket.html" title=" " alt="" coords="272,329,423,355"/>
-<area shape="poly" id="edge9_Node000008_Node000009" title=" " alt="" coords="436,339,654,339,654,345,436,345"/>
-<area shape="poly" id="edge10_Node000009_Node000009" title=" " alt="" coords="320,315,328,306,347,303,363,305,373,311,376,321,371,330,366,328,371,320,369,315,362,310,347,308,331,311,324,318"/>
-<area shape="poly" id="edge11_Node000004_Node000010" title=" " alt="" coords="800,198,867,222,900,239,931,260,963,292,989,328,1022,389,1017,392,985,331,959,295,928,264,898,244,865,227,798,203"/>
-<area shape="poly" id="edge13_Node000010_Node000010" title=" " alt="" coords="691,157,700,149,722,145,740,148,752,154,755,164,749,173,744,171,749,163,747,157,739,153,722,151,702,154,694,161"/>
-<area shape="rect" id="Node000011" href="$dd/d55/structcwist__db.html" title="Wrapper for Database Operations. Currently uses SQLite3." alt="" coords="308,395,387,420"/>
-<area shape="poly" id="edge34_Node000002_Node000011" title=" " alt="" coords="401,415,529,440,609,458,643,480,672,507,713,554,709,558,668,511,639,485,607,463,527,445,400,420"/>
-<area shape="poly" id="edge15_Node000004_Node000011" title=" " alt="" coords="400,404,953,401,953,406,400,410"/>
-<area shape="poly" id="edge17_Node000002_Node000012" title=" " alt="" coords="1270,388,1247,403,1227,421,1219,437,1217,453,1215,469,1203,486,1024,521,766,564,765,559,1023,515,1200,481,1210,467,1212,452,1214,436,1223,418,1244,399,1267,384"/>
-<area shape="poly" id="edge20_Node000012_Node000012" title=" " alt="" coords="1285,340,1294,331,1315,328,1332,330,1343,337,1346,346,1340,356,1336,353,1340,346,1339,340,1330,335,1315,333,1296,336,1288,344"/>
-<area shape="rect" id="Node000013" href="$d9/d2c/structcwist__websocket.html" title=" " alt="" coords="960,23,1092,48"/>
-<area shape="poly" id="edge19_Node000012_Node000013" title=" " alt="" coords="1092,52,1100,57,1141,93,1179,133,1212,176,1241,220,1285,300,1310,353,1306,356,1281,302,1236,223,1207,179,1174,137,1138,96,1097,61,1089,56"/>
-<area shape="rect" id="Node000014" href="$dd/dcc/structcwist__https__context.html" title=" " alt="" coords="271,753,423,779"/>
-<area shape="poly" id="edge22_Node000002_Node000014" title=" " alt="" coords="437,771,479,769,523,763,566,752,607,733,628,717,647,698,678,655,701,613,714,580,719,582,705,615,683,658,651,702,631,721,609,738,568,757,524,769,480,774,437,776"/>
-<area shape="rect" id="Node000015" href="$d1/dda/structcwist__rdbms__runtime.html" title="Mounted RDBMS runtime state." alt="" coords="266,457,429,483"/>
-<area shape="poly" id="edge23_Node000002_Node000015" title=" " alt="" coords="443,475,525,488,609,509,660,530,702,554,699,558,658,535,607,514,524,493,442,480"/>
-<area shape="rect" id="Node000016" href="$db/d95/structcwist__https__connection.html" title=" " alt="" coords="260,507,435,532"/>
-<area shape="poly" id="edge24_Node000002_Node000016" title=" " alt="" coords="448,526,608,546,679,558,678,563,608,551,448,532"/>
-<area shape="poly" id="edge25_Node000002_Node000017" title=" " alt="" coords="1225,739,1140,735,1040,725,935,703,884,686,835,666,803,647,774,624,733,583,736,580,778,620,806,643,837,661,886,681,937,697,1041,719,1141,730,1226,733"/>
-<area shape="poly" id="edge27_Node000017_Node000017" title=" " alt="" coords="1286,698,1296,690,1315,687,1331,689,1341,695,1346,704,1344,714,1339,713,1340,705,1337,699,1329,695,1315,693,1298,695,1290,702"/>
-<area shape="rect" id="Node000018" href="$db/dcb/structcwist__config.html" title=" " alt="" coords="296,556,399,581"/>
-<area shape="poly" id="edge28_Node000002_Node000018" title=" " alt="" coords="412,566,678,566,678,571,412,571"/>
-<area shape="rect" id="Node000019" href="$d7/db7/structcwist__config__bucket.html" title=" " alt="" coords="5,556,157,581"/>
-<area shape="poly" id="edge29_Node000018_Node000019" title=" " alt="" coords="171,566,296,566,296,571,171,571"/>
-<area shape="poly" id="edge30_Node000019_Node000019" title=" " alt="" coords="56,541,64,533,81,529,96,532,105,538,107,548,103,557,98,555,102,547,101,541,94,537,81,535,67,537,60,545"/>
-<area shape="rect" id="Node000020" href="$d0/dd4/structcwist__logger.html" title=" " alt="" coords="295,605,399,631"/>
-<area shape="poly" id="edge31_Node000002_Node000020" title=" " alt="" coords="413,609,608,586,678,574,679,579,608,591,413,615"/>
-<area shape="poly" id="edge32_Node000002_Node000021" title=" " alt="" coords="1274,609,1202,637,1134,657,1079,667,1024,668,953,662,893,654,835,636,782,610,740,584,743,579,785,606,837,632,894,649,954,657,1024,662,1079,661,1133,651,1200,631,1272,604"/>
-<area shape="rect" id="Node000022" href="$d7/dba/structcwist__fix__server__mem.html" title="Fixed Server Memory Manager." alt="" coords="263,655,431,680"/>
-<area shape="poly" id="edge35_Node000002_Node000022" title=" " alt="" coords="445,657,525,645,607,625,658,603,700,579,703,584,661,608,609,630,526,651,446,663"/>
-<area shape="rect" id="Node000023" href="$d6/de0/structcwist__file__t.html" title="Represents a file loaded into the fixed memory pool." alt="" coords="34,644,129,669"/>
-<area shape="poly" id="edge36_Node000022_Node000023" title=" " alt="" coords="143,656,263,661,263,667,143,662"/>
-<area shape="rect" id="Node000024" href="$d9/d90/structcwist__bdr__t.html" title="Big Dumb Reply Context. Manages cache buckets and learning parameters." alt="" coords="299,704,395,729"/>
-<area shape="poly" id="edge37_Node000002_Node000024" title=" " alt="" coords="409,715,454,713,505,707,557,695,607,676,640,654,669,628,710,580,714,583,673,632,643,659,609,680,559,700,506,712,455,718,409,721"/>
-<area shape="rect" id="Node000025" href="$d5/d26/structbdr__entry__t.html" title="Big Dumb Reply Entry. Stores a completely serialized HTTP response blob." alt="" coords="33,732,129,757"/>
-<area shape="poly" id="edge38_Node000024_Node000025" title=" " alt="" coords="143,736,299,719,300,724,144,741"/>
-<area shape="poly" id="edge39_Node000025_Node000025" title=" " alt="" coords="56,717,64,709,81,705,96,708,105,714,107,724,103,733,98,731,102,723,101,717,94,713,81,711,67,713,60,721"/>
+<area shape="rect" id="Node000001" title=" " alt="" coords="962,746,1093,771"/>
+<area shape="rect" id="Node000002" href="$dc/da0/structcwist__app.html" title="Main Application Context." alt="" coords="679,550,766,575"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="737,587,753,618,775,654,804,690,839,719,860,728,890,736,962,748,961,754,889,741,858,733,836,724,800,694,771,657,748,621,732,589"/>
+<area shape="rect" id="Node000004" href="$dd/d68/structcwist__http__request.html" title=" " alt="" coords="955,357,1100,382"/>
+<area shape="poly" id="edge14_Node000004_Node000002" title=" " alt="" coords="738,537,779,487,806,460,836,436,861,424,882,418,930,405,995,380,997,385,931,411,883,423,863,428,839,441,809,464,783,490,742,540"/>
+<area shape="rect" id="Node000003" href="$d8/d41/structcwist__middleware__node.html" title="Linked list node for middleware chain." alt="" coords="1227,413,1405,438"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="1262,446,1229,469,1221,481,1218,494,1215,507,1204,521,1170,539,1122,552,1064,561,999,566,869,569,766,567,766,562,869,564,999,561,1063,555,1121,547,1168,534,1201,517,1210,505,1213,493,1216,479,1225,465,1259,441"/>
+<area shape="poly" id="edge16_Node000003_Node000003" title=" " alt="" coords="1286,398,1295,389,1316,386,1334,388,1344,395,1347,404,1342,414,1337,411,1342,404,1340,398,1332,393,1316,391,1297,394,1290,402"/>
+<area shape="poly" id="edge21_Node000002_Node000004" title=" " alt="" coords="1012,395,979,436,957,458,932,476,907,487,886,491,864,494,838,501,787,527,745,552,742,547,784,522,836,496,863,488,885,486,905,482,929,471,953,453,975,433,1008,392"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="1114,377,1203,392,1274,410,1272,415,1202,397,1113,382"/>
+<area shape="rect" id="Node000012" href="$dd/da0/structcwist__route__node.html" title=" " alt="" coords="1248,307,1384,333"/>
+<area shape="poly" id="edge18_Node000012_Node000004" title=" " alt="" coords="1100,351,1124,347,1247,327,1248,332,1124,352,1101,356"/>
+<area shape="rect" id="Node000017" href="$d3/d50/structcwist__error__handler__entry.html" title=" " alt="" coords="1241,601,1391,641"/>
+<area shape="poly" id="edge26_Node000017_Node000004" title=" " alt="" coords="1054,390,1126,455,1292,599,1289,603,1122,459,1051,394"/>
+<area shape="rect" id="Node000021" href="$d9/dae/structcwist__http3__context.html" title="HTTP/3 server context encapsulating lsquic/BoringSSL settings." alt="" coords="1239,479,1393,505"/>
+<area shape="poly" id="edge33_Node000021_Node000004" title=" " alt="" coords="1069,385,1125,410,1204,438,1290,477,1288,482,1202,442,1123,414,1067,390"/>
+<area shape="rect" id="Node000005" href="$d5/ddc/structcwist__sstring.html" title=" " alt="" coords="294,113,401,138"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="415,131,540,148,692,175,835,209,891,229,932,251,961,276,987,305,1021,355,1016,358,982,308,958,280,929,256,889,234,833,215,691,180,540,153,414,136"/>
+<area shape="rect" id="Node000007" href="$d8/dca/struct____prim__cwist__error__t.html" title="Internal union&#45;like structure to store the actual error value." alt="" coords="644,65,801,90"/>
+<area shape="poly" id="edge7_Node000007_Node000005" title=" " alt="" coords="414,114,644,85,644,90,415,120"/>
+<area shape="rect" id="Node000010" href="$d3/d72/structcwist__http__header__node.html" title="Linked list for headers to handle multiple headers easily." alt="" coords="633,261,813,286"/>
+<area shape="poly" id="edge12_Node000010_Node000005" title=" " alt="" coords="371,147,410,185,434,203,460,219,502,236,547,249,633,265,632,270,546,255,500,241,457,224,431,208,406,189,367,151"/>
+<area shape="rect" id="Node000006" href="$d4/d50/structcwist__error__t.html" title="Integrated error structure used throughout the system." alt="" coords="974,65,1081,90"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="960,65,930,60,797,43,692,36,642,38,589,45,459,76,412,94,371,115,369,110,409,89,458,71,588,40,641,33,692,31,798,38,931,55,961,60"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="815,75,974,75,974,80,815,80"/>
+<area shape="rect" id="Node000008" href="$dd/d72/structcwist__query__map.html" title=" " alt="" coords="655,310,791,335"/>
+<area shape="poly" id="edge8_Node000004_Node000008" title=" " alt="" coords="805,332,955,356,954,361,804,338"/>
+<area shape="rect" id="Node000009" href="$d1/d8f/structcwist__query__bucket.html" title=" " alt="" coords="272,310,423,335"/>
+<area shape="poly" id="edge9_Node000008_Node000009" title=" " alt="" coords="436,320,654,320,654,325,436,325"/>
+<area shape="poly" id="edge10_Node000009_Node000009" title=" " alt="" coords="320,295,328,287,347,283,363,286,373,292,376,302,371,311,366,309,371,301,369,295,362,291,347,289,331,292,324,299"/>
+<area shape="poly" id="edge11_Node000004_Node000010" title=" " alt="" coords="827,268,880,275,932,290,958,303,981,321,1016,354,1013,358,978,325,955,308,930,294,879,280,826,273"/>
+<area shape="poly" id="edge13_Node000010_Node000010" title=" " alt="" coords="691,246,701,237,723,234,741,236,752,243,755,252,750,262,745,259,750,252,748,246,739,241,723,239,703,242,695,250"/>
+<area shape="rect" id="Node000011" href="$dd/d55/structcwist__db.html" title="Wrapper for Database Operations. Currently uses SQLite3." alt="" coords="308,375,387,401"/>
+<area shape="poly" id="edge34_Node000002_Node000011" title=" " alt="" coords="401,395,529,420,609,439,645,464,675,495,716,548,711,552,671,498,641,468,607,444,528,425,400,400"/>
+<area shape="poly" id="edge15_Node000004_Node000011" title=" " alt="" coords="400,384,954,369,954,374,400,389"/>
+<area shape="poly" id="edge17_Node000002_Node000012" title=" " alt="" coords="1257,341,1241,351,1229,363,1220,378,1217,393,1219,423,1221,453,1216,468,1204,484,1144,500,1022,521,766,559,766,554,1021,516,1143,495,1201,479,1211,466,1216,452,1214,423,1212,393,1215,376,1225,360,1238,346,1254,336"/>
+<area shape="poly" id="edge20_Node000012_Node000012" title=" " alt="" coords="1286,293,1295,284,1316,281,1334,283,1344,289,1347,299,1342,309,1337,306,1342,298,1340,293,1332,288,1316,286,1297,289,1290,297"/>
+<area shape="rect" id="Node000013" href="$d9/d2c/structcwist__websocket.html" title=" " alt="" coords="961,15,1093,41"/>
+<area shape="poly" id="edge19_Node000012_Node000013" title=" " alt="" coords="1093,44,1102,50,1140,80,1176,115,1237,190,1283,258,1310,306,1306,309,1278,261,1233,193,1172,119,1136,84,1098,54,1090,49"/>
+<area shape="rect" id="Node000014" href="$dd/dcc/structcwist__https__context.html" title=" " alt="" coords="271,735,423,761"/>
+<area shape="poly" id="edge22_Node000002_Node000014" title=" " alt="" coords="437,752,479,750,523,745,566,733,607,715,646,683,677,644,700,604,714,574,719,577,705,607,681,647,650,687,609,720,568,738,524,750,479,756,437,757"/>
+<area shape="rect" id="Node000015" href="$d1/dda/structcwist__rdbms__runtime.html" title="Mounted RDBMS runtime state." alt="" coords="266,439,429,465"/>
+<area shape="poly" id="edge23_Node000002_Node000015" title=" " alt="" coords="443,455,525,468,609,491,664,519,707,548,704,552,661,523,607,496,524,473,442,461"/>
+<area shape="rect" id="Node000016" href="$db/d95/structcwist__https__connection.html" title=" " alt="" coords="260,489,435,514"/>
+<area shape="poly" id="edge24_Node000002_Node000016" title=" " alt="" coords="449,509,608,532,680,548,678,554,608,537,448,514"/>
+<area shape="poly" id="edge25_Node000002_Node000017" title=" " alt="" coords="1231,647,1167,661,1100,672,1027,677,954,672,894,665,868,659,836,646,779,612,736,578,740,573,782,608,839,642,870,654,895,660,955,667,1027,672,1100,667,1166,656,1230,642"/>
+<area shape="poly" id="edge27_Node000017_Node000017" title=" " alt="" coords="1288,585,1298,578,1316,575,1332,577,1342,583,1347,592,1345,601,1340,600,1342,593,1339,586,1330,582,1316,580,1300,583,1291,589"/>
+<area shape="rect" id="Node000018" href="$db/dcb/structcwist__config.html" title=" " alt="" coords="296,538,399,563"/>
+<area shape="poly" id="edge28_Node000002_Node000018" title=" " alt="" coords="413,550,679,559,679,564,412,555"/>
+<area shape="rect" id="Node000019" href="$d7/db7/structcwist__config__bucket.html" title=" " alt="" coords="5,538,157,563"/>
+<area shape="poly" id="edge29_Node000018_Node000019" title=" " alt="" coords="171,548,296,548,296,553,171,553"/>
+<area shape="poly" id="edge30_Node000019_Node000019" title=" " alt="" coords="56,523,64,515,81,511,96,514,105,520,107,530,103,539,98,537,102,529,101,523,94,519,81,517,67,519,60,527"/>
+<area shape="rect" id="Node000020" href="$d0/dd4/structcwist__logger.html" title=" " alt="" coords="295,587,399,613"/>
+<area shape="poly" id="edge31_Node000002_Node000020" title=" " alt="" coords="413,594,608,577,679,567,679,573,608,583,413,599"/>
+<area shape="poly" id="edge32_Node000002_Node000021" title=" " alt="" coords="1281,514,1229,553,1217,569,1204,583,1178,598,1155,604,1100,609,1007,613,914,605,830,591,766,577,767,572,831,586,914,600,1007,608,1100,604,1154,599,1176,593,1201,579,1213,565,1225,549,1278,510"/>
+<area shape="rect" id="Node000022" href="$d7/dba/structcwist__fix__server__mem.html" title="Fixed Server Memory Manager." alt="" coords="263,637,431,662"/>
+<area shape="poly" id="edge35_Node000002_Node000022" title=" " alt="" coords="445,640,525,629,607,611,656,593,697,573,699,578,658,598,609,616,526,634,446,645"/>
+<area shape="rect" id="Node000023" href="$d6/de0/structcwist__file__t.html" title="Represents a file loaded into the fixed memory pool." alt="" coords="34,626,129,651"/>
+<area shape="poly" id="edge36_Node000022_Node000023" title=" " alt="" coords="143,638,263,643,263,649,143,644"/>
+<area shape="rect" id="Node000024" href="$d9/d90/structcwist__bdr__t.html" title="Big Dumb Reply Context. Manages cache buckets and learning parameters." alt="" coords="299,686,395,711"/>
+<area shape="poly" id="edge37_Node000002_Node000024" title=" " alt="" coords="409,697,505,688,557,677,607,659,639,640,668,617,709,574,713,577,671,621,642,645,609,664,558,682,505,693,409,702"/>
+<area shape="rect" id="Node000025" href="$d5/d26/structbdr__entry__t.html" title="Big Dumb Reply Entry. Stores a completely serialized HTTP response blob." alt="" coords="33,714,129,739"/>
+<area shape="poly" id="edge38_Node000024_Node000025" title=" " alt="" coords="143,718,299,701,300,706,144,723"/>
+<area shape="poly" id="edge39_Node000025_Node000025" title=" " alt="" coords="56,699,64,691,81,687,96,690,105,696,107,706,103,715,98,713,102,705,101,699,94,695,81,693,67,695,60,703"/>
+<area shape="rect" id="Node000026" href="$d0/d82/structcwist__test__client__cookie.html" title=" " alt="" coords="632,755,813,781"/>
+<area shape="poly" id="edge40_Node000001_Node000026" title=" " alt="" coords="827,766,931,764,962,762,962,767,931,769,827,772"/>
+<area shape="poly" id="edge41_Node000026_Node000026" title=" " alt="" coords="691,741,701,732,723,729,741,731,752,737,755,747,750,757,745,754,750,746,748,741,739,736,723,734,703,737,695,745"/>
 </map>

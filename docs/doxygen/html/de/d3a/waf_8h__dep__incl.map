@@ -1,0 +1,11 @@
+<map id="include/cwist/sys/app/waf.h" name="include/cwist/sys/app/waf.h">
+<area shape="rect" id="Node000001" title="Deterministic request firewall and output sanitization." alt="" coords="229,5,390,45"/>
+<area shape="rect" id="Node000002" href="$d3/db9/middleware_8h.html" title="middleware.h interface." alt="" coords="5,101,205,126"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="253,53,134,103,131,98,251,48"/>
+<area shape="rect" id="Node000003" href="$d3/d30/sys_2app_2middleware_8h.html" title="Built&#45;in middleware factories." alt="" coords="229,93,390,133"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="312,59,312,93,307,93,307,59"/>
+<area shape="rect" id="Node000005" href="$db/d6e/waf_8c.html" title="Bounded, case&#45;insensitive WAF&#45;lite checks." alt="" coords="415,101,548,126"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="360,49,460,98,457,103,358,54"/>
+<area shape="rect" id="Node000004" href="$d9/dc9/middleware_8c.html" title="Built&#45;in middleware implementations for request IDs, logging, rate limits, CORS, and JWT auth." alt="" coords="216,181,403,207"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="312,147,312,181,307,181,307,147"/>
+</map>

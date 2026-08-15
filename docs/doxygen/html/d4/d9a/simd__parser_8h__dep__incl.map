@@ -1,0 +1,7 @@
+<map id="src/net/http/simd_parser.h" name="src/net/http/simd_parser.h">
+<area shape="rect" id="Node000001" title=" " alt="" coords="59,5,249,31"/>
+<area shape="rect" id="Node000002" href="$dd/d43/http_8c.html" title="Core HTTP request/response allocation, serialization, socket, and server&#45;loop helpers." alt="" coords="5,79,143,104"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="133,42,89,80,85,76,129,38"/>
+<area shape="rect" id="Node000003" href="$df/d7f/app_8c.html" title=" " alt="" coords="167,79,301,104"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="179,38,223,76,219,80,175,42"/>
+</map>

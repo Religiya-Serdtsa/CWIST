@@ -1,25 +1,26 @@
 <map id="include/cwist/core/db/sql.h" name="include/cwist/core/db/sql.h">
-<area shape="rect" id="Node000001" title="Database operations wrapper (SQLite3)." alt="" coords="117,5,255,45"/>
-<area shape="rect" id="Node000002" title=" " alt="" coords="19,93,97,119"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="156,48,90,88,87,84,154,43"/>
-<area shape="rect" id="Node000003" href="$d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="5,167,148,207"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="175,47,99,157,95,154,171,44"/>
-<area shape="rect" id="Node000006" title=" " alt="" coords="133,255,244,280"/>
-<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="189,45,191,241,186,241,184,45"/>
-<area shape="rect" id="Node000007" href="$db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="340,167,491,207"/>
-<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="256,29,292,36,330,48,366,66,397,92,413,121,419,152,413,153,408,123,393,95,363,70,328,53,291,41,255,34"/>
-<area shape="rect" id="Node000009" href="$dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="224,93,383,119"/>
-<area shape="poly" id="edge11_Node000001_Node000009" title=" " alt="" coords="216,43,276,84,273,88,213,48"/>
-<area shape="rect" id="Node000004" title=" " alt="" coords="39,255,109,280"/>
-<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="79,207,78,241,72,241,73,207"/>
-<area shape="rect" id="Node000005" title=" " alt="" coords="269,255,351,280"/>
-<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="133,204,264,248,262,253,132,209"/>
-<area shape="poly" id="edge5_Node000003_Node000006" title=" " alt="" coords="105,205,162,244,159,249,102,209"/>
-<area shape="poly" id="edge8_Node000007_Node000005" title=" " alt="" coords="391,209,338,248,335,244,388,205"/>
-<area shape="poly" id="edge10_Node000007_Node000006" title=" " alt="" coords="362,209,236,253,234,248,360,204"/>
-<area shape="rect" id="Node000008" title=" " alt="" coords="378,255,453,280"/>
-<area shape="poly" id="edge9_Node000007_Node000008" title=" " alt="" coords="418,207,418,241,413,241,413,207"/>
-<area shape="poly" id="edge14_Node000009_Node000005" title=" " alt="" coords="306,119,312,241,306,241,301,119"/>
-<area shape="poly" id="edge13_Node000009_Node000006" title=" " alt="" coords="297,120,207,245,203,241,293,117"/>
-<area shape="poly" id="edge12_Node000009_Node000007" title=" " alt="" coords="321,117,379,157,376,161,318,121"/>
+<area shape="rect" id="Node000001" title="Database operations wrapper (SQLite3)." alt="" coords="143,5,282,45"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,93,84,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="174,48,83,90,81,85,171,43"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="130,255,205,280"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="191,47,171,69,156,94,148,133,148,173,154,211,162,241,157,243,149,212,143,174,143,133,152,92,167,65,187,44"/>
+<area shape="rect" id="Node000004" href="$d7/da1/sys_2err_2cwist__err_8h.html" title="Unified error code and type definitions for the CWIST system layer." alt="" coords="488,167,631,207"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="283,30,379,50,430,67,478,91,514,121,542,153,537,157,510,124,475,96,428,72,377,55,282,36"/>
+<area shape="rect" id="Node000007" title=" " alt="" coords="252,255,363,280"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="207,46,196,79,187,120,187,164,191,186,200,205,223,230,253,247,250,252,220,234,196,208,186,187,181,165,182,120,191,77,202,45"/>
+<area shape="rect" id="Node000008" href="$db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="211,167,361,207"/>
+<area shape="poly" id="edge8_Node000001_Node000008" title=" " alt="" coords="224,44,274,153,269,155,219,47"/>
+<area shape="rect" id="Node000009" href="$dc/d6e/zod_8h.html" title="Strict JSON schema validation (Zod&#45;style) for CWIST." alt="" coords="305,93,464,119"/>
+<area shape="poly" id="edge12_Node000001_Node000009" title=" " alt="" coords="255,43,348,85,346,90,253,48"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="524,255,595,280"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="562,207,562,241,557,241,557,207"/>
+<area shape="rect" id="Node000006" title=" " alt="" coords="409,255,491,280"/>
+<area shape="poly" id="edge5_Node000004_Node000006" title=" " alt="" coords="534,209,479,249,476,244,531,205"/>
+<area shape="poly" id="edge6_Node000004_Node000007" title=" " alt="" coords="500,209,358,253,357,248,498,204"/>
+<area shape="poly" id="edge10_Node000008_Node000003" title=" " alt="" coords="259,209,198,249,195,245,256,205"/>
+<area shape="poly" id="edge9_Node000008_Node000006" title=" " alt="" coords="326,204,415,246,413,251,324,209"/>
+<area shape="poly" id="edge11_Node000008_Node000007" title=" " alt="" coords="294,206,303,240,298,242,289,208"/>
+<area shape="poly" id="edge15_Node000009_Node000006" title=" " alt="" coords="394,118,420,166,446,240,441,242,416,168,390,120"/>
+<area shape="poly" id="edge14_Node000009_Node000007" title=" " alt="" coords="388,119,388,160,384,184,375,208,359,230,339,248,335,244,355,227,370,205,379,183,383,159,383,119"/>
+<area shape="poly" id="edge13_Node000009_Node000008" title=" " alt="" coords="372,121,322,160,319,156,368,117"/>
 </map>

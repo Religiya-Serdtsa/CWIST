@@ -1,6 +1,5 @@
 var searchData=
 [
-  ['session_5farena_0',['session_arena',['../d4/d6b/structsession__arena.html',1,'']]],
-  ['session_5fmanager_1',['session_manager',['../de/d64/structsession__manager.html',1,'']]],
-  ['session_5frc_5fheader_2',['session_rc_header',['../d7/d9b/structsession__rc__header.html',1,'']]]
+  ['quic_5fconn_5ffc_0',['quic_conn_fc',['../d0/dba/structquic__conn__fc.html',1,'']]],
+  ['quic_5fstream_5ffc_1',['quic_stream_fc',['../d9/d1b/structquic__stream__fc.html',1,'']]]
 ];

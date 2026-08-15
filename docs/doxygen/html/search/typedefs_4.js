@@ -1,4 +1,8 @@
 var searchData=
 [
-  ['job_5fnode_5ft_0',['job_node_t',['../d9/d70/io__select_8c.html#a33eb97006e5539c94cc623bb804d7564',1,'job_node_t:&#160;io_select.c'],['../d2/d29/io__uring_8c.html#a33eb97006e5539c94cc623bb804d7564',1,'job_node_t:&#160;io_uring.c']]]
+  ['h2_5fhuffman_5fnode_0',['h2_huffman_node',['../d2/db0/http2_8c.html#aa964bb9aa40aa6b9d57b0ad049c665ea',1,'http2.c']]],
+  ['h2_5fstream_1',['h2_stream',['../d2/db0/http2_8c.html#a86ff98564567f65ca71fb0c0dd5e22a4',1,'http2.c']]],
+  ['h3_5fstream_5fctx_5ft_2',['h3_stream_ctx_t',['../de/daf/http3_8c.html#a94cd8f1a05f5199c046203cb7ad17042',1,'http3.c']]],
+  ['h3c_5fhset_5ft_3',['h3c_hset_t',['../d1/d88/http3__client_8c.html#a9e70aa40b49dbe2711f30381c94b424f',1,'http3_client.c']]],
+  ['h3c_5fstream_5fctx_5ft_4',['h3c_stream_ctx_t',['../d1/d88/http3__client_8c.html#a3931c7046d8358bdeed239f9a1ab3bc9',1,'http3_client.c']]]
 ];

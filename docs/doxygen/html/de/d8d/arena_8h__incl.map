@@ -1,0 +1,7 @@
+<map id="include/cwist/core/mem/arena.h" name="include/cwist/core/mem/arena.h">
+<area shape="rect" id="Node000001" title="Request&#45;scoped arena allocator backed by libttak arena generations." alt="" coords="28,5,167,45"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,93,88,119"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="87,47,64,83,59,80,83,44"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="112,93,187,119"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="112,44,136,80,132,83,108,47"/>
+</map>

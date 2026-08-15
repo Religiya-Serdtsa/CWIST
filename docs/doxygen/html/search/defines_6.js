@@ -10,9 +10,11 @@ var searchData=
   ['h2_5ferr_5fstream_5fclosed_7',['H2_ERR_STREAM_CLOSED',['../d2/db0/http2_8c.html#a97b931c7f8809b55174e588b6b52efbc',1,'http2.c']]],
   ['h3_5fdecode_5fbuf_5fsize_8',['H3_DECODE_BUF_SIZE',['../de/daf/http3_8c.html#aa80fe318a84397a0e364a3fdc854996d',1,'http3.c']]],
   ['h3_5fmax_5fheaders_9',['H3_MAX_HEADERS',['../de/daf/http3_8c.html#ad986a0c33898d323004c8b5cc81120b4',1,'http3.c']]],
-  ['h3c_5fdecode_5fbuf_5fsize_10',['H3C_DECODE_BUF_SIZE',['../d1/d88/http3__client_8c.html#a8ea871fd705b062c103809ee494f21f6',1,'http3_client.c']]],
-  ['h3c_5fmax_5fheaders_11',['H3C_MAX_HEADERS',['../d1/d88/http3__client_8c.html#a208ac5a7c624b5a693c19340fe7dcbf9',1,'http3_client.c']]],
-  ['http_5ftasks_5fper_5fthread_12',['HTTP_TASKS_PER_THREAD',['../dd/d43/http_8c.html#a44411035765c6ef5c13daea4390f95be',1,'http.c']]],
-  ['https_5ftask_5fqueue_5fsize_13',['HTTPS_TASK_QUEUE_SIZE',['../d2/db2/https_8c.html#a8f1634ab90d75c164f0d27d5ae436ea5',1,'https.c']]],
-  ['https_5fthread_5fpool_5fsize_14',['HTTPS_THREAD_POOL_SIZE',['../d7/d67/net_2http_2https_8h.html#aded948326f120c613ad017251ae2dd37',1,'https.h']]]
+  ['h3_5fmax_5fresponse_5fheaders_10',['H3_MAX_RESPONSE_HEADERS',['../de/daf/http3_8c.html#a55ea6c6d83b026b4777a5cc67cd2c006',1,'http3.c']]],
+  ['h3_5fresponse_5fheader_5fbuf_5fsize_11',['H3_RESPONSE_HEADER_BUF_SIZE',['../de/daf/http3_8c.html#aac8d324c67e3535e01af26eebef182d7',1,'http3.c']]],
+  ['h3c_5fdecode_5fbuf_5fsize_12',['H3C_DECODE_BUF_SIZE',['../d1/d88/http3__client_8c.html#a8ea871fd705b062c103809ee494f21f6',1,'http3_client.c']]],
+  ['h3c_5fmax_5fheaders_13',['H3C_MAX_HEADERS',['../d1/d88/http3__client_8c.html#a208ac5a7c624b5a693c19340fe7dcbf9',1,'http3_client.c']]],
+  ['http_5ftasks_5fper_5fthread_14',['HTTP_TASKS_PER_THREAD',['../dd/d43/http_8c.html#a44411035765c6ef5c13daea4390f95be',1,'http.c']]],
+  ['https_5ftask_5fqueue_5fsize_15',['HTTPS_TASK_QUEUE_SIZE',['../d2/db2/https_8c.html#a8f1634ab90d75c164f0d27d5ae436ea5',1,'https.c']]],
+  ['https_5fthread_5fpool_5fsize_16',['HTTPS_THREAD_POOL_SIZE',['../d7/d67/net_2http_2https_8h.html#aded948326f120c613ad017251ae2dd37',1,'https.h']]]
 ];

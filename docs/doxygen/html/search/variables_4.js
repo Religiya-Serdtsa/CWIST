@@ -22,5 +22,6 @@ var searchData=
   ['error_5fhandlers_19',['error_handlers',['../dc/da0/structcwist__app.html#a5f3830291c548387cb48c2394eedcc6f',1,'cwist_app']]],
   ['error_5fmessage_20',['error_message',['../de/d25/structcwist__bind__rule.html#a94d7ac638d4f67d80491e691a4925139',1,'cwist_bind_rule']]],
   ['errors_21',['errors',['../dd/d71/structcwist__zod__result.html#a64957bfbb985f62c2eae22dd084f98a0',1,'cwist_zod_result::errors'],['../de/ddb/structcwist__bind__result.html#a319b44e5fa677cdd406b6e5f4ae71dc3',1,'cwist_bind_result::errors']]],
-  ['errtype_22',['errtype',['../d4/d50/structcwist__error__t.html#a9d2eb8f5526877f744a642ae0aa04e23',1,'cwist_error_t']]]
+  ['errtype_22',['errtype',['../d4/d50/structcwist__error__t.html#a9d2eb8f5526877f744a642ae0aa04e23',1,'cwist_error_t']]],
+  ['event_23',['event',['../d8/d63/structcwist__sse__event.html#aa7b18ec5113395098d27dc896d5c1ad0',1,'cwist_sse_event']]]
 ];

@@ -1,19 +1,21 @@
 <map id="src/core/utils/json_heal.c" name="src/core/utils/json_heal.c">
-<area shape="rect" id="Node000001" title="Multi&#45;stage JSON recovery pipeline with optional schema alignment." alt="" coords="442,5,578,45"/>
+<area shape="rect" id="Node000001" title="Multi&#45;stage JSON recovery pipeline with optional schema alignment." alt="" coords="489,5,625,45"/>
 <area shape="rect" id="Node000002" href="$db/dd3/json__heal_8h.html" title="Self&#45;Healing JSON Recovery Layer (CWIST)" alt="" coords="104,93,255,133"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="443,47,266,93,264,87,441,42"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="489,45,269,95,267,89,488,40"/>
 <area shape="rect" id="Node000005" title=" " alt="" coords="5,181,116,207"/>
-<area shape="poly" id="edge8_Node000001_Node000005" title=" " alt="" coords="442,32,350,38,247,49,154,68,118,80,93,95,80,111,72,129,64,168,59,167,67,128,76,108,90,91,116,76,152,63,246,44,350,32,442,26"/>
+<area shape="poly" id="edge8_Node000001_Node000005" title=" " alt="" coords="489,30,386,35,269,46,163,65,122,79,93,95,80,111,71,130,64,168,59,167,66,128,76,108,90,91,119,74,161,60,268,40,386,30,488,25"/>
 <area shape="rect" id="Node000006" href="$d2/dfe/alloc_8h.html" title="Memory allocation wrappers backed by libttak." alt="" coords="279,101,453,126"/>
-<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="480,48,398,96,395,91,477,43"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="516,48,405,98,403,93,514,43"/>
 <area shape="rect" id="Node000008" title=" " alt="" coords="477,101,543,126"/>
-<area shape="poly" id="edge9_Node000001_Node000008" title=" " alt="" coords="513,46,513,87,507,87,507,46"/>
+<area shape="poly" id="edge9_Node000001_Node000008" title=" " alt="" coords="549,47,525,90,521,87,544,44"/>
 <area shape="rect" id="Node000009" title=" " alt="" coords="568,101,639,126"/>
-<area shape="poly" id="edge10_Node000001_Node000009" title=" " alt="" coords="533,44,582,89,579,93,529,48"/>
+<area shape="poly" id="edge10_Node000001_Node000009" title=" " alt="" coords="569,44,593,87,588,90,565,47"/>
 <area shape="rect" id="Node000010" title=" " alt="" coords="663,101,733,126"/>
-<area shape="poly" id="edge11_Node000001_Node000010" title=" " alt="" coords="552,43,662,93,660,98,550,48"/>
-<area shape="rect" id="Node000011" title=" " alt="" coords="757,101,828,126"/>
-<area shape="poly" id="edge12_Node000001_Node000011" title=" " alt="" coords="579,41,747,91,754,93,752,98,745,96,577,46"/>
+<area shape="poly" id="edge11_Node000001_Node000010" title=" " alt="" coords="589,43,669,91,666,96,586,48"/>
+<area shape="rect" id="Node000011" title=" " alt="" coords="757,101,836,126"/>
+<area shape="poly" id="edge12_Node000001_Node000011" title=" " alt="" coords="611,43,747,91,754,93,752,98,745,96,610,48"/>
+<area shape="rect" id="Node000012" title=" " alt="" coords="860,101,931,126"/>
+<area shape="poly" id="edge13_Node000001_Node000012" title=" " alt="" coords="625,36,731,59,849,91,857,93,855,98,848,96,730,64,624,42"/>
 <area shape="rect" id="Node000003" title=" " alt="" coords="141,181,223,207"/>
 <area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="183,133,184,167,178,167,177,134"/>
 <area shape="rect" id="Node000004" title=" " alt="" coords="247,181,322,207"/>
