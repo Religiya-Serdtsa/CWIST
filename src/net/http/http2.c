@@ -1883,7 +1883,7 @@ cwist_error_t cwist_http2_serve_connection(
     }
 
     unsigned char settings[12] = {
-        0x00, 0x01, 0x00, 0x00, 0x10, 0x00, // SETTINGS_HEADER_TABLE_SIZE = 4096
+        0x00, 0x01, 0x00, 0x00, 0x00, 0x00, // SETTINGS_HEADER_TABLE_SIZE = 0 (Disable dynamic table compression to guarantee full literal header transmission)
         0x00, 0x04, 0x7f, 0xff, 0xff, 0xff  // SETTINGS_INITIAL_WINDOW_SIZE = 2147483647 (2GB)
     };
     if (h2_write_frame(conn, CWIST_HTTP2_FRAME_SETTINGS, 0, 0, settings, sizeof(settings)) != 0) {
