@@ -614,18 +614,20 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
             return NULL;
         }
 
-        uint64_t now = cwist_https_now_ms();
-        if (now >= headers_deadline) {
-            return NULL;
-        }
-        int wait_ms = CWIST_HTTP_TIMEOUT_MS;
-        uint64_t remaining = headers_deadline - now;
-        if (remaining < (uint64_t)wait_ms) wait_ms = (int)remaining;
+        if (SSL_pending(conn->ssl) == 0) {
+            uint64_t now = cwist_https_now_ms();
+            if (now >= headers_deadline) {
+                return NULL;
+            }
+            int wait_ms = CWIST_HTTP_TIMEOUT_MS;
+            uint64_t remaining = headers_deadline - now;
+            if (remaining < (uint64_t)wait_ms) wait_ms = (int)remaining;
 
-        struct pollfd pfd = { .fd = conn->fd, .events = POLLIN };
-        int pret = poll(&pfd, 1, wait_ms);
-        if (pret <= 0) {
-            return NULL;
+            struct pollfd pfd = { .fd = conn->fd, .events = POLLIN };
+            int pret = poll(&pfd, 1, wait_ms);
+            if (pret <= 0) {
+                return NULL;
+            }
         }
 
         int bytes = SSL_read(conn->ssl, conn->read_buf + total_received, (int)(CWIST_HTTP_READ_BUFFER_SIZE - 1 - total_received));
@@ -672,22 +674,24 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
         uint64_t body_idle_start = cwist_https_now_ms();
 
         while (current_body_len < req->content_length) {
-            uint64_t now = cwist_https_now_ms();
-            if (now - body_idle_start >= CWIST_HTTP_BODY_IDLE_TIMEOUT_MS) {
-                cwist_free(body);
-                cwist_http_request_destroy(req);
-                return NULL;
-            }
-            int wait_ms = CWIST_HTTP_TIMEOUT_MS;
-            uint64_t idle_left = CWIST_HTTP_BODY_IDLE_TIMEOUT_MS - (now - body_idle_start);
-            if (idle_left < (uint64_t)wait_ms) wait_ms = (int)idle_left;
+            if (SSL_pending(conn->ssl) == 0) {
+                uint64_t now = cwist_https_now_ms();
+                if (now - body_idle_start >= CWIST_HTTP_BODY_IDLE_TIMEOUT_MS) {
+                    cwist_free(body);
+                    cwist_http_request_destroy(req);
+                    return NULL;
+                }
+                int wait_ms = CWIST_HTTP_TIMEOUT_MS;
+                uint64_t idle_left = CWIST_HTTP_BODY_IDLE_TIMEOUT_MS - (now - body_idle_start);
+                if (idle_left < (uint64_t)wait_ms) wait_ms = (int)idle_left;
 
-            struct pollfd pfd = { .fd = conn->fd, .events = POLLIN };
-            int pret = poll(&pfd, 1, wait_ms);
-            if (pret <= 0) {
-                cwist_free(body);
-                cwist_http_request_destroy(req);
-                return NULL;
+                struct pollfd pfd = { .fd = conn->fd, .events = POLLIN };
+                int pret = poll(&pfd, 1, wait_ms);
+                if (pret <= 0) {
+                    cwist_free(body);
+                    cwist_http_request_destroy(req);
+                    return NULL;
+                }
             }
 
             int bytes = SSL_read(conn->ssl, body + current_body_len, (int)(req->content_length - current_body_len));
