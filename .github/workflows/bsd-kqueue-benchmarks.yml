@@ -248,7 +248,7 @@ jobs:
             BEFORE_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$BEFORE_CSW" ] && BEFORE_CSW=0
 
-            wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
+            wrk -t12 -c400 -d10s --latency http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
 
             AFTER_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$AFTER_CSW" ] && AFTER_CSW=0
@@ -325,6 +325,8 @@ jobs:
               text = p.read_text() if p.exists() else ""
               rps = 0.0
               lat_ms = 0.0
+              lat_p90_ms = 0.0
+              lat_p99_ms = 0.0
               m_rps = re.search(r"Requests/sec:\s+([0-9.]+)", text)
               if m_rps:
                   rps = float(m_rps.group(1))
@@ -335,7 +337,20 @@ jobs:
                   if unit == "us": lat_ms = val / 1000.0
                   elif unit == "ms": lat_ms = val
                   elif unit == "s": lat_ms = val * 1000.0
-              return rps, lat_ms
+
+              def parse_percentile(pct_str, raw_text):
+                  m = re.search(r"\s+" + re.escape(pct_str) + r"\s+([0-9.]+)(us|ms|s)", raw_text)
+                  if m:
+                      val = float(m.group(1))
+                      unit = m.group(2)
+                      if unit == "us": return val / 1000.0
+                      elif unit == "ms": return val
+                      elif unit == "s": return val * 1000.0
+                  return 0.0
+
+              lat_p90_ms = parse_percentile("90%", text)
+              lat_p99_ms = parse_percentile("99%", text)
+              return rps, lat_ms, lat_p90_ms, lat_p99_ms
 
           def parse_stat(path_str):
               p = pathlib.Path(path_str)
@@ -348,24 +363,24 @@ jobs:
               if m_csw: csw = float(m_csw.group(1))
               return rss, csw
 
-          cwist_rps, cwist_lat = parse_wrk("/tmp/cwist.txt")
+          cwist_rps, cwist_lat, cwist_p90, cwist_p99 = parse_wrk("/tmp/cwist.txt")
           cwist_rss, cwist_csw = parse_stat("/tmp/cwist_stat.txt")
 
-          axum_rps, axum_lat = parse_wrk("/tmp/axum.txt")
+          axum_rps, axum_lat, axum_p90, axum_p99 = parse_wrk("/tmp/axum.txt")
           axum_rss, axum_csw = parse_stat("/tmp/axum_stat.txt")
 
-          gin_rps, gin_lat = parse_wrk("/tmp/gin.txt")
+          gin_rps, gin_lat, gin_p90, gin_p99 = parse_wrk("/tmp/gin.txt")
           gin_rss, gin_csw = parse_stat("/tmp/gin_stat.txt")
 
-          spring_rps, spring_lat = parse_wrk("/tmp/spring.txt")
+          spring_rps, spring_lat, spring_p90, spring_p99 = parse_wrk("/tmp/spring.txt")
           spring_rss, spring_csw = parse_stat("/tmp/spring_stat.txt")
 
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
-              "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
-              "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
-              "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
-              "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_rss_kib": spring_rss, "spring_csw": spring_csw,
+              "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_p90_ms": cwist_p90, "cwist_p99_ms": cwist_p99, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
+              "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_p90_ms": axum_p90, "axum_p99_ms": axum_p99, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
+              "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_p90_ms": gin_p90, "gin_p99_ms": gin_p99, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
+              "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_p90_ms": spring_p90, "spring_p99_ms": spring_p99, "spring_rss_kib": spring_rss, "spring_csw": spring_csw,
               "wrk_profile": os.environ.get("WRK_PROFILE", ""),
               "runner_hw": os.environ.get("RUNNER_HW", ""),
               "go_env": {
