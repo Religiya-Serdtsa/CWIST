@@ -70,7 +70,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '25'
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -267,29 +267,61 @@ jobs:
           run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
           run_bench "Gin" "/tmp/gin_bench/gin_server" 9094 "/tmp/gin.txt" "/tmp/gin_stat.txt" 10
 
-          # Spring Boot JVM optimal tuning:
+          # Spring Boot JVM tuning (JDK 25):
           #  - Fixed 1024m heap + AlwaysPreTouch: no heap resize or page faults
-          #    during the measured window
-          #  - UseParallelGC + GCTimeRatio=99: cap GC at ~1% of wall time; the
-          #    hello-world live set is tiny, so minor collections stay sub-ms
-          #    and raw throughput is maximised (ZGC generational would trade a
-          #    few % throughput for better p99, which is not what wrk measures)
+          #    during the measured window.
+          #  - G1GC + GCTimeRatio=99: G1 offers better tail-latency than
+          #    ParallelGC for this workload size while still capping GC overhead
+          #    to ~1% of wall time. The live set is tiny so G1 minor collections
+          #    are equally sub-ms, and G1 avoids the stop-the-world full-GC risk
+          #    that ParallelGC carries on small heaps under bursty load.
+          #  - G1HeapRegionSize=1m: keeps region bookkeeping overhead minimal for
+          #    a 1g heap (default would pick 1m anyway, but explicit is clearer).
+          #  - JIT tiering: TieredStopAtLevel=4 (default Tier-4 C2) already
+          #    active; CompileThreshold lowered to 1500 from default 10000 so
+          #    the hot Netty/WebFlux paths reach native code faster during the
+          #    10-second warmup window. CICompilerCount pinned to nproc to
+          #    saturate all available compilation threads.
           #  - ioWorkerCount=$(nproc): Netty defaults to 2x cores event-loop
-          #    threads, which inflates context switches on small runners; the
-          #    benchmark records csw, so pin workers to the physical vCPU count
+          #    threads, which inflates context switches on small runners; pin
+          #    workers to the physical vCPU count.
           #  - Pooled Netty allocator with leak detection and buffer bounds/
           #    accessibility checks disabled: removes per-buffer overhead in
-          #    the hot path
+          #    the hot path.
           #  - Native epoll transport via netty-transport-native-epoll (see
-          #    pom.xml above): replaces NIO Selector with epoll on Linux
+          #    pom.xml above): replaces NIO Selector with epoll on Linux.
           #  - GC log written to /tmp/spring_gc.log and shipped with raw_logs
-          #    so pauses can be audited after the run
-          #  - CDS (Class Data Sharing) AOT cache trained from a real boot, then
-          #    replayed via -XX:SharedArchiveFile for representative startup/warmup
-          SPRING_JVM_OPTS="-Xms1024m -Xmx1024m -XX:+UseParallelGC -XX:GCTimeRatio=99 -XX:+AlwaysPreTouch -Djava.security.egd=file:/dev/urandom -Djava.net.preferIPv4Stack=true -Dio.netty.allocator.type=pooled -Dio.netty.leakDetection.level=disabled -Dio.netty.buffer.checkBounds=false -Dio.netty.buffer.checkAccessible=false -Dreactor.netty.ioWorkerCount=$(nproc) -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags"
-          SPRING_CDS_ARCHIVE=/tmp/spring_bench/app.jsa
+          #    so pauses can be audited after the run.
+          #  - Dual JDK 25 AOT:
+          #    (1) JEP 483 AOTClassLinking (-XX:+AOTClassLinking): links class
+          #        hierarchy and vtable layout ahead of time so class loading is
+          #        near-zero-cost at startup.
+          #    (2) JEP 493 AOTCache (-XX:AOTCache): caches JIT-compiled native
+          #        code from the training run and replays it at startup, skipping
+          #        the entire interpretation + Tier-1/Tier-2 warm-up ramp.
+          #    Both caches are produced during the training boot and consumed
+          #    during the measured run.
+          NPROC=$(nproc)
+          SPRING_JVM_OPTS="-Xms1024m -Xmx1024m \
+            -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m \
+            -XX:+AlwaysPreTouch \
+            -XX:CompileThreshold=1500 -XX:CICompilerCount=${NPROC} \
+            -Djava.security.egd=file:/dev/urandom \
+            -Djava.net.preferIPv4Stack=true \
+            -Dio.netty.allocator.type=pooled \
+            -Dio.netty.leakDetection.level=disabled \
+            -Dio.netty.buffer.checkBounds=false \
+            -Dio.netty.buffer.checkAccessible=false \
+            -Dreactor.netty.ioWorkerCount=${NPROC} \
+            -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags"
+          SPRING_AOT_CACHE=/tmp/spring_bench/app.aot
 
-          java $SPRING_JVM_OPTS -XX:ArchiveClassesAtExit=$SPRING_CDS_ARCHIVE \
+          # Training run: produce Leyden AOT cache in a single boot.
+          # -XX:+AOTClassLinking (JEP 483) links classes pre-boot.
+          # -XX:AOTCacheOutput=<file> (JEP 514) writes the unified AOT cache (class data + JIT compiled code) on exit.
+          java $SPRING_JVM_OPTS \
+            -XX:+AOTClassLinking \
+            -XX:AOTCacheOutput=$SPRING_AOT_CACHE \
             -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093 &
           TRAIN_PID=$!
           for i in $(seq 1 90); do
@@ -299,7 +331,13 @@ jobs:
           kill -TERM $TRAIN_PID 2>/dev/null || true
           wait $TRAIN_PID 2>/dev/null || true
 
-          run_bench "Spring Boot" "java $SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093" 9093 "/tmp/spring.txt" "/tmp/spring_stat.txt" 90
+          # Measured run: replay Leyden AOT cache.
+          run_bench "Spring Boot" \
+            "java $SPRING_JVM_OPTS \
+              -XX:+AOTClassLinking \
+              -XX:AOTCache=$SPRING_AOT_CACHE \
+              -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093" \
+            9093 "/tmp/spring.txt" "/tmp/spring_stat.txt" 90
 
           # Result JSON must land in the workspace so upload-artifact can find it
           # (the shell is still sitting in /tmp/spring_bench from the maven build).
@@ -309,8 +347,8 @@ jobs:
           export RUNNER_HW="$(nproc) vCPU | $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
           export SPRING_JAVA_VERSION="$(java -version 2>&1 | head -1)"
           export SPRING_BOOT_VERSION="3.2.3"
-          export SPRING_STACK="Spring WebFlux + Reactor Netty on native epoll (optimized event loop pinned to nproc, virtual threads disabled)"
-          export SPRING_JVM_OPTS_RECORDED="$SPRING_JVM_OPTS -XX:SharedArchiveFile=$SPRING_CDS_ARCHIVE (CDS AOT cache)"
+          export SPRING_STACK="Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)"
+          export SPRING_JVM_OPTS_RECORDED="$SPRING_JVM_OPTS -XX:+AOTClassLinking -XX:AOTCache=$SPRING_AOT_CACHE (JEP 483 + JEP 514 single-step AOT)"
           export SPRING_VIRTUAL_THREADS="false"
           export GO_VERSION_RECORDED="$(go version)"
           export GIN_FRAMEWORK="Gin v1.10.0 (gin-gonic/gin, release mode)"
