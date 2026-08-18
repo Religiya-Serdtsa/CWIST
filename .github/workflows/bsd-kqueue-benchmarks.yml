@@ -219,7 +219,24 @@ jobs:
 
           cd /tmp/axum_bench && cargo build --release
           cd /tmp/gin_bench && go mod tidy && go build -o gin_server .
-          cd /tmp/spring_bench && mvn -q package -DskipTests
+          # Maven Central occasionally returns 403 to shared CI egress IPs;
+          # route through Google's GCS mirror of Central and enable retries.
+          cd /tmp/spring_bench
+          cat << 'EOF' > settings.xml
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+              <mirrors>
+                  <mirror>
+                      <id>gcs-central</id>
+                      <name>Google Cloud Storage mirror of Maven Central</name>
+                      <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+                      <mirrorOf>central</mirrorOf>
+                  </mirror>
+              </mirrors>
+          </settings>
+          EOF
+          mvn -q -s settings.xml -Dmaven.wagon.http.retryHandler.count=5 package -DskipTests
 
           # Helper function for process stats before/after wrk test.
           # Every server gets an identical 10s warmup run (discarded) before the
