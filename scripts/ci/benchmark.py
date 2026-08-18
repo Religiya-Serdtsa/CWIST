@@ -150,12 +150,25 @@ def render() -> None:
     WEBSERVER_SVG.parent.mkdir(parents=True, exist_ok=True)
     WEBSERVER_SVG.write_text(render_webserver_svg(ws_history))
     ws_latest = ws_history[-1] if ws_history else {}
+
+    def get_lat_part(prefix):
+        p90 = ws_latest.get(f"{prefix}_p90_ms")
+        p99 = ws_latest.get(f"{prefix}_p99_ms")
+        if p90 is not None and p99 is not None:
+            return f" (P90 {p90:.2f}ms, P99 {p99:.2f}ms)"
+        return ""
+
+    cwist_lat_part = get_lat_part("cwist")
+    axum_lat_part = get_lat_part("axum")
+    gin_lat_part = get_lat_part("gin")
+    spring_lat_part = get_lat_part("spring")
+
     ws_summary = (
         f"Latest Web Server Benchmark (wrk 12t 400c):\n"
-        f"- **CWIST**: {ws_latest.get('cwist_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_lat_ms',0):.2f}ms | RSS {ws_latest.get('cwist_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_csw',0):.0f}\n"
-        f"- **Axum**: {ws_latest.get('axum_rps',0):.0f} req/s | Latency {ws_latest.get('axum_lat_ms',0):.2f}ms | RSS {ws_latest.get('axum_rss_kib',0):.0f}KiB | Csw {ws_latest.get('axum_csw',0):.0f}\n"
-        f"- **Gin (Go)**: {ws_latest.get('gin_rps',0):.0f} req/s | Latency {ws_latest.get('gin_lat_ms',0):.2f}ms | RSS {ws_latest.get('gin_rss_kib',0):.0f}KiB | Csw {ws_latest.get('gin_csw',0):.0f}\n"
-        f"- **Spring Boot**: {ws_latest.get('spring_rps',0):.0f} req/s | Latency {ws_latest.get('spring_lat_ms',0):.2f}ms | RSS {ws_latest.get('spring_rss_kib',0):.0f}KiB | Csw {ws_latest.get('spring_csw',0):.0f}\n"
+        f"- **CWIST**: {ws_latest.get('cwist_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_lat_ms',0):.2f}ms{cwist_lat_part} | RSS {ws_latest.get('cwist_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_csw',0):.0f}\n"
+        f"- **Axum**: {ws_latest.get('axum_rps',0):.0f} req/s | Latency {ws_latest.get('axum_lat_ms',0):.2f}ms{axum_lat_part} | RSS {ws_latest.get('axum_rss_kib',0):.0f}KiB | Csw {ws_latest.get('axum_csw',0):.0f}\n"
+        f"- **Gin (Go)**: {ws_latest.get('gin_rps',0):.0f} req/s | Latency {ws_latest.get('gin_lat_ms',0):.2f}ms{gin_lat_part} | RSS {ws_latest.get('gin_rss_kib',0):.0f}KiB | Csw {ws_latest.get('gin_csw',0):.0f}\n"
+        f"- **Spring Boot**: {ws_latest.get('spring_rps',0):.0f} req/s | Latency {ws_latest.get('spring_lat_ms',0):.2f}ms{spring_lat_part} | RSS {ws_latest.get('spring_rss_kib',0):.0f}KiB | Csw {ws_latest.get('spring_csw',0):.0f}\n"
     )
     ws_env = ws_latest.get("spring_env", {}) or {}
     if ws_env:
