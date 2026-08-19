@@ -27,6 +27,10 @@ Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3
 
 _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
 
+<!-- TUNED_BENCHMARK:START -->
+**Tuned low-latency run (local, Ryzen 5 5600X, `CWIST_WORKERS=6`, wrk `-t4 -c100 -d10s` after warmup): 253,211 req/s at 0.036ms average latency.** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
+<!-- TUNED_BENCHMARK:END -->
+
 ---
 
 ## Why CWIST?
