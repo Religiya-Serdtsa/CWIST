@@ -1455,5 +1455,52 @@
       "virtual_threads": false,
       "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
     }
+  },
+  {
+    "timestamp": "2026-08-19T03:47:48.396154+00:00",
+    "cwist_rps": 109447.99,
+    "cwist_lat_ms": 0.14092,
+    "cwist_p90_ms": 0.273,
+    "cwist_p99_ms": 1.15,
+    "cwist_rss_kib": 14672.0,
+    "cwist_csw": 0.0,
+    "cwist_tuned_rps": 109094.39,
+    "cwist_tuned_lat_ms": 0.12027,
+    "cwist_tuned_p50_ms": 0.09,
+    "cwist_tuned_p90_ms": 0.221,
+    "cwist_tuned_p99_ms": 0.404,
+    "axum_rps": 112447.04,
+    "axum_lat_ms": 3.48,
+    "axum_p90_ms": 5.89,
+    "axum_p99_ms": 8.75,
+    "axum_rss_kib": 17472.0,
+    "axum_csw": 0.0,
+    "gin_rps": 79218.96,
+    "gin_lat_ms": 6.67,
+    "gin_p90_ms": 16.01,
+    "gin_p99_ms": 35.0,
+    "gin_rss_kib": 30156.0,
+    "gin_csw": 0.0,
+    "spring_rps": 43550.45,
+    "spring_lat_ms": 9.15,
+    "spring_p90_ms": 12.18,
+    "spring_p99_ms": 19.5,
+    "spring_rss_kib": 1317636.0,
+    "spring_csw": 0.0,
+    "wrk_profile": "wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)",
+    "tuned_profile": "wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)",
+    "runner_hw": "4 vCPU | AMD EPYC 7763 64-Core Processor",
+    "go_env": {
+      "go_version": "go version go1.22.12 linux/amd64",
+      "framework": "Gin v1.10.0 (gin-gonic/gin, release mode)"
+    },
+    "spring_env": {
+      "java_version": "openjdk version \"25.0.4\" 2026-07-21 LTS",
+      "spring_boot_version": "3.2.3",
+      "stack": "Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)",
+      "jvm_opts": "-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)",
+      "virtual_threads": false,
+      "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
+    }
   }
 ]
