@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -159,6 +160,17 @@ static size_t g_rr_index = 0;
 static long g_http_thread_count;
 static http_thread_worker_t *g_workers = NULL;
 
+/* Saturation backpressure: track in-flight connections and shed load once
+ * every worker thread could be parked on a connection many times over.
+ * Past the limit there is no throughput left to win — new arrivals would
+ * only inflate tail latency for traffic already being served. Shedding is
+ * a single fixed 503 write + close, so it adds no latency to others. */
+static _Atomic long g_http_inflight = 0;
+#define CWIST_HTTP_INFLIGHT_PER_THREAD 32
+
+static const char CWIST_HTTP_503[] =
+    "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
 typedef struct {
     int client_fd;
     void (*handler_func)(int, void *);
@@ -172,6 +184,7 @@ static void http_conn_event_cb(int fd, void *ctx) {
     void *user_ctx = c->ctx;
 
     handler(fd, user_ctx);
+    atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
     cwist_free(c);
 }
 
@@ -204,6 +217,17 @@ int cwist_http_pool_init(void) {
 }
 
 void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx) {
+    /* Backpressure gate: shed before doing any routing/allocation work when
+     * saturated. In-flight = queued + actively served connections. */
+    long limit = g_http_thread_count * CWIST_HTTP_INFLIGHT_PER_THREAD;
+    long inflight = atomic_fetch_add_explicit(&g_http_inflight, 1, memory_order_acq_rel) + 1;
+    if (inflight > limit) {
+        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
+        send(client_fd, CWIST_HTTP_503, sizeof(CWIST_HTTP_503) - 1, MSG_NOSIGNAL | MSG_DONTWAIT);
+        close(client_fd);
+        return;
+    }
+
     /* Deterministic worker selection using Choi Seok-jeong's MOLS to minimize cache bouncing. */
     uint16_t node_id = (uint16_t)(client_fd % TTAK_MOLS_NODE_COUNT);
     uint32_t mixed = ttak_apply_mols_control(node_id, (uint32_t)g_rr_index);
@@ -215,6 +239,7 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
 
     http_conn_ctx_t *c = cwist_alloc(sizeof(http_conn_ctx_t));
     if (!c) {
+        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
         close(client_fd);
         return;
     }
@@ -224,6 +249,7 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
     c->reactor = w->reactor;
 
     if (!cwist_reactor_add(w->reactor, client_fd, http_conn_event_cb, c)) {
+        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
         close(client_fd);
         cwist_free(c);
     }
