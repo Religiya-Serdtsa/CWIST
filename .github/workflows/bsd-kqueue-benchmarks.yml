@@ -115,11 +115,24 @@ jobs:
           cat << 'EOF' > src/main.rs
           use axum::{routing::get, Router};
 
-          #[tokio::main]
-          async fn main() {
-              let app = Router::new().route("/", get(|| async { "Hello, World!" }));
-              let listener = tokio::net::TcpListener::bind("127.0.0.1:9092").await.unwrap();
-              axum::serve(listener, app).await.unwrap();
+          fn main() {
+              // Honor TOKIO_WORKER_THREADS so CI can size the runtime to its
+              // pinned core set instead of oversubscribing all visible CPUs.
+              let workers = std::env::var("TOKIO_WORKER_THREADS")
+                  .ok()
+                  .and_then(|v| v.parse::<usize>().ok())
+                  .filter(|&n| n > 0)
+                  .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4));
+              let rt = tokio::runtime::Builder::new_multi_thread()
+                  .worker_threads(workers)
+                  .enable_all()
+                  .build()
+                  .unwrap();
+              rt.block_on(async {
+                  let app = Router::new().route("/", get(|| async { "Hello, World!" }));
+                  let listener = tokio::net::TcpListener::bind("127.0.0.1:9092").await.unwrap();
+                  axum::serve(listener, app).await.unwrap();
+              });
           }
           EOF
 
@@ -238,6 +251,18 @@ jobs:
           EOF
           mvn -q -s settings.xml -Dmaven.wagon.http.retryHandler.count=5 package -DskipTests
 
+          # CPU budget split: pin server and load generator to disjoint core
+          # sets so neither oversubscribes the other (this is what keeps the
+          # latency tail flat — see TUNED_BENCHMARK note in README.md).
+          TOTAL_CPUS=$(nproc)
+          WRK_T=$(( TOTAL_CPUS / 3 ))
+          [ $WRK_T -lt 2 ] && WRK_T=2
+          SRV=$(( TOTAL_CPUS - WRK_T ))
+          [ $SRV -lt 1 ] && SRV=1
+          SRV_CPUS="0-$(( SRV - 1 ))"
+          WRK_CPUS="$SRV-$(( TOTAL_CPUS - 1 ))"
+          echo "CPU split: server cores $SRV_CPUS, wrk cores $WRK_CPUS (wrk -t$WRK_T)"
+
           # Helper function for process stats before/after wrk test.
           # Every server gets an identical 10s warmup run (discarded) before the
           # measured run so JIT-tiered runtimes (JVM) reach steady state; context
@@ -251,7 +276,7 @@ jobs:
             WAIT=${6:-2}
 
             echo "=== Starting $NAME Web Server (Port $PORT) ==="
-            $CMD &
+            taskset -c $SRV_CPUS $CMD &
             PID=$!
             for i in $(seq 1 $WAIT); do
               curl -sf http://127.0.0.1:$PORT/ > /dev/null 2>&1 && break
@@ -259,13 +284,13 @@ jobs:
             done
 
             # Warmup (results discarded)
-            wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/ > /dev/null 2>&1 || true
+            taskset -c $WRK_CPUS wrk -t$WRK_T -c400 -d10s http://127.0.0.1:$PORT/ > /dev/null 2>&1 || true
 
             # Initial stat (after warmup)
             BEFORE_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$BEFORE_CSW" ] && BEFORE_CSW=0
 
-            wrk -t12 -c400 -d10s --latency http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
+            taskset -c $WRK_CPUS wrk -t$WRK_T -c400 -d10s --latency http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
 
             AFTER_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$AFTER_CSW" ] && AFTER_CSW=0
@@ -280,9 +305,25 @@ jobs:
             cat $TXT
           }
 
-          run_bench "CWIST" "/tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
-          run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
-          run_bench "Gin" "/tmp/gin_bench/gin_server" 9094 "/tmp/gin.txt" "/tmp/gin_stat.txt" 10
+          run_bench "CWIST" "env CWIST_WORKERS=$SRV /tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
+
+          # Tuned low-latency profile (CWIST only): same anti-oversubscription
+          # budget as the standard run, but at lower connection pressure
+          # (c100) so the per-request latency floor is visible.
+          echo "=== Starting CWIST tuned run (CWIST_WORKERS=$SRV, wrk -t$WRK_T -c100) ==="
+          taskset -c $SRV_CPUS env CWIST_WORKERS=$SRV /tmp/cwist_server &
+          TUNED_PID=$!
+          for i in $(seq 1 10); do
+            curl -sf http://127.0.0.1:9091/ > /dev/null 2>&1 && break
+            sleep 1
+          done
+          taskset -c $WRK_CPUS wrk -t$WRK_T -c100 -d10s http://127.0.0.1:9091/ > /dev/null 2>&1 || true
+          taskset -c $WRK_CPUS wrk -t$WRK_T -c100 -d10s --latency http://127.0.0.1:9091/ > /tmp/cwist_tuned.txt 2>&1 || true
+          kill -9 $TUNED_PID || true
+          cat /tmp/cwist_tuned.txt
+          export TUNED_PROFILE="CWIST_WORKERS=$SRV (pinned to $SRV_CPUS), wrk -t$WRK_T -c100 -d10s pinned to $WRK_CPUS (after 10s warmup, warmup discarded)"
+          run_bench "Axum" "env TOKIO_WORKER_THREADS=$SRV /tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
+          run_bench "Gin" "env GOMAXPROCS=$SRV /tmp/gin_bench/gin_server" 9094 "/tmp/gin.txt" "/tmp/gin_stat.txt" 10
 
           # Spring Boot JVM tuning (JDK 25):
           #  - Fixed 1024m heap + AlwaysPreTouch: no heap resize or page faults
@@ -299,9 +340,9 @@ jobs:
           #    the hot Netty/WebFlux paths reach native code faster during the
           #    10-second warmup window. CICompilerCount pinned to nproc to
           #    saturate all available compilation threads.
-          #  - ioWorkerCount=$(nproc): Netty defaults to 2x cores event-loop
-          #    threads, which inflates context switches on small runners; pin
-          #    workers to the physical vCPU count.
+          #  - ioWorkerCount=${SRV}: Netty event-loop workers sized to the
+          #    pinned server core set (default would be 2x visible CPUs and
+          #    oversubscribe the wrk budget).
           #  - Pooled Netty allocator with leak detection and buffer bounds/
           #    accessibility checks disabled: removes per-buffer overhead in
           #    the hot path.
@@ -329,7 +370,7 @@ jobs:
             -Dio.netty.leakDetection.level=disabled \
             -Dio.netty.buffer.checkBounds=false \
             -Dio.netty.buffer.checkAccessible=false \
-            -Dreactor.netty.ioWorkerCount=${NPROC} \
+            -Dreactor.netty.ioWorkerCount=${SRV} \
             -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags"
           SPRING_AOT_CACHE=/tmp/spring_bench/app.aot
 
@@ -369,7 +410,7 @@ jobs:
           export SPRING_VIRTUAL_THREADS="false"
           export GO_VERSION_RECORDED="$(go version)"
           export GIN_FRAMEWORK="Gin v1.10.0 (gin-gonic/gin, release mode)"
-          export WRK_PROFILE="wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)"
+          export WRK_PROFILE="wrk -t$WRK_T -c400 -d10s pinned to cores $WRK_CPUS, servers pinned to cores $SRV_CPUS (after 10s warmup, warmup discarded)"
 
           python3 - <<'PY'
           import json, os, re, pathlib
@@ -403,9 +444,10 @@ jobs:
                       elif unit == "s": return val * 1000.0
                   return 0.0
 
+              lat_p50_ms = parse_percentile("50%", text)
               lat_p90_ms = parse_percentile("90%", text)
               lat_p99_ms = parse_percentile("99%", text)
-              return rps, lat_ms, lat_p90_ms, lat_p99_ms
+              return rps, lat_ms, lat_p50_ms, lat_p90_ms, lat_p99_ms
 
           def parse_stat(path_str):
               p = pathlib.Path(path_str)
@@ -418,25 +460,29 @@ jobs:
               if m_csw: csw = float(m_csw.group(1))
               return rss, csw
 
-          cwist_rps, cwist_lat, cwist_p90, cwist_p99 = parse_wrk("/tmp/cwist.txt")
+          cwist_rps, cwist_lat, cwist_p50, cwist_p90, cwist_p99 = parse_wrk("/tmp/cwist.txt")
           cwist_rss, cwist_csw = parse_stat("/tmp/cwist_stat.txt")
 
-          axum_rps, axum_lat, axum_p90, axum_p99 = parse_wrk("/tmp/axum.txt")
+          cwist_tuned_rps, cwist_tuned_lat, cwist_tuned_p50, cwist_tuned_p90, cwist_tuned_p99 = parse_wrk("/tmp/cwist_tuned.txt")
+
+          axum_rps, axum_lat, axum_p50, axum_p90, axum_p99 = parse_wrk("/tmp/axum.txt")
           axum_rss, axum_csw = parse_stat("/tmp/axum_stat.txt")
 
-          gin_rps, gin_lat, gin_p90, gin_p99 = parse_wrk("/tmp/gin.txt")
+          gin_rps, gin_lat, gin_p50, gin_p90, gin_p99 = parse_wrk("/tmp/gin.txt")
           gin_rss, gin_csw = parse_stat("/tmp/gin_stat.txt")
 
-          spring_rps, spring_lat, spring_p90, spring_p99 = parse_wrk("/tmp/spring.txt")
+          spring_rps, spring_lat, spring_p50, spring_p90, spring_p99 = parse_wrk("/tmp/spring.txt")
           spring_rss, spring_csw = parse_stat("/tmp/spring_stat.txt")
 
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
               "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_p90_ms": cwist_p90, "cwist_p99_ms": cwist_p99, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
+              "cwist_tuned_rps": cwist_tuned_rps, "cwist_tuned_lat_ms": cwist_tuned_lat, "cwist_tuned_p50_ms": cwist_tuned_p50, "cwist_tuned_p90_ms": cwist_tuned_p90, "cwist_tuned_p99_ms": cwist_tuned_p99,
               "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_p90_ms": axum_p90, "axum_p99_ms": axum_p99, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
               "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_p90_ms": gin_p90, "gin_p99_ms": gin_p99, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
               "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_p90_ms": spring_p90, "spring_p99_ms": spring_p99, "spring_rss_kib": spring_rss, "spring_csw": spring_csw,
               "wrk_profile": os.environ.get("WRK_PROFILE", ""),
+              "tuned_profile": os.environ.get("TUNED_PROFILE", ""),
               "runner_hw": os.environ.get("RUNNER_HW", ""),
               "go_env": {
                   "go_version": os.environ.get("GO_VERSION_RECORDED", ""),

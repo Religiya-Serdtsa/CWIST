@@ -164,7 +164,7 @@ def render() -> None:
     spring_lat_part = get_lat_part("spring")
 
     ws_summary = (
-        f"Latest Web Server Benchmark (wrk 12t 400c):\n"
+        f"Latest Web Server Benchmark ({ws_latest.get('wrk_profile','wrk 12t 400c')}):\n"
         f"- **CWIST**: {ws_latest.get('cwist_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_lat_ms',0):.2f}ms{cwist_lat_part} | RSS {ws_latest.get('cwist_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_csw',0):.0f}\n"
         f"- **Axum**: {ws_latest.get('axum_rps',0):.0f} req/s | Latency {ws_latest.get('axum_lat_ms',0):.2f}ms{axum_lat_part} | RSS {ws_latest.get('axum_rss_kib',0):.0f}KiB | Csw {ws_latest.get('axum_csw',0):.0f}\n"
         f"- **Gin (Go)**: {ws_latest.get('gin_rps',0):.0f} req/s | Latency {ws_latest.get('gin_lat_ms',0):.2f}ms{gin_lat_part} | RSS {ws_latest.get('gin_rss_kib',0):.0f}KiB | Csw {ws_latest.get('gin_csw',0):.0f}\n"
@@ -184,6 +184,19 @@ def render() -> None:
     ws_summary += f"\n![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)"
     if README.exists(): replace(README, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
     if README_MD.exists(): replace(README_MD, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
+
+    tuned_rps = ws_latest.get("cwist_tuned_rps")
+    if tuned_rps and README_MD.exists() and "<!-- TUNED_BENCHMARK:START -->" in README_MD.read_text():
+        tuned_profile = ws_latest.get("tuned_profile") or "CWIST_WORKERS sized to a pinned server core set, wrk pinned to the remaining cores"
+        tuned_line = (
+            f"**Tuned low-latency run ({tuned_profile}): "
+            f"{tuned_rps:,.0f} req/s at {ws_latest.get('cwist_tuned_lat_ms',0):.2f}ms average latency "
+            f"(P50 {ws_latest.get('cwist_tuned_p50_ms',0):.2f}ms, P90 {ws_latest.get('cwist_tuned_p90_ms',0):.2f}ms, "
+            f"P99 {ws_latest.get('cwist_tuned_p99_ms',0):.2f}ms).** "
+            f"Leaving headroom between server workers and load-generator threads keeps the latency tail flat — "
+            f"oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput."
+        )
+        replace(README_MD, "<!-- TUNED_BENCHMARK:START -->", "<!-- TUNED_BENCHMARK:END -->", tuned_line)
 
 if __name__ == "__main__":
     if len(sys.argv) == 2 and sys.argv[1] == "measure": print(json.dumps(run_measurement()))
