@@ -300,23 +300,6 @@ jobs:
 
           run_bench "CWIST" "/tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
 
-          # Diagnostic sweep: pool-thread sizing on the actual runner hardware.
-          # Same fair profile as the standard run; results go to the log only
-          # and never enter the comparison table.
-          for T in 16 32 64 128; do
-            echo "=== CWIST sweep CWIST_WORKER_THREADS=$T (wrk -t12 -c400) ==="
-            env CWIST_WORKER_THREADS=$T /tmp/cwist_server &
-            SWEEP_PID=$!
-            for i in $(seq 1 10); do
-              curl -sf http://127.0.0.1:9091/ > /dev/null 2>&1 && break
-              sleep 1
-            done
-            wrk -t12 -c400 -d10s http://127.0.0.1:9091/ > /dev/null 2>&1 || true
-            wrk -t12 -c400 -d10s --latency http://127.0.0.1:9091/ 2>&1 | grep -E "Latency |Requests/sec" || true
-            kill -9 $SWEEP_PID || true
-            sleep 1
-          done
-
           # Tuned low-latency profile (CWIST only): lower connection pressure
           # (c100, 4 wrk threads) so the per-request latency floor is visible
           # alongside the c400 throughput numbers.
