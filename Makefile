@@ -122,14 +122,11 @@ SQLITE_DIR = lib/sqlite3
 
 # Detect OS
 IO_SRC = src/sys/io/io_select.c # Default fallback
-PLATFORM_SRC =
 
 ifeq ($(UNAME_S),Linux)
     CFLAGS += -DCWIST_OS_LINUX
-    # Check for io_uring headers? For now assume available or user manages env.
-    IO_SRC = src/sys/io/io_uring.c
-    # io_uring_backend.c includes <linux/io_uring.h>; Linux-only.
-    PLATFORM_SRC = src/sys/io/io_uring_backend.c
+    # io_queue.c is a lock-free job queue (unrelated to io_uring despite the history).
+    IO_SRC = src/sys/io/io_queue.c
 endif
 ifeq ($(UNAME_S),Darwin)
     # _DARWIN_C_SOURCE: in-file strict _POSIX_C_SOURCE/_XOPEN_SOURCE would
@@ -211,7 +208,6 @@ SRCS = src/core/sstring/sstring.c \
        src/net/nats/cwist_nats.c \
        src/net/redis/cwist_redis.c \
        src/core/validation/bind.c \
-       $(PLATFORM_SRC) \
        src/sys/io/reactor.c \
        src/sys/job/scheduler.c \
        src/sys/metrics/metrics.c \
@@ -383,11 +379,6 @@ TEST_TARGETS = test_sstring \
                test_multiport \
                test_grpc
 
-# io_uring backend is Linux-only (linux/io_uring.h), as are its tests.
-ifeq ($(UNAME_S),Linux)
-TEST_TARGETS += test_io_uring test_io_uring_demolition
-endif
-
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall clean rebuild examples clean-examples
 
 # Run with e.g. `make fuzz_seq FUZZ_RUNS=100000`.  The target intentionally
@@ -497,14 +488,6 @@ test_bind: $(LIB_NAME) tests/test_bind.c
 test_metrics: $(LIB_NAME) tests/test_metrics.c
 	$(CC) $(CFLAGS) -o test_metrics tests/test_metrics.c $(LIB_NAME) $(LIBS)
 	./test_metrics
-
-test_io_uring: $(LIB_NAME) tests/test_io_uring.c
-	$(CC) $(CFLAGS) -o test_io_uring tests/test_io_uring.c $(LIB_NAME) $(LIBS)
-	./test_io_uring
-
-test_io_uring_demolition: $(LIB_NAME) tests/test_io_uring_demolition.c
-	$(CC) $(CFLAGS) -o test_io_uring_demolition tests/test_io_uring_demolition.c $(LIB_NAME) $(LIBS)
-	./test_io_uring_demolition
 
 test_access_log: $(LIB_NAME) tests/test_access_log.c
 	$(CC) $(CFLAGS) -o test_access_log tests/test_access_log.c $(LIB_NAME) $(LIBS)
