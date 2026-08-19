@@ -5,8 +5,10 @@
 #include <stdbool.h>
 
 /**
- * @file io_uring.c
- * @brief Linux lock-free queue backend currently used as CWIST's io_uring placeholder.
+ * @file io_queue.c
+ * @brief Lock-free job queue backing cwist_io_queue. Despite the old file
+ * name (io_uring.c), this has nothing to do with Linux io_uring; the
+ * io_uring readiness multiplexer lives in reactor.c.
  */
 
 /**
