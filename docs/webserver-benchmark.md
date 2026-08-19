@@ -13,10 +13,10 @@ framework-specific tuning is applied beyond what is documented here.
 
 | Phase | Command | Purpose |
 |---|---|---|
-| Warmup | `taskset -c $WRK_CPUS wrk -t$WRK_T -c400 -d10s http://127.0.0.1:$PORT/` | Discarded. Lets JIT-tiered runtimes (JVM) reach steady state. Applied identically to all four servers. |
-| Measurement | `taskset -c $WRK_CPUS wrk -t$WRK_T -c400 -d10s http://127.0.0.1:$PORT/` | Recorded: `Requests/sec`, avg `Latency`. |
+| Warmup | `wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/` | Discarded. Lets JIT-tiered runtimes (JVM) reach steady state. Applied identically to all four servers. |
+| Measurement | `wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/` | Recorded: `Requests/sec`, avg `Latency`. |
 
-**CPU budget split (anti-oversubscription):** the runner's cores are split into two disjoint sets — servers are pinned via `taskset` to the first `SRV = nproc - max(2, nproc/3)` cores, `wrk` is pinned to the remaining `WRK_T = max(2, nproc/3)` cores and runs with `-t$WRK_T` threads. Each runtime's worker count is sized to its pinned set (`CWIST_WORKERS=$SRV`, `TOKIO_WORKER_THREADS=$SRV`, `GOMAXPROCS=$SRV`, `reactor.netty.ioWorkerCount=$SRV`). Pinning server and load generator to disjoint cores is what keeps the latency tail flat; sharing the same cores inflates average latency with pure scheduling jitter.
+**CPU budget:** every server and the load generator see the full runner CPU set — no pinning, no per-runtime thread caps. Each runtime uses its own default/auto worker sizing (CWIST `CWIST_WORKERS=auto`, Tokio `available_parallelism`, Go `GOMAXPROCS=default`, Netty `ioWorkerCount=nproc`). This keeps the comparison fair: no framework gets a hand-tuned advantage the others do not get.
 
 - Server startup wait is a readiness loop (`curl` poll, up to 90s for the JVM), not a fixed sleep.
 - **Peak RSS** is sampled from `ps -o rss=` immediately after the measured run.
@@ -78,7 +78,7 @@ to the numbers, so a result is never an isolated req/s figure:
 
 ```json
 {
-  "wrk_profile": "wrk -t$WRK_T -c400 -d10s pinned to dedicated cores (after 10s warmup, warmup discarded)",
+  "wrk_profile": "wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)",
   "go_env": {
     "go_version": "go version go1.22.x linux/amd64",
     "framework": "Gin v1.10.0 (gin-gonic/gin, release mode)"

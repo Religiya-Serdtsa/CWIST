@@ -130,16 +130,20 @@ long get_optimal_thread_count(void) {
     }
 
     if (workers == 1) {
-        long count = cores;
-        if (count < 4) count = 4;
-        if (count > 32) count = 32;
+        /* Keep-alive handlers park on their connection, so the pool must
+         * cover many more concurrent connections than there are cores.
+         * Blocked threads are nearly free (futex sleep); undersizing the
+         * pool caps throughput at threads x per-conn rate. */
+        long count = cores * 8;
+        if (count < 32) count = 32;
+        if (count > 256) count = 256;
         return count;
     }
 
     /* Dynamic thread downscaling: distribute thread budget proportionally across forked worker processes */
-    long threads_per_worker = (cores * 4) / workers;
-    if (threads_per_worker < 2) threads_per_worker = 2;
-    if (threads_per_worker > 16) threads_per_worker = 16;
+    long threads_per_worker = (cores * 8) / workers;
+    if (threads_per_worker < 8) threads_per_worker = 8;
+    if (threads_per_worker > 64) threads_per_worker = 64;
     return threads_per_worker;
 }
 
