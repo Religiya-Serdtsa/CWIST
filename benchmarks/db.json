@@ -1065,5 +1065,27 @@
     "memory_recovery_kib": 0,
     "waf_mchecks_s": 2.15,
     "throughput_mleases_s": 12.59
+  },
+  {
+    "timestamp": "2026-08-19T03:57:28.065707+00:00",
+    "os": "Linux",
+    "arch": "x86_64",
+    "cpu_percent": 116.91,
+    "rss_kib": 558648,
+    "context_switches": 7434,
+    "memory_recovery_kib": 0,
+    "waf_mchecks_s": 1.51,
+    "throughput_mleases_s": 9.02
+  },
+  {
+    "timestamp": "2026-08-19T03:55:04.829798+00:00",
+    "os": "Darwin",
+    "arch": "arm64",
+    "cpu_percent": 100.12,
+    "rss_kib": 732304,
+    "context_switches": 2700,
+    "memory_recovery_kib": 0,
+    "waf_mchecks_s": 1.62,
+    "throughput_mleases_s": 12.22
   }
 ]
