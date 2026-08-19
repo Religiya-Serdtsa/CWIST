@@ -1408,5 +1408,52 @@
       "virtual_threads": false,
       "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
     }
+  },
+  {
+    "timestamp": "2026-08-19T02:56:28.720152+00:00",
+    "cwist_rps": 87411.47,
+    "cwist_lat_ms": 0.06528,
+    "cwist_p90_ms": 0.082,
+    "cwist_p99_ms": 0.108,
+    "cwist_rss_kib": 14588.0,
+    "cwist_csw": 0.0,
+    "cwist_tuned_rps": 66194.32,
+    "cwist_tuned_lat_ms": 0.05572,
+    "cwist_tuned_p50_ms": 0.053,
+    "cwist_tuned_p90_ms": 0.073,
+    "cwist_tuned_p99_ms": 0.106,
+    "axum_rps": 122425.74,
+    "axum_lat_ms": 3.38,
+    "axum_p90_ms": 4.28,
+    "axum_p99_ms": 10.73,
+    "axum_rss_kib": 16756.0,
+    "axum_csw": 0.0,
+    "gin_rps": 73616.6,
+    "gin_lat_ms": 5.46,
+    "gin_p90_ms": 8.13,
+    "gin_p99_ms": 12.61,
+    "gin_rss_kib": 28548.0,
+    "gin_csw": 0.0,
+    "spring_rps": 31641.38,
+    "spring_lat_ms": 13.38,
+    "spring_p90_ms": 12.36,
+    "spring_p99_ms": 42.72,
+    "spring_rss_kib": 1282508.0,
+    "spring_csw": 0.0,
+    "wrk_profile": "wrk -t2 -c400 -d10s pinned to cores 2-3, servers pinned to cores 0-1 (after 10s warmup, warmup discarded)",
+    "tuned_profile": "CWIST_WORKERS=2 (pinned to 0-1), wrk -t2 -c100 -d10s pinned to 2-3 (after 10s warmup, warmup discarded)",
+    "runner_hw": "4 vCPU | AMD EPYC 7763 64-Core Processor",
+    "go_env": {
+      "go_version": "go version go1.22.12 linux/amd64",
+      "framework": "Gin v1.10.0 (gin-gonic/gin, release mode)"
+    },
+    "spring_env": {
+      "java_version": "openjdk version \"25.0.4\" 2026-07-21 LTS",
+      "spring_boot_version": "3.2.3",
+      "stack": "Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)",
+      "jvm_opts": "-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=2   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)",
+      "virtual_threads": false,
+      "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
+    }
   }
 ]

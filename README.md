@@ -14,13 +14,13 @@ Post-Quantum TLS, and zero-copy I/O—to systems programming without sacrificing
 [Heavy Benchmark on CWIST APP](https://github.com/gg582/fly.board/blob/main/README.md)
 
 <!-- WEBSERVER_BENCHMARKS:START -->
-Latest Web Server Benchmark (wrk 12t 400c):
-- **CWIST**: 311248 req/s | Latency 0.03ms (P90 0.05ms, P99 0.10ms) | RSS 14848KiB | Csw 0
-- **Axum**: 254135 req/s | Latency 1.58ms (P90 2.81ms, P99 4.55ms) | RSS 15380KiB | Csw 0
-- **Gin (Go)**: 197881 req/s | Latency 3.34ms (P90 8.90ms, P99 19.86ms) | RSS 29320KiB | Csw 0
-- **Spring Boot**: 130078 req/s | Latency 3.06ms (P90 4.23ms, P99 5.99ms) | RSS 1297512KiB | Csw 0
+Latest Web Server Benchmark (wrk -t2 -c400 -d10s pinned to cores 2-3, servers pinned to cores 0-1 (after 10s warmup, warmup discarded)):
+- **CWIST**: 87411 req/s | Latency 0.07ms (P90 0.08ms, P99 0.11ms) | RSS 14588KiB | Csw 0
+- **Axum**: 122426 req/s | Latency 3.38ms (P90 4.28ms, P99 10.73ms) | RSS 16756KiB | Csw 0
+- **Gin (Go)**: 73617 req/s | Latency 5.46ms (P90 8.13ms, P99 12.61ms) | RSS 28548KiB | Csw 0
+- **Spring Boot**: 31641 req/s | Latency 13.38ms (P90 12.36ms, P99 42.72ms) | RSS 1282508KiB | Csw 0
 
-Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
+Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=2   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)`, warmup/profile: wrk -t2 -c400 -d10s pinned to cores 2-3, servers pinned to cores 0-1 (after 10s warmup, warmup discarded)
 
 ![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)
 <!-- WEBSERVER_BENCHMARKS:END -->
@@ -28,7 +28,7 @@ Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3
 _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
 
 <!-- TUNED_BENCHMARK:START -->
-**Tuned low-latency run (local, Ryzen 5 5600X, `CWIST_WORKERS=6`, wrk `-t4 -c100 -d10s` after warmup): 253,211 req/s at 0.036ms average latency.** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
+**Tuned low-latency run (CWIST_WORKERS=2 (pinned to 0-1), wrk -t2 -c100 -d10s pinned to 2-3 (after 10s warmup, warmup discarded)): 66,194 req/s at 0.06ms average latency (P50 0.05ms, P90 0.07ms, P99 0.11ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
 <!-- TUNED_BENCHMARK:END -->
 
 ---
