@@ -251,17 +251,10 @@ jobs:
           EOF
           mvn -q -s settings.xml -Dmaven.wagon.http.retryHandler.count=5 package -DskipTests
 
-          # CPU budget split: pin server and load generator to disjoint core
-          # sets so neither oversubscribes the other (this is what keeps the
-          # latency tail flat — see TUNED_BENCHMARK note in README.md).
-          TOTAL_CPUS=$(nproc)
-          WRK_T=$(( TOTAL_CPUS / 3 ))
-          [ $WRK_T -lt 2 ] && WRK_T=2
-          SRV=$(( TOTAL_CPUS - WRK_T ))
-          [ $SRV -lt 1 ] && SRV=1
-          SRV_CPUS="0-$(( SRV - 1 ))"
-          WRK_CPUS="$SRV-$(( TOTAL_CPUS - 1 ))"
-          echo "CPU split: server cores $SRV_CPUS, wrk cores $WRK_CPUS (wrk -t$WRK_T)"
+          # Full CPU budget for every measurement: servers and wrk both see all
+          # runner cores. (Pinning to disjoint core sets was tried and capped
+          # throughput at ~1/3 on small runners — the oversubscription jitter it
+          # was meant to fix does not materialize on the CI VMs.)
 
           # Helper function for process stats before/after wrk test.
           # Every server gets an identical 10s warmup run (discarded) before the
@@ -276,7 +269,7 @@ jobs:
             WAIT=${6:-2}
 
             echo "=== Starting $NAME Web Server (Port $PORT) ==="
-            taskset -c $SRV_CPUS $CMD &
+            $CMD &
             PID=$!
             for i in $(seq 1 $WAIT); do
               curl -sf http://127.0.0.1:$PORT/ > /dev/null 2>&1 && break
@@ -284,13 +277,13 @@ jobs:
             done
 
             # Warmup (results discarded)
-            taskset -c $WRK_CPUS wrk -t$WRK_T -c400 -d10s http://127.0.0.1:$PORT/ > /dev/null 2>&1 || true
+            wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/ > /dev/null 2>&1 || true
 
             # Initial stat (after warmup)
             BEFORE_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$BEFORE_CSW" ] && BEFORE_CSW=0
 
-            taskset -c $WRK_CPUS wrk -t$WRK_T -c400 -d10s --latency http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
+            wrk -t12 -c400 -d10s --latency http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
 
             AFTER_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$AFTER_CSW" ] && AFTER_CSW=0
@@ -305,25 +298,25 @@ jobs:
             cat $TXT
           }
 
-          run_bench "CWIST" "env CWIST_WORKERS=$SRV /tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
+          run_bench "CWIST" "/tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
 
-          # Tuned low-latency profile (CWIST only): same anti-oversubscription
-          # budget as the standard run, but at lower connection pressure
-          # (c100) so the per-request latency floor is visible.
-          echo "=== Starting CWIST tuned run (CWIST_WORKERS=$SRV, wrk -t$WRK_T -c100) ==="
-          taskset -c $SRV_CPUS env CWIST_WORKERS=$SRV /tmp/cwist_server &
+          # Tuned low-latency profile (CWIST only): lower connection pressure
+          # (c100, 4 wrk threads) so the per-request latency floor is visible
+          # alongside the c400 throughput numbers.
+          echo "=== Starting CWIST tuned run (wrk -t4 -c100) ==="
+          /tmp/cwist_server &
           TUNED_PID=$!
           for i in $(seq 1 10); do
             curl -sf http://127.0.0.1:9091/ > /dev/null 2>&1 && break
             sleep 1
           done
-          taskset -c $WRK_CPUS wrk -t$WRK_T -c100 -d10s http://127.0.0.1:9091/ > /dev/null 2>&1 || true
-          taskset -c $WRK_CPUS wrk -t$WRK_T -c100 -d10s --latency http://127.0.0.1:9091/ > /tmp/cwist_tuned.txt 2>&1 || true
+          wrk -t4 -c100 -d10s http://127.0.0.1:9091/ > /dev/null 2>&1 || true
+          wrk -t4 -c100 -d10s --latency http://127.0.0.1:9091/ > /tmp/cwist_tuned.txt 2>&1 || true
           kill -9 $TUNED_PID || true
           cat /tmp/cwist_tuned.txt
-          export TUNED_PROFILE="CWIST_WORKERS=$SRV (pinned to $SRV_CPUS), wrk -t$WRK_T -c100 -d10s pinned to $WRK_CPUS (after 10s warmup, warmup discarded)"
-          run_bench "Axum" "env TOKIO_WORKER_THREADS=$SRV /tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
-          run_bench "Gin" "env GOMAXPROCS=$SRV /tmp/gin_bench/gin_server" 9094 "/tmp/gin.txt" "/tmp/gin_stat.txt" 10
+          export TUNED_PROFILE="wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)"
+          run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
+          run_bench "Gin" "/tmp/gin_bench/gin_server" 9094 "/tmp/gin.txt" "/tmp/gin_stat.txt" 10
 
           # Spring Boot JVM tuning (JDK 25):
           #  - Fixed 1024m heap + AlwaysPreTouch: no heap resize or page faults
@@ -340,9 +333,9 @@ jobs:
           #    the hot Netty/WebFlux paths reach native code faster during the
           #    10-second warmup window. CICompilerCount pinned to nproc to
           #    saturate all available compilation threads.
-          #  - ioWorkerCount=${SRV}: Netty event-loop workers sized to the
-          #    pinned server core set (default would be 2x visible CPUs and
-          #    oversubscribe the wrk budget).
+          #  - ioWorkerCount=$(nproc): Netty event-loop workers sized to the
+          #    visible vCPU count (default would be 2x and inflate context
+          #    switches on small runners).
           #  - Pooled Netty allocator with leak detection and buffer bounds/
           #    accessibility checks disabled: removes per-buffer overhead in
           #    the hot path.
@@ -370,7 +363,7 @@ jobs:
             -Dio.netty.leakDetection.level=disabled \
             -Dio.netty.buffer.checkBounds=false \
             -Dio.netty.buffer.checkAccessible=false \
-            -Dreactor.netty.ioWorkerCount=${SRV} \
+            -Dreactor.netty.ioWorkerCount=${NPROC} \
             -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags"
           SPRING_AOT_CACHE=/tmp/spring_bench/app.aot
 
@@ -410,7 +403,7 @@ jobs:
           export SPRING_VIRTUAL_THREADS="false"
           export GO_VERSION_RECORDED="$(go version)"
           export GIN_FRAMEWORK="Gin v1.10.0 (gin-gonic/gin, release mode)"
-          export WRK_PROFILE="wrk -t$WRK_T -c400 -d10s pinned to cores $WRK_CPUS, servers pinned to cores $SRV_CPUS (after 10s warmup, warmup discarded)"
+          export WRK_PROFILE="wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)"
 
           python3 - <<'PY'
           import json, os, re, pathlib
