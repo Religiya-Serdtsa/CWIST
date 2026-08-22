@@ -63,6 +63,11 @@ static size_t cq_ring_size(struct io_uring_params *p) {
 
 typedef struct {
     int ring_fd;
+    /* Serializes SQ producers: the accept thread (reactor_add) and worker
+     * threads (rearm/del) submit concurrently; without this the SQE memcpy
+     * and tail advance race and one submission overwrites the other,
+     * silently dropping the connection's POLL_ADD. */
+    pthread_mutex_t sq_lock;
     struct io_uring_sqe *sqes;
     struct io_uring_cqe *cqes;
     uint32_t *sq_head, *sq_tail, *sq_ring_mask, *sq_array;
@@ -140,6 +145,9 @@ cwist_reactor_t *cwist_reactor_create(void) {
     memset(r, 0, sizeof(cwist_reactor_t));
     r->running = false;
     pthread_mutex_init(&r->pool_lock, NULL);
+#ifdef __linux__
+    pthread_mutex_init(&r->impl.sq_lock, NULL);
+#endif
     for (uint32_t i = 0; i < MAX_REACTOR_EVENTS; i++) {
         r->free_stack[i] = (MAX_REACTOR_EVENTS - 1) - i;
     }
@@ -232,6 +240,9 @@ void cwist_reactor_destroy(cwist_reactor_t *reactor) {
     close(reactor->impl.kq_fd);
 #endif
     pthread_mutex_destroy(&reactor->pool_lock);
+#ifdef __linux__
+    pthread_mutex_destroy(&reactor->impl.sq_lock);
+#endif
     cwist_free(reactor);
 }
 
@@ -239,18 +250,23 @@ void cwist_reactor_destroy(cwist_reactor_t *reactor) {
 /* Submit one SQE immediately: the reactor never batches or defers submission,
  * so a woken worker always sees the event on its next wait. */
 static bool uring_submit(cwist_reactor_t *reactor, struct io_uring_sqe *out_sqe) {
+    bool ok = false;
+    pthread_mutex_lock(&reactor->impl.sq_lock);
     uint32_t tail = *reactor->impl.sq_tail;
     uint32_t head = __atomic_load_n(reactor->impl.sq_head, __ATOMIC_ACQUIRE);
-    if (tail - head >= reactor->impl.sq_entries) return false;
-    uint32_t index = tail & *reactor->impl.sq_ring_mask;
-    struct io_uring_sqe *sqe = &reactor->impl.sqes[index];
-    memcpy(sqe, out_sqe, sizeof(*sqe));
-    __atomic_store_n(reactor->impl.sq_tail, tail + 1, __ATOMIC_RELEASE);
-    if (sys_io_uring_enter(reactor->impl.ring_fd, 1, 0, 0, NULL) < 0) {
-        __atomic_store_n(reactor->impl.sq_tail, tail, __ATOMIC_RELEASE);
-        return false;
+    if (tail - head < reactor->impl.sq_entries) {
+        uint32_t index = tail & *reactor->impl.sq_ring_mask;
+        struct io_uring_sqe *sqe = &reactor->impl.sqes[index];
+        memcpy(sqe, out_sqe, sizeof(*sqe));
+        __atomic_store_n(reactor->impl.sq_tail, tail + 1, __ATOMIC_RELEASE);
+        if (sys_io_uring_enter(reactor->impl.ring_fd, 1, 0, 0, NULL) < 0) {
+            __atomic_store_n(reactor->impl.sq_tail, tail, __ATOMIC_RELEASE);
+        } else {
+            ok = true;
+        }
     }
-    return true;
+    pthread_mutex_unlock(&reactor->impl.sq_lock);
+    return ok;
 }
 #endif
 
