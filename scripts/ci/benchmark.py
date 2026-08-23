@@ -54,10 +54,10 @@ README_MD = ROOT / "README.md"
 def render_webserver_svg(history: list[dict]) -> str:
     ws_latest = history[-1] if history else {}
     metrics = [
-        ("Throughput (req/s)", [("CWIST", "cwist_rps", "#22c55e"), ("Axum", "axum_rps", "#3b82f6"), ("Gin", "gin_rps", "#06b6d4"), ("Spring", "spring_rps", "#ef4444")]),
-        ("Avg Latency (ms)", [("CWIST", "cwist_lat_ms", "#22c55e"), ("Axum", "axum_lat_ms", "#3b82f6"), ("Gin", "gin_lat_ms", "#06b6d4"), ("Spring", "spring_lat_ms", "#ef4444")]),
-        ("Peak RSS (KiB)", [("CWIST", "cwist_rss_kib", "#22c55e"), ("Axum", "axum_rss_kib", "#3b82f6"), ("Gin", "gin_rss_kib", "#06b6d4"), ("Spring", "spring_rss_kib", "#ef4444")]),
-        ("Context Switches", [("CWIST", "cwist_csw", "#22c55e"), ("Axum", "axum_csw", "#3b82f6"), ("Gin", "gin_csw", "#06b6d4"), ("Spring", "spring_csw", "#ef4444")])
+        ("Throughput (req/s)", [("CWIST", "cwist_rps", "#22c55e"), ("CWIST C1M", "cwist_c1m_rps", "#10b981"), ("Axum", "axum_rps", "#3b82f6"), ("Gin", "gin_rps", "#06b6d4"), ("Spring", "spring_rps", "#ef4444")]),
+        ("Avg Latency (ms)", [("CWIST", "cwist_lat_ms", "#22c55e"), ("CWIST C1M", "cwist_c1m_lat_ms", "#10b981"), ("Axum", "axum_lat_ms", "#3b82f6"), ("Gin", "gin_lat_ms", "#06b6d4"), ("Spring", "spring_lat_ms", "#ef4444")]),
+        ("Peak RSS (KiB)", [("CWIST", "cwist_rss_kib", "#22c55e"), ("CWIST C1M", "cwist_c1m_rss_kib", "#10b981"), ("Axum", "axum_rss_kib", "#3b82f6"), ("Gin", "gin_rss_kib", "#06b6d4"), ("Spring", "spring_rss_kib", "#ef4444")]),
+        ("Context Switches", [("CWIST", "cwist_csw", "#22c55e"), ("CWIST C1M", "cwist_c1m_csw", "#10b981"), ("Axum", "axum_csw", "#3b82f6"), ("Gin", "gin_csw", "#06b6d4"), ("Spring", "spring_csw", "#ef4444")])
     ]
     
     width = 960
@@ -66,10 +66,11 @@ def render_webserver_svg(history: list[dict]) -> str:
     
     # Title & Legend
     blocks.append('<text x="30" y="35" class="title">Web Server Performance Comparison (wrk 12t 400c)</text>')
-    blocks.append('<rect x="580" y="20" width="12" height="12" fill="#22c55e" rx="2"/><text x="598" y="31" class="legend">CWIST</text>')
-    blocks.append('<rect x="665" y="20" width="12" height="12" fill="#3b82f6" rx="2"/><text x="683" y="31" class="legend">Axum</text>')
-    blocks.append('<rect x="740" y="20" width="12" height="12" fill="#06b6d4" rx="2"/><text x="758" y="31" class="legend">Gin</text>')
-    blocks.append('<rect x="805" y="20" width="12" height="12" fill="#ef4444" rx="2"/><text x="823" y="31" class="legend">Spring Boot</text>')
+    blocks.append('<rect x="450" y="20" width="12" height="12" fill="#22c55e" rx="2"/><text x="468" y="31" class="legend">CWIST</text>')
+    blocks.append('<rect x="535" y="20" width="12" height="12" fill="#10b981" rx="2"/><text x="553" y="31" class="legend">CWIST C1M</text>')
+    blocks.append('<rect x="650" y="20" width="12" height="12" fill="#3b82f6" rx="2"/><text x="668" y="31" class="legend">Axum</text>')
+    blocks.append('<rect x="725" y="20" width="12" height="12" fill="#06b6d4" rx="2"/><text x="743" y="31" class="legend">Gin</text>')
+    blocks.append('<rect x="790" y="20" width="12" height="12" fill="#ef4444" rx="2"/><text x="808" y="31" class="legend">Spring Boot</text>')
     
     # Render 4 grid subpanels (2x2 layout)
     panel_w = 420
@@ -85,12 +86,12 @@ def render_webserver_svg(history: list[dict]) -> str:
         max_val = max(vals, default=1.0)
         if max_val <= 0: max_val = 1.0
         
-        bar_y_base = py + 55
+        bar_y_base = py + 44
         for s_idx, (label, key, color) in enumerate(series_list):
             val = float(ws_latest.get(key, 0))
             ratio = min(1.0, max(0.0, val / max_val))
             bar_len = int(ratio * 240)
-            by = bar_y_base + s_idx * 34
+            by = bar_y_base + s_idx * 27
             
             # Format value label
             if "ms" in m_title:
@@ -159,13 +160,15 @@ def render() -> None:
         return ""
 
     cwist_lat_part = get_lat_part("cwist")
+    cwist_c1m_lat_part = get_lat_part("cwist_c1m")
     axum_lat_part = get_lat_part("axum")
     gin_lat_part = get_lat_part("gin")
     spring_lat_part = get_lat_part("spring")
 
     ws_summary = (
         f"Latest Web Server Benchmark ({ws_latest.get('wrk_profile','wrk 12t 400c')}):\n"
-        f"- **CWIST**: {ws_latest.get('cwist_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_lat_ms',0):.2f}ms{cwist_lat_part} | RSS {ws_latest.get('cwist_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_csw',0):.0f}\n"
+        f"- **CWIST (classic pool)**: {ws_latest.get('cwist_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_lat_ms',0):.2f}ms{cwist_lat_part} | RSS {ws_latest.get('cwist_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_csw',0):.0f}\n"
+        f"- **CWIST (C1M reactor)**: {ws_latest.get('cwist_c1m_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_c1m_lat_ms',0):.2f}ms{cwist_c1m_lat_part} | RSS {ws_latest.get('cwist_c1m_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_c1m_csw',0):.0f}\n"
         f"- **Axum**: {ws_latest.get('axum_rps',0):.0f} req/s | Latency {ws_latest.get('axum_lat_ms',0):.2f}ms{axum_lat_part} | RSS {ws_latest.get('axum_rss_kib',0):.0f}KiB | Csw {ws_latest.get('axum_csw',0):.0f}\n"
         f"- **Gin (Go)**: {ws_latest.get('gin_rps',0):.0f} req/s | Latency {ws_latest.get('gin_lat_ms',0):.2f}ms{gin_lat_part} | RSS {ws_latest.get('gin_rss_kib',0):.0f}KiB | Csw {ws_latest.get('gin_csw',0):.0f}\n"
         f"- **Spring Boot**: {ws_latest.get('spring_rps',0):.0f} req/s | Latency {ws_latest.get('spring_lat_ms',0):.2f}ms{spring_lat_part} | RSS {ws_latest.get('spring_rss_kib',0):.0f}KiB | Csw {ws_latest.get('spring_csw',0):.0f}\n"
