@@ -353,6 +353,37 @@ parking a worker thread each), a single cwist process on loopback served:
 | C100K | 100,000 / 100,000 responded (100%) | ~9 s |
 | C1M (8×125K) | 1,000,000 / 1,000,000 responded (100%) | ~20 s per client process |
 
+The classic thread-per-connection path (`CWIST_C1M_MODE=0`) is no longer
+capped at `cores*8` held connections either: every accepted connection gets
+its own on-demand detached thread with a 256 KiB stack, so held connections
+scale with the task budget instead of parking a fixed worker pool. Measured
+on the same machine, same client:
+
+| Scale | Result | Wall time |
+|-------|--------|-----------|
+| C10K | 10,000 / 10,000 responded (100%) | ~0.6 s |
+| C100K | 100,000 / 100,000 responded (100%) | ~9 s |
+
+C100K classic needs task-count headroom (one thread per held connection:
+`pids.max` / `TasksMax` above 100K — desktop app scopes often cap this near
+76K — and `kernel.threads-max` is fine by default) and roughly 26 GB of
+virtual commit budget for 100K x 256 KiB stacks (raise
+`vm.overcommit_ratio` when RAMxratio + swap is tight). C1M is out of reach
+for this model — a million threads exceeds `threads-max` — which is exactly
+what the reactor path is for.
+
+**Which mode should you pick?** Most HTTP workloads are request bursts,
+not held connections: APIs behind a reverse proxy, web pages, webhooks.
+There the classic path is the right default — a dedicated thread per active
+connection gives the kernel scheduler direct per-connection fairness with
+no reactor round trip, which is where cwist's sub-millisecond latency comes
+from (369k req/s, P50 ~0.7 ms at `wrk -t12 -c400` on the benchmark
+machine). Flip C1M mode on when you must *hold* very large numbers of
+simultaneously open, mostly idle connections — SSE fan-out, websocket-scale
+chat, long-polling — or when you genuinely target C1M. Giving up C1M for
+the classic path costs you nothing until your workload is dominated by
+hundreds of thousands of idle open sockets.
+
 Benchmark environment:
 
 - CPU: AMD Ryzen 5 5600X (6 cores / 12 threads)
