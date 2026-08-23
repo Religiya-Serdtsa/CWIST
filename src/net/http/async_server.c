@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -53,10 +54,20 @@ static void async_accept_cb(int fd, void *ctx) {
         }
     }
 
-    /* Re-arm the listening socket so we can accept the next batch. */
+    /* Re-arm the listening socket so we can accept the next batch.  A
+     * transient submission failure (e.g. a momentarily full io_uring SQ
+     * under a connect burst) must not silently stop accepting on this
+     * worker forever — retry with a short backoff, then scream. */
     if (g_reactor) {
         if (atomic_load(&g_cwist_running)) {
-            cwist_reactor_add(g_reactor, fd, async_accept_cb, &app, sizeof(app));
+            for (int attempt = 0; attempt < 1000; attempt++) {
+                if (cwist_reactor_add(g_reactor, fd, async_accept_cb, &app, sizeof(app))) {
+                    return;
+                }
+                struct timespec ts = { .tv_sec = 0, .tv_nsec = 10 * 1000 * 1000 };
+                nanosleep(&ts, NULL);
+            }
+            fprintf(stderr, "[async] FATAL: listen socket re-arm failed 1000x; this worker stopped accepting\n");
         } else {
             cwist_reactor_stop(g_reactor);
         }
