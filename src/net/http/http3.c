@@ -326,29 +326,126 @@ static SSL_CTX *cwist_h3_get_ssl_ctx(void *peer_ctx,
 /* Packet-out callback                                                */
 /* ------------------------------------------------------------------ */
 
+static int h3_send_one(int udp_fd, const struct lsquic_out_spec *spec) {
+    struct msghdr msg = {0};
+    msg.msg_name = (void *)spec->dest_sa;
+    msg.msg_namelen = (spec->dest_sa && spec->dest_sa->sa_family == AF_INET)
+                      ? sizeof(struct sockaddr_in)
+                      : sizeof(struct sockaddr_in6);
+    msg.msg_iov = (struct iovec *)spec->iov;
+    msg.msg_iovlen = spec->iovlen;
+    return (int)sendmsg(udp_fd, &msg, MSG_DONTWAIT);
+}
+
+#if defined(__linux__)
+#ifndef UDP_SEGMENT
+#define UDP_SEGMENT 103
+#endif
+#ifndef SOL_UDP
+#define SOL_UDP 17
+#endif
+
+static size_t h3_spec_len(const struct lsquic_out_spec *spec) {
+    size_t n = 0;
+    for (unsigned k = 0; k < spec->iovlen; k++) n += spec->iov[k].iov_len;
+    return n;
+}
+
+static bool h3_same_dest(const struct lsquic_out_spec *a, const struct lsquic_out_spec *b) {
+    if (!a->dest_sa || !b->dest_sa) return false;
+    if (a->dest_sa->sa_family != b->dest_sa->sa_family) return false;
+    if (a->dest_sa->sa_family == AF_INET) {
+        const struct sockaddr_in *x = (const struct sockaddr_in *)a->dest_sa;
+        const struct sockaddr_in *y = (const struct sockaddr_in *)b->dest_sa;
+        return x->sin_port == y->sin_port && x->sin_addr.s_addr == y->sin_addr.s_addr;
+    }
+    const struct sockaddr_in6 *x = (const struct sockaddr_in6 *)a->dest_sa;
+    const struct sockaddr_in6 *y = (const struct sockaddr_in6 *)b->dest_sa;
+    return x->sin6_port == y->sin6_port &&
+           memcmp(&x->sin6_addr, &y->sin6_addr, sizeof(x->sin6_addr)) == 0;
+}
+#endif
+
 static int cwist_h3_packets_out(void *ctx,
                                   const struct lsquic_out_spec *specs,
                                   unsigned n_specs) {
     int udp_fd = *(int *)ctx;
-    unsigned i;
-    for (i = 0; i < n_specs; ++i) {
-        const struct lsquic_out_spec *spec = &specs[i];
-        struct msghdr msg = {0};
-        msg.msg_name = (void *)spec->dest_sa;
-        msg.msg_namelen = (spec->dest_sa && spec->dest_sa->sa_family == AF_INET)
-                          ? sizeof(struct sockaddr_in)
-                          : sizeof(struct sockaddr_in6);
-        msg.msg_iov = (struct iovec *)spec->iov;
-        msg.msg_iovlen = spec->iovlen;
-        ssize_t nw = sendmsg(udp_fd, &msg, MSG_DONTWAIT);
-        if (nw < 0) {
+    unsigned i = 0;
+    while (i < n_specs) {
+#if defined(__linux__)
+        /* UDP GSO: coalesce runs of equal-size datagrams headed to the same
+         * peer into one sendmsg with UDP_SEGMENT.  lsquic emits a paced
+         * burst of full-size packets per connection adjacently, so runs are
+         * the norm during bulk transfer; this cuts syscalls ~run-fold. */
+        size_t seg = h3_spec_len(&specs[i]);
+        unsigned run = 1;
+        unsigned niov = specs[i].iovlen;
+        if (seg > 0 && seg <= 65535) {
+            unsigned max_segs = (unsigned)(65536 / seg);
+            if (max_segs > 48) max_segs = 48;
+            while (i + run < n_specs && run < max_segs &&
+                   specs[i + run].ecn == specs[i].ecn &&
+                   h3_same_dest(&specs[i], &specs[i + run]) &&
+                   h3_spec_len(&specs[i + run]) == seg &&
+                   niov + specs[i + run].iovlen <= 128) {
+                niov += specs[i + run].iovlen;
+                run++;
+            }
+        }
+        if (run >= 2) {
+            struct iovec iov[128];
+            unsigned n = 0;
+            for (unsigned k = 0; k < run; k++)
+                for (unsigned m = 0; m < specs[i + k].iovlen; m++)
+                    iov[n++] = specs[i + k].iov[m];
+
+            char ctrl[CMSG_SPACE(sizeof(uint16_t))];
+            struct msghdr msg = {0};
+            msg.msg_name = (void *)specs[i].dest_sa;
+            msg.msg_namelen = (specs[i].dest_sa && specs[i].dest_sa->sa_family == AF_INET)
+                              ? sizeof(struct sockaddr_in)
+                              : sizeof(struct sockaddr_in6);
+            msg.msg_iov = iov;
+            msg.msg_iovlen = n;
+            msg.msg_control = ctrl;
+            msg.msg_controllen = sizeof(ctrl);
+            struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+            cmsg->cmsg_level = SOL_UDP;
+            cmsg->cmsg_type = UDP_SEGMENT;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(uint16_t));
+            uint16_t gso_seg = (uint16_t)seg;
+            memcpy(CMSG_DATA(cmsg), &gso_seg, sizeof(gso_seg));
+
+            ssize_t nw = sendmsg(udp_fd, &msg, MSG_DONTWAIT);
+            if (nw >= 0) {
+                i += run;
+                continue;
+            }
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
-            /* Non-fatal errors: log and continue if possible */
-            if (errno == ECONNREFUSED || errno == ENETUNREACH ||
-                errno == EHOSTUNREACH || errno == EMSGSIZE)
-                continue;
-            return -1;
+            /* GSO rejected (e.g. EMSGSIZE on an exotic path): fall through
+             * to per-packet sends for this run. */
+        }
+#endif
+        /* Per-packet path: singles, non-Linux, and GSO fallback. */
+        {
+#if defined(__linux__)
+            unsigned limit = i + (run >= 2 ? run : 1);
+#else
+            unsigned limit = i + 1;
+#endif
+            for (; i < limit; ++i) {
+                int nw = h3_send_one(udp_fd, &specs[i]);
+                if (nw < 0) {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        return (int)i;
+                    /* Non-fatal errors: log and continue if possible */
+                    if (errno == ECONNREFUSED || errno == ENETUNREACH ||
+                        errno == EHOSTUNREACH || errno == EMSGSIZE)
+                        continue;
+                    return -1;
+                }
+            }
         }
     }
     return (int)i;
@@ -951,9 +1048,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         const char *body_data = NULL;
 
         if (st->res->use_file_stream) {
-            /* Read file chunk into temporary buffer and write */
-            if (st->res->file_stream_fd >= 0 && st->res->file_stream_len > 0) {
-                static __thread char file_buf[65536];
+            /* Fill the congestion window on each callback: loop chunk writes
+             * until the stream says EAGAIN instead of one 64 KiB chunk per
+             * tick. */
+            while (st->res->file_stream_fd >= 0 && st->body_sent < st->res->file_stream_len) {                static __thread char file_buf[65536];
                 off_t offset = st->res->file_stream_offset + (off_t)st->body_sent;
                 size_t to_read = st->res->file_stream_len - st->body_sent;
                 if (to_read > sizeof(file_buf)) to_read = sizeof(file_buf);
@@ -970,6 +1068,12 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                     }
                     st->send_xor ^= h3_xor_bytes((const unsigned char *)file_buf, (size_t)nw);
                     st->body_sent += (size_t)nw;
+                    if (nw < nr) {
+                        /* Stream buffer full for now; come back when writable. */
+                        lsquic_stream_wantwrite(stream, 1);
+                        return;
+                    }
+                    continue;
                 } else if (nr == 0) {
                     /* Short EOF (file truncated after fstat): the announced
                      * content-length can no longer be honoured, and finishing
@@ -977,16 +1081,17 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                      * client.  Reset the stream instead. */
                     lsquic_stream_close(stream);
                     return;
-                } else if (nr < 0) {
+                } else {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         /* Retry next tick */
-                    } else {
-                        lsquic_stream_close(stream);
-                        return;
+                        break;
                     }
+                    lsquic_stream_close(stream);
+                    return;
                 }
-                body_len = st->res->file_stream_len;
             }
+            if (st->res->file_stream_fd >= 0)
+                body_len = st->res->file_stream_len;
         } else if (st->res->is_ptr_body) {
             if (!st->res->ptr_body && st->res->ptr_body_len > 0) {
                 /* Announced a body we cannot produce; spinning here with

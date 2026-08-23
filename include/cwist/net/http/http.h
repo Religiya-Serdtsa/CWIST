@@ -176,6 +176,12 @@ void cwist_http_response_set_alt_svc(cwist_http_response *res, const char *alt_s
 cwist_sstring *cwist_http_stringify_response(cwist_http_response *res);
 cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res);
 /**
+ * @brief Whether the TCP_CORK coalescing layer is active for cleartext
+ * HTTP/1.1 responses. Enabled at runtime with CWIST_USE_TCP_CORK=1 (burst
+ * size via CWIST_TCP_CORK_BURST, default 256 KiB); always false off-Linux.
+ */
+bool cwist_tcp_cork_enabled(void);
+/**
  * @brief Serialize only the status line and headers into a caller buffer.
  * Used by the TLS send path to stream header block and body separately.
  * @return Number of bytes written.
