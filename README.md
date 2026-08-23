@@ -349,11 +349,20 @@ parking a worker thread each), a single cwist process on loopback served:
 | Scale | Result | Wall time |
 |-------|--------|-----------|
 | C10K | 10,000 / 10,000 established + responded (100%) | ~0.5 s |
-| C100K | 99,984 / 100,000 responded (99.98%) | ~12 s |
-| C1M (8×125K) | 999,872 / 1,000,000 responded (99.99%) | ~32–46 s per client process |
+| C100K | 100,000 / 100,000 responded (100%) | ~9 s |
+| C1M (8×125K) | 1,000,000 / 1,000,000 responded (100%) | ~20 s per client process |
 
-Measured with `tests/bench_cxm.c` (multi-process epoll load client, deterministic
-source-port allocation over multiple 127.0.0.x addresses). Kernel prerequisites
+Benchmark environment:
+
+- CPU: AMD Ryzen 5 5600X (6 cores / 12 threads)
+- RAM: 62 GB
+- Kernel: Linux 6.12.101 (Debian 13), GCC 14.2.0
+- Network: loopback (127.0.0.0/8 source-IP spreading on the client side)
+
+Measured with `tests/bench_cxm.c` (multi-process epoll load client,
+deterministic source-port allocation round-robined over multiple 127.0.0.x
+addresses, `SO_REUSEADDR` on every client socket so reruns within the
+TIME_WAIT window do not collide with themselves). Kernel prerequisites
 for C100K and above:
 
 - `ulimit -n 1050000` (and `fs.file-max` ≥ 8M for C1M: each connection costs
