@@ -136,6 +136,12 @@ typedef struct {
     uint64_t ping_sent_us;
     unsigned char ping_payload[8];
     bool ping_outstanding;
+    /* Userspace frame batching: outgoing frames accumulate here and flush on
+     * size threshold or before any blocking wait, cutting per-frame write /
+     * SSL_write syscalls for both h2c and TLS. */
+    unsigned char *out_buf;
+    size_t out_len;
+    size_t out_cap;
     unsigned char *cont_buf;
     size_t cont_len;
     size_t cont_cap;
@@ -180,6 +186,7 @@ static void h2_conn_destroy(h2_conn *hc) {
         s = next;
     }
     cwist_free(hc->cont_buf);
+    cwist_free(hc->out_buf);
     h2_deferred_frame *df = hc->deferred_head;
     while (df) {
         h2_deferred_frame *next = df->next;
@@ -343,7 +350,11 @@ static int h2_wait_socket(cwist_https_connection *conn, int ssl_error, int timeo
 /* Poll until frame bytes can be read or the connection idle deadline
  * expires.  Skips the poll when decrypted bytes are already buffered.
  * Returns 0 when readable, -1 on idle timeout or socket error. */
+static int h2_out_flush(h2_conn *hc);
+
 static int h2_wait_readable(h2_conn *hc) {
+    /* Never block with unflushed frames in the batch buffer. */
+    if (h2_out_flush(hc) != 0) return -1;
     while (hc->conn->ssl ? (SSL_pending(hc->conn->ssl) <= 0) : true) {
         uint64_t idle_ms = (uint64_t)h2_idle_timeout_ms();
         uint64_t now = h2_now_ms();
@@ -454,7 +465,47 @@ static void h2_make_frame_header(unsigned char out[CWIST_HTTP2_FRAME_HEADER_SIZE
     out[8] = (unsigned char)(stream_id & 0xff);
 }
 
-static int h2_write_frame(cwist_https_connection *conn,
+/* --- Userspace frame batching ---
+ * Frames accumulate in hc->out_buf and flush when the batch reaches the
+ * threshold (CWIST_H2_BATCH_BYTES, default 64 KiB) or before any blocking
+ * wait.  One write/SSL_write per batch instead of two per frame. */
+#define CWIST_H2_BATCH_DEFAULT_BYTES (64 * 1024)
+
+static size_t h2_batch_threshold(void) {
+    static size_t threshold = 0;
+    if (threshold == 0) {
+        const char *env = getenv("CWIST_H2_BATCH_BYTES");
+        long v = (env && *env) ? atol(env) : 0;
+        threshold = (v >= 4096) ? (size_t)v : (size_t)CWIST_H2_BATCH_DEFAULT_BYTES;
+    }
+    return threshold;
+}
+
+static int h2_out_flush(h2_conn *hc) {
+    if (hc->out_len == 0) return 0;
+    if (h2_write_all(hc->conn, hc->out_buf, hc->out_len) != 0) return -1;
+    hc->out_len = 0;
+    return 0;
+}
+
+static int h2_out_append(h2_conn *hc, const void *buf, size_t len) {
+    if (len == 0) return 0;
+    if (hc->out_len + len > hc->out_cap) {
+        size_t cap = hc->out_cap ? hc->out_cap : 16384;
+        while (cap < hc->out_len + len) cap *= 2;
+        unsigned char *nb = (unsigned char *)cwist_realloc(hc->out_buf, cap);
+        if (!nb) return -1;
+        hc->out_buf = nb;
+        hc->out_cap = cap;
+    }
+    memcpy(hc->out_buf + hc->out_len, buf, len);
+    hc->out_len += len;
+    if (hc->out_len >= h2_batch_threshold()) return h2_out_flush(hc);
+    return 0;
+}
+
+/* Batched frame write: appends to the connection batch buffer. */
+static int h2_write_frame(h2_conn *hc,
                           uint8_t type,
                           uint8_t flags,
                           uint32_t stream_id,
@@ -462,9 +513,31 @@ static int h2_write_frame(cwist_https_connection *conn,
                           uint32_t len) {
     unsigned char frame[CWIST_HTTP2_FRAME_HEADER_SIZE];
     h2_make_frame_header(frame, len, type, flags, stream_id);
+    if (h2_out_append(hc, frame, sizeof(frame)) != 0) return -1;
+    if (len > 0 && payload) return h2_out_append(hc, payload, len);
+    return 0;
+}
+
+/* Immediate frame write for paths without a connection context (push). */
+static int h2_write_frame_now(cwist_https_connection *conn,
+                              uint8_t type,
+                              uint8_t flags,
+                              uint32_t stream_id,
+                              const unsigned char *payload,
+                              uint32_t len) {
+    unsigned char frame[CWIST_HTTP2_FRAME_HEADER_SIZE];
+    h2_make_frame_header(frame, len, type, flags, stream_id);
     if (h2_write_all(conn, frame, sizeof(frame)) != 0) return -1;
     if (len > 0 && payload) return h2_write_all(conn, payload, len);
     return 0;
+}
+
+/* Dispatch helper for helpers shared by batched and immediate paths. */
+static int h2_write_frame_any(h2_conn *hc, cwist_https_connection *conn,
+                              uint8_t type, uint8_t flags, uint32_t stream_id,
+                              const unsigned char *payload, uint32_t len) {
+    if (hc) return h2_write_frame(hc, type, flags, stream_id, payload, len);
+    return h2_write_frame_now(conn, type, flags, stream_id, payload, len);
 }
 
 /* --- GOAWAY & WINDOW_UPDATE Helpers --- */
@@ -479,7 +552,7 @@ static int h2_send_goaway(h2_conn *hc, uint32_t last_stream_id, uint32_t error_c
     payload[5] = (unsigned char)((error_code >> 16) & 0xff);
     payload[6] = (unsigned char)((error_code >> 8) & 0xff);
     payload[7] = (unsigned char)(error_code & 0xff);
-    return h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_GOAWAY, 0, 0, payload, 8);
+    return h2_write_frame(hc, CWIST_HTTP2_FRAME_GOAWAY, 0, 0, payload, 8);
 }
 
 static int h2_send_window_update(h2_conn *hc, uint32_t stream_id, int32_t increment) {
@@ -488,7 +561,7 @@ static int h2_send_window_update(h2_conn *hc, uint32_t stream_id, int32_t increm
     payload[1] = (unsigned char)((increment >> 16) & 0xff);
     payload[2] = (unsigned char)((increment >> 8) & 0xff);
     payload[3] = (unsigned char)(increment & 0xff);
-    return h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_WINDOW_UPDATE, 0, stream_id, payload, 4);
+    return h2_write_frame(hc, CWIST_HTTP2_FRAME_WINDOW_UPDATE, 0, stream_id, payload, 4);
 }
 
 /* Adaptive receive-window refill driven by the flow-control module: emits a
@@ -503,7 +576,7 @@ static int h2_auto_window_update(h2_conn *hc, h2_stream *s) {
                                                          sizeof(frame_buf), &written,
                                                          now, false);
     if (r < 0) return -1;
-    if (r > 0 && h2_write_all(hc->conn, frame_buf, written) != 0) return -1;
+    if (r > 0 && h2_out_append(hc, frame_buf, written) != 0) return -1;
 
     if (s) {
         written = 0;
@@ -511,7 +584,7 @@ static int h2_auto_window_update(h2_conn *hc, h2_stream *s) {
                                                                 frame_buf, sizeof(frame_buf),
                                                                 &written, now, false);
         if (r < 0) return -1;
-        if (r > 0 && h2_write_all(hc->conn, frame_buf, written) != 0) return -1;
+        if (r > 0 && h2_out_append(hc, frame_buf, written) != 0) return -1;
     }
     return 0;
 }
@@ -547,7 +620,7 @@ static int h2_send_ping(h2_conn *hc) {
     uint64_t now = h2_now_us();
     unsigned char p[8];
     for (int i = 0; i < 8; i++) p[i] = (unsigned char)(now >> (56 - 8 * i));
-    if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_PING, 0, 0, p, 8) != 0) return -1;
+    if (h2_write_frame(hc, CWIST_HTTP2_FRAME_PING, 0, 0, p, 8) != 0) return -1;
     memcpy(hc->ping_payload, p, 8);
     hc->ping_sent_us = now;
     hc->ping_outstanding = true;
@@ -1309,7 +1382,7 @@ static size_t h2_encode_response_headers(cwist_http_response *res,
 /* Send an encoded header block as HEADERS, splitting into CONTINUATION
  * frames when it exceeds the peer's advertised max frame size.  base_flags
  * (e.g. END_STREAM) applies to the HEADERS frame only. */
-static int h2_send_header_block(cwist_https_connection *conn, uint32_t stream_id,
+static int h2_send_header_block(h2_conn *hc, cwist_https_connection *conn, uint32_t stream_id,
                                 const unsigned char *block, size_t block_len,
                                 uint32_t max_frame, uint8_t base_flags) {
     size_t sent = 0;
@@ -1320,8 +1393,8 @@ static int h2_send_header_block(cwist_https_connection *conn, uint32_t stream_id
         if (chunk > max_frame) chunk = max_frame;
         uint8_t frame_flags = flags;
         if (sent + chunk == block_len) frame_flags |= CWIST_HTTP2_FLAG_END_HEADERS;
-        if (h2_write_frame(conn, type, frame_flags, stream_id,
-                           block + sent, (uint32_t)chunk) != 0) {
+        if (h2_write_frame_any(hc, conn, type, frame_flags, stream_id,
+                               block + sent, (uint32_t)chunk) != 0) {
             return -1;
         }
         sent += chunk;
@@ -1362,7 +1435,7 @@ static unsigned char *h2_encode_response_block(cwist_http_response *res, size_t 
  * Used by the CWIST HTTP/2 DATA extension: every DATA frame carries one
  * sequence chunk so the receiver can reorder and discard duplicates.
  */
-static int h2_send_seq_data_frames(cwist_https_connection *conn,
+static int h2_send_seq_data_frames(h2_conn *hc, cwist_https_connection *conn,
                                    uint32_t stream_id,
                                    const uint8_t *body_data,
                                    size_t body_len,
@@ -1376,8 +1449,8 @@ static int h2_send_seq_data_frames(cwist_https_connection *conn,
 
     for (size_t i = 0; i < msg.count; i++) {
         uint8_t flags = (i + 1 == msg.count) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
-        if (h2_write_frame(conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
-                           msg.chunks[i], (uint32_t)msg.chunk_lens[i]) != 0) {
+        if (h2_write_frame_any(hc, conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
+                               msg.chunks[i], (uint32_t)msg.chunk_lens[i]) != 0) {
             cwist_seq_message_free(&msg);
             return -1;
         }
@@ -1412,7 +1485,7 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
         header_flags |= CWIST_HTTP2_FLAG_END_STREAM;
     }
 
-    int rc = h2_send_header_block(conn, stream_id, block, block_len, max_frame_size, header_flags);
+    int rc = h2_send_header_block(NULL, conn, stream_id, block, block_len, max_frame_size, header_flags);
     cwist_free(block);
     if (rc != 0) return -1;
 
@@ -1425,12 +1498,12 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
         if (!file_buf) return -1;
         ssize_t r = pread(res->file_stream_fd, file_buf, body_len, res->file_stream_offset);
         if (r <= 0 || (size_t)r != body_len) { cwist_free(file_buf); return -1; }
-        int rc = h2_send_seq_data_frames(conn, stream_id, file_buf, body_len, max_frame_size, NULL);
+        int rc = h2_send_seq_data_frames(NULL, conn, stream_id, file_buf, body_len, max_frame_size, NULL);
         cwist_free(file_buf);
         return rc;
     }
 
-    return h2_send_seq_data_frames(conn, stream_id, body_data, body_len, max_frame_size, NULL);
+    return h2_send_seq_data_frames(NULL, conn, stream_id, body_data, body_len, max_frame_size, NULL);
 }
 
 static int h2_read_all(h2_conn *hc, void *buf, int len) {
@@ -1453,6 +1526,8 @@ static int h2_read_all(h2_conn *hc, void *buf, int len) {
  *    streams, etc.) used to be read and discarded. They are now queued so
  *    the main frame loop can dispatch them. */
 static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
+    /* Never wait on the peer with unflushed frames in the batch buffer. */
+    if (h2_out_flush(hc) != 0) return -1;
     struct pollfd pfd;
     pfd.fd = hc->conn->fd;
     pfd.events = POLLIN;
@@ -1503,7 +1578,7 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
             }
         } else if (type == 0x06) { // PING
             if ((flags & 0x01) == 0 && len == 8) { // ACK flag is 0x01
-                h2_write_frame(hc->conn, 0x06, 0x01, 0, payload, 8);
+                h2_write_frame(hc, 0x06, 0x01, 0, payload, 8);
             }
         } else if (type == 0x03) { // RST_STREAM
             if (s && stream_id == s->stream_id) {
@@ -1584,7 +1659,7 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
         cwist_seq_chunk_build_header(chunk, i + 1, (uint16_t)total_chunks,
                                      (uint16_t)plen, chunk_payload);
         uint8_t flags = (i + 1 == total_chunks) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
-        if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
+        if (h2_write_frame(hc, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
                            chunk, (uint32_t)chunk_len) != 0) {
             cwist_free(chunk); return -1;
         }
@@ -1633,7 +1708,7 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
         }
 
         uint8_t flags = (i + 1 == msg.count) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
-        if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
+        if (h2_write_frame(hc, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
                            msg.chunks[i], (uint32_t)chunk_len) != 0) {
             cwist_seq_message_free(&msg);
             return -1;
@@ -1681,7 +1756,7 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
     uint32_t max_frame = hc->peer_max_frame_size;
     if (max_frame == 0) max_frame = CWIST_HTTP2_MAX_FRAME_SIZE;
 
-    int rc = h2_send_header_block(hc->conn, stream_id, block, block_len, max_frame, header_flags);
+    int rc = h2_send_header_block(hc, hc->conn, stream_id, block, block_len, max_frame, header_flags);
     cwist_free(block);
     if (rc != 0) return -1;
 
@@ -1714,7 +1789,8 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
             uint32_t chunk = (uint32_t)(remaining > max_frame ? max_frame : remaining);
             uint32_t allowed = h2_send_allowance(hc, s, chunk);
             if (allowed == 0) {
-                /* Pacing throttled us below one byte; wait briefly. */
+                /* Pacing throttled us below one byte; flush and wait. */
+                if (h2_out_flush(hc) != 0) return -1;
                 struct timespec ts = {0, 2000000};
                 nanosleep(&ts, NULL);
                 continue;
@@ -1725,7 +1801,7 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
             ssize_t r = pread(res->file_stream_fd, chunk_buf, allowed, offset);
             if (r <= 0) { cwist_free(chunk_buf); return -1; }
             uint8_t flags = (remaining == (size_t)r) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
-            if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id, chunk_buf, (uint32_t)r) != 0) {
+            if (h2_write_frame(hc, CWIST_HTTP2_FRAME_DATA, flags, stream_id, chunk_buf, (uint32_t)r) != 0) {
                 cwist_free(chunk_buf); return -1;
             }
             if (s) s->send_xor ^= h2_xor_bytes(chunk_buf, (size_t)r);
@@ -1752,14 +1828,15 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
             uint32_t chunk = (uint32_t)(remaining > max_frame ? max_frame : remaining);
             uint32_t allowed = h2_send_allowance(hc, s, chunk);
             if (allowed == 0) {
-                /* Pacing throttled us below one byte; wait briefly. */
+                /* Pacing throttled us below one byte; flush and wait. */
+                if (h2_out_flush(hc) != 0) return -1;
                 struct timespec ts = {0, 2000000};
                 nanosleep(&ts, NULL);
                 continue;
             }
 
             uint8_t flags = (sent + allowed == body_len) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
-            if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
+            if (h2_write_frame(hc, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
                                body_data + sent, allowed) != 0) {
                 return -1;
             }
@@ -2024,7 +2101,7 @@ cwist_error_t cwist_http2_serve_connection(
         0x00, 0x01, 0x00, 0x00, 0x00, 0x00, // SETTINGS_HEADER_TABLE_SIZE = 0 (Disable dynamic table compression to guarantee full literal header transmission)
         0x00, 0x04, 0x7f, 0xff, 0xff, 0xff  // SETTINGS_INITIAL_WINDOW_SIZE = 2147483647 (2GB)
     };
-    if (h2_write_frame(conn, CWIST_HTTP2_FRAME_SETTINGS, 0, 0, settings, sizeof(settings)) != 0) {
+    if (h2_write_frame(&hc, CWIST_HTTP2_FRAME_SETTINGS, 0, 0, settings, sizeof(settings)) != 0) {
         h2_conn_destroy(&hc);
         result = make_error(CWIST_ERR_INT16);
         result.error.err_i16 = -1;
@@ -2109,7 +2186,7 @@ cwist_error_t cwist_http2_serve_connection(
                     h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_PROTOCOL_ERROR);
                     connected = false;
                 } else if ((flags & CWIST_HTTP2_FLAG_ACK) == 0) {
-                    if (h2_write_frame(conn, CWIST_HTTP2_FRAME_SETTINGS, CWIST_HTTP2_FLAG_ACK, 0, NULL, 0) != 0) {
+                    if (h2_write_frame(&hc, CWIST_HTTP2_FRAME_SETTINGS, CWIST_HTTP2_FLAG_ACK, 0, NULL, 0) != 0) {
                         connected = false;
                     }
                 }
@@ -2239,7 +2316,7 @@ cwist_error_t cwist_http2_serve_connection(
                                  * retransmission.  Refuse the stream without
                                  * exposing a mixed body to the application. */
                                 uint8_t rst[4] = {0, 0, 0, H2_ERR_PROTOCOL_ERROR};
-                                h2_write_frame(hc.conn, CWIST_HTTP2_FRAME_RST_STREAM,
+                                h2_write_frame(&hc, CWIST_HTTP2_FRAME_RST_STREAM,
                                                0, stream_id, rst, sizeof(rst));
                                 h2_stream_remove(&hc, stream_id);
                                 break;
@@ -2249,7 +2326,7 @@ cwist_error_t cwist_http2_serve_connection(
                     } else if (!hc.sequenced_data) {
                         if (s->req->body->size + len > CWIST_HTTP_MAX_BODY_SIZE) {
                             uint8_t rst[4] = {0, 0, 0, H2_ERR_REFUSED_STREAM};
-                            h2_write_frame(hc.conn, CWIST_HTTP2_FRAME_RST_STREAM, 0, stream_id, rst, 4);
+                            h2_write_frame(&hc, CWIST_HTTP2_FRAME_RST_STREAM, 0, stream_id, rst, 4);
                             h2_stream_remove(&hc, stream_id);
                             break;
                         }
@@ -2279,7 +2356,7 @@ cwist_error_t cwist_http2_serve_connection(
                          * with REFUSED_STREAM.  Never call the handler with a
                          * partial sequenced body. */
                         uint8_t rst[4] = {0, 0, 0, H2_ERR_REFUSED_STREAM};
-                        h2_write_frame(hc.conn, CWIST_HTTP2_FRAME_RST_STREAM,
+                        h2_write_frame(&hc, CWIST_HTTP2_FRAME_RST_STREAM,
                                        0, stream_id, rst, sizeof(rst));
                         h2_auto_window_update(&hc, s);
                         h2_stream_remove(&hc, stream_id);
@@ -2321,7 +2398,7 @@ cwist_error_t cwist_http2_serve_connection(
                     break;
                 }
                 if ((flags & CWIST_HTTP2_FLAG_ACK) == 0) {
-                    if (h2_write_frame(conn, CWIST_HTTP2_FRAME_PING, CWIST_HTTP2_FLAG_ACK, 0, payload, 8) != 0) {
+                    if (h2_write_frame(&hc, CWIST_HTTP2_FRAME_PING, CWIST_HTTP2_FLAG_ACK, 0, payload, 8) != 0) {
                         connected = false;
                     }
                 } else if (hc.ping_outstanding && memcmp(payload, hc.ping_payload, 8) == 0) {
@@ -2367,6 +2444,7 @@ cwist_error_t cwist_http2_serve_connection(
         sent_goaway = true;
     }
 
+    h2_out_flush(&hc); /* best effort: last GOAWAY/batched frames */
     h2_conn_destroy(&hc);
 
     result = make_error(CWIST_ERR_INT16);
@@ -2442,7 +2520,7 @@ int cwist_http2_push_resource(cwist_http_request *req,
     pp_payload[3] = (unsigned char)(promised_stream_id & 0xff);
     memcpy(pp_payload + 4, header_block, pos);
 
-    if (h2_write_frame(conn, 0x05, CWIST_HTTP2_FLAG_END_HEADERS,
+    if (h2_write_frame_now(conn, 0x05, CWIST_HTTP2_FLAG_END_HEADERS,
                        original_stream_id, pp_payload, (uint32_t)(pos + 4)) != 0) {
         return -1;
     }
