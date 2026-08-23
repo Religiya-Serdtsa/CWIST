@@ -57,6 +57,8 @@ typedef enum cwist_metric_id {
     CWIST_METRIC_VALIDATION_ERRORS,       /**< Validation error frequency. */
     CWIST_METRIC_REQUESTS_TOTAL,          /**< Total HTTP requests handled. */
     CWIST_METRIC_REQUEST_DURATION_NS,     /**< Request duration (nanoseconds sum). */
+    CWIST_METRIC_HTTP_HEADER_OVERFLOW,    /**< H1 connections dropped: headers exceeded read buffer. */
+    CWIST_METRIC_H2_HEADERS_DROPPED,      /**< H2 header fields dropped: unresolvable HPACK index. */
     CWIST_METRIC_COUNT
 } cwist_metric_id_t;
 

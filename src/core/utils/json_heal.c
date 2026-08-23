@@ -122,7 +122,7 @@ static void balance_brackets(strbuf_t *b, char *log, size_t log_sz) {
         else if (c == '[')            stack[top++] = ']';
         else if (c == '}' || c == ']') {
             if (top > 0 && stack[top-1] == c) top--;
-            /* mismatched closer — ignore; cJSON will flag remaining issues */
+            /* mismatched closer - ignore; cJSON will flag remaining issues */
         }
     }
 

@@ -29,6 +29,8 @@ static const cwist_metric_t metric_defaults[CWIST_METRIC_COUNT] = {
     [CWIST_METRIC_VALIDATION_ERRORS]    = { .name = "cwist_validation_errors",       .help = "Validation error frequency",                       .type = CWIST_METRIC_COUNTER },
     [CWIST_METRIC_REQUESTS_TOTAL]       = { .name = "cwist_requests_total",          .help = "Total HTTP requests handled",                      .type = CWIST_METRIC_COUNTER },
     [CWIST_METRIC_REQUEST_DURATION_NS]  = { .name = "cwist_request_duration_ns",     .help = "Request duration sum in nanoseconds",              .type = CWIST_METRIC_COUNTER },
+    [CWIST_METRIC_HTTP_HEADER_OVERFLOW] = { .name = "cwist_http_header_overflow_total", .help = "HTTP/1.1 connections dropped because headers exceeded the read buffer", .type = CWIST_METRIC_COUNTER },
+    [CWIST_METRIC_H2_HEADERS_DROPPED]   = { .name = "cwist_h2_headers_dropped_total",   .help = "HTTP/2 header fields dropped due to unresolvable HPACK index",          .type = CWIST_METRIC_COUNTER },
 };
 
 /* -------------------------------------------------------------------------
