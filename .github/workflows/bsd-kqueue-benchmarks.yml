@@ -298,13 +298,16 @@ jobs:
             cat $TXT
           }
 
-          run_bench "CWIST" "/tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
+          # CWIST is measured twice: the classic thread-pool path (the
+          # ultra-low-latency profile) and the event-driven C1M reactor path.
+          run_bench "CWIST (classic)" "env CWIST_C1M_MODE=0 /tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
+          run_bench "CWIST C1M" "env CWIST_C1M_MODE=1 /tmp/cwist_server" 9091 "/tmp/cwist_c1m.txt" "/tmp/cwist_c1m_stat.txt" 10
 
-          # Tuned low-latency profile (CWIST only): lower connection pressure
-          # (c100, 4 wrk threads) so the per-request latency floor is visible
-          # alongside the c400 throughput numbers.
+          # Tuned low-latency profile (CWIST classic only): lower connection
+          # pressure (c100, 4 wrk threads) so the per-request latency floor is
+          # visible alongside the c400 throughput numbers.
           echo "=== Starting CWIST tuned run (wrk -t4 -c100) ==="
-          /tmp/cwist_server &
+          env CWIST_C1M_MODE=0 /tmp/cwist_server &
           TUNED_PID=$!
           for i in $(seq 1 10); do
             curl -sf http://127.0.0.1:9091/ > /dev/null 2>&1 && break
@@ -456,6 +459,9 @@ jobs:
           cwist_rps, cwist_lat, cwist_p50, cwist_p90, cwist_p99 = parse_wrk("/tmp/cwist.txt")
           cwist_rss, cwist_csw = parse_stat("/tmp/cwist_stat.txt")
 
+          cwist_c1m_rps, cwist_c1m_lat, cwist_c1m_p50, cwist_c1m_p90, cwist_c1m_p99 = parse_wrk("/tmp/cwist_c1m.txt")
+          cwist_c1m_rss, cwist_c1m_csw = parse_stat("/tmp/cwist_c1m_stat.txt")
+
           cwist_tuned_rps, cwist_tuned_lat, cwist_tuned_p50, cwist_tuned_p90, cwist_tuned_p99 = parse_wrk("/tmp/cwist_tuned.txt")
 
           axum_rps, axum_lat, axum_p50, axum_p90, axum_p99 = parse_wrk("/tmp/axum.txt")
@@ -470,6 +476,7 @@ jobs:
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
               "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_p90_ms": cwist_p90, "cwist_p99_ms": cwist_p99, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
+              "cwist_c1m_rps": cwist_c1m_rps, "cwist_c1m_lat_ms": cwist_c1m_lat, "cwist_c1m_p90_ms": cwist_c1m_p90, "cwist_c1m_p99_ms": cwist_c1m_p99, "cwist_c1m_rss_kib": cwist_c1m_rss, "cwist_c1m_csw": cwist_c1m_csw,
               "cwist_tuned_rps": cwist_tuned_rps, "cwist_tuned_lat_ms": cwist_tuned_lat, "cwist_tuned_p50_ms": cwist_tuned_p50, "cwist_tuned_p90_ms": cwist_tuned_p90, "cwist_tuned_p99_ms": cwist_tuned_p99,
               "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_p90_ms": axum_p90, "axum_p99_ms": axum_p99, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
               "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_p90_ms": gin_p90, "gin_p99_ms": gin_p99, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
@@ -497,7 +504,7 @@ jobs:
       - name: Copy raw benchmark output
         run: |
           mkdir -p raw_logs
-          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
+          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: webserver-result
