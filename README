@@ -16,17 +16,17 @@ to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
 <!-- BENCHMARKS:START -->
-Latest automated benchmark: **Darwin** — 10.97 M leases/s, 112.14% CPU, 713472 KiB RSS.
+Latest automated benchmark: **Darwin** — 12.69 M leases/s, 110.62% CPU, 654976 KiB RSS.
 
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST**: 298034 req/s | Latency 0.05ms (P90 0.09ms, P99 0.27ms) | RSS 17960KiB | Csw 0
-- **Axum**: 246383 req/s | Latency 1.59ms (P90 2.84ms, P99 4.50ms) | RSS 14972KiB | Csw 0
-- **Gin (Go)**: 195804 req/s | Latency 3.52ms (P90 9.43ms, P99 21.37ms) | RSS 29016KiB | Csw 0
-- **Spring Boot**: 128893 req/s | Latency 3.08ms (P90 4.39ms, P99 6.40ms) | RSS 1309232KiB | Csw 0
+- **CWIST**: 110236 req/s | Latency 0.14ms (P90 0.26ms, P99 0.82ms) | RSS 15688KiB | Csw 0
+- **Axum**: 110312 req/s | Latency 3.56ms (P90 6.02ms, P99 9.11ms) | RSS 17476KiB | Csw 0
+- **Gin (Go)**: 77441 req/s | Latency 6.47ms (P90 15.06ms, P99 32.28ms) | RSS 29196KiB | Csw 0
+- **Spring Boot**: 43016 req/s | Latency 9.24ms (P90 12.03ms, P99 19.78ms) | RSS 1328424KiB | Csw 0
 
 Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
