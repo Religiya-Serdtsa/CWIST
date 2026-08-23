@@ -95,26 +95,34 @@ typedef struct {
 } reactor_impl_t;
 #endif
 
-#define MAX_REACTOR_EVENTS 4096
-
 typedef struct {
     int fd;
     cwist_reactor_cb_t cb;
     void *ctx;
     /* Inline caller payload; ctx always points here. Zeroed on checkout so
      * reuse across events cannot leak stale fields (calloc semantics
-     * without the heap). */
+     * without the heap).  While the slot sits on the free list, ctx is
+     * borrowed as the next-free link. */
     unsigned char payload[CWIST_REACTOR_PAYLOAD_SIZE];
 } reactor_event_ctx_t;
+
+#define REACTOR_CHUNK_EVENTS 4096
+
+typedef struct reactor_slot_chunk {
+    struct reactor_slot_chunk *next;
+    /* Slots follow in the same allocation. */
+    reactor_event_ctx_t slots[];
+} reactor_slot_chunk_t;
 
 struct cwist_reactor {
     reactor_impl_t impl;
     bool running;
-    reactor_event_ctx_t event_pool[MAX_REACTOR_EVENTS];
-    /* Free-stack over event_pool (pattern absorbed from io_uring_backend.c's
-     * stream table): O(1) slot acquire/release instead of a linear scan. */
-    uint32_t free_stack[MAX_REACTOR_EVENTS];
-    uint32_t free_top;
+    /* Dynamically grown slot chunks: a fixed pool (formerly 4096 slots)
+     * capped every reactor at 4096 live connections, which is what shed
+     * requests en masse past ~500k concurrent connections.  Chunks are never
+     * freed until destroy because slot pointers sit in in-flight CQEs. */
+    reactor_slot_chunk_t *chunks;
+    reactor_event_ctx_t *free_head;  /* Free list threaded through slots. */
     pthread_mutex_t pool_lock;
 };
 
@@ -122,14 +130,26 @@ static reactor_event_ctx_t *alloc_reactor_ctx(cwist_reactor_t *r, int fd, cwist_
                                               const void *payload, size_t payload_size) {
     if (!r || payload_size > CWIST_REACTOR_PAYLOAD_SIZE) return NULL;
     pthread_mutex_lock(&r->pool_lock);
-    if (r->free_top == 0) {
-        pthread_mutex_unlock(&r->pool_lock);
-        return NULL;
+    if (!r->free_head) {
+        reactor_slot_chunk_t *chunk = cwist_alloc(sizeof(*chunk) +
+                                                  REACTOR_CHUNK_EVENTS * sizeof(reactor_event_ctx_t));
+        if (chunk) {
+            chunk->next = r->chunks;
+            r->chunks = chunk;
+            for (uint32_t i = 0; i + 1 < REACTOR_CHUNK_EVENTS; i++) {
+                chunk->slots[i].ctx = &chunk->slots[i + 1];
+            }
+            chunk->slots[REACTOR_CHUNK_EVENTS - 1].ctx = NULL;
+            r->free_head = &chunk->slots[0];
+        }
     }
-    uint32_t idx = r->free_stack[--r->free_top];
+    reactor_event_ctx_t *ev_ctx = r->free_head;
+    if (ev_ctx) {
+        r->free_head = (reactor_event_ctx_t *)ev_ctx->ctx;
+    }
     pthread_mutex_unlock(&r->pool_lock);
+    if (!ev_ctx) return NULL;
 
-    reactor_event_ctx_t *ev_ctx = &r->event_pool[idx];
     memset(ev_ctx, 0, sizeof(*ev_ctx));
     ev_ctx->fd = fd;
     ev_ctx->cb = cb;
@@ -142,9 +162,9 @@ static reactor_event_ctx_t *alloc_reactor_ctx(cwist_reactor_t *r, int fd, cwist_
 
 static void free_reactor_ctx(cwist_reactor_t *r, reactor_event_ctx_t *ev_ctx) {
     if (!r || !ev_ctx) return;
-    uint32_t idx = (uint32_t)(ev_ctx - r->event_pool);
     pthread_mutex_lock(&r->pool_lock);
-    r->free_stack[r->free_top++] = idx;
+    ev_ctx->ctx = r->free_head;
+    r->free_head = ev_ctx;
     pthread_mutex_unlock(&r->pool_lock);
 }
 
@@ -157,10 +177,6 @@ cwist_reactor_t *cwist_reactor_create(void) {
 #ifdef __linux__
     pthread_mutex_init(&r->impl.sq_lock, NULL);
 #endif
-    for (uint32_t i = 0; i < MAX_REACTOR_EVENTS; i++) {
-        r->free_stack[i] = (MAX_REACTOR_EVENTS - 1) - i;
-    }
-    r->free_top = MAX_REACTOR_EVENTS;
 
 #ifdef __linux__
     r->impl.use_epoll = false;
@@ -252,6 +268,12 @@ void cwist_reactor_destroy(cwist_reactor_t *reactor) {
 #ifdef __linux__
     pthread_mutex_destroy(&reactor->impl.sq_lock);
 #endif
+    reactor_slot_chunk_t *chunk = reactor->chunks;
+    while (chunk) {
+        reactor_slot_chunk_t *next = chunk->next;
+        cwist_free(chunk);
+        chunk = next;
+    }
     cwist_free(reactor);
 }
 
@@ -269,10 +291,24 @@ static bool uring_submit(cwist_reactor_t *reactor, struct io_uring_sqe *out_sqe)
         memcpy(sqe, out_sqe, sizeof(*sqe));
         __atomic_store_n(reactor->impl.sq_tail, tail + 1, __ATOMIC_RELEASE);
         if (sys_io_uring_enter(reactor->impl.ring_fd, 1, 0, 0, NULL) < 0) {
+            if (getenv("CWIST_ASYNC_DEBUG")) {
+                static _Atomic long dbg_enter_fail;
+                long n = atomic_fetch_add(&dbg_enter_fail, 1) + 1;
+                if (n <= 5 || n % 10000 == 0)
+                    fprintf(stderr, "[reactor] uring enter failed fd=%d errno=%d(%s) sq=%u/%u total=%ld\n",
+                            out_sqe->fd, errno, strerror(errno), tail - head,
+                            reactor->impl.sq_entries, n);
+            }
             __atomic_store_n(reactor->impl.sq_tail, tail, __ATOMIC_RELEASE);
         } else {
             ok = true;
         }
+    } else if (getenv("CWIST_ASYNC_DEBUG")) {
+        static _Atomic long dbg_sq_full;
+        long n = atomic_fetch_add(&dbg_sq_full, 1) + 1;
+        if (n <= 5 || n % 10000 == 0)
+            fprintf(stderr, "[reactor] SQ full fd=%d depth=%u/%u total=%ld\n",
+                    out_sqe->fd, tail - head, reactor->impl.sq_entries, n);
     }
     pthread_mutex_unlock(&reactor->impl.sq_lock);
     return ok;
