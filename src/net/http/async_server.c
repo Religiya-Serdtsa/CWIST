@@ -41,7 +41,7 @@ static void async_accept_cb(int fd, void *ctx) {
 #endif
 
         if (app_use_https(app)) {
-            https_pool_submit(client_fd, app->ssl_ctx, app->https_request_handler, app);
+            cwist_https_dispatch(client_fd, app->ssl_ctx, app->https_request_handler, app);
         } else if (app && !app->use_ssl) {
             cwist_http_pool_submit_async(client_fd, cwist_app_http_handler_async, app);
         } else {
