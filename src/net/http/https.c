@@ -17,7 +17,9 @@
 #include <string.h>
 #include <errno.h>
 #include <poll.h>
+#ifdef __linux__
 #include <sys/epoll.h>
+#endif
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -207,7 +209,12 @@ void https_pool_destroy(void) {
  * tries SSL_accept once on a non-blocking socket; incomplete handshakes are
  * parked in a private epoll set and retried by a single shepherd thread,
  * which also reaps connections that exceed CWIST_HTTPS_HANDSHAKE_TIMEOUT_MS.
- * Only fully established sessions enter the worker pool. */
+ * Only fully established sessions enter the worker pool.
+ *
+ * The shepherd is epoll-based and therefore Linux-only.  On other platforms
+ * cwist_https_dispatch() falls back to the legacy blocking pool path. */
+
+#ifdef __linux__
 
 typedef struct https_hs_pending {
     int fd;
@@ -491,6 +498,24 @@ void cwist_https_dispatch(int client_fd, cwist_https_context *ctx, void (*handle
     char b = 1;
     if (write(g_hs_wakeup_wr, &b, 1) < 0) { /* non-fatal */ }
 }
+
+#else /* !__linux__ */
+
+int https_hs_shepherd_start(void) { return -1; }
+void https_hs_shepherd_stop(void) {}
+
+long cwist_https_pending_handshakes(void) { return 0; }
+
+/* Non-Linux fallback: no epoll shepherd, use the legacy blocking pool path. */
+void cwist_https_dispatch(int client_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx) {
+    if (!ctx || !ctx->ctx || client_fd < 0) {
+        if (client_fd >= 0) close(client_fd);
+        return;
+    }
+    https_pool_submit(client_fd, ctx, handler, user_ctx);
+}
+
+#endif /* __linux__ */
 
 #define CWIST_ALPN_HTTP11       ((const unsigned char *)"\x08http/1.1")
 #define CWIST_ALPN_H2_HTTP11    ((const unsigned char *)"\x02h2\x08http/1.1")
