@@ -60,22 +60,22 @@ def render_webserver_svg(history: list[dict]) -> str:
         ("Context Switches", [("CWIST", "cwist_csw", "#22c55e"), ("CWIST C1M", "cwist_c1m_csw", "#10b981"), ("Axum", "axum_csw", "#3b82f6"), ("Gin", "gin_csw", "#06b6d4"), ("Spring", "spring_csw", "#ef4444")])
     ]
     
-    width = 960
+    width = 1120
     height = 540
     blocks = []
     
     # Title & Legend
     blocks.append('<text x="30" y="35" class="title">Web Server Performance Comparison (wrk 12t 400c)</text>')
-    blocks.append('<rect x="450" y="20" width="12" height="12" fill="#22c55e" rx="2"/><text x="468" y="31" class="legend">CWIST</text>')
-    blocks.append('<rect x="535" y="20" width="12" height="12" fill="#10b981" rx="2"/><text x="553" y="31" class="legend">CWIST C1M</text>')
-    blocks.append('<rect x="650" y="20" width="12" height="12" fill="#3b82f6" rx="2"/><text x="668" y="31" class="legend">Axum</text>')
-    blocks.append('<rect x="725" y="20" width="12" height="12" fill="#06b6d4" rx="2"/><text x="743" y="31" class="legend">Gin</text>')
-    blocks.append('<rect x="790" y="20" width="12" height="12" fill="#ef4444" rx="2"/><text x="808" y="31" class="legend">Spring Boot</text>')
+    blocks.append('<rect x="530" y="20" width="12" height="12" fill="#22c55e" rx="2"/><text x="548" y="31" class="legend">CWIST</text>')
+    blocks.append('<rect x="615" y="20" width="12" height="12" fill="#10b981" rx="2"/><text x="633" y="31" class="legend">CWIST C1M</text>')
+    blocks.append('<rect x="730" y="20" width="12" height="12" fill="#3b82f6" rx="2"/><text x="748" y="31" class="legend">Axum</text>')
+    blocks.append('<rect x="805" y="20" width="12" height="12" fill="#06b6d4" rx="2"/><text x="823" y="31" class="legend">Gin</text>')
+    blocks.append('<rect x="870" y="20" width="12" height="12" fill="#ef4444" rx="2"/><text x="888" y="31" class="legend">Spring Boot</text>')
     
     # Render 4 grid subpanels (2x2 layout)
-    panel_w = 420
+    panel_w = 520
     panel_h = 200
-    offsets = [(30, 60), (490, 60), (30, 290), (490, 290)]
+    offsets = [(30, 60), (570, 60), (30, 290), (570, 290)]
     
     for idx, (m_title, series_list) in enumerate(metrics):
         px, py = offsets[idx]
@@ -90,7 +90,7 @@ def render_webserver_svg(history: list[dict]) -> str:
         for s_idx, (label, key, color) in enumerate(series_list):
             val = float(ws_latest.get(key, 0))
             ratio = min(1.0, max(0.0, val / max_val))
-            bar_len = int(ratio * 240)
+            bar_len = int(ratio * 280)
             by = bar_y_base + s_idx * 27
             
             # Format value label
@@ -104,10 +104,10 @@ def render_webserver_svg(history: list[dict]) -> str:
                 val_str = f"{val:,.0f}"
                 
             blocks.append(f'<text x="{px+15}" y="{by+16}" class="bar-label">{label}</text>')
-            blocks.append(f'<rect x="{px+80}" y="{by}" width="240" height="22" fill="#374151" rx="3"/>')
+            blocks.append(f'<rect x="{px+100}" y="{by}" width="280" height="22" fill="#374151" rx="3"/>')
             if bar_len > 0:
-                blocks.append(f'<rect x="{px+80}" y="{by}" width="{bar_len}" height="22" fill="{color}" rx="3"/>')
-            blocks.append(f'<text x="{px+330}" y="{by+16}" class="bar-val">{val_str}</text>')
+                blocks.append(f'<rect x="{px+100}" y="{by}" width="{bar_len}" height="22" fill="{color}" rx="3"/>')
+            blocks.append(f'<text x="{px+390}" y="{by+16}" class="bar-val">{val_str}</text>')
 
     # Footer: recorded Spring/JVM & Go runtime environment & benchmark profile
     env = ws_latest.get("spring_env", {}) or {}
