@@ -1174,6 +1174,49 @@ size_t cwist_http_serialize_headers(cwist_http_response *res, char *buf, size_t 
 
 #include <sys/uio.h> // For writev and BSD sendfile
 
+/* --- Optional TCP_CORK coalescing layer (cleartext HTTP/1.1) -------------
+ * Enabled at runtime with CWIST_USE_TCP_CORK=1, no source changes needed.
+ * While corked, headers + body + file bytes accumulate into full segments;
+ * instead of flushing everything in one giant clump, the file path flushes
+ * every CWIST_TCP_CORK_BURST bytes (default 256 KiB), which is what keeps
+ * high-RTT links fed without head-of-queue clumping. TLS is unaffected
+ * (records are sealed above the TCP layer, so cork buys nothing there). */
+#if defined(__linux__) && defined(TCP_CORK)
+#define CWIST_TCP_CORK_DEFAULT_BURST (256 * 1024)
+
+bool cwist_tcp_cork_enabled(void) {
+    static int enabled = -1; /* benign idempotent race on first use */
+    if (enabled < 0) {
+        const char *env = getenv("CWIST_USE_TCP_CORK");
+        enabled = (env && atoi(env) > 0) ? 1 : 0;
+    }
+    return enabled == 1;
+}
+
+static size_t cwist_tcp_cork_burst(void) {
+    static size_t burst = 0;
+    if (burst == 0) {
+        const char *env = getenv("CWIST_TCP_CORK_BURST");
+        long v = (env && *env) ? atol(env) : 0;
+        burst = (v >= 16384) ? (size_t)v : (size_t)CWIST_TCP_CORK_DEFAULT_BURST;
+    }
+    return burst;
+}
+
+static int cwist_tcp_cork_set(int fd, bool on) {
+    int v = on ? 1 : 0;
+    return setsockopt(fd, IPPROTO_TCP, TCP_CORK, &v, sizeof(v));
+}
+
+/* Flush pending corked bytes, then re-cork: a burst boundary. */
+static void cwist_tcp_cork_flush(int fd) {
+    cwist_tcp_cork_set(fd, false);
+    cwist_tcp_cork_set(fd, true);
+}
+#else
+bool cwist_tcp_cork_enabled(void) { return false; }
+#endif
+
 /**
  * @brief Send an entire iovec over a (possibly non-blocking) socket.
  * Handles EINTR, EAGAIN/EWOULDBLOCK with POLLOUT polling, and partial writes.
@@ -1223,9 +1266,18 @@ static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res)
     if (!res || !res->use_file_stream || res->file_stream_fd < 0) return false;
     size_t remaining = res->file_stream_len;
     off_t offset = res->file_stream_offset;
+#if defined(__linux__)
+    const bool cork = cwist_tcp_cork_enabled();
+    const size_t burst = cork ? cwist_tcp_cork_burst() : 0;
+    size_t since_flush = 0;
+#endif
     while (remaining > 0) {
 #if defined(__linux__)
-        ssize_t sent = sendfile(client_fd, res->file_stream_fd, &offset, remaining);
+        /* Cap each sendfile at the remaining burst budget so flushes land on
+         * moderate boundaries instead of one giant clump. */
+        size_t quota = remaining;
+        if (cork && burst - since_flush < quota) quota = burst - since_flush;
+        ssize_t sent = sendfile(client_fd, res->file_stream_fd, &offset, quota);
         if (sent < 0) {
             if (errno == EINTR) continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -1238,6 +1290,13 @@ static bool cwist_http_stream_file_fast(int client_fd, cwist_http_response *res)
         }
         if (sent == 0) break;
         remaining -= (size_t)sent;
+        if (cork) {
+            since_flush += (size_t)sent;
+            if (since_flush >= burst && remaining > 0) {
+                cwist_tcp_cork_flush(client_fd);
+                since_flush = 0;
+            }
+        }
 #else
         /* Portable read+write fallback for macOS, FreeBSD, and other platforms.
            lseek is used to handle the offset since pread avoids modifying the
@@ -1324,6 +1383,17 @@ cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) 
     flags |= MSG_DONTWAIT;
     #endif
 
+#if defined(__linux__) && defined(TCP_CORK)
+    const bool cork = cwist_tcp_cork_enabled();
+    if (cork) {
+        cwist_tcp_cork_set(client_fd, true);
+#if defined(MSG_MORE)
+        /* File body follows: let the headers merge with the first burst. */
+        if (res->use_file_stream) flags |= MSG_MORE;
+#endif
+    }
+#endif
+
     if (cwist_http_sendmsg_all(client_fd, iov, iov_cnt, flags) != 0) {
         err.error.err_i16 = -1;
     } else {
@@ -1334,6 +1404,12 @@ cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) 
             }
         }
     }
+
+#if defined(__linux__) && defined(TCP_CORK)
+    /* Uncorking flushes the final partial burst; runs on every outcome so a
+     * failed send can never leave the socket corked. */
+    if (cork) cwist_tcp_cork_set(client_fd, false);
+#endif
 
     cwist_http_response_release_ptr_body(res);
     cwist_http_response_release_file_stream(res);
