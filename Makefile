@@ -150,6 +150,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/sse.c \
        src/net/graphql/graphql.c \
        src/net/http/http2.c \
+       src/net/http/http2_flow_control.c \
        src/net/http/http3.c \
        src/net/http/curl_global.c \
        src/net/http/http_client.c \
