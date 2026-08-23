@@ -24,7 +24,10 @@
 #include <time.h>
 
 #include <cwist/net/http/http2.h>
+#include <cwist/net/http/http2_flow_control.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/log.h>
+#include <cwist/sys/metrics/metrics.h>
 #include <cwist/core/seq/seq.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/sys/app/shutdown.h>
@@ -79,6 +82,13 @@ static uint64_t h2_now_ms(void) {
     return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
 }
 
+/* Monotonic clock in microseconds, for flow-control RTT samples/pacing. */
+static uint64_t h2_now_us(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000 + (uint64_t)ts.tv_nsec / 1000;
+}
+
 /* Idle deadline for a connection with no complete frame arriving.  Defaults
  * to CWIST_HTTP2_IDLE_TIMEOUT_MS, overridable via the env var of the same
  * name (read once at first use). */
@@ -96,13 +106,21 @@ static int h2_idle_timeout_ms(void) {
 typedef struct h2_stream {
     uint32_t stream_id;
     cwist_http_request *req;
-    int32_t send_window;   /* peer-advertised; bytes we may send */
-    int32_t recv_window;   /* our window; bytes peer may send */
+    /* Adaptive flow control (send: peer-advertised credit; receive: our
+     * advertised credit).  Replaces the old hand-rolled window ints. */
+    cwist_http2_stream_flow_control fc;
+    bool send_aborted;       /* RST_STREAM received while sending */
     uint8_t recv_xor;      /* running XOR of received DATA payload bytes */
     uint8_t send_xor;      /* running XOR of sent DATA payload bytes */
     cwist_seq_assembler_t *body_assembler; /* reorders sequenced DATA chunks */
     struct h2_stream *next;
 } h2_stream;
+
+typedef struct h2_deferred_frame {
+    unsigned char hdr[9];
+    unsigned char *payload; /* owned; NULL when the frame has no payload */
+    struct h2_deferred_frame *next;
+} h2_deferred_frame;
 
 typedef struct {
     cwist_https_connection *conn;
@@ -110,8 +128,14 @@ typedef struct {
     uint32_t peer_max_frame_size;
     uint32_t peer_initial_window_size;
     uint32_t peer_max_concurrent_streams;
-    int32_t conn_send_window;
-    int32_t conn_recv_window;
+    /* Connection-level adaptive flow control: tracks both our advertised
+     * receive credit and the peer-advertised send credit, auto-tunes the
+     * receive target from PING-measured RTT, and paces sends once RTT is
+     * known. */
+    cwist_http2_flow_control fc;
+    uint64_t ping_sent_us;
+    unsigned char ping_payload[8];
+    bool ping_outstanding;
     unsigned char *cont_buf;
     size_t cont_len;
     size_t cont_cap;
@@ -121,6 +145,11 @@ typedef struct {
     bool sequenced_data;   /* CWIST extension: DATA frames carry seq chunks */
     uint32_t last_processed_stream_id;
     uint64_t last_activity; /* monotonic ms of the last complete frame read */
+    /* Frames the send-window wait loop had to read off the wire but must not
+     * dispatch (HEADERS/SETTINGS of other streams, etc.). The main loop
+     * drains these before touching the socket again. */
+    h2_deferred_frame *deferred_head;
+    h2_deferred_frame *deferred_tail;
 } h2_conn;
 
 static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
@@ -128,8 +157,11 @@ static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
     hc->conn = conn;
     hc->peer_max_frame_size = CWIST_HTTP2_MAX_FRAME_SIZE;
     hc->peer_initial_window_size = 65535;
-    hc->conn_send_window = 65535;
-    hc->conn_recv_window = 65535;
+    /* Start at the RFC-default 65535 on the send side; the startup code
+     * bumps our receive credit to 2GB on the wire and mirrors that into
+     * fc.receive_window. */
+    cwist_http2_flow_control_init(&hc->fc, 0, CWIST_HTTP2_MAX_WINDOW);
+    hc->fc.send_window = 65535;
     hc->cont_end_stream = false;
     hc->last_activity = h2_now_ms();
     /* The extension carries application bodies and must not be enabled over
@@ -148,6 +180,13 @@ static void h2_conn_destroy(h2_conn *hc) {
         s = next;
     }
     cwist_free(hc->cont_buf);
+    h2_deferred_frame *df = hc->deferred_head;
+    while (df) {
+        h2_deferred_frame *next = df->next;
+        cwist_free(df->payload);
+        cwist_free(df);
+        df = next;
+    }
 }
 
 static h2_stream *h2_stream_find(h2_conn *hc, uint32_t stream_id) {
@@ -164,8 +203,11 @@ static h2_stream *h2_stream_create(h2_conn *hc, uint32_t stream_id) {
     if (!s) return NULL;
     memset(s, 0, sizeof(*s));
     s->stream_id = stream_id;
-    s->send_window = (int32_t)hc->peer_initial_window_size;
-    s->recv_window = 65535;
+    /* Receive credit matches the INITIAL_WINDOW_SIZE=2GB we advertise in
+     * SETTINGS; send credit starts at the peer's initial window. */
+    cwist_http2_stream_flow_control_init(&s->fc, stream_id,
+                                         CWIST_HTTP2_MAX_WINDOW, CWIST_HTTP2_MAX_WINDOW);
+    s->fc.send_window = hc->peer_initial_window_size;
     s->next = hc->streams;
     hc->streams = s;
     return s;
@@ -449,19 +491,66 @@ static int h2_send_window_update(h2_conn *hc, uint32_t stream_id, int32_t increm
     return h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_WINDOW_UPDATE, 0, stream_id, payload, 4);
 }
 
+/* Adaptive receive-window refill driven by the flow-control module: emits a
+ * WINDOW_UPDATE only once at least half of the (RTT-scaled) target window
+ * has been consumed, instead of the old fixed 32 KiB threshold. */
 static int h2_auto_window_update(h2_conn *hc, h2_stream *s) {
-    if (hc->conn_recv_window < 32768) {
-        int32_t inc = 65535 - hc->conn_recv_window;
-        if (inc > 0 && h2_send_window_update(hc, 0, inc) == 0) {
-            hc->conn_recv_window += inc;
-        }
+    unsigned char frame_buf[13];
+    size_t written = 0;
+    uint64_t now = h2_now_us();
+
+    int r = cwist_http2_flow_control_maybe_window_update(&hc->fc, frame_buf,
+                                                         sizeof(frame_buf), &written,
+                                                         now, false);
+    if (r < 0) return -1;
+    if (r > 0 && h2_write_all(hc->conn, frame_buf, written) != 0) return -1;
+
+    if (s) {
+        written = 0;
+        r = cwist_http2_stream_flow_control_maybe_window_update(&hc->fc, &s->fc,
+                                                                frame_buf, sizeof(frame_buf),
+                                                                &written, now, false);
+        if (r < 0) return -1;
+        if (r > 0 && h2_write_all(hc->conn, frame_buf, written) != 0) return -1;
     }
-    if (s && s->recv_window < 32768) {
-        int32_t inc = 65535 - s->recv_window;
-        if (inc > 0 && h2_send_window_update(hc, s->stream_id, inc) == 0) {
-            s->recv_window += inc;
-        }
+    return 0;
+}
+
+/* How many bytes may be sent right now: peer window credit, throttled by
+ * RTT pacing once the first PING sample has calibrated it. */
+static uint32_t h2_send_allowance(h2_conn *hc, h2_stream *s, uint32_t requested) {
+    uint32_t allowed = requested;
+    if (allowed > hc->fc.send_window) allowed = hc->fc.send_window;
+    if (s && allowed > s->fc.send_window) allowed = s->fc.send_window;
+    if (s && hc->fc.rtt_initialized && allowed > 0) {
+        size_t paced = cwist_http2_flow_control_pacing_allowance(&hc->fc, &s->fc,
+                                                                 allowed, h2_now_us());
+        if (paced < allowed) allowed = (uint32_t)paced;
     }
+    return allowed;
+}
+
+static void h2_commit_send(h2_conn *hc, h2_stream *s, uint32_t bytes) {
+    if (s && hc->fc.rtt_initialized) {
+        /* Allowance was already vetted by h2_send_allowance, so this always
+         * succeeds and debits windows + pacing tokens together. */
+        cwist_http2_flow_control_reserve_send(&hc->fc, &s->fc, bytes, h2_now_us());
+        return;
+    }
+    hc->fc.send_window -= bytes;
+    if (s) s->fc.send_window -= bytes;
+}
+
+/* Send a PING carrying a monotonic timestamp; the matching ACK yields an
+ * RTT sample that feeds the adaptive window/pacing tuning. */
+static int h2_send_ping(h2_conn *hc) {
+    uint64_t now = h2_now_us();
+    unsigned char p[8];
+    for (int i = 0; i < 8; i++) p[i] = (unsigned char)(now >> (56 - 8 * i));
+    if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_PING, 0, 0, p, 8) != 0) return -1;
+    memcpy(hc->ping_payload, p, 8);
+    hc->ping_sent_us = now;
+    hc->ping_outstanding = true;
     return 0;
 }
 
@@ -987,7 +1076,15 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
             uint32_t index = 0;
             if (h2_decode_integer(payload, len, &pos, 7, &index) != 0) break;
             const cwist_http2_static_header *entry = h2_static_header(index);
-            if (entry && entry->name) h2_apply_header(req, entry->name, entry->value);
+            if (entry && entry->name) {
+                h2_apply_header(req, entry->name, entry->value);
+            } else {
+                /* Client referenced the HPACK dynamic table despite
+                 * SETTINGS_HEADER_TABLE_SIZE=0: the header is lost, so make
+                 * the loss observable instead of a silent session break. */
+                cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_H2_HEADERS_DROPPED);
+                CWIST_LOG_WARN("[h2] dropping header field: indexed name/value index=%u beyond static table", index);
+            }
             continue;
         }
 
@@ -1010,6 +1107,10 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
         if (name_index > 0) {
             const cwist_http2_static_header *entry = h2_static_header(name_index);
             if (!entry || !entry->name) {
+                /* Same dynamic-table reference case as above, on the name
+                 * side of a literal field. */
+                cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_H2_HEADERS_DROPPED);
+                CWIST_LOG_WARN("[h2] dropping header field: literal with name index=%u beyond static table", name_index);
                 char *discard = h2_decode_string(payload, len, &pos);
                 cwist_free(discard);
                 continue;
@@ -1339,13 +1440,25 @@ static int h2_read_all(h2_conn *hc, void *buf, int len) {
     return len;
 }
 
-/* Returns 0 normally, -1 when the peer vanished mid-frame (EOF/error). */
+/* Returns 0 normally, -1 when the peer vanished mid-frame (EOF/error).
+ *
+ * Two traps are handled here:
+ * 1. poll(fd, 0) alone misses WINDOW_UPDATEs sitting in OpenSSL's internal
+ *    buffer (a whole TLS record is decrypted per SSL_read, so leftover
+ *    frames have zero bytes pending on the socket). Without the
+ *    SSL_pending check the window wait loop never sees the update and the
+ *    connection is torn down mid-body — the "some chunks arrive, then
+ *    stuck" symptom.
+ * 2. Frames this loop is not responsible for (HEADERS/SETTINGS of other
+ *    streams, etc.) used to be read and discarded. They are now queued so
+ *    the main frame loop can dispatch them. */
 static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
     struct pollfd pfd;
     pfd.fd = hc->conn->fd;
     pfd.events = POLLIN;
 
-    while (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN)) {
+    while ((poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN)) ||
+           (hc->conn->ssl && SSL_pending(hc->conn->ssl) > 0)) {
         unsigned char hdr[9];
         int n = h2_read_all(hc, hdr, 9);
         if (n != 9) return -1;
@@ -1379,12 +1492,12 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
                                     (int32_t)payload[3];
                 if (increment > 0) {
                     if (stream_id == 0) {
-                        hc->conn_send_window += increment;
+                        cwist_http2_flow_control_add_send_window(&hc->fc, (uint32_t)increment);
                     } else if (s && stream_id == s->stream_id) {
-                        s->send_window += increment;
+                        cwist_http2_stream_flow_control_add_send_window(&s->fc, (uint32_t)increment);
                     } else {
                         h2_stream *other = h2_stream_find(hc, stream_id);
-                        if (other) other->send_window += increment;
+                        if (other) cwist_http2_stream_flow_control_add_send_window(&other->fc, (uint32_t)increment);
                     }
                 }
             }
@@ -1394,8 +1507,22 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
             }
         } else if (type == 0x03) { // RST_STREAM
             if (s && stream_id == s->stream_id) {
-                s->send_window = -999; // abort code
+                s->send_aborted = true;
             }
+        } else {
+            /* Not ours to consume: hand the intact frame to the main loop. */
+            h2_deferred_frame *df = (h2_deferred_frame *)cwist_alloc(sizeof(*df));
+            if (!df) {
+                cwist_free(payload);
+                return -1;
+            }
+            memcpy(df->hdr, hdr, 9);
+            df->payload = payload;
+            df->next = NULL;
+            if (hc->deferred_tail) hc->deferred_tail->next = df;
+            else hc->deferred_head = df;
+            hc->deferred_tail = df;
+            continue;
         }
         cwist_free(payload);
     }
@@ -1407,10 +1534,9 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
  */
 static uint16_t h2_seq_chunk_payload(h2_conn *hc, h2_stream *s, uint32_t max_frame_size) {
     uint16_t max_payload = CWIST_HTTP2_SEQ_CHUNK_PAYLOAD(max_frame_size);
-    int32_t eff_window = hc->conn_send_window;
-    if (s && s->send_window < eff_window) eff_window = s->send_window;
-    if (eff_window <= (int32_t)CWIST_SEQ_HEADER_SIZE) return 0;
-    uint32_t allowed_payload = (uint32_t)(eff_window - (int32_t)CWIST_SEQ_HEADER_SIZE);
+    uint32_t eff_window = h2_send_allowance(hc, s, max_payload + CWIST_SEQ_HEADER_SIZE);
+    if (eff_window <= CWIST_SEQ_HEADER_SIZE) return 0;
+    uint32_t allowed_payload = eff_window - CWIST_SEQ_HEADER_SIZE;
     return (allowed_payload < (uint32_t)max_payload) ? (uint16_t)allowed_payload : max_payload;
 }
 
@@ -1428,10 +1554,10 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
     off_t cur_offset = offset;
 
     for (uint32_t i = 0; i < total_chunks && remaining > 0; i++) {
-        while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+        while (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
             if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
-            if (s && s->send_window == -999) return -1;
-            if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+            if (s && s->send_aborted) return -1;
+            if (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
                 /* Give up if no frame arrived within the idle deadline. */
                 if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
                 struct timespec ts = {0, 2000000};
@@ -1441,8 +1567,7 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
 
         size_t plen = remaining > chunk_payload ? chunk_payload : remaining;
         size_t chunk_len = CWIST_SEQ_HEADER_SIZE + plen;
-        if ((int32_t)chunk_len > hc->conn_send_window ||
-            (s && (int32_t)chunk_len > s->send_window)) {
+        if (h2_send_allowance(hc, s, (uint32_t)chunk_len) < chunk_len) {
             /* Window too small for a full sequenced chunk; wait for update. */
             if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
             if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
@@ -1465,8 +1590,7 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
         }
         if (s) s->send_xor ^= h2_xor_bytes(chunk, chunk_len);
         cwist_free(chunk);
-        hc->conn_send_window -= (int32_t)chunk_len;
-        if (s) s->send_window -= (int32_t)chunk_len;
+        h2_commit_send(hc, s, (uint32_t)chunk_len);
         cur_offset += (off_t)plen;
         remaining -= plen;
     }
@@ -1486,10 +1610,10 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
     if (!cwist_seq_split(body_data, body_len, chunk_payload, &msg)) return -1;
 
     for (size_t i = 0; i < msg.count; i++) {
-        while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+        while (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
             if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
-            if (s && s->send_window == -999) return -1;
-            if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+            if (s && s->send_aborted) return -1;
+            if (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
                 /* Give up if no frame arrived within the idle deadline. */
                 if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
                 struct timespec ts = {0, 2000000};
@@ -1498,8 +1622,7 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
         }
 
         size_t chunk_len = msg.chunk_lens[i];
-        if ((int32_t)chunk_len > hc->conn_send_window ||
-            (s && (int32_t)chunk_len > s->send_window)) {
+        if (h2_send_allowance(hc, s, (uint32_t)chunk_len) < chunk_len) {
             /* Window too small for a full sequenced chunk; wait for update. */
             if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
             if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
@@ -1516,8 +1639,7 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
             return -1;
         }
         if (s) s->send_xor ^= h2_xor_bytes(msg.chunks[i], chunk_len);
-        hc->conn_send_window -= (int32_t)chunk_len;
-        if (s) s->send_window -= (int32_t)chunk_len;
+        h2_commit_send(hc, s, (uint32_t)chunk_len);
     }
 
     cwist_seq_message_free(&msg);
@@ -1578,10 +1700,10 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
         off_t offset = res->file_stream_offset;
         size_t remaining = res->file_stream_len;
         while (remaining > 0) {
-            while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+            while (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
                 if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
-                if (s && s->send_window == -999) return -1;
-                if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                if (s && s->send_aborted) return -1;
+                if (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
                     /* Give up if no frame arrived within the idle deadline. */
                     if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
                     struct timespec ts = {0, 2000000};
@@ -1590,32 +1712,35 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
             }
 
             uint32_t chunk = (uint32_t)(remaining > max_frame ? max_frame : remaining);
-            uint32_t allowed = chunk;
-            if ((int32_t)allowed > hc->conn_send_window) allowed = (uint32_t)hc->conn_send_window;
-            if (s && (int32_t)allowed > s->send_window) allowed = (uint32_t)s->send_window;
+            uint32_t allowed = h2_send_allowance(hc, s, chunk);
+            if (allowed == 0) {
+                /* Pacing throttled us below one byte; wait briefly. */
+                struct timespec ts = {0, 2000000};
+                nanosleep(&ts, NULL);
+                continue;
+            }
 
             unsigned char *chunk_buf = (unsigned char *)cwist_alloc(allowed);
             if (!chunk_buf) return -1;
             ssize_t r = pread(res->file_stream_fd, chunk_buf, allowed, offset);
-            if (r <= 0) { free(chunk_buf); return -1; }
+            if (r <= 0) { cwist_free(chunk_buf); return -1; }
             uint8_t flags = (remaining == (size_t)r) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
             if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id, chunk_buf, (uint32_t)r) != 0) {
-                free(chunk_buf); return -1;
+                cwist_free(chunk_buf); return -1;
             }
             if (s) s->send_xor ^= h2_xor_bytes(chunk_buf, (size_t)r);
-            free(chunk_buf);
-            hc->conn_send_window -= (int32_t)r;
-            if (s) s->send_window -= (int32_t)r;
+            cwist_free(chunk_buf);
+            h2_commit_send(hc, s, (uint32_t)r);
             offset += r;
             remaining -= (size_t)r;
         }
     } else {
         size_t sent = 0;
         while (sent < body_len) {
-            while (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+            while (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
                 if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
-                if (s && s->send_window == -999) return -1;
-                if (hc->conn_send_window <= 0 || (s && s->send_window <= 0)) {
+                if (s && s->send_aborted) return -1;
+                if (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
                     /* Give up if no frame arrived within the idle deadline. */
                     if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
                     struct timespec ts = {0, 2000000};
@@ -1625,9 +1750,13 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
 
             size_t remaining = body_len - sent;
             uint32_t chunk = (uint32_t)(remaining > max_frame ? max_frame : remaining);
-            uint32_t allowed = chunk;
-            if ((int32_t)allowed > hc->conn_send_window) allowed = (uint32_t)hc->conn_send_window;
-            if (s && (int32_t)allowed > s->send_window) allowed = (uint32_t)s->send_window;
+            uint32_t allowed = h2_send_allowance(hc, s, chunk);
+            if (allowed == 0) {
+                /* Pacing throttled us below one byte; wait briefly. */
+                struct timespec ts = {0, 2000000};
+                nanosleep(&ts, NULL);
+                continue;
+            }
 
             uint8_t flags = (sent + allowed == body_len) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
             if (h2_write_frame(hc->conn, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
@@ -1635,8 +1764,7 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
                 return -1;
             }
             if (s) s->send_xor ^= h2_xor_bytes(body_data + sent, allowed);
-            hc->conn_send_window -= (int32_t)allowed;
-            if (s) s->send_window -= (int32_t)allowed;
+            h2_commit_send(hc, s, allowed);
             sent += allowed;
         }
     }
@@ -1773,7 +1901,17 @@ static int h2_handle_settings(h2_conn *hc, const unsigned char *payload, size_t 
                     hc->peer_initial_window_size = value;
                     h2_stream *s = hc->streams;
                     while (s) {
-                        s->send_window += delta;
+                        if (delta >= 0) {
+                            uint32_t inc = (uint32_t)delta;
+                            s->fc.send_window = inc > CWIST_HTTP2_MAX_WINDOW - s->fc.send_window
+                                                    ? CWIST_HTTP2_MAX_WINDOW
+                                                    : s->fc.send_window + inc;
+                        } else {
+                            uint32_t dec = (uint32_t)(-delta);
+                            /* RFC 7540 allows the adjusted window to go
+                             * negative; clamping to 0 is the safe subset. */
+                            s->fc.send_window = dec > s->fc.send_window ? 0 : s->fc.send_window - dec;
+                        }
                         s = s->next;
                     }
                 }
@@ -1804,8 +1942,8 @@ static int h2_handle_window_update(h2_conn *hc, uint32_t stream_id,
     if (increment <= 0) return -1;
 
     if (stream_id == 0) {
-        hc->conn_send_window += increment;
-        if (hc->conn_send_window > 2147483647 || hc->conn_send_window < 0) return -1;
+        if ((uint64_t)hc->fc.send_window + (uint32_t)increment > CWIST_HTTP2_MAX_WINDOW) return -1;
+        hc->fc.send_window += (uint32_t)increment;
     } else {
         h2_stream *s = h2_stream_find(hc, stream_id);
         if (!s) {
@@ -1813,8 +1951,8 @@ static int h2_handle_window_update(h2_conn *hc, uint32_t stream_id,
              * or may be ignored depending on state. We ignore for leniency. */
             return 0;
         }
-        s->send_window += increment;
-        if (s->send_window > 2147483647 || s->send_window < 0) return -1;
+        if ((uint64_t)s->fc.send_window + (uint32_t)increment > CWIST_HTTP2_MAX_WINDOW) return -1;
+        s->fc.send_window += (uint32_t)increment;
     }
     return 0;
 }
@@ -1895,26 +2033,45 @@ cwist_error_t cwist_http2_serve_connection(
 
     /* Upgrade connection flow control window to 2GB */
     h2_send_window_update(&hc, 0, 2147483647 - 65535);
+    hc.fc.receive_window = CWIST_HTTP2_MAX_WINDOW;
+
+    /* Kick off RTT sampling for the adaptive flow control; the ACK arrives
+     * in the main loop below.  Failure is non-fatal: pacing simply stays
+     * uncalibrated. */
+    h2_send_ping(&hc);
 
     bool connected = true;
     bool sent_goaway = false;
     while (connected && atomic_load(&g_cwist_running)) {
         unsigned char hdr[9];
-        /* Bound the wait for the next frame with the idle deadline so an
-         * idle connection cannot monopolize a pool worker forever. */
-        if (h2_wait_readable(&hc) != 0) {
-            if (!sent_goaway &&
-                h2_now_ms() - hc.last_activity >= (uint64_t)h2_idle_timeout_ms()) {
-                h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR);
-                sent_goaway = true;
+        unsigned char *payload = NULL;
+
+        /* Frames the send-window wait loop pulled off the wire but could not
+         * dispatch are served first; only then touch the socket. */
+        h2_deferred_frame *df = hc.deferred_head;
+        if (df) {
+            hc.deferred_head = df->next;
+            if (!hc.deferred_head) hc.deferred_tail = NULL;
+            memcpy(hdr, df->hdr, 9);
+            payload = df->payload;
+            cwist_free(df);
+        } else {
+            /* Bound the wait for the next frame with the idle deadline so an
+             * idle connection cannot monopolize a pool worker forever. */
+            if (h2_wait_readable(&hc) != 0) {
+                if (!sent_goaway &&
+                    h2_now_ms() - hc.last_activity >= (uint64_t)h2_idle_timeout_ms()) {
+                    h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR);
+                    sent_goaway = true;
+                }
+                connected = false;
+                break;
             }
-            connected = false;
-            break;
+            /* Frame bytes already in flight may still straddle TLS records or
+             * TCP segments; h2_read_full waits out WANT_READ instead of
+             * treating it as a dropped connection. */
+            if (h2_read_full(&hc, hdr, 9) != 0) { connected = false; break; }
         }
-        /* Frame bytes already in flight may still straddle TLS records or
-         * TCP segments; h2_read_full waits out WANT_READ instead of
-         * treating it as a dropped connection. */
-        if (h2_read_full(&hc, hdr, 9) != 0) { connected = false; break; }
 
         uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | hdr[2];
         uint8_t type = hdr[3];
@@ -1930,19 +2087,19 @@ cwist_error_t cwist_http2_serve_connection(
                 type == CWIST_HTTP2_FRAME_CONTINUATION || type == CWIST_HTTP2_FRAME_PUSH_PROMISE) {
                 if (type == CWIST_HTTP2_FRAME_SETTINGS || len > hc.peer_max_frame_size) {
                     h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_FRAME_SIZE_ERROR);
+                    cwist_free(payload);
                     connected = false;
                     break;
                 }
             }
         }
 
-        unsigned char *payload = NULL;
-        if (len > 0) {
+        if (!df && len > 0) {
             payload = (unsigned char *)cwist_alloc(len);
             if (!payload) { connected = false; break; }
             if (h2_read_full(&hc, payload, len) != 0) connected = false;
+            if (!connected) { cwist_free(payload); break; }
         }
-        if (!connected) { cwist_free(payload); break; }
 
         hc.last_activity = h2_now_ms();
 
@@ -2047,21 +2204,23 @@ cwist_error_t cwist_http2_serve_connection(
                     /* DATA on closed/unknown stream: must check if it violates flow control */
                     /* For simplicity, we treat it as a stream error by ignoring the data
                      * but still accounting connection-level window. */
-                    hc.conn_recv_window -= (int32_t)len;
-                    if (hc.conn_recv_window < 0) {
+                    if (!cwist_http2_flow_control_receive(&hc.fc, len)) {
                         h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_FLOW_CONTROL_ERROR);
                         connected = false;
+                    } else {
+                        cwist_http2_flow_control_consume(&hc.fc, len);
                     }
                     break;
                 }
                 if (len > 0) {
-                    hc.conn_recv_window -= (int32_t)len;
-                    s->recv_window -= (int32_t)len;
-                    if (hc.conn_recv_window < 0 || s->recv_window < 0) {
+                    if (!cwist_http2_flow_control_receive(&hc.fc, len) ||
+                        !cwist_http2_stream_flow_control_receive(&s->fc, len)) {
                         h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_FLOW_CONTROL_ERROR);
                         connected = false;
                         break;
                     }
+                    cwist_http2_flow_control_consume(&hc.fc, len);
+                    cwist_http2_stream_flow_control_consume(&s->fc, len);
                 }
                 if (payload && len > 0) {
                     if (hc.sequenced_data && len >= CWIST_SEQ_HEADER_SIZE) {
@@ -2165,6 +2324,14 @@ cwist_error_t cwist_http2_serve_connection(
                     if (h2_write_frame(conn, CWIST_HTTP2_FRAME_PING, CWIST_HTTP2_FLAG_ACK, 0, payload, 8) != 0) {
                         connected = false;
                     }
+                } else if (hc.ping_outstanding && memcmp(payload, hc.ping_payload, 8) == 0) {
+                    /* RTT sample for the adaptive window/pacing tuner.  Keep
+                     * one ping in flight while streams are active so the
+                     * estimate tracks changing network conditions. */
+                    uint64_t sample = h2_now_us() - hc.ping_sent_us;
+                    hc.ping_outstanding = false;
+                    if (sample > 0) cwist_http2_flow_control_update_rtt(&hc.fc, sample);
+                    if (hc.streams) h2_send_ping(&hc);
                 }
                 break;
             }

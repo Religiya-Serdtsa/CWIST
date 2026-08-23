@@ -32,7 +32,7 @@ cwist_http2_flow_control_adjust(cwist_http2_flow_control *flow_control)
     }
 
     delay_us = flow_control->srtt_us + (4U * flow_control->rttvar_us);
-    if (flow_control->rttvar_us >= flow_control->srtt_us / 2U) {
+    if (flow_control->rttvar_us > flow_control->srtt_us / 2U) {
         flow_control->network_quality = CWIST_HTTP2_NETWORK_QUALITY_UNSTABLE;
     } else if (delay_us >= 200000U) {
         flow_control->network_quality = CWIST_HTTP2_NETWORK_QUALITY_HIGH_RTT;
@@ -65,7 +65,10 @@ cwist_http2_write_window_update(uint8_t *buffer, size_t buffer_len,
     if (written != NULL) {
         *written = 0;
     }
-    if (buffer == NULL || written == NULL || buffer_len < 9U || increment == 0U) {
+    /* A WINDOW_UPDATE frame is 9 bytes of header + 4 bytes of payload;
+     * accepting buffer_len < 13 used to write 4 bytes past the caller's
+     * buffer. */
+    if (buffer == NULL || written == NULL || buffer_len < 13U || increment == 0U) {
         return -1;
     }
 
@@ -94,7 +97,8 @@ cwist_http2_flow_control_init(cwist_http2_flow_control *flow_control,
     if (flow_control == NULL) {
         return;
     }
-    if (initial_connection_window == 0U) {
+    /* Anything below the default minimum means "use the default". */
+    if (initial_connection_window < CWIST_HTTP2_INITIAL_CONNECTION_WINDOW) {
         initial_connection_window = CWIST_HTTP2_INITIAL_CONNECTION_WINDOW;
     }
     if (max_connection_window < initial_connection_window) {
@@ -111,7 +115,9 @@ cwist_http2_flow_control_init(cwist_http2_flow_control *flow_control,
     flow_control->max_window = max_connection_window;
     flow_control->send_window = initial_connection_window;
     flow_control->network_quality = CWIST_HTTP2_NETWORK_QUALITY_NORMAL;
-    flow_control->pacing_tokens = initial_connection_window;
+    /* Start with half a window of burst credit; the bucket refills at
+     * pacing_rate once RTT samples calibrate it. */
+    flow_control->pacing_tokens = initial_connection_window / 2U;
     flow_control->pacing_rate_bytes_per_sec = initial_connection_window * 10U;
 }
 
@@ -124,7 +130,8 @@ cwist_http2_stream_flow_control_init(cwist_http2_stream_flow_control *flow_contr
     if (flow_control == NULL) {
         return;
     }
-    if (initial_stream_window == 0U) {
+    /* Anything below the default minimum means "use the default". */
+    if (initial_stream_window < CWIST_HTTP2_INITIAL_STREAM_WINDOW) {
         initial_stream_window = CWIST_HTTP2_INITIAL_STREAM_WINDOW;
     }
     if (max_stream_window < initial_stream_window) {
@@ -204,6 +211,33 @@ cwist_http2_stream_flow_control_consume(cwist_http2_stream_flow_control *flow_co
     }
 }
 
+/* Retune the receive target toward 2x the measured bandwidth-delay product:
+ * bytes consumed since the previous update, projected over one SRTT. */
+static uint32_t
+cwist_http2_flow_control_retune_target(uint32_t pending_update,
+                                       uint64_t srtt_us,
+                                       uint64_t interval_us,
+                                       uint32_t minimum,
+                                       uint32_t maximum)
+{
+    if (interval_us == 0) {
+        return minimum;
+    }
+    uint64_t bdp2 = (2ULL * (uint64_t)pending_update * srtt_us) / interval_us;
+    return cwist_http2_window_clamp(bdp2, minimum, maximum);
+}
+
+/* Credit to hand back to the peer: top the window up to the target, but
+ * never refund less than what the application has actually consumed. */
+static uint32_t
+cwist_http2_flow_control_increment(uint32_t pending_update,
+                                   uint32_t receive_window,
+                                   uint32_t target_window)
+{
+    uint32_t top_up = receive_window < target_window ? target_window - receive_window : 0U;
+    return pending_update > top_up ? pending_update : top_up;
+}
+
 int
 cwist_http2_flow_control_maybe_window_update(cwist_http2_flow_control *flow_control,
                                              uint8_t *buffer, size_t buffer_len,
@@ -218,15 +252,25 @@ cwist_http2_flow_control_maybe_window_update(cwist_http2_flow_control *flow_cont
         (!force && flow_control->pending_update < flow_control->target_window / 2U)) {
         return 0;
     }
-    if (flow_control->receive_window >= flow_control->target_window) {
-        return 0;
+
+    if (flow_control->rtt_initialized && flow_control->last_window_update_us != 0U &&
+        now_us > flow_control->last_window_update_us) {
+        flow_control->target_window = cwist_http2_flow_control_retune_target(
+            flow_control->pending_update, flow_control->srtt_us,
+            now_us - flow_control->last_window_update_us,
+            flow_control->min_window, flow_control->max_window);
     }
 
-    increment = flow_control->target_window - flow_control->receive_window;
+    increment = cwist_http2_flow_control_increment(flow_control->pending_update,
+                                                   flow_control->receive_window,
+                                                   flow_control->target_window);
     if (cwist_http2_write_window_update(buffer, buffer_len, written, 0U, increment) != 0) {
         return -1;
     }
-    flow_control->receive_window += increment;
+    flow_control->receive_window =
+        increment > CWIST_HTTP2_MAX_WINDOW - flow_control->receive_window
+            ? CWIST_HTTP2_MAX_WINDOW
+            : flow_control->receive_window + increment;
     flow_control->pending_update = 0;
     flow_control->last_window_update_us = now_us;
     return 1;
@@ -238,7 +282,6 @@ cwist_http2_stream_flow_control_maybe_window_update(cwist_http2_flow_control *co
                                                     uint8_t *buffer, size_t buffer_len,
                                                     size_t *written, uint64_t now_us, bool force)
 {
-    uint64_t scaled_target;
     uint32_t increment;
 
     if (written != NULL) {
@@ -247,25 +290,36 @@ cwist_http2_stream_flow_control_maybe_window_update(cwist_http2_flow_control *co
     if (connection_flow_control == NULL || stream_flow_control == NULL) {
         return -1;
     }
-
-    scaled_target = ((uint64_t)stream_flow_control->min_window *
-                     connection_flow_control->target_window) /
-                    connection_flow_control->min_window;
-    stream_flow_control->target_window = cwist_http2_window_clamp(scaled_target,
-                                                                    stream_flow_control->min_window,
-                                                                    stream_flow_control->max_window);
+    /* Server-side only client-initiated (odd, non-zero) streams may receive
+     * a stream-level WINDOW_UPDATE. */
+    if (stream_flow_control->stream_id == 0U || (stream_flow_control->stream_id & 1U) == 0U) {
+        return 0;
+    }
     if (stream_flow_control->pending_update == 0U ||
-        (!force && stream_flow_control->pending_update < stream_flow_control->target_window / 2U) ||
-        stream_flow_control->receive_window >= stream_flow_control->target_window) {
+        (!force && stream_flow_control->pending_update < stream_flow_control->target_window / 2U)) {
         return 0;
     }
 
-    increment = stream_flow_control->target_window - stream_flow_control->receive_window;
+    if (connection_flow_control->rtt_initialized &&
+        connection_flow_control->last_window_update_us != 0U &&
+        now_us > connection_flow_control->last_window_update_us) {
+        stream_flow_control->target_window = cwist_http2_flow_control_retune_target(
+            stream_flow_control->pending_update, connection_flow_control->srtt_us,
+            now_us - connection_flow_control->last_window_update_us,
+            stream_flow_control->min_window, stream_flow_control->max_window);
+    }
+
+    increment = cwist_http2_flow_control_increment(stream_flow_control->pending_update,
+                                                   stream_flow_control->receive_window,
+                                                   stream_flow_control->target_window);
     if (cwist_http2_write_window_update(buffer, buffer_len, written,
                                         stream_flow_control->stream_id, increment) != 0) {
         return -1;
     }
-    stream_flow_control->receive_window += increment;
+    stream_flow_control->receive_window =
+        increment > CWIST_HTTP2_MAX_WINDOW - stream_flow_control->receive_window
+            ? CWIST_HTTP2_MAX_WINDOW
+            : stream_flow_control->receive_window + increment;
     stream_flow_control->pending_update = 0;
     stream_flow_control->last_window_update_us = now_us;
     return 1;
@@ -275,8 +329,12 @@ void
 cwist_http2_flow_control_add_send_window(cwist_http2_flow_control *flow_control,
                                          uint32_t increment)
 {
-    if (flow_control != NULL && increment <= CWIST_HTTP2_MAX_WINDOW - flow_control->send_window) {
-        flow_control->send_window += increment;
+    if (flow_control != NULL) {
+        /* Saturating add: credit is capped at the protocol maximum. */
+        flow_control->send_window =
+            increment > CWIST_HTTP2_MAX_WINDOW - flow_control->send_window
+                ? CWIST_HTTP2_MAX_WINDOW
+                : flow_control->send_window + increment;
     }
 }
 
@@ -284,8 +342,11 @@ void
 cwist_http2_stream_flow_control_add_send_window(cwist_http2_stream_flow_control *flow_control,
                                                 uint32_t increment)
 {
-    if (flow_control != NULL && increment <= CWIST_HTTP2_MAX_WINDOW - flow_control->send_window) {
-        flow_control->send_window += increment;
+    if (flow_control != NULL) {
+        flow_control->send_window =
+            increment > CWIST_HTTP2_MAX_WINDOW - flow_control->send_window
+                ? CWIST_HTTP2_MAX_WINDOW
+                : flow_control->send_window + increment;
     }
 }
 
