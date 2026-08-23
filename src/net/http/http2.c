@@ -1447,7 +1447,7 @@ static int h2_read_all(h2_conn *hc, void *buf, int len) {
  *    buffer (a whole TLS record is decrypted per SSL_read, so leftover
  *    frames have zero bytes pending on the socket). Without the
  *    SSL_pending check the window wait loop never sees the update and the
- *    connection is torn down mid-body — the "some chunks arrive, then
+ *    connection is torn down mid-body - the "some chunks arrive, then
  *    stuck" symptom.
  * 2. Frames this loop is not responsible for (HEADERS/SETTINGS of other
  *    streams, etc.) used to be read and discarded. They are now queued so

@@ -1,6 +1,6 @@
 /**
  * @file multipart.c
- * @brief RFC 7578 multipart/form-data parser — wrapper around multipart-parser-c.
+ * @brief RFC 7578 multipart/form-data parser - wrapper around multipart-parser-c.
  */
 
 #include <cwist/net/http/multipart.h>

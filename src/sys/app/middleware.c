@@ -476,7 +476,7 @@ void cwist_mw_jwt_auth_handler(cwist_http_request *req, cwist_http_response *res
 }
 
 /*
- * Factory — we use a small heap-allocated context to bind the secret to the
+ * Factory - we use a small heap-allocated context to bind the secret to the
  * handler.  Because cwist_middleware_func is a plain function pointer we cannot
  * capture the secret in a closure, so we embed it in the req->private_data
  * field before dispatching.
