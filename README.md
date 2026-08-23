@@ -17,10 +17,10 @@ sub-0.2ms average latency in ~14MB of RSS.
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST**: 111320 req/s | Latency 0.13ms (P90 0.23ms, P99 1.00ms) | RSS 14120KiB | Csw 0
-- **Axum**: 122881 req/s | Latency 3.17ms (P90 5.43ms, P99 8.20ms) | RSS 15708KiB | Csw 0
-- **Gin (Go)**: 90729 req/s | Latency 5.53ms (P90 12.99ms, P99 26.63ms) | RSS 30372KiB | Csw 0
-- **Spring Boot**: 56291 req/s | Latency 7.17ms (P90 9.48ms, P99 16.71ms) | RSS 1328936KiB | Csw 0
+- **CWIST**: 298034 req/s | Latency 0.05ms (P90 0.09ms, P99 0.27ms) | RSS 17960KiB | Csw 0
+- **Axum**: 246383 req/s | Latency 1.59ms (P90 2.84ms, P99 4.50ms) | RSS 14972KiB | Csw 0
+- **Gin (Go)**: 195804 req/s | Latency 3.52ms (P90 9.43ms, P99 21.37ms) | RSS 29016KiB | Csw 0
+- **Spring Boot**: 128893 req/s | Latency 3.08ms (P90 4.39ms, P99 6.40ms) | RSS 1309232KiB | Csw 0
 
 Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
@@ -30,7 +30,7 @@ Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3
 _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
 
 <!-- TUNED_BENCHMARK:START -->
-**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 117,476 req/s at 0.10ms average latency (P50 0.08ms, P90 0.19ms, P99 0.31ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
+**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 301,136 req/s at 0.05ms average latency (P50 0.03ms, P90 0.08ms, P99 0.48ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
 <!-- TUNED_BENCHMARK:END -->
 
 ---
