@@ -85,36 +85,56 @@ int main(int argc, char **argv) {
      * the kernel scan the ephemeral space for conflicts, which degrades to
      * ~3 ms/bind as the space fills (measured: 100k binds = 294 s). */
     for (long i = 0; i < count; i++) {
-        int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-        if (fd < 0) { failed++; conns[i].st = ST_FAILED; continue; }
-        int one = 1;
-        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-
         long per_ip = 64512; /* 1024..65535 */
-        int ip_off = (int)((i / per_ip) % ip_count);
-        int port0 = 1024 + (int)(i % per_ip);
-        struct sockaddr_in src = {0};
-        src.sin_family = AF_INET;
+        /* Spread round-robin over the source IPs: with count > 64512 a
+         * per-IP sequential block fills one IP's whole ephemeral space, and
+         * any rerun within the 60s TIME_WAIT window then collides with
+         * itself.  Interleaving keeps per-IP usage at count/ip_count. */
+        int ip_off = (int)(i % ip_count);
+        int port0 = 1024 + (int)((i / ip_count) % per_ip);
         char sip[32];
         snprintf(sip, sizeof(sip), "127.0.0.%d", ip_base + ip_off);
-        inet_pton(AF_INET, sip, &src.sin_addr);
-        int bound = 0;
-        for (int attempt = 0; attempt < 8 && !bound; attempt++) {
-            src.sin_port = htons((uint16_t)(port0 + attempt));
-            if (src.sin_port == 0) src.sin_port = htons(1024);
-            bound = (bind(fd, (struct sockaddr *)&src, sizeof(src)) == 0);
-        }
-        if (!bound) {
-            /* fall back to kernel auto-assign */
-            src.sin_port = 0;
-            if (bind(fd, (struct sockaddr *)&src, sizeof(src)) != 0) { /* ignore */ }
-        }
 
-        int rc = connect(fd, (struct sockaddr *)&dst, sizeof(dst));
-        if (rc != 0 && errno != EINPROGRESS) {
-            if (i < 5 || errno != EADDRNOTAVAIL)
-                fprintf(stderr, "connect fail i=%ld errno=%d (%s)\n", i, errno, strerror(errno));
-            close(fd); failed++; conns[i].st = ST_FAILED; continue;
+        /* bind+connect retry: a port can bind() fine yet collide with a
+         * lingering TIME_WAIT 4-tuple at connect() (EADDRNOTAVAIL).  Walk
+         * forward through the port space instead of giving up, so local
+         * residue never masquerades as a server failure. */
+        int fd = -1;
+        int connected = 0;
+        int last_errno = 0;
+        for (int attempt = 0; attempt < 64 && !connected; attempt++) {
+            fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+            if (fd < 0) { last_errno = errno; break; }
+            int one = 1;
+            setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+            /* Deterministic port reuse across runs requires SO_REUSEADDR:
+             * without it, bind() over a residual TIME_WAIT port fails with
+             * EADDRINUSE even when tcp_tw_reuse would let the connect out. */
+            setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+
+            struct sockaddr_in src = {0};
+            src.sin_family = AF_INET;
+            inet_pton(AF_INET, sip, &src.sin_addr);
+            int p = port0 + attempt;
+            if (p > 65535) p = 1024 + (p - 65536);
+            src.sin_port = htons((uint16_t)p);
+            if (bind(fd, (struct sockaddr *)&src, sizeof(src)) != 0) {
+                last_errno = errno;
+                close(fd); fd = -1;
+                continue;
+            }
+            int rc = connect(fd, (struct sockaddr *)&dst, sizeof(dst));
+            if (rc == 0 || errno == EINPROGRESS) {
+                connected = 1;
+            } else {
+                last_errno = errno;
+                close(fd); fd = -1;
+                if (errno != EADDRNOTAVAIL && errno != EADDRINUSE) break; /* fatal */
+            }
+        }
+        if (!connected) {
+            fprintf(stderr, "connect fail i=%ld errno=%d (%s)\n", i, last_errno, strerror(last_errno));
+            failed++; conns[i].st = ST_FAILED; continue;
         }
         conns[i].fd = fd;
         conns[i].st = ST_CONNECTING;
