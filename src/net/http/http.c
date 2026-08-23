@@ -13,6 +13,8 @@
 #include <cwist/core/mem/arena.h>
 #include <cwist/sys/app/shutdown.h>
 #include <cwist/sys/io/reactor.h>
+#include <cwist/core/log.h>
+#include <cwist/sys/metrics/metrics.h>
 #include <ttak/mols_control.h>
 #include <ttak/net/lattice.h>
 #include <ttak/priority/scheduler.h>
@@ -162,7 +164,7 @@ static http_thread_worker_t *g_workers = NULL;
 
 /* Saturation backpressure: track in-flight connections and shed load once
  * every worker thread could be parked on a connection many times over.
- * Past the limit there is no throughput left to win — new arrivals would
+ * Past the limit there is no throughput left to win - new arrivals would
  * only inflate tail latency for traffic already being served. Shedding is
  * a single fixed 503 write + close, so it adds no latency to others. */
 static _Atomic long g_http_inflight = 0;
@@ -178,6 +180,9 @@ typedef struct {
     cwist_reactor_t *reactor;
 } http_conn_ctx_t;
 
+/* The reactor copies this struct into its pooled, zeroed slot at add time,
+ * so the callback reads the slot's inline storage - no per-connection
+ * heap allocation, nothing to free here. */
 static void http_conn_event_cb(int fd, void *ctx) {
     http_conn_ctx_t *c = (http_conn_ctx_t *)ctx;
     void (*handler)(int, void *) = c->handler_func;
@@ -185,7 +190,6 @@ static void http_conn_event_cb(int fd, void *ctx) {
 
     handler(fd, user_ctx);
     atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
-    cwist_free(c);
 }
 
 static _Thread_local http_thread_worker_t *t_current_worker = NULL;
@@ -237,39 +241,30 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
 
     http_thread_worker_t *w = &g_workers[worker_idx];
 
-    http_conn_ctx_t *c = cwist_alloc(sizeof(http_conn_ctx_t));
-    if (!c) {
-        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
-        close(client_fd);
-        return;
-    }
-    c->client_fd = client_fd;
-    c->handler_func = handler;
-    c->ctx = ctx;
-    c->reactor = w->reactor;
+    http_conn_ctx_t c = {
+        .client_fd = client_fd,
+        .handler_func = handler,
+        .ctx = ctx,
+        .reactor = w->reactor,
+    };
 
-    if (!cwist_reactor_add(w->reactor, client_fd, http_conn_event_cb, c)) {
+    if (!cwist_reactor_add(w->reactor, client_fd, http_conn_event_cb, &c, sizeof(c))) {
         atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
         close(client_fd);
-        cwist_free(c);
     }
 }
 
 bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), void *ctx) {
     if (!t_current_worker || !t_current_worker->reactor || client_fd < 0) return false;
 
-    http_conn_ctx_t *c = cwist_alloc(sizeof(http_conn_ctx_t));
-    if (!c) return false;
-    c->client_fd = client_fd;
-    c->handler_func = handler;
-    c->ctx = ctx;
-    c->reactor = t_current_worker->reactor;
+    http_conn_ctx_t c = {
+        .client_fd = client_fd,
+        .handler_func = handler,
+        .ctx = ctx,
+        .reactor = t_current_worker->reactor,
+    };
 
-    if (!cwist_reactor_add(t_current_worker->reactor, client_fd, http_conn_event_cb, c)) {
-        cwist_free(c);
-        return false;
-    }
-    return true;
+    return cwist_reactor_add(t_current_worker->reactor, client_fd, http_conn_event_cb, &c, sizeof(c));
 }
 
 void cwist_http_pool_destroy(void) {
@@ -1623,6 +1618,11 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
     // 1. Read until headers are complete
     while (!(header_end = (char *)cwist_simd_find_crlfcrlf(read_buf, total_received))) {
         if (total_received >= buf_size - 1) {
+            /* Fat Cookie/Authorization combinations can legitimately push a
+             * header block past the read buffer; without this trail the drop
+             * is indistinguishable from a client vanish. */
+            cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_HTTP_HEADER_OVERFLOW);
+            CWIST_LOG_WARN("[http] dropping connection: headers exceed %zu-byte read buffer", buf_size);
             return NULL;
         }
 
