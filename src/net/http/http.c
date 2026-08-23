@@ -41,6 +41,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <fcntl.h>
 #ifdef __linux__
 #include <sys/epoll.h>
@@ -163,12 +164,24 @@ static long g_http_thread_count;
 static http_thread_worker_t *g_workers = NULL;
 
 /* Saturation backpressure: track in-flight connections and shed load once
- * every worker thread could be parked on a connection many times over.
- * Past the limit there is no throughput left to win - new arrivals would
- * only inflate tail latency for traffic already being served. Shedding is
- * a single fixed 503 write + close, so it adds no latency to others. */
+ * the process fd budget is nearly spent.  The one-shot async path holds one
+ * slot per open connection, so the cap follows RLIMIT_NOFILE (with a reserve
+ * for files/accept socket/etc.); the legacy parked-thread path keeps the
+ * smaller threads-based floor.  Shedding is a single fixed 503 write +
+ * close, so it adds no latency to connections already being served. */
 static _Atomic long g_http_inflight = 0;
 #define CWIST_HTTP_INFLIGHT_PER_THREAD 32
+#define CWIST_HTTP_INFLIGHT_FD_RESERVE 4096
+
+static long cwist_http_inflight_limit(void) {
+    long floor = g_http_thread_count * CWIST_HTTP_INFLIGHT_PER_THREAD;
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_NOFILE, &rl) != 0) return floor;
+    long budget = (rl.rlim_cur == RLIM_INFINITY)
+                      ? (1024L * 1024L)
+                      : (long)rl.rlim_cur - CWIST_HTTP_INFLIGHT_FD_RESERVE;
+    return budget > floor ? budget : floor;
+}
 
 static const char CWIST_HTTP_503[] =
     "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
@@ -223,7 +236,7 @@ int cwist_http_pool_init(void) {
 void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx) {
     /* Backpressure gate: shed before doing any routing/allocation work when
      * saturated. In-flight = queued + actively served connections. */
-    long limit = g_http_thread_count * CWIST_HTTP_INFLIGHT_PER_THREAD;
+    long limit = cwist_http_inflight_limit();
     long inflight = atomic_fetch_add_explicit(&g_http_inflight, 1, memory_order_acq_rel) + 1;
     if (inflight > limit) {
         atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
@@ -286,6 +299,131 @@ void cwist_http_pool_destroy(void) {
     g_http_thread_count = 0;
 }
 /* --- End Thread Pool --- */
+
+/* --- Async (one-shot, event-driven) connection path ------------------------
+ * See include/cwist/net/http/http.h for the model overview.  The connection
+ * shell lives across events; the recv stash is allocated lazily and released
+ * whenever it drains to empty, so an idle keep-alive connection costs only
+ * the shell plus its reactor slot. */
+
+typedef struct {
+    int client_fd;
+    cwist_async_handler_t handler;
+    void *ctx;
+    cwist_reactor_t *reactor;
+    cwist_http_async_conn_t *conn;
+} http_async_ctx_t;
+
+static void http_async_conn_release(cwist_http_async_conn_t *conn) {
+    if (!conn) return;
+    cwist_free(conn->rbuf);
+    cwist_free(conn);
+    atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
+}
+
+static void http_async_event_cb(int fd, void *ctx) {
+    http_async_ctx_t *c = (http_async_ctx_t *)ctx;
+    cwist_http_async_conn_t *conn = c->conn;
+    cwist_async_handler_t handler = c->handler;
+
+    cwist_async_action_t action = handler(fd, conn);
+
+    if (action == CWIST_ASYNC_DETACH) {
+        /* The handler owns fd now (h2c preface, protocol upgrade).  Free the
+         * shell but never touch the fd. */
+        cwist_free(conn->rbuf);
+        cwist_free(conn);
+        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
+        return;
+    }
+    if (action == CWIST_ASYNC_CLOSE) {
+        close(fd);
+        http_async_conn_release(conn);
+        return;
+    }
+
+    /* CWIST_ASYNC_REARM: shrink the stash once it has fully drained so idle
+     * keep-alive connections do not pin a 16 KiB buffer each. */
+    if (conn->len == 0 && conn->rbuf) {
+        cwist_free(conn->rbuf);
+        conn->rbuf = NULL;
+        conn->cap = 0;
+    }
+
+    http_async_ctx_t next = {
+        .client_fd = fd,
+        .handler = handler,
+        .ctx = c->ctx,
+        .reactor = c->reactor,
+        .conn = conn,
+    };
+    if (!cwist_reactor_add(c->reactor, fd, http_async_event_cb, &next, sizeof(next))) {
+        if (getenv("CWIST_ASYNC_DEBUG")) {
+            static _Atomic long dbg_rearm_fail;
+            long n = atomic_fetch_add(&dbg_rearm_fail, 1) + 1;
+            if (n <= 5 || n % 10000 == 0)
+                fprintf(stderr, "[async] rearm failed fd=%d total=%ld\n", fd, n);
+        }
+        close(fd);
+        http_async_conn_release(conn);
+    }
+}
+
+bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, void *ctx) {
+    long limit = cwist_http_inflight_limit();
+    long inflight = atomic_fetch_add_explicit(&g_http_inflight, 1, memory_order_acq_rel) + 1;
+    if (inflight > limit) {
+        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
+        send(client_fd, CWIST_HTTP_503, sizeof(CWIST_HTTP_503) - 1, MSG_NOSIGNAL | MSG_DONTWAIT);
+        close(client_fd);
+        return false;
+    }
+
+    /* The one-shot path must never park the reactor on a blocking recv. */
+    int fl = fcntl(client_fd, F_GETFL, 0);
+    if (fl >= 0) fcntl(client_fd, F_SETFL, fl | O_NONBLOCK);
+
+    cwist_http_async_conn_t *conn = cwist_alloc(sizeof(*conn));
+    if (!conn) {
+        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
+        close(client_fd);
+        return false;
+    }
+    memset(conn, 0, sizeof(*conn));
+    conn->fd = client_fd;
+    conn->user_ctx = ctx;
+    conn->virgin = true;
+
+    /* Round-robin worker selection: perfectly even by construction, which the
+     * dynamically grown reactor slots rely on.  (MOLS hashing deviates up to
+     * ±15% per reactor and overflowed the old fixed 4096-slot pool.) */
+    size_t worker_idx = g_rr_index;
+    g_rr_index = (g_rr_index + 1) % (size_t)g_http_thread_count;
+    http_thread_worker_t *w = &g_workers[worker_idx];
+
+    http_async_ctx_t c = {
+        .client_fd = client_fd,
+        .handler = handler,
+        .ctx = ctx,
+        .reactor = w->reactor,
+        .conn = conn,
+    };
+    if (!cwist_reactor_add(w->reactor, client_fd, http_async_event_cb, &c, sizeof(c))) {
+        if (getenv("CWIST_ASYNC_DEBUG")) {
+            static _Atomic long dbg_submit_fail;
+            long n = atomic_fetch_add(&dbg_submit_fail, 1) + 1;
+            if (n <= 5 || n % 10000 == 0)
+                fprintf(stderr, "[async] submit-add failed fd=%d total=%ld worker=%zu\n",
+                        client_fd, n, worker_idx);
+        }
+        http_async_conn_release(conn);
+        close(client_fd);
+        return false;
+    }
+    return true;
+}
+
+/* --- End Async Connection Path --- */
 
 /**
  * @file http.c
@@ -1814,6 +1952,182 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
 
     return req;
 }
+
+/* --- Non-blocking request assembly for the async (C1M) path --------------- */
+
+#define CWIST_ASYNC_STASH_MAX (CWIST_HTTP_READ_BUFFER_SIZE + CWIST_HTTP_MAX_BODY_SIZE)
+
+/* Grow the recv stash.  Returns false when the hard cap is reached. */
+static bool http_async_stash_grow(cwist_http_async_conn_t *conn, size_t need) {
+    if (need > CWIST_ASYNC_STASH_MAX) return false;
+    if (conn->cap >= need) return true;
+    size_t cap = conn->cap ? conn->cap : CWIST_HTTP_READ_BUFFER_SIZE;
+    while (cap < need) {
+        if (cap > CWIST_ASYNC_STASH_MAX / 2) { cap = CWIST_ASYNC_STASH_MAX; break; }
+        cap *= 2;
+    }
+    if (cap > CWIST_ASYNC_STASH_MAX) cap = CWIST_ASYNC_STASH_MAX;
+    if (cap == conn->cap) return false;
+    char *nb = cwist_realloc(conn->rbuf, cap);
+    if (!nb) return false;
+    conn->rbuf = nb;
+    conn->cap = cap;
+    return true;
+}
+
+/**
+ * @brief Drain the socket into the connection stash until EAGAIN.
+ * @return 0 on success (EAGAIN or data), -1 on orderly close or fatal error.
+ */
+int cwist_http_async_conn_fill(cwist_http_async_conn_t *conn) {
+    for (;;) {
+        if (conn->len + 1 >= conn->cap && !http_async_stash_grow(conn, conn->len + 4096)) {
+            return -1;
+        }
+        ssize_t n = recv(conn->fd, conn->rbuf + conn->len, conn->cap - 1 - conn->len, 0);
+        if (n > 0) {
+            conn->len += (size_t)n;
+            conn->rbuf[conn->len] = '\0';
+            conn->virgin = false;
+            continue;
+        }
+        if (n == 0) return -1;
+        if (errno == EINTR) continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+        return -1;
+    }
+}
+
+/**
+ * @brief Walk a chunked transfer coding and tell whether a full message sits
+ * in the stash.  Strict size-line parsing is shared with the blocking path.
+ * @return 1 complete, 0 need more bytes, -1 malformed.
+ */
+static int http_chunked_scan(const char *buf, size_t avail, size_t *consumed, cwist_sstring *assemble) {
+    size_t pos = 0;
+    for (;;) {
+        char *crlf = memmem(buf + pos, avail - pos, "\r\n", 2);
+        if (!crlf) return avail > CWIST_ASYNC_STASH_MAX ? -1 : 0;
+        size_t line_len = (size_t)(crlf - (buf + pos));
+        size_t chunk_size = 0;
+        if (http_parse_chunk_size(buf + pos, line_len, &chunk_size) != 0) return -1;
+        pos += line_len + 2;
+
+        if (chunk_size == 0) {
+            /* Trailers until an empty line. */
+            for (;;) {
+                if (avail - pos < 2) return 0;
+                if (buf[pos] == '\r' && buf[pos + 1] == '\n') {
+                    *consumed = pos + 2;
+                    return 1;
+                }
+                char *tcrlf = memmem(buf + pos, avail - pos, "\r\n", 2);
+                if (!tcrlf) return 0;
+                pos = (size_t)(tcrlf - buf) + 2;
+            }
+        }
+
+        if (chunk_size > CWIST_HTTP_MAX_BODY_SIZE) return -1;
+        if (avail - pos < chunk_size + 2) return 0;
+        if (buf[pos + chunk_size] != '\r' || buf[pos + chunk_size + 1] != '\n') return -1;
+        if (assemble) {
+            if (assemble->size + chunk_size > CWIST_HTTP_MAX_BODY_SIZE) return -1;
+            if (cwist_sstring_append_len(assemble, (char *)buf + pos, chunk_size).error.err_i8 != 0) return -1;
+        }
+        pos += chunk_size + 2;
+    }
+}
+
+/**
+ * @brief Try to assemble one complete request from the stash without any
+ * blocking IO.  On CWIST_RECV_OK the consumed bytes are removed from the
+ * stash and *out holds a fully parsed request.
+ */
+cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out) {
+    *out = NULL;
+    if (!conn->rbuf || conn->len == 0) return CWIST_RECV_NEED_MORE;
+
+    char *header_end = (char *)cwist_simd_find_crlfcrlf(conn->rbuf, conn->len);
+    if (!header_end) {
+        if (conn->len >= CWIST_HTTP_READ_BUFFER_SIZE - 1) {
+            cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_HTTP_HEADER_OVERFLOW);
+            CWIST_LOG_WARN("[http] dropping async connection: headers exceed %d-byte read buffer",
+                           CWIST_HTTP_READ_BUFFER_SIZE);
+            return CWIST_RECV_FATAL;
+        }
+        return CWIST_RECV_NEED_MORE;
+    }
+
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, header_end);
+    if (!req) return CWIST_RECV_FATAL;
+
+    size_t header_len = (size_t)(header_end + 4 - conn->rbuf);
+    size_t body_received = conn->len - header_len;
+    size_t consumed = header_len;
+
+    if (req->content_length > 0) {
+        if (req->content_length > CWIST_HTTP_MAX_BODY_SIZE) {
+            cwist_http_request_destroy(req);
+            return CWIST_RECV_FATAL;
+        }
+        if (body_received < (size_t)req->content_length) {
+            /* Not all here yet; make sure the stash can hold the full message. */
+            if (!http_async_stash_grow(conn, header_len + (size_t)req->content_length + 1)) {
+                cwist_http_request_destroy(req);
+                return CWIST_RECV_FATAL;
+            }
+            cwist_http_request_destroy(req);
+            return CWIST_RECV_NEED_MORE;
+        }
+        char *body = cwist_alloc((size_t)req->content_length + 1);
+        if (!body) {
+            cwist_http_request_destroy(req);
+            return CWIST_RECV_FATAL;
+        }
+        memcpy(body, conn->rbuf + header_len, (size_t)req->content_length);
+        body[req->content_length] = '\0';
+        cwist_sstring_adopt_len(req->body, body, (size_t)req->content_length);
+        consumed += (size_t)req->content_length;
+    } else {
+        const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
+        if (te && strcasecmp(te, "chunked") == 0) {
+            cwist_sstring *assembled = cwist_sstring_create();
+            if (!assembled) {
+                cwist_http_request_destroy(req);
+                return CWIST_RECV_FATAL;
+            }
+            size_t chunk_bytes = 0;
+            int scan = http_chunked_scan(conn->rbuf + header_len, body_received, &chunk_bytes, assembled);
+            if (scan <= 0) {
+                cwist_sstring_destroy(assembled);
+                cwist_http_request_destroy(req);
+                if (scan == 0 && !http_async_stash_grow(conn, conn->len + 4096)) {
+                    return CWIST_RECV_FATAL;
+                }
+                return scan == 0 ? CWIST_RECV_NEED_MORE : CWIST_RECV_FATAL;
+            }
+            char *data = assembled->data;
+            size_t dlen = assembled->size;
+            assembled->data = NULL;
+            assembled->size = 0;
+            cwist_sstring_destroy(assembled);
+            cwist_sstring_adopt_len(req->body, data, dlen);
+            consumed += chunk_bytes;
+        }
+    }
+
+    /* Shift the leftover (pipelined bytes) to the stash head. */
+    size_t leftover = conn->len - consumed;
+    if (leftover > 0) memmove(conn->rbuf, conn->rbuf + consumed, leftover);
+    conn->len = leftover;
+    conn->rbuf[leftover] = '\0';
+
+    req->client_fd = conn->fd;
+    *out = req;
+    return CWIST_RECV_OK;
+}
+
+/* --- End Non-blocking Request Assembly --- */
 
 typedef struct {
     const char *ext;

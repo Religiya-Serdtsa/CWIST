@@ -2162,6 +2162,158 @@ static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx) {
     }
 }
 
+/**
+ * @brief Route and respond to one fully parsed HTTP/1.1 request.
+ * Shared by the blocking keep-alive loop and the event-driven async path.
+ * @return true when the connection stays open (keep-alive), false to close.
+ */
+static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_request *req, uint32_t priority_weight) {
+    // --- Big Dumb Reply (Read) ---
+    if (app->bdr_ctx && req->method == CWIST_HTTP_GET) {
+        size_t cached_len = 0;
+        const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
+        if (cached_blob && cached_len > 0) {
+            send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
+            bool keep_alive = req->keep_alive;
+            cwist_http_request_destroy(req);
+            return keep_alive;
+        }
+    }
+    // -----------------------------
+
+    cwist_http_response *res = cwist_http_response_create();
+    if (!res) {
+        cwist_http_request_destroy(req);
+        return false;
+    }
+
+    bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
+    struct timespec start, end;
+    uint64_t duration_ms = 0;
+    if (app->bdr_ctx && !endpoint_fixed) {
+        clock_gettime(CLOCK_MONOTONIC, &start);
+    }
+
+    internal_route_handler(app, req, res);
+
+    if (app->bdr_ctx && !endpoint_fixed) {
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        duration_ms = (end.tv_sec - start.tv_sec) * 1000 + (end.tv_nsec - start.tv_nsec) / 1000000;
+    }
+
+    bool keep_alive = req->keep_alive && res->keep_alive;
+    bool upgraded = req->upgraded;
+
+    if (!upgraded) {
+        if (cwist_http_send_response(client_fd, res).error.err_i16 < 0) {
+            cwist_http_response_destroy(res);
+            cwist_http_request_destroy(req);
+            return false;
+        }
+
+        // --- Big Dumb Reply (Learn) ---
+        if (app->bdr_ctx) {
+            bool endpoint_file = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FILE);
+
+            uint64_t scaled_threshold = (uint64_t)app->bdr_ctx->latency_threshold_ms;
+            if (priority_weight > 50) {
+                scaled_threshold = scaled_threshold * (100 - priority_weight) / 100;
+            }
+
+            if (req->method == CWIST_HTTP_GET && !endpoint_file) {
+                if (endpoint_fixed) {
+                    cwist_sstring *serialized = cwist_http_stringify_response(res);
+                    if (serialized) {
+                        cwist_bdr_put_fixed(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
+                        cwist_sstring_destroy(serialized);
+                    }
+                } else if (duration_ms > scaled_threshold) {
+                    cwist_sstring *serialized = cwist_http_stringify_response(res);
+                    if (serialized) {
+                        cwist_bdr_put(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
+                        cwist_sstring_destroy(serialized);
+                    }
+                }
+            }
+        }
+        // ------------------------------
+    }
+
+    cwist_http_response_destroy(res);
+    cwist_http_request_destroy(req);
+
+    return keep_alive && !upgraded;
+}
+
+/**
+ * @brief Event-driven HTTP/1.1 handler for the C1M reactor path.
+ * Drains the socket without blocking, serves every complete request in the
+ * stash, then tells the pool whether to rearm, close, or detach the fd.
+ */
+cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_async_conn_t *conn) {
+    cwist_app *app = (cwist_app *)conn->user_ctx;
+    static _Atomic long dbg_fill_fail, dbg_fatal, dbg_serve_close;
+    const bool dbg = getenv("CWIST_ASYNC_DEBUG") != NULL;
+
+    if (cwist_http_async_conn_fill(conn) != 0) {
+        if (dbg) {
+            long n = atomic_fetch_add(&dbg_fill_fail, 1) + 1;
+            if (n <= 5 || n % 10000 == 0)
+                fprintf(stderr, "[async] fill-fail fd=%d total=%ld fatal=%ld serve=%ld errno=%d len=%zu\n",
+                        client_fd, n, atomic_load(&dbg_fatal), atomic_load(&dbg_serve_close), errno, conn->len);
+        }
+        return CWIST_ASYNC_CLOSE;
+    }
+
+    /* h2c preface: hand the whole connection to the blocking HTTP/2 server,
+     * which owns and closes the fd from here on. */
+    if (app->use_http2 && conn->len >= 24 &&
+        memcmp(conn->rbuf, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24) == 0) {
+        cwist_https_connection h2c = { .fd = client_fd, .ssl = NULL, .negotiated_http2 = true, .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2 };
+        /* The h2 stack does its own reads; drop the sniffed bytes so the
+         * preface is still available on the socket... it is not: the stash
+         * already consumed them.  Replay by parsing is not supported, so only
+         * take this branch when the stash holds exactly the preface. */
+        if (conn->len == 24) {
+            cwist_http2_serve_connection(&h2c, app, static_http2_route_bridge);
+            close(client_fd);
+            return CWIST_ASYNC_DETACH;
+        }
+    }
+
+    /* Apply Choi Seok-jeong's Lattice (Sanpan) for priority scaling. */
+    uint32_t tid = ttak_net_lattice_get_worker_id();
+    uint16_t node_id = (uint16_t)(client_fd % TTAK_MOLS_NODE_COUNT);
+    uint32_t mixed_seed = ttak_apply_mols_control(node_id, tid);
+
+    /* Jeungseung Gaebang Scaling for priority weighting. */
+    uint32_t priority_weight = ((mixed_seed * 16777619U) >> 8) % 100;
+
+    for (;;) {
+        cwist_http_request *req = NULL;
+        cwist_recv_status_t st = cwist_http_receive_request_nb(conn, &req);
+        if (st == CWIST_RECV_NEED_MORE) return CWIST_ASYNC_REARM;
+        if (st == CWIST_RECV_FATAL) {
+            if (dbg) {
+                long n = atomic_fetch_add(&dbg_fatal, 1) + 1;
+                if (n <= 5 || n % 10000 == 0)
+                    fprintf(stderr, "[async] recv-fatal fd=%d total=%ld len=%zu\n", client_fd, n, conn->len);
+            }
+            return CWIST_ASYNC_CLOSE;
+        }
+        req->app = app;
+        req->db = app->db;
+        if (!app_serve_parsed_request(app, client_fd, req, priority_weight)) {
+            if (dbg) {
+                long n = atomic_fetch_add(&dbg_serve_close, 1) + 1;
+                if (n <= 5 || n % 10000 == 0)
+                    fprintf(stderr, "[async] serve-close fd=%d total=%ld\n", client_fd, n);
+            }
+            return CWIST_ASYNC_CLOSE;
+        }
+    }
+}
+
 void cwist_app_http_handler(int client_fd, void *ctx) {
     cwist_app *app = (cwist_app *)ctx;
     
@@ -2249,82 +2401,7 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
         req->app = app;
         req->db = app->db;
 
-        // --- Big Dumb Reply (Read) ---
-        if (app->bdr_ctx && req->method == CWIST_HTTP_GET) {
-            size_t cached_len = 0;
-            const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
-            if (cached_blob && cached_len > 0) {
-                send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
-                bool keep_alive = req->keep_alive;
-                cwist_http_request_destroy(req);
-                if (!keep_alive) break;
-                continue;
-            }
-        }
-        // -----------------------------
-
-        cwist_http_response *res = cwist_http_response_create();
-        if (!res) {
-            cwist_http_request_destroy(req);
-            break;
-        }
-        
-        bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
-        struct timespec start, end;
-        uint64_t duration_ms = 0;
-        if (app->bdr_ctx && !endpoint_fixed) {
-            clock_gettime(CLOCK_MONOTONIC, &start);
-        }
-
-        internal_route_handler(app, req, res);
-        
-        if (app->bdr_ctx && !endpoint_fixed) {
-            clock_gettime(CLOCK_MONOTONIC, &end);
-            duration_ms = (end.tv_sec - start.tv_sec) * 1000 + (end.tv_nsec - start.tv_nsec) / 1000000;
-        }
-
-        bool keep_alive = req->keep_alive && res->keep_alive;
-        bool upgraded = req->upgraded;
-        
-        if (!req->upgraded) {
-            if (cwist_http_send_response(client_fd, res).error.err_i16 < 0) {
-                cwist_http_response_destroy(res);
-                cwist_http_request_destroy(req);
-                break;
-            }
-            
-            // --- Big Dumb Reply (Learn) ---
-            if (app->bdr_ctx) {
-                bool endpoint_file = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FILE);
-                
-                uint64_t scaled_threshold = (uint64_t)app->bdr_ctx->latency_threshold_ms;
-                if (priority_weight > 50) {
-                    scaled_threshold = scaled_threshold * (100 - priority_weight) / 100;
-                }
-
-                if (req->method == CWIST_HTTP_GET && !endpoint_file) {
-                    if (endpoint_fixed) {
-                        cwist_sstring *serialized = cwist_http_stringify_response(res);
-                        if (serialized) {
-                            cwist_bdr_put_fixed(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
-                            cwist_sstring_destroy(serialized);
-                        }
-                    } else if (duration_ms > scaled_threshold) {
-                        cwist_sstring *serialized = cwist_http_stringify_response(res);
-                        if (serialized) {
-                            cwist_bdr_put(app->bdr_ctx, "GET", req->path->data, serialized->data, serialized->size);
-                            cwist_sstring_destroy(serialized);
-                        }
-                    }
-                }
-            }
-            // ------------------------------
-        }
-        
-        cwist_http_response_destroy(res);
-        cwist_http_request_destroy(req);
-        
-        if (!keep_alive || upgraded) {
+        if (!app_serve_parsed_request(app, client_fd, req, priority_weight)) {
             break;
         }
     }

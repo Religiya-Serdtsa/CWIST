@@ -236,6 +236,43 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
 bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), void *ctx);
 void cwist_http_pool_destroy(void);
 
+/* --- Event-driven (one-shot) connection path for the C1M reactor ---------
+ * The classic pool handler parks a worker thread on each keep-alive
+ * connection, capping concurrent connections at the thread count.  The async
+ * path below never blocks on a read: the callback drains whatever arrived,
+ * serves every complete request, and rearms the fd, so one thread can hold
+ * hundreds of thousands of mostly-idle connections.
+ *
+ * Writes still use the bounded poll wait inside cwist_http_send_response
+ * (CWIST_HTTP_TIMEOUT_MS), so a slow client can occupy a reactor thread for
+ * that budget; true EPOLLOUT write resumption is future work. */
+typedef struct cwist_http_async_conn {
+    int fd;
+    void *user_ctx;                       /* Owning app context. */
+    char *rbuf;                           /* Lazy recv stash; freed while empty. */
+    size_t cap;
+    size_t len;
+    bool virgin;                          /* No bytes seen yet (h2c preface sniff). */
+} cwist_http_async_conn_t;
+
+typedef enum {
+    CWIST_ASYNC_CLOSE = 0,  /* Close fd and release the connection. */
+    CWIST_ASYNC_REARM,      /* Keep the connection; wait for more reads. */
+    CWIST_ASYNC_DETACH      /* Handler took ownership of fd (h2c, upgrades). */
+} cwist_async_action_t;
+
+typedef cwist_async_action_t (*cwist_async_handler_t)(int fd, cwist_http_async_conn_t *conn);
+
+typedef enum {
+    CWIST_RECV_OK = 0,
+    CWIST_RECV_NEED_MORE,   /* Partial request; rearm and wait. */
+    CWIST_RECV_FATAL        /* Protocol error / overflow; close. */
+} cwist_recv_status_t;
+
+bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, void *ctx);
+int cwist_http_async_conn_fill(cwist_http_async_conn_t *conn);
+cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out);
+
 extern const int CWIST_CREATE_SOCKET_FAILED;
 extern const int CWIST_HTTP_UNAVAILABLE_ADDRESS;
 extern const int CWIST_HTTP_BIND_FAILED;

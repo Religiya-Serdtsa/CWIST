@@ -115,7 +115,7 @@ memory management to the user. CWIST ships the whole stack:
   native C client on `dev`, backed by LSQUIC PR #629).
 - **Post-Quantum TLS** with one call: `cwist_app_use_pqc_layer(app, true)`
   forces hybrid X25519MLKEM768 and disables legacy TLS < 1.3.
-- **Server-side zero-copy I/O & C100K reactor** on io_uring / epoll / kqueue,
+- **Server-side zero-copy I/O & C1M reactor** on io_uring / epoll / kqueue,
   with lock-free job queues and generational arena allocators from libttak.
 - **Nuke DB**: a read-optimal, in-memory SQLite engine that syncs to disk on every COMMIT.
 - **Auto-RDBMS detection**: probe any TCP port and mount PostgreSQL, MySQL,
@@ -340,8 +340,32 @@ These variables are read directly by the framework runtime (no prefix required):
 |----------|------|---------|-------------|
 | `CWIST_WORKERS` | integer | `1` | Number of worker processes to fork before entering the event loop. |
 | `CWIST_C1M_MODE` | boolean | `true` | Enables the high-concurrency C1M async server loop. Set to `0` or `false` to fall back to a blocking accept loop. |
+| `CWIST_ASYNC_DEBUG` | boolean | unset | When set, the C1M async path and the reactor log rare failure events (rearm/submit/SQ failures) to stderr. No output in normal operation. |
 
-**C1M Mode's value is theorically ready for C1M Server loop. However, a benchmark failed with file descriptor exhaution. This is theorically calculated. The real benchmark will handle C300K connections.**
+**C1M mode is now measured, not theoretical.** With the event-driven one-shot
+connection path (connections live in the io_uring/epoll reactor instead of
+parking a worker thread each), a single cwist process on loopback served:
+
+| Scale | Result | Wall time |
+|-------|--------|-----------|
+| C10K | 10,000 / 10,000 established + responded (100%) | ~0.5 s |
+| C100K | 99,984 / 100,000 responded (99.98%) | ~12 s |
+| C1M (8×125K) | 999,872 / 1,000,000 responded (99.99%) | ~32–46 s per client process |
+
+Measured with `tests/bench_cxm.c` (multi-process epoll load client, deterministic
+source-port allocation over multiple 127.0.0.x addresses). Kernel prerequisites
+for C100K and above:
+
+- `ulimit -n 1050000` (and `fs.file-max` ≥ 8M for C1M: each connection costs
+  one file descriptor on client and server side alike)
+- `net.netfilter.nf_conntrack_max=4194304` — loopback traffic is conntracked
+  too, and the default 262144 caps you near ~263K connections
+- `net.ipv4.ip_local_port_range="1024 65535"` on the client side
+
+Known limits of the current async path: cleartext HTTP/1.x only (HTTPS still
+uses the thread-pool model), a handler that writes faster than the socket
+drains waits inside the reactor thread (bounded by `CWIST_HTTP_TIMEOUT_MS`),
+and idle keep-alive connections are not yet reaped by a timer.
 
 Some example applications (e.g. `example/othello-web`) also read the standard
 `PORT` variable when no explicit port is given.
