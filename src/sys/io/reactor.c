@@ -3,7 +3,7 @@
  * @brief Readiness multiplexer (io_uring / epoll / kqueue) driving CWIST's
  * synchronous callback model.
  *
- * Design note — why readiness notification + synchronous completion is kept:
+ * Design note - why readiness notification + synchronous completion is kept:
  * 1. No queues: a request passes through no queue at all; the woken worker
  *    finishes it immediately. This is the source of the 0.0x ms latency.
  *    A completion model pushes each request through a ring 3-4 times and
@@ -101,6 +101,10 @@ typedef struct {
     int fd;
     cwist_reactor_cb_t cb;
     void *ctx;
+    /* Inline caller payload; ctx always points here. Zeroed on checkout so
+     * reuse across events cannot leak stale fields (calloc semantics
+     * without the heap). */
+    unsigned char payload[CWIST_REACTOR_PAYLOAD_SIZE];
 } reactor_event_ctx_t;
 
 struct cwist_reactor {
@@ -114,8 +118,9 @@ struct cwist_reactor {
     pthread_mutex_t pool_lock;
 };
 
-static reactor_event_ctx_t *alloc_reactor_ctx(cwist_reactor_t *r, int fd, cwist_reactor_cb_t cb, void *ctx) {
-    if (!r) return NULL;
+static reactor_event_ctx_t *alloc_reactor_ctx(cwist_reactor_t *r, int fd, cwist_reactor_cb_t cb,
+                                              const void *payload, size_t payload_size) {
+    if (!r || payload_size > CWIST_REACTOR_PAYLOAD_SIZE) return NULL;
     pthread_mutex_lock(&r->pool_lock);
     if (r->free_top == 0) {
         pthread_mutex_unlock(&r->pool_lock);
@@ -125,9 +130,13 @@ static reactor_event_ctx_t *alloc_reactor_ctx(cwist_reactor_t *r, int fd, cwist_
     pthread_mutex_unlock(&r->pool_lock);
 
     reactor_event_ctx_t *ev_ctx = &r->event_pool[idx];
+    memset(ev_ctx, 0, sizeof(*ev_ctx));
     ev_ctx->fd = fd;
     ev_ctx->cb = cb;
-    ev_ctx->ctx = ctx;
+    ev_ctx->ctx = ev_ctx->payload;
+    if (payload && payload_size > 0) {
+        memcpy(ev_ctx->payload, payload, payload_size);
+    }
     return ev_ctx;
 }
 
@@ -270,16 +279,17 @@ static bool uring_submit(cwist_reactor_t *reactor, struct io_uring_sqe *out_sqe)
 }
 #endif
 
-bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, void *ctx) {
+bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
+                       const void *payload, size_t payload_size) {
     if (!reactor || fd < 0) return false;
-    reactor_event_ctx_t *ev_ctx = alloc_reactor_ctx(reactor, fd, cb, ctx);
+    reactor_event_ctx_t *ev_ctx = alloc_reactor_ctx(reactor, fd, cb, payload, payload_size);
     if (!ev_ctx) return false;
 
 #ifdef __linux__
     if (!reactor->impl.use_epoll) {
         /* One-shot POLL_ADD: multishot (IORING_POLL_ADD_MULTI) was rejected
-         * because the callback owns ctx and frees it after firing, so a
-         * persistent poll would re-dispatch into a recycled slot. */
+         * because the slot is recycled after firing, so a persistent poll
+         * would re-dispatch into a recycled slot. */
         struct io_uring_sqe sqe;
         memset(&sqe, 0, sizeof(sqe));
         sqe.opcode = IORING_OP_POLL_ADD;
@@ -319,9 +329,10 @@ bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, 
     return false;
 }
 
-bool cwist_reactor_mod(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb, void *ctx) {
+bool cwist_reactor_mod(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
+                       const void *payload, size_t payload_size) {
     if (!reactor || fd < 0) return false;
-    reactor_event_ctx_t *ev_ctx = alloc_reactor_ctx(reactor, fd, cb, ctx);
+    reactor_event_ctx_t *ev_ctx = alloc_reactor_ctx(reactor, fd, cb, payload, payload_size);
     if (!ev_ctx) return false;
 
 #ifdef __linux__
