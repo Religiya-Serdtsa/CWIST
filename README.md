@@ -372,9 +372,31 @@ for C100K and above:
 - `net.ipv4.ip_local_port_range="1024 65535"` on the client side
 
 Known limits of the current async path: cleartext HTTP/1.x only (HTTPS still
-uses the thread-pool model), a handler that writes faster than the socket
-drains waits inside the reactor thread (bounded by `CWIST_HTTP_TIMEOUT_MS`),
-and idle keep-alive connections are not yet reaped by a timer.
+uses the thread-pool model for the request phase), a handler that writes
+faster than the socket drains waits inside the reactor thread (bounded by
+`CWIST_HTTP_TIMEOUT_MS`), and idle keep-alive connections are not yet reaped
+by a timer.
+
+**HTTPS churn experiment (handshake shepherd).** HTTPS accepts go through
+`cwist_https_dispatch()`: a single non-blocking `SSL_accept` attempt, with
+incomplete handshakes parked in a private epoll set owned by one shepherd
+thread (Linux-only; other platforms fall back to the blocking pool path).
+Parked handshakes are reaped after `CWIST_HTTPS_HANDSHAKE_TIMEOUT_MS`
+(45 s, compile-time). This replaced a synchronous in-worker handshake that stalled the accept loop
+under churn (accept-queue overflow, silently dropped handshakes, "phantom"
+ESTABLISHED clients). Measured on the benchmark machine above (fly.board,
+TLS 1.3, loopback, same kernel/sysctl tuning):
+
+- Load: 20 `h2load` processes x `-c 5000 -n 50000 -r 1000 -T 30` against
+  `https://127.0.0.$i:8888/` (1,000,000 requests total).
+- Before the fix: deadlocked within minutes (0 completed requests, hundreds
+  of phantom connections).
+- After the fix: completes in ~7 min, 756,610 / 1,000,000 requests (75.7%),
+  zero phantom connections. The remaining ~24% are slow handshakes reclaimed
+  by h2load's `-T 30` timeout while queued behind the single shepherd
+  thread; multi-shepherd scaling is the next performance candidate.
+- Regression check: `h2load -c 1000 -n 10000` passes at 100%
+  (~1,780 req/s), and `make test_https` passes.
 
 Some example applications (e.g. `example/othello-web`) also read the standard
 `PORT` variable when no explicit port is given.
