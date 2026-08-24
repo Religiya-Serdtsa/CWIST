@@ -233,33 +233,6 @@ int cwist_http_pool_init(void) {
     return 0;
 }
 
-/* Classic path: one on-demand thread per connection.  The previous model
- * (fixed worker pool, connections dispatched into per-worker reactors that
- * then ran the blocking keep-alive handler inline) parked a worker thread
- * for the whole lifetime of any held connection, so a process capped at
- * cores*8 workers could only ever answer that many concurrent connections.
- * Idle parked threads are nearly free (futex sleep, ~1 MiB of untouched
- * stack), so scaling threads with connections is cheap up to
- * kernel.threads-max; beyond that pthread_create fails and we shed. */
-#define CWIST_CLASSIC_CONN_STACK (256 * 1024)
-
-typedef struct {
-    int client_fd;
-    void (*handler_func)(int, void *);
-    void *ctx;
-} http_classic_conn_t;
-
-static void *http_classic_conn_thread(void *arg) {
-    http_classic_conn_t *c = (http_classic_conn_t *)arg;
-    int fd = c->client_fd;
-    void (*handler)(int, void *) = c->handler_func;
-    void *ctx = c->ctx;
-    cwist_free(c);
-    handler(fd, ctx); /* owns and closes fd */
-    atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
-    return NULL;
-}
-
 void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx) {
     /* Backpressure gate: shed before doing any routing/allocation work when
      * saturated. In-flight = queued + actively served connections. */
@@ -272,35 +245,24 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
         return;
     }
 
-    http_classic_conn_t *c = cwist_alloc(sizeof(*c));
-    if (!c) {
-        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
-        close(client_fd);
-        return;
-    }
-    c->client_fd = client_fd;
-    c->handler_func = handler;
-    c->ctx = ctx;
+    /* Deterministic worker selection using Choi Seok-jeong's MOLS to minimize cache bouncing. */
+    uint16_t node_id = (uint16_t)(client_fd % TTAK_MOLS_NODE_COUNT);
+    uint32_t mixed = ttak_apply_mols_control(node_id, (uint32_t)g_rr_index);
+    size_t worker_idx = mixed % (size_t)g_http_thread_count;
 
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    pthread_attr_setstacksize(&attr, CWIST_CLASSIC_CONN_STACK);
-    pthread_t tid;
-    int rc = pthread_create(&tid, &attr, http_classic_conn_thread, c);
-    pthread_attr_destroy(&attr);
-    if (rc != 0) {
-        /* Thread budget exhausted (kernel.threads-max, RLIMIT_NPROC, ...):
-         * shed this connection instead of stalling the accept loop. */
-        if (getenv("CWIST_ASYNC_DEBUG")) {
-            static _Atomic long dbg_spawn_fail;
-            long n = atomic_fetch_add(&dbg_spawn_fail, 1) + 1;
-            if (n <= 5 || n % 10000 == 0)
-                fprintf(stderr, "[classic] conn thread spawn failed rc=%d total=%ld\n", rc, n);
-        }
+    g_rr_index = (g_rr_index + 1) % (size_t)g_http_thread_count;
+
+    http_thread_worker_t *w = &g_workers[worker_idx];
+
+    http_conn_ctx_t c = {
+        .client_fd = client_fd,
+        .handler_func = handler,
+        .ctx = ctx,
+        .reactor = w->reactor,
+    };
+
+    if (!cwist_reactor_add(w->reactor, client_fd, http_conn_event_cb, &c, sizeof(c))) {
         atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
-        cwist_free(c);
-        send(client_fd, CWIST_HTTP_503, sizeof(CWIST_HTTP_503) - 1, MSG_NOSIGNAL | MSG_DONTWAIT);
         close(client_fd);
     }
 }
