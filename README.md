@@ -135,24 +135,13 @@ memory management to the user. CWIST ships the whole stack:
 
 ## Why C, when Axum and Gin exist?
 
-The numbers above are the point. Concretely:
+The benchmark results above demonstrate the advantages in latency, memory footprint, and determinism:
 
-1. **Latency.** CWIST averages 0.09ms per request under load, versus 2.56ms for
-   Axum and 4.27ms for Gin in the same benchmark. CWIST has no runtime scheduler:
-   the worker that reads a packet runs the handler to completion on the same
-   thread. Tokio-style work stealing trades per-request latency for global
-   throughput; CWIST does not make that trade.
-2. **Memory.** Baseline RSS is ~13MB, versus ~14MB for Axum and ~30MB for Gin.
-   At thousands of container replicas, that difference is hundreds of gigabytes
-   of RAM.
-3. **Tail latency.** Thread-pinned queues and arena allocators give near-zero
-   variance, which matters for trading systems, game servers, and packet
-   switching.
-4. **FFI.** Production code in automotive, defense, finance, and databases is
-   already C/C++. CWIST links against it directly, with no FFI boundary or
-   async-runtime bridging.
-5. **Cold start.** No runtime bootstrap or GC init; the server answers at full
-   speed from the first packet.
+1. **Latency & Throughput.** Under 400 concurrency (`wrk -t12 -c400`), CWIST Classic Pool delivers 2.16ms average latency and ~111k req/s, and C1M Reactor delivers 2.41ms (versus 3.52ms for Axum, 7.18ms for Gin, and 9.11ms for Spring Boot). In tuned low-latency configurations (`wrk -t4 -c100`), CWIST achieves 0.59ms average latency (P50 0.46ms, P90 1.12ms) at ~108k req/s.
+2. **Memory Efficiency.** CWIST maintains a lean memory footprint (~15.9MB RSS in C1M mode, ~21.7MB in Classic Pool), compared to ~29.5MB for Gin and ~1.34GB for Spring Boot. In high-density container environments, this significantly reduces memory consumption across thousands of instances.
+3. **Tail Latency & Predictability.** Zero-copy framing, thread-pinned worker execution, and generational arena allocators minimize latency variance and GC pauses.
+4. **Zero-Overhead FFI.** Production libraries in finance, game servers, machine learning, and systems software written in C/C++ link directly into CWIST with zero FFI conversion or runtime bridge penalty.
+5. **Instant Cold Start.** With no runtime VM warmup or GC initialization required, CWIST starts in milliseconds and immediately serves requests at full capacity.
 
 ## Platform support
 
@@ -162,51 +151,23 @@ systems use the portable polling path. ECN metadata is enabled only when the
 host exposes the required socket options, so a missing optional API never
 blocks an HTTP/3 build.
 
-## I/O model: io_uring at the wait layer only
+## Execution & I/O models: C1M Reactor and Classic Pool
 
-On Linux, CWIST uses io_uring (raw syscalls, no liburing dependency) strictly
-as a readiness multiplexer, replacing `epoll_wait` in `src/sys/io/reactor.c`.
-The reactor arms one-shot `IORING_OP_POLL_ADD` requests. When a completion
-arrives, the woken worker performs ordinary blocking `recv`/`send` inline and
-runs the request to completion on the spot. If io_uring setup fails, the
-reactor falls back to epoll (kqueue on macOS/BSD) with identical behavior.
+CWIST provides two operational execution models tailored for different workload profiles:
 
-**Why the request hot path is not completion-based.** A full completion model
-(submitting `recv`/`send` as SQEs and reacting to CQEs) pushes every request
-through the ring multiple times and ties progress to loop ticks. That is the
-design point where async runtimes land at 2-3ms average latency (Axum/Tokio
-territory). CWIST's 0.0x ms latency comes from the opposite choice: the worker
-that wakes up for an event owns the request synchronously until it is finished,
-so no SQE ever sits between a packet and its handler. Keeping io_uring at the
-wait layer, and out of the hot path, is a deliberate design strength, not an
-unfinished integration:
+1. **C1M Reactor Mode (`CWIST_C1M_MODE=1`, default)**: An event-driven asynchronous reactor designed for massive concurrent connections (`epoll` on Linux, `kqueue` on macOS/BSD). It uses non-blocking I/O multiplexing and cooperative scheduling with lock-free coordination to maintain low latency under high concurrency without per-connection thread overhead.
+2. **Classic Pool Mode (`CWIST_C1M_MODE=0`)**: A worker thread pool model designed for low-jitter, predictable throughput on compute-bound workloads. In this mode, incoming requests are assigned to worker threads using thread-pinned queues and executed to completion inline on the worker stack.
 
-- **No queues.** A request passes through no queue between the readiness
-  notification and its handler; the woken worker completes it inline. That
-  absence, not any single optimization, is where the 0.0x ms latency comes
-  from. A completion model routes each request through a ring 3-4 times and
-  binds it to loop ticks, which is exactly the 2-3ms regime.
-- **Structural backpressure.** Callbacks block, so unfinished work cannot
-  accumulate in the kernel or in userland. One in-flight cap per worker thread
-  (`32` in `src/net/http/http.c`) is the entire flow-control story; past the
-  cap the server sheds load with a fixed 503 instead of inflating tail latency.
-- **Cache locality.** A request's whole lifetime runs on one thread's
-  contiguous stack and reuses L1/L2 lines. A completion model splits the
-  handler into fragments and lifts per-stage state onto the heap.
-- **No state machines.** Handlers are straight-line code; a stack trace is the
-  request's execution history.
-- **Deterministic tail.** With no queue waiting anywhere, p99/p999 converge on
-  the mean.
+### Readiness multiplexing vs full completion rings
 
-The trade-off is explicit: per-connection concurrency is bounded by the worker
-count (cores x 8), and horizontal headroom comes from multi-process scaling
-(fork + SO_REUSEPORT) rather than per-core async fan-out. The retired
-completion-based backend (`io_uring_backend.c`) was removed; its ring
-setup/teardown and free-stack slot infrastructure were absorbed into the
-reactor.
+On Linux, CWIST uses `io_uring` (raw syscalls, no liburing dependency) strictly as a readiness multiplexer, replacing `epoll_wait` in `src/sys/io/reactor.c`. The reactor arms one-shot `IORING_OP_POLL_ADD` requests. When a completion arrives, the woken worker performs inline I/O operations directly. If io_uring setup fails, the reactor falls back to epoll (kqueue on macOS/BSD) with identical behavior.
 
-**Operational gate.** Average request latency crossing **1ms** is treated as a
-regression and a build/benchmark failure, regardless of throughput gains.
+- **Direct readiness handling.** When a readiness notification arrives, the worker processes the event directly rather than routing multiple intermediate completion steps through userspace ring buffers on every tick.
+- **Structural backpressure.** Work cannot unboundedly accumulate; per-worker concurrency limits allow the server to shed excess load under saturation rather than inflating tail latency.
+- **Cache locality.** Handling request execution on contiguous worker stacks minimizes cache misses and fragmentation compared to multi-stage heap-allocated callback chains.
+- **Deterministic tail.** Thread-pinned worker execution and generational arenas keep latency variance minimal across percentiles.
+
+**Operational gate.** Average request latency crossing **1ms** is treated as a regression and a build/benchmark failure, regardless of throughput gains.
 
 ## Development hot reload
 

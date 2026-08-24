@@ -47,42 +47,31 @@ Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3
   The answer lies in Ultra-Low Latency, Extreme Container Density,
   Zero Jitter, and Zero-Friction FFI:
 
-  1. Ultra-Low Latency (0.09ms vs. 2.56ms/4.27ms):
-     CWIST delivers an average latency of 0.09ms (90 microseconds)
-     -- nearly 30x faster than Axum (2.56ms) and 45x faster than
-     Gin (4.27ms) under heavy concurrency.
-     While runtime-heavy engines like Tokio (Axum) sacrifice individual
-     request latency to maximize global throughput via cooperative
-     work-stealing, CWIST bypasses scheduling queue overhead entirely,
-     mapping incoming packets directly to CPU-pinned ring buffers
-     to keep latency at bare-metal speed.
+  1. Low Latency & High Throughput:
+     Under heavy concurrency (wrk -t12 -c400), CWIST Classic Pool delivers
+     2.16ms average latency (P90 4.45ms, P99 8.80ms) and ~111k req/s,
+     and C1M Reactor delivers 2.41ms (versus 3.52ms for Axum, 7.18ms for
+     Gin, and 9.11ms for Spring Boot). In tuned low-latency profiles,
+     CWIST averages 0.59ms latency (P50 0.46ms, P90 1.12ms).
 
-  2. Predictable Memory & Extreme Container Density (12MB vs. 17MB/30MB):
-     CWIST runs on an ultra-lean 12MB baseline RSS. Axum requires
-     ~17MB, and Gin requires ~30MB.
-     In containerized Microservices Architectures (MSA) or Serverless
-     (Edge) environments scaling to thousands of replicas, saving 5MB
-     to 18MB per container adds up to hundreds of gigabytes in cloud
-     cost savings.
+  2. Predictable Memory & Container Density:
+     CWIST operates with a compact memory footprint (~15.9MB RSS in
+     C1M Reactor mode, ~21.7MB in Classic Pool mode), compared to
+     ~29.5MB for Gin and ~1.34GB for Spring Boot. In containerized
+     deployments with thousands of replicas, this preserves significant
+     memory resources.
 
-  3. Zero Jitter & Predictable Tail Latency (P99):
-     Async runtimes introduce scheduling jitter and work-stealing locks.
-     CWIST uses deterministic thread-pinned task queues and arena
-     allocators, meaning execution times have near-zero variance --
-     critical for High-Frequency Trading (HFT), real-time game loops,
-     and packet switching.
+  3. Zero GC Pauses & Predictable Tail Latency:
+     With generational arenas, EBR GC, and deterministic worker
+     scheduling, CWIST avoids GC pause spikes and work-stealing jitter.
 
-  4. Zero-Friction C/C++ FFI Integration:
-     Real-world production engines (automotive, defense, heavy finance,
-     databases) are written in C/C++. Exposing these via Rust/Go async
-     pools introduces FFI boundary overhead and complex thread-blocking
-     context switches. CWIST integrates natively at link-time with 0%
-     FFI translation penalty.
+  4. Zero-Friction C/C++ Integration:
+     Existing C/C++ libraries and native engines link directly at
+     compile-time with 0% FFI translation penalty.
 
   5. Instantaneous Cold Starts:
-     Without thread-pool bootstrapping or GC runtime initialization,
-     CWIST boots in nanoseconds, responding at 100% capacity from the
-     very first packet -- the holy grail of Serverless Edge Computing.
+     Without JVM warmup or runtime bootstrap overhead, CWIST boots
+     instantly and handles requests at full capacity from the first packet.
 
 ------------------------------------------------------------------
 
