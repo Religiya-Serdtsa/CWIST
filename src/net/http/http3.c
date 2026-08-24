@@ -20,6 +20,8 @@
 #include <cwist/core/seq/seq.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/sys/app/shutdown.h>
+#include <ttak/timing/timing.h>
+#include <ttak/async/sched.h>
 #include "tls_chain.h"
 
 #include <stdio.h>
@@ -1002,10 +1004,11 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         bool is_head = st->req && st->req->method == CWIST_HTTP_HEAD;
 
         /* :status */
+        int status_code = (st->res->status_code > 0) ? st->res->status_code : 200;
         char status_str[16];
-        snprintf(status_str, sizeof(status_str), "%d", st->res->status_code);
+        snprintf(status_str, sizeof(status_str), "%d", status_code);
         size_t slen = strlen(status_str);
-        if (hdr_count < H3_MAX_RESPONSE_HEADERS && hbuf_off + 7 + 2 + slen <= sizeof(hbuf)) {
+        if (hdr_count < H3_MAX_RESPONSE_HEADERS && slen > 0 && hbuf_off + 7 + 2 + slen <= sizeof(hbuf)) {
             memcpy(hbuf + hbuf_off, ":status", 7);
             memcpy(hbuf + hbuf_off + 9, status_str, slen);
             lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
@@ -1035,11 +1038,11 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
                 cl_val = cl_str;
             }
-            if (cl_val) {
-                size_t cl_name_len = strlen("content-length");
+            if (cl_val && cl_val[0] != '\0') {
+                size_t cl_name_len = 14;
                 size_t cl_val_len  = strlen(cl_val);
                 size_t total = cl_name_len + 2 + cl_val_len;
-                if (hbuf_off + total <= sizeof(hbuf)) {
+                if (cl_val_len > 0 && hbuf_off + total <= sizeof(hbuf)) {
                     memcpy(hbuf + hbuf_off, "content-length", cl_name_len);
                     memcpy(hbuf + hbuf_off + cl_name_len + 2, cl_val, cl_val_len);
                     lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
@@ -1053,10 +1056,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         /* content-type (if present) */
         if (st->res->headers) {
             char *ct = cwist_http_header_get(st->res->headers, "content-type");
-            if (ct && hdr_count < H3_MAX_RESPONSE_HEADERS) {
-                size_t klen = strlen("content-type");
+            if (ct && ct[0] != '\0' && hdr_count < H3_MAX_RESPONSE_HEADERS) {
+                size_t klen = 12;
                 size_t vlen = strlen(ct);
-                if (hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
+                if (vlen > 0 && hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
                     memcpy(hbuf + hbuf_off, "content-type", klen);
                     memcpy(hbuf + hbuf_off + klen + 2, ct, vlen);
                     lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
@@ -1070,11 +1073,13 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         /* user headers (skip content-length/content-type already handled) */
         cwist_http_header_node *node = st->res->headers;
         while (node && hdr_count < H3_MAX_RESPONSE_HEADERS) {
-            if (node->key && node->key->data && node->value && node->value->data) {
+            if (node->key && node->key->data && node->key->size > 0 &&
+                node->value && node->value->data) {
                 char h3_name[256];
                 if (cwist_http3_normalize_response_header_name(node->key->data,
                                                                h3_name,
                                                                sizeof(h3_name)) != 0 ||
+                    h3_name[0] == '\0' ||
                     strlen(node->value->data) != node->value->size ||
                     !cwist_http3_response_header_value_is_safe(node->value->data)) {
                     node = node->next;
@@ -1101,7 +1106,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
 
                 size_t klen = strlen(h3_name);
                 size_t vlen = node->value->size;
-                if (hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
+                if (klen > 0 && hbuf_off + klen + 2 + vlen <= sizeof(hbuf)) {
                     memcpy(hbuf + hbuf_off, h3_name, klen);
                     memcpy(hbuf + hbuf_off + klen + 2, node->value->data, vlen);
                     lsxpack_header_set_offset2(&headers_arr[hdr_count], hbuf + hbuf_off,
@@ -1236,6 +1241,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
 
         if (st->body_sent >= body_len) {
             st->write_state = 2;
+            lsquic_stream_flush(stream);
             lsquic_stream_shutdown(stream, 1);
             lsquic_stream_wantwrite(stream, 0);
         } else {
@@ -1631,12 +1637,6 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 
     struct lsquic_engine_settings settings;
     lsquic_engine_init_settings(&settings, LSENG_HTTP_SERVER);
-    settings.es_versions = (1 << LSQVER_I001) | (1 << LSQVER_ID29);
-    settings.es_init_max_data = 16777216;
-    settings.es_init_max_stream_data_bidi_local = 8388608;
-    settings.es_init_max_stream_data_bidi_remote = 8388608;
-    settings.es_init_max_stream_data_uni = 1048576;
-    settings.es_max_streams_in = 100;
     settings.es_support_push = ctx->push_enabled;
     settings.es_allow_migration = ctx->allow_migration ? ctx->allow_migration : 1;
     settings.es_max_delayed_0rtt_packets = 32;
@@ -1894,6 +1894,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
         lsquic_engine_process_conns(engine);
         if (lsquic_engine_has_unsent_packets(engine)) {
             lsquic_engine_send_unsent_packets(engine);
+            ttak_async_yield();
         }
     }
 
