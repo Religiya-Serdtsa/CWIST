@@ -21,6 +21,7 @@
 typedef struct test_http2_server_ctx {
     int fd;
     cwist_error_t result;
+    cwist_http2_request_handler_func handler;
 } test_http2_server_ctx;
 
 static int ssl_read_exact(SSL *ssl, void *buf, size_t len) {
@@ -128,8 +129,38 @@ static void *http2_server_thread(void *arg) {
     return NULL;
 }
 
-static void *http2_big_server_thread(void *arg) {
+static void *http2_handler_server_thread(void *arg) {
     test_http2_server_ctx *ctx = arg;
+    assert(ctx->handler != NULL);
+    SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_server_method());
+    assert(ssl_ctx != NULL);
+    assert(SSL_CTX_use_certificate_file(ssl_ctx, TEST_CERT, SSL_FILETYPE_PEM) == 1);
+    assert(SSL_CTX_use_PrivateKey_file(ssl_ctx, TEST_KEY, SSL_FILETYPE_PEM) == 1);
+
+    SSL *ssl = SSL_new(ssl_ctx);
+    assert(ssl != NULL);
+    assert(SSL_set_fd(ssl, ctx->fd) == 1);
+    assert(SSL_accept(ssl) == 1);
+
+    cwist_https_connection conn = {
+        .fd = ctx->fd,
+        .ssl = ssl,
+        .read_buf = NULL,
+        .buf_len = 0,
+        .negotiated_http2 = true,
+        .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2,
+        .http2_sequenced_data = true
+    };
+    ctx->result = cwist_http2_serve_connection(&conn, NULL, ctx->handler);
+
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    SSL_CTX_free(ssl_ctx);
+    close(ctx->fd);
+    return NULL;
+}
+
+static void *http2_big_server_thread(void *arg) {    test_http2_server_ctx *ctx = arg;
     SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_server_method());
     assert(ssl_ctx != NULL);
     assert(SSL_CTX_use_certificate_file(ssl_ctx, TEST_CERT, SSL_FILETYPE_PEM) == 1);
@@ -769,6 +800,251 @@ static void test_http2_response_headers(void) {
     printf("Passed HTTP/2 response headers.\n");
 }
 
+/* Handler for the HPACK incremental-indexing test: replies "h2 ok" only when
+ * the request carried x-token: abc123 (delivered via the dynamic table on the
+ * second request). */
+static void http2_hpack_handler(void *user_ctx, cwist_http_request *req, cwist_http_response *res) {
+    (void)user_ctx;
+    char *token = cwist_http_header_get(req->headers, "x-token");
+    cwist_http_header_add(&res->headers, "content-type", "text/plain");
+    if (token && strcmp(token, "abc123") == 0) {
+        cwist_sstring_assign(res->body, "h2 ok");
+    } else {
+        cwist_sstring_assign(res->body, "unexpected");
+    }
+}
+
+static void test_http2_hpack_incremental_indexing(void) {
+    printf("Testing HTTP/2 HPACK incremental indexing...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16),
+        .handler = http2_hpack_handler
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_handler_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    /* Stream 1: :method GET, :scheme https, :path /, then literal-with-
+     * incremental-indexing "x-token: abc123" (inserts dynamic index 62). */
+    static const unsigned char headers_s1[] = {
+        0x00, 0x00, 0x13, 0x01, 0x05,
+        0x00, 0x00, 0x00, 0x01,
+        0x82, 0x87, 0x84,
+        0x40, 0x07, 'x', '-', 't', 'o', 'k', 'e', 'n',
+        0x06, 'a', 'b', 'c', '1', '2', '3'
+    };
+    /* Stream 3: same pseudo-headers plus indexed field 62 (0x80|62 = 0xBE),
+     * resolving to x-token: abc123 from the dynamic table. */
+    static const unsigned char headers_s3[] = {
+        0x00, 0x00, 0x04, 0x01, 0x05,
+        0x00, 0x00, 0x00, 0x03,
+        0x82, 0x87, 0x84, 0xBE
+    };
+
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+    assert(ssl_write_all(client, headers_s1, sizeof(headers_s1)) == 0);
+    assert(ssl_write_all(client, headers_s3, sizeof(headers_s3)) == 0);
+
+    bool saw_stream1 = false;
+    bool saw_stream3 = false;
+    for (int i = 0; i < 16 && !(saw_stream1 && saw_stream3); ++i) {
+        unsigned char hdr[9];
+        assert(ssl_read_exact(client, hdr, sizeof(hdr)) == 0);
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | (uint32_t)hdr[2];
+        uint8_t type = hdr[3];
+        uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
+                             ((uint32_t)hdr[7] << 8) | hdr[8];
+        unsigned char payload[4096] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
+
+        if (type == 0x0 && (stream_id == 1 || stream_id == 3)) {
+            char data_body[64];
+            size_t body_len = 0;
+            assert(http2_read_seq_payload(payload, len, data_body, sizeof(data_body), &body_len));
+            assert(strcmp(data_body, "h2 ok") == 0);
+            if (stream_id == 1) saw_stream1 = true;
+            else saw_stream3 = true;
+        }
+    }
+
+    assert(saw_stream1);
+    assert(saw_stream3);
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    printf("Passed HTTP/2 HPACK incremental indexing.\n");
+}
+
+static void test_http2_missing_pseudo_header(void) {
+    printf("Testing HTTP/2 missing pseudo-header rejection...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16),
+        .handler = http2_test_handler
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_handler_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    /* :method GET + :scheme https, but no :path: RFC 7540 §8.1.2.3 violation. */
+    static const unsigned char headers_bad[] = {
+        0x00, 0x00, 0x02, 0x01, 0x05,
+        0x00, 0x00, 0x00, 0x01,
+        0x82, 0x87
+    };
+
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+    assert(ssl_write_all(client, headers_bad, sizeof(headers_bad)) == 0);
+
+    bool saw_rst = false;
+    for (int i = 0; i < 10 && !saw_rst; ++i) {
+        unsigned char hdr[9];
+        assert(ssl_read_exact(client, hdr, sizeof(hdr)) == 0);
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | (uint32_t)hdr[2];
+        uint8_t type = hdr[3];
+        uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
+                             ((uint32_t)hdr[7] << 8) | hdr[8];
+        unsigned char payload[4096] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
+
+        if (type == 0x3 && stream_id == 1) {
+            assert(len == 4);
+            uint32_t err = ((uint32_t)payload[0] << 24) | ((uint32_t)payload[1] << 16) |
+                           ((uint32_t)payload[2] << 8) | (uint32_t)payload[3];
+            assert(err == 0x1); /* PROTOCOL_ERROR */
+            saw_rst = true;
+        }
+    }
+
+    assert(saw_rst);
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    printf("Passed HTTP/2 missing pseudo-header rejection.\n");
+}
+
+static void test_http2_max_concurrent_streams(void) {
+    printf("Testing HTTP/2 max concurrent streams...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16),
+        .handler = http2_test_handler
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_handler_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    /* HEADERS, END_HEADERS but no END_STREAM: stream stays open. */
+    static const unsigned char headers_open[] = {
+        0x00, 0x00, 0x03, 0x01, 0x04,
+        0x00, 0x00, 0x00, 0x00,
+        0x82, 0x87, 0x84
+    };
+
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+
+    /* Open 101 streams (ids 1..201); the advertised/compiled limit is 100,
+     * so stream 201 must be refused. */
+    const uint32_t limit = 100;
+    const uint32_t last_id = 2 * (limit + 1) - 1;
+    for (uint32_t id = 1; id <= last_id; id += 2) {
+        unsigned char frame[sizeof(headers_open)];
+        memcpy(frame, headers_open, sizeof(frame));
+        frame[5] = (unsigned char)((id >> 24) & 0x7f);
+        frame[6] = (unsigned char)((id >> 16) & 0xff);
+        frame[7] = (unsigned char)((id >> 8) & 0xff);
+        frame[8] = (unsigned char)(id & 0xff);
+        assert(ssl_write_all(client, frame, sizeof(frame)) == 0);
+    }
+
+    bool saw_refused = false;
+    for (int i = 0; i < 64 && !saw_refused; ++i) {
+        unsigned char hdr[9];
+        assert(ssl_read_exact(client, hdr, sizeof(hdr)) == 0);
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | (uint32_t)hdr[2];
+        uint8_t type = hdr[3];
+        uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
+                             ((uint32_t)hdr[7] << 8) | hdr[8];
+        unsigned char payload[4096] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
+
+        if (type == 0x3 && stream_id == last_id) {
+            assert(len == 4);
+            uint32_t err = ((uint32_t)payload[0] << 24) | ((uint32_t)payload[1] << 16) |
+                           ((uint32_t)payload[2] << 8) | (uint32_t)payload[3];
+            assert(err == 0x7); /* REFUSED_STREAM */
+            saw_refused = true;
+        }
+    }
+
+    assert(saw_refused);
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    printf("Passed HTTP/2 max concurrent streams.\n");
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     test_http2_roundtrip();
@@ -778,6 +1054,9 @@ int main(void) {
     test_http2_continuation();
     test_http2_flow_control();
     test_http2_response_headers();
+    test_http2_hpack_incremental_indexing();
+    test_http2_missing_pseudo_header();
+    test_http2_max_concurrent_streams();
     printf("All HTTP/2 tests passed!\n");
     return 0;
 }

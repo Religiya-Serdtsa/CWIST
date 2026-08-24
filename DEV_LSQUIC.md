@@ -26,8 +26,10 @@ now exports the expected `lsquic_wt_*` symbols.
 
 ## Platform Portability
 
-The HTTP/3 server and native client configure their UDP sockets as non-blocking
-before lsquic sends packets. The Linux server loop uses `epoll`; macOS and BSD
+The HTTP/3 server loop (`cwist_http3_server_loop`) forces its UDP socket into
+non-blocking mode with `fcntl(O_NONBLOCK)` (idempotent if the caller already
+set it), and the native client configures its UDP socket non-blocking before
+lsquic sends packets. The Linux server loop uses `epoll`; macOS and BSD
 use the portable polling path. BSD-derived socket interfaces do not all expose
 `MSG_DONTWAIT`, ECN receive options, or ancillary-data macros, so CWIST treats
 those as optional capabilities. HTTP/3 continues to build and run without ECN
@@ -131,6 +133,34 @@ make test_webtransport
 - null-safety for public WT I/O functions
 - app-level WT handler persistence across HTTP/3 context refresh
 
+## 0-RTT Early Data
+
+Server-side 0-RTT is opt-in via `cwist_http3_set_early_data(ctx, true)`:
+
+- The setter applies `SSL_CTX_set_early_data_enabled` to the context's
+  SSL_CTX immediately and stores the flag for the server loop.
+- H3 contexts are created with a server session cache
+  (`SSL_SESS_CACHE_SERVER`) and a shared, prefork-safe ticket key
+  (`SSL_CTX_set_tlsext_ticket_key_cb`, same pattern as `src/net/http/https.c`)
+  so clients receive resumable tickets — a prerequisite for 0-RTT.
+- A replay guard is ON by default: requests delivered while the QUIC
+  handshake is still in progress (`lsquic_conn_status() ==
+  LSCONN_ST_HSK_IN_PROGRESS`) are treated as early data, and non-idempotent
+  methods are answered with 425 Too Early instead of reaching the handler.
+  Disable with `cwist_http3_set_early_data_guard(ctx, 0)`.
+
+Baseline limitations found in this lsquic checkout:
+
+- No `es_max_early_data_size` engine setting exists in this lsquic version,
+  so the engine settings block needs no 0-RTT-specific tuning beyond
+  `es_max_delayed_0rtt_packets` (already set to 32).
+- No `lsquic_conn_is_early_data_accepted()`-style public query exists
+  (`on_hsk_done` is client-only, and the server path in
+  `lsquic_enc_sess_ietf.c` still carries an internal `TODO`), which is why
+  the guard infers early data from the connection handshake status.
+- BoringSSL does not suppress 0-RTT replays; the method guard is the only
+  application-level protection.
+
 ## Not Yet Verified
 
 The current tests are infrastructure-level tests.  They do not yet perform a
@@ -149,6 +179,10 @@ Still needs verification:
 - Stream reset and STOP_SENDING behavior.
 - Multiple concurrent sessions.  CWIST currently configures one WT session per
   QUIC connection because this lsquic branch rejects higher values.
+- End-to-end 0-RTT: unit tests cover the setter, guard defaults, and method
+  classification, but a real client/server 0-RTT exchange (resumed session,
+  early data accepted, 425 Too Early for non-idempotent early requests) has
+  not been exercised over loopback yet.
 
 ## Known Limitations
 

@@ -53,6 +53,19 @@ typedef enum cwist_http_status_t {
     CWIST_HTTP_SERVICE_UNAVAILABLE = 503
 } cwist_http_status_t;
 
+/** @brief Failure reason reported by the request receive APIs.
+ * Distinguishes protocol errors (which deserve an error response before
+ * close) from an orderly client disconnect (close quietly). */
+typedef enum cwist_http_parse_error_t {
+    CWIST_HTTP_PARSE_OK = 0,          /* No error. */
+    CWIST_HTTP_PARSE_EOF,             /* Orderly close / no data: close quietly. */
+    CWIST_HTTP_PARSE_MALFORMED,       /* 400: bad request-line, Host rules, CL/TE rules. */
+    CWIST_HTTP_PARSE_HEADER_OVERFLOW, /* 431: header block exceeds the read buffer. */
+    CWIST_HTTP_PARSE_BODY_TOO_LARGE,  /* 413: Content-Length exceeds the body cap. */
+    CWIST_HTTP_PARSE_TE_UNSUPPORTED,  /* 501: unsupported transfer coding. */
+    CWIST_HTTP_PARSE_EXPECT_FAILED    /* 417: unsupported Expect value. */
+} cwist_http_parse_error_t;
+
 /** --- Constants and Limits --- */
 #define CWIST_HTTP_MAX_HEADER_SIZE (8 * 1024)
 #define CWIST_HTTP_MAX_BODY_SIZE   (10 * 1024 * 1024)
@@ -141,7 +154,13 @@ typedef struct cwist_http_response {
 cwist_http_request *cwist_http_request_create(void);
 void cwist_http_request_destroy(cwist_http_request *req);
 cwist_http_request *cwist_http_parse_request(const char *raw_request); 
-cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len);
+cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len, cwist_http_parse_error_t *err_out);
+/**
+ * @brief Send a minimal HTTP/1.x error response (Connection: close) on a
+ * socket, used to answer malformed requests before dropping them.
+ * @param msg Plain-text body; NULL uses the status reason phrase.
+ */
+void cwist_http_send_error_response(int fd, int status, const char *msg);
 /** @} */
 
 /** @name Request Data Processing */
@@ -175,6 +194,12 @@ void cwist_http_response_set_alt_svc(cwist_http_response *res, const char *alt_s
 
 cwist_sstring *cwist_http_stringify_response(cwist_http_response *res);
 cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res);
+/**
+ * @brief Send only the status line and headers of a response (HEAD replies).
+ * Content-Length still reflects the would-be body; body resources are
+ * released without being transmitted.
+ */
+cwist_error_t cwist_http_send_response_head(int client_fd, cwist_http_response *res);
 /**
  * @brief Whether the TCP_CORK coalescing layer is active for cleartext
  * HTTP/1.1 responses. Enabled at runtime with CWIST_USE_TCP_CORK=1 (burst
@@ -253,6 +278,7 @@ typedef struct cwist_http_async_conn {
     size_t cap;
     size_t len;
     bool virgin;                          /* No bytes seen yet (h2c preface sniff). */
+    bool expect_continue_sent;            /* 100 Continue already emitted for the pending request. */
 } cwist_http_async_conn_t;
 
 typedef enum {
@@ -271,7 +297,7 @@ typedef enum {
 
 bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, void *ctx);
 int cwist_http_async_conn_fill(cwist_http_async_conn_t *conn);
-cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out);
+cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out, cwist_http_parse_error_t *err_out);
 
 extern const int CWIST_CREATE_SOCKET_FAILED;
 extern const int CWIST_HTTP_UNAVAILABLE_ADDRESS;

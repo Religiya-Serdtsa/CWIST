@@ -49,6 +49,8 @@
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
+#include <openssl/rand.h>
+#include <openssl/hmac.h>
 
 #include <lsquic.h>
 #ifdef CWIST_WEBTRANSPORT
@@ -914,6 +916,21 @@ static bool h3_process_stream_headers(lsquic_stream_t *stream, h3_stream_ctx_t *
     return true;
 }
 
+/* RFC 9110: methods with the idempotent property are safe to replay, which
+ * makes them acceptable for 0-RTT delivery. */
+static bool h3_method_is_idempotent(cwist_http_method_t method) {
+    switch (method) {
+    case CWIST_HTTP_GET:
+    case CWIST_HTTP_HEAD:
+    case CWIST_HTTP_PUT:
+    case CWIST_HTTP_DELETE:
+    case CWIST_HTTP_OPTIONS:
+        return true;
+    default:
+        return false;
+    }
+}
+
 static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     h3_stream_ctx_t *st = (h3_stream_ctx_t *)st_h;
     if (!st) return;
@@ -1033,7 +1050,23 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             } else
 #endif
             if (h3_ctx && h3_ctx->handler) {
-                h3_ctx->handler(h3_ctx->user_ctx, st->req, st->res);
+                /* 0-RTT replay guard: requests delivered while the QUIC
+                 * handshake is still in progress arrived as early data.
+                 * lsquic (this baseline) exposes no
+                 * lsquic_conn_is_early_data_accepted()-style query, so the
+                 * guard uses the public lsquic_conn_status() instead. */
+                bool is_early_data = h3_ctx->early_data_enabled &&
+                    h3_ctx->early_data_guard &&
+                    lsquic_conn_status(lsquic_stream_conn(stream), NULL, 0)
+                        == LSCONN_ST_HSK_IN_PROGRESS;
+                if (is_early_data && st->req &&
+                    !h3_method_is_idempotent(st->req->method)) {
+                    /* RFC 8470: refuse replayable non-idempotent early data
+                     * so the client retries after the handshake. */
+                    st->res->status_code = 425; /* Too Early */
+                } else {
+                    h3_ctx->handler(h3_ctx->user_ctx, st->req, st->res);
+                }
             }
         }
         st->response_ready = 1;
@@ -1523,11 +1556,88 @@ static const struct lsquic_stream_if cwist_h3_stream_if = {
 /* Context management                                                 */
 /* ------------------------------------------------------------------ */
 
+/* --- Shared session ticket key -------------------------------------------
+ * Session resumption (and therefore 0-RTT early data) requires the server to
+ * issue resumable tickets.  Mirrors the prefork-safe pattern used by the
+ * HTTPS stack (src/net/http/https.c): one random key generated at context
+ * creation and installed via an explicit ticket-key callback, so tickets
+ * issued by one worker resume on any other (SO_REUSEPORT scatters
+ * connections across workers).  The key lives for the process lifetime.
+ * ------------------------------------------------------------------------- */
+typedef struct cwist_h3_ticket_key {
+    unsigned char name[16];     /* key_name sent in the ticket */
+    unsigned char aes_key[32];  /* AES-256-CBC encryption key  */
+    unsigned char hmac_key[32]; /* HMAC-SHA-256 MAC key        */
+} cwist_h3_ticket_key;
+
+static int g_h3_ticket_key_ex_data_idx = -1;
+static pthread_once_t g_h3_ticket_key_ex_data_once = PTHREAD_ONCE_INIT;
+
+static void cwist_h3_ticket_key_ex_data_init(void) {
+    g_h3_ticket_key_ex_data_idx = SSL_CTX_get_ex_new_index(0, NULL, NULL, NULL, NULL);
+}
+
+static int cwist_h3_ticket_key_cb(SSL *ssl, uint8_t *key_name, uint8_t *iv,
+                                  EVP_CIPHER_CTX *ectx, HMAC_CTX *hctx, int encrypt) {
+    SSL_CTX *ssl_ctx = ssl ? SSL_get_SSL_CTX(ssl) : NULL;
+    const cwist_h3_ticket_key *key = NULL;
+    if (ssl_ctx && g_h3_ticket_key_ex_data_idx >= 0) {
+        key = (const cwist_h3_ticket_key *)SSL_CTX_get_ex_data(ssl_ctx, g_h3_ticket_key_ex_data_idx);
+    }
+    if (!key) return 0;
+
+    if (encrypt) {
+        memcpy(key_name, key->name, sizeof(key->name));
+        if (RAND_bytes(iv, 16) != 1) return 0;
+        if (EVP_EncryptInit_ex(ectx, EVP_aes_256_cbc(), NULL, key->aes_key, iv) != 1) return 0;
+        if (HMAC_Init_ex(hctx, key->hmac_key, sizeof(key->hmac_key), EVP_sha256(), NULL) != 1) return 0;
+        return 1;
+    }
+
+    if (memcmp(key_name, key->name, sizeof(key->name)) != 0) {
+        return 0; /* Unknown key: decline the ticket, do a full handshake. */
+    }
+    if (EVP_DecryptInit_ex(ectx, EVP_aes_256_cbc(), NULL, key->aes_key, iv) != 1) return 0;
+    if (HMAC_Init_ex(hctx, key->hmac_key, sizeof(key->hmac_key), EVP_sha256(), NULL) != 1) return 0;
+    return 1;
+}
+
+/**
+ * @brief Arm the server session cache and the shared ticket key so the
+ *        context issues resumable tickets (prerequisite for 0-RTT).
+ * @param ssl_ctx Context being configured.
+ */
+static void cwist_h3_setup_session_tickets(SSL_CTX *ssl_ctx) {
+    SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_SERVER);
+
+    pthread_once(&g_h3_ticket_key_ex_data_once, cwist_h3_ticket_key_ex_data_init);
+    if (g_h3_ticket_key_ex_data_idx < 0) return;
+
+    cwist_h3_ticket_key *key = (cwist_h3_ticket_key *)cwist_alloc(sizeof(*key));
+    if (!key) return;
+    if (RAND_bytes((uint8_t *)key, sizeof(*key)) != 1) {
+        cwist_free(key);
+        return; /* Fall back to the library-internal (per-worker) keys. */
+    }
+    SSL_CTX_set_ex_data(ssl_ctx, g_h3_ticket_key_ex_data_idx, key);
+    SSL_CTX_set_tlsext_ticket_key_cb(ssl_ctx, cwist_h3_ticket_key_cb);
+}
+
+static void cwist_h3_free_session_ticket_key(SSL_CTX *ssl_ctx) {
+    if (!ssl_ctx || g_h3_ticket_key_ex_data_idx < 0) return;
+    void *key = SSL_CTX_get_ex_data(ssl_ctx, g_h3_ticket_key_ex_data_idx);
+    if (key) {
+        SSL_CTX_set_ex_data(ssl_ctx, g_h3_ticket_key_ex_data_idx, NULL);
+        cwist_free(key);
+    }
+}
+
 static int cwist_h3_ssl_ctx_init(SSL_CTX *ssl_ctx, int early_data) {
     SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_default_verify_paths(ssl_ctx);
     SSL_CTX_set_alpn_select_cb(ssl_ctx, cwist_h3_alpn_select_cb, NULL);
+    cwist_h3_setup_session_tickets(ssl_ctx);
 
     if (early_data) {
         SSL_CTX_set_early_data_enabled(ssl_ctx, 1);
@@ -1560,6 +1670,7 @@ cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
 
     if (SSL_CTX_use_certificate_chain_file(ssl_ctx, cert_path) <= 0 ||
         SSL_CTX_use_PrivateKey_file(ssl_ctx, key_path, SSL_FILETYPE_PEM) <= 0) {
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1567,6 +1678,7 @@ cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
     }
 
     if (cwist_tls_autoload_intermediates(ssl_ctx) < 0) {
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1574,6 +1686,7 @@ cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
     }
 
     if (SSL_CTX_check_private_key(ssl_ctx) != 1) {
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1582,6 +1695,7 @@ cwist_error_t cwist_http3_init_context(cwist_http3_context **ctx,
 
     *ctx = (cwist_http3_context *)cwist_alloc(sizeof(cwist_http3_context));
     if (!*ctx) {
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1616,6 +1730,7 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
 
     EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
     if (!pctx) {
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1624,6 +1739,7 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
     if (EVP_PKEY_keygen_init(pctx) <= 0 ||
         EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, 2048) <= 0) {
         EVP_PKEY_CTX_free(pctx);
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1632,6 +1748,7 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
     EVP_PKEY *pkey = NULL;
     if (EVP_PKEY_keygen(pctx, &pkey) <= 0 || !pkey) {
         EVP_PKEY_CTX_free(pctx);
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1642,6 +1759,7 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
     X509 *x509 = X509_new();
     if (!x509) {
         EVP_PKEY_free(pkey);
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1663,6 +1781,7 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
         SSL_CTX_use_PrivateKey(ssl_ctx, pkey) != 1) {
         X509_free(x509);
         EVP_PKEY_free(pkey);
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1674,6 +1793,7 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
 
     *ctx = (cwist_http3_context *)cwist_alloc(sizeof(cwist_http3_context));
     if (!*ctx) {
+        cwist_h3_free_session_ticket_key(ssl_ctx);
         SSL_CTX_free(ssl_ctx);
         h3_global_cleanup();
         err.error.err_i16 = -1;
@@ -1694,6 +1814,7 @@ void cwist_http3_destroy_context(cwist_http3_context *ctx) {
             ctx->engine = NULL;
         }
         if (ctx->ssl_ctx) {
+            cwist_h3_free_session_ticket_key(ctx->ssl_ctx);
             SSL_CTX_free(ctx->ssl_ctx);
             ctx->ssl_ctx = NULL;
         }
@@ -1780,6 +1901,14 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     ctx->handler = handler;
     ctx->user_ctx = user_ctx;
     ctx->running = 1;
+
+    /* The receive loop relies on MSG_DONTWAIT, which some platforms lack
+     * (it degrades to 0).  Guarantee non-blocking semantics at the socket
+     * level instead; idempotent if the caller already set O_NONBLOCK. */
+    int fl = fcntl(udp_fd, F_GETFL, 0);
+    if (fl >= 0 && !(fl & O_NONBLOCK)) {
+        fcntl(udp_fd, F_SETFL, fl | O_NONBLOCK);
+    }
 
     struct sockaddr_storage local_addr;
     socklen_t local_addr_len = sizeof(local_addr);
@@ -2090,6 +2219,29 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 
 void cwist_http3_set_push_enabled(cwist_http3_context *ctx, int enabled) {
     if (ctx) ctx->push_enabled = enabled;
+}
+
+void cwist_http3_set_early_data(cwist_http3_context *ctx, bool enabled) {
+    if (!ctx || !ctx->ssl_ctx) return;
+    ctx->early_data_enabled = enabled ? 1 : 0;
+    SSL_CTX_set_early_data_enabled(ctx->ssl_ctx, enabled ? 1 : 0);
+    if (enabled) {
+        /* Replay protection is opt-out: restrict 0-RTT requests to
+         * idempotent methods unless the application overrides the guard. */
+        ctx->early_data_guard = 1;
+    }
+}
+
+void cwist_http3_set_early_data_guard(cwist_http3_context *ctx, int enabled) {
+    if (ctx) ctx->early_data_guard = enabled ? 1 : 0;
+}
+
+/* RFC 9110: string-based variant used by tests and external checks. */
+int cwist_http3_method_is_idempotent(const char *method_str) {
+    if (!method_str) return 0;
+    /* TRACE is absent from cwist_http_method_t; match it by name. */
+    if (strcasecmp(method_str, "TRACE") == 0) return 1;
+    return h3_method_is_idempotent(cwist_http_string_to_method(method_str)) ? 1 : 0;
 }
 
 int cwist_http3_push_resource(cwist_http_request *req,

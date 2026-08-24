@@ -9,6 +9,7 @@
 #include <cwist/net/http/http.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <openssl/ssl.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 /** --- Forward Declarations --- */
@@ -40,6 +41,7 @@ struct cwist_http3_context {
     volatile int running; /**< Set to 0 to gracefully stop server_loop */
     int push_enabled;     /**< HTTP/3 server push enabled */
     int early_data_enabled; /**< 0-RTT early data enabled */
+    int early_data_guard;   /**< Restrict 0-RTT requests to idempotent methods */
     int allow_migration;  /**< QUIC connection migration enabled */
     int datagram_enabled; /**< QUIC datagram extension enabled */
     void (*datagram_cb)(const void *data, size_t len, void *user_ctx);
@@ -99,6 +101,43 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                                       void *user_ctx);
 
 /** --- Advanced Features --- */
+
+/**
+ * @brief Enable or disable server-side 0-RTT early data on the given context.
+ *
+ * Early data is disabled by default because 0-RTT payloads are replayable:
+ * BoringSSL does not provide replay suppression for QUIC early data, so an
+ * attacker can re-send captured 0-RTT packets.  Only opt in when the
+ * application can tolerate replays (or relies on the built-in idempotent
+ * method guard, see cwist_http3_set_early_data_guard()).
+ *
+ * The flag is applied immediately to the context's SSL_CTX and stored so the
+ * server loop can enforce the replay guard.  Works for both
+ * cwist_http3_init_context() and cwist_http3_init_context_ephemeral().
+ *
+ * Note: enabling early data also requires session resumption; the H3 SSL_CTX
+ * is configured with a server session cache and a shared ticket key at
+ * context creation so tickets (and thus 0-RTT) work across prefork workers.
+ *
+ * @param ctx     HTTP/3 context.
+ * @param enabled true to accept 0-RTT early data, false to reject it.
+ */
+void cwist_http3_set_early_data(cwist_http3_context *ctx, bool enabled);
+
+/**
+ * @brief Enable or disable the 0-RTT replay guard (default ON when early
+ *        data is enabled).
+ *
+ * When the guard is active, a request that arrived as early data (i.e. while
+ * the QUIC handshake is still in progress) is only passed to the application
+ * handler if its method is idempotent (GET/HEAD/PUT/DELETE/OPTIONS/TRACE);
+ * other methods are answered with 425 Too Early so the client retries after
+ * the handshake completes.
+ *
+ * @param ctx     HTTP/3 context.
+ * @param enabled Non-zero to keep the guard, 0 to disable it (replay risk).
+ */
+void cwist_http3_set_early_data_guard(cwist_http3_context *ctx, int enabled);
 
 /**
  * @brief Enable or disable HTTP/3 server push on the given context.

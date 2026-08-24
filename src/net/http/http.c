@@ -160,21 +160,16 @@ typedef struct {
 } http_thread_worker_t;
 
 static size_t g_rr_index = 0;
-static long g_http_thread_count;
+static long g_http_thread_count = 0;
 static http_thread_worker_t *g_workers = NULL;
 
-/* Saturation backpressure: track in-flight connections and shed load once
- * the process fd budget is nearly spent.  The one-shot async path holds one
- * slot per open connection, so the cap follows RLIMIT_NOFILE (with a reserve
- * for files/accept socket/etc.); the legacy parked-thread path keeps the
- * smaller threads-based floor.  Shedding is a single fixed 503 write +
- * close, so it adds no latency to connections already being served. */
 static _Atomic long g_http_inflight = 0;
 #define CWIST_HTTP_INFLIGHT_PER_THREAD 32
 #define CWIST_HTTP_INFLIGHT_FD_RESERVE 4096
 
 static long cwist_http_inflight_limit(void) {
-    long floor = g_http_thread_count * CWIST_HTTP_INFLIGHT_PER_THREAD;
+    long base = g_http_thread_count > 0 ? g_http_thread_count : get_optimal_thread_count();
+    long floor = base * CWIST_HTTP_INFLIGHT_PER_THREAD;
     struct rlimit rl;
     if (getrlimit(RLIMIT_NOFILE, &rl) != 0) return floor;
     long budget = (rl.rlim_cur == RLIM_INFINITY)
@@ -185,25 +180,6 @@ static long cwist_http_inflight_limit(void) {
 
 static const char CWIST_HTTP_503[] =
     "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-
-typedef struct {
-    int client_fd;
-    void (*handler_func)(int, void *);
-    void *ctx;
-    cwist_reactor_t *reactor;
-} http_conn_ctx_t;
-
-/* The reactor copies this struct into its pooled, zeroed slot at add time,
- * so the callback reads the slot's inline storage - no per-connection
- * heap allocation, nothing to free here. */
-static void http_conn_event_cb(int fd, void *ctx) {
-    http_conn_ctx_t *c = (http_conn_ctx_t *)ctx;
-    void (*handler)(int, void *) = c->handler_func;
-    void *user_ctx = c->ctx;
-
-    handler(fd, user_ctx);
-    atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
-}
 
 static _Thread_local http_thread_worker_t *t_current_worker = NULL;
 
@@ -216,53 +192,149 @@ static void *http_pool_worker(void *arg) {
     return NULL;
 }
 
-int cwist_http_pool_init(void) {
-    g_http_thread_count = get_optimal_thread_count();
-    g_workers = cwist_alloc(g_http_thread_count * sizeof(http_thread_worker_t));
-    g_rr_index = 0;
-    memset(g_workers, 0, g_http_thread_count * sizeof(http_thread_worker_t));
+/* Dynamic Thread Pool for Classic Mode
+ * Combines pre-allocated idle worker threads with fast job queue and
+ * on-demand scaling to eliminate starvation on compute/keepalive workloads
+ * while avoiding per-connection pthread_create overhead. */
+#define CWIST_POOL_STACK_SIZE (256 * 1024)
 
-    for (int i = 0; i < g_http_thread_count; i++) {
-        g_workers[i].reactor = cwist_reactor_create();
-        if (!g_workers[i].reactor) return -1;
-        g_workers[i].worker_id = (uint32_t)i;
-        if (pthread_create(&g_workers[i].thread, NULL, http_pool_worker, &g_workers[i]) != 0) {
-            return -1;
+typedef struct http_pool_task {
+    int client_fd;
+    void (*handler_func)(int, void *);
+    void *ctx;
+    struct http_pool_task *next;
+} http_pool_task_t;
+
+typedef struct {
+    http_pool_task_t *head;
+    http_pool_task_t *tail;
+    atomic_long pending_tasks;
+    atomic_long active_workers;
+    atomic_long idle_workers;
+    atomic_long max_workers;
+    atomic_bool running;
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+} http_dynamic_pool_t;
+
+static http_dynamic_pool_t g_dyn_pool;
+
+static void *http_dynamic_worker_thread(void *arg) {
+    (void)arg;
+    while (atomic_load_explicit(&g_dyn_pool.running, memory_order_acquire)) {
+        http_pool_task_t *task = NULL;
+
+        pthread_mutex_lock(&g_dyn_pool.lock);
+        while (atomic_load_explicit(&g_dyn_pool.running, memory_order_acquire) && !g_dyn_pool.head) {
+            atomic_fetch_add_explicit(&g_dyn_pool.idle_workers, 1, memory_order_relaxed);
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            ts.tv_sec += 2; /* 2 second idle timeout */
+            int rc = pthread_cond_timedwait(&g_dyn_pool.cond, &g_dyn_pool.lock, &ts);
+            atomic_fetch_sub_explicit(&g_dyn_pool.idle_workers, 1, memory_order_relaxed);
+            if (rc == ETIMEDOUT && !g_dyn_pool.head) {
+                /* Scale down if idle and above base worker threshold */
+                long current = atomic_load_explicit(&g_dyn_pool.active_workers, memory_order_relaxed);
+                if (current > g_http_thread_count) {
+                    atomic_fetch_sub_explicit(&g_dyn_pool.active_workers, 1, memory_order_relaxed);
+                    pthread_mutex_unlock(&g_dyn_pool.lock);
+                    return NULL;
+                }
+            }
+        }
+
+        if (!atomic_load_explicit(&g_dyn_pool.running, memory_order_acquire)) {
+            pthread_mutex_unlock(&g_dyn_pool.lock);
+            break;
+        }
+
+        task = g_dyn_pool.head;
+        if (task) {
+            g_dyn_pool.head = task->next;
+            if (!g_dyn_pool.head) g_dyn_pool.tail = NULL;
+            atomic_fetch_sub_explicit(&g_dyn_pool.pending_tasks, 1, memory_order_release);
+        }
+        pthread_mutex_unlock(&g_dyn_pool.lock);
+
+        if (task) {
+            int fd = task->client_fd;
+            void (*handler)(int, void *) = task->handler_func;
+            void *ctx = task->ctx;
+            cwist_free(task);
+
+            ttak_net_lattice_set_worker_id((uint32_t)(uintptr_t)pthread_self());
+            if (handler) handler(fd, ctx);
+            atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
+        }
+    }
+    return NULL;
+}
+
+static bool http_spawn_worker(void) {
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_t tid;
+    atomic_fetch_add_explicit(&g_dyn_pool.active_workers, 1, memory_order_relaxed);
+    int rc = pthread_create(&tid, &attr, http_dynamic_worker_thread, NULL);
+    pthread_attr_destroy(&attr);
+    if (rc != 0) {
+        atomic_fetch_sub_explicit(&g_dyn_pool.active_workers, 1, memory_order_relaxed);
+        return false;
+    }
+    return true;
+}
+
+int cwist_http_pool_init(void) {
+    const char *c1m = getenv("CWIST_C1M_MODE");
+    bool use_c1m = true;
+    if (c1m) {
+        if (c1m[0] == '0' || strcmp(c1m, "false") == 0) {
+            use_c1m = false;
+        }
+    }
+
+    g_http_thread_count = get_optimal_thread_count();
+
+    if (use_c1m) {
+        /* Pre-allocate reactor workers for async path (CWIST_C1M_MODE=1) */
+        g_workers = cwist_alloc(g_http_thread_count * sizeof(http_thread_worker_t));
+        if (!g_workers) return -1;
+        g_rr_index = 0;
+        memset(g_workers, 0, g_http_thread_count * sizeof(http_thread_worker_t));
+
+        for (int i = 0; i < g_http_thread_count; i++) {
+            g_workers[i].reactor = cwist_reactor_create();
+            if (!g_workers[i].reactor) return -1;
+            g_workers[i].worker_id = (uint32_t)i;
+            if (pthread_create(&g_workers[i].thread, NULL, http_pool_worker, &g_workers[i]) != 0) {
+                return -1;
+            }
+        }
+    } else {
+        /* Initialize dynamic worker pool for classic path (CWIST_C1M_MODE=0) */
+        g_dyn_pool.head = NULL;
+        g_dyn_pool.tail = NULL;
+        atomic_init(&g_dyn_pool.pending_tasks, 0);
+        atomic_init(&g_dyn_pool.active_workers, 0);
+        atomic_init(&g_dyn_pool.idle_workers, 0);
+        atomic_init(&g_dyn_pool.max_workers, 65536);
+        atomic_init(&g_dyn_pool.running, true);
+
+        pthread_mutex_init(&g_dyn_pool.lock, NULL);
+        pthread_cond_init(&g_dyn_pool.cond, NULL);
+
+        /* Pre-warm core worker threads */
+        for (int i = 0; i < g_http_thread_count; i++) {
+            if (!http_spawn_worker()) {
+                return -1;
+            }
         }
     }
     return 0;
 }
 
-/* Classic path: one on-demand thread per connection.  The previous model
- * (fixed worker pool, connections dispatched into per-worker reactors that
- * then ran the blocking keep-alive handler inline) parked a worker thread
- * for the whole lifetime of any held connection, so a process capped at
- * cores*8 workers could only ever answer that many concurrent connections.
- * Idle parked threads are nearly free (futex sleep, ~1 MiB of untouched
- * stack), so scaling threads with connections is cheap up to
- * kernel.threads-max; beyond that pthread_create fails and we shed. */
-#define CWIST_CLASSIC_CONN_STACK (256 * 1024)
-
-typedef struct {
-    int client_fd;
-    void (*handler_func)(int, void *);
-    void *ctx;
-} http_classic_conn_t;
-
-static void *http_classic_conn_thread(void *arg) {
-    http_classic_conn_t *c = (http_classic_conn_t *)arg;
-    int fd = c->client_fd;
-    void (*handler)(int, void *) = c->handler_func;
-    void *ctx = c->ctx;
-    cwist_free(c);
-    handler(fd, ctx); /* owns and closes fd */
-    atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
-    return NULL;
-}
-
 void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *ctx) {
-    /* Backpressure gate: shed before doing any routing/allocation work when
-     * saturated. In-flight = queued + actively served connections. */
     long limit = cwist_http_inflight_limit();
     long inflight = atomic_fetch_add_explicit(&g_http_inflight, 1, memory_order_acq_rel) + 1;
     if (inflight > limit) {
@@ -272,69 +344,81 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
         return;
     }
 
-    http_classic_conn_t *c = cwist_alloc(sizeof(*c));
-    if (!c) {
+    http_pool_task_t *node = cwist_alloc(sizeof(*node));
+    if (!node) {
         atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
         close(client_fd);
         return;
     }
-    c->client_fd = client_fd;
-    c->handler_func = handler;
-    c->ctx = ctx;
+    node->client_fd = client_fd;
+    node->handler_func = handler;
+    node->ctx = ctx;
+    node->next = NULL;
 
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    pthread_attr_setstacksize(&attr, CWIST_CLASSIC_CONN_STACK);
-    pthread_t tid;
-    int rc = pthread_create(&tid, &attr, http_classic_conn_thread, c);
-    pthread_attr_destroy(&attr);
-    if (rc != 0) {
-        /* Thread budget exhausted (kernel.threads-max, RLIMIT_NPROC, ...):
-         * shed this connection instead of stalling the accept loop. */
-        if (getenv("CWIST_ASYNC_DEBUG")) {
-            static _Atomic long dbg_spawn_fail;
-            long n = atomic_fetch_add(&dbg_spawn_fail, 1) + 1;
-            if (n <= 5 || n % 10000 == 0)
-                fprintf(stderr, "[classic] conn thread spawn failed rc=%d total=%ld\n", rc, n);
-        }
-        atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
-        cwist_free(c);
-        send(client_fd, CWIST_HTTP_503, sizeof(CWIST_HTTP_503) - 1, MSG_NOSIGNAL | MSG_DONTWAIT);
-        close(client_fd);
+    pthread_mutex_lock(&g_dyn_pool.lock);
+    if (!g_dyn_pool.tail) {
+        g_dyn_pool.head = node;
+        g_dyn_pool.tail = node;
+    } else {
+        g_dyn_pool.tail->next = node;
+        g_dyn_pool.tail = node;
+    }
+    atomic_fetch_add_explicit(&g_dyn_pool.pending_tasks, 1, memory_order_release);
+    pthread_cond_signal(&g_dyn_pool.cond);
+    pthread_mutex_unlock(&g_dyn_pool.lock);
+
+    long current = atomic_load_explicit(&g_dyn_pool.active_workers, memory_order_relaxed);
+    long idle = atomic_load_explicit(&g_dyn_pool.idle_workers, memory_order_relaxed);
+    long max_w = atomic_load_explicit(&g_dyn_pool.max_workers, memory_order_relaxed);
+    if (idle == 0 && current < max_w) {
+        http_spawn_worker();
     }
 }
 
 bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), void *ctx) {
-    if (!t_current_worker || !t_current_worker->reactor || client_fd < 0) return false;
-
-    http_conn_ctx_t c = {
-        .client_fd = client_fd,
-        .handler_func = handler,
-        .ctx = ctx,
-        .reactor = t_current_worker->reactor,
-    };
-
-    return cwist_reactor_add(t_current_worker->reactor, client_fd, http_conn_event_cb, &c, sizeof(c));
+    if (client_fd < 0 || !handler) return false;
+    cwist_http_pool_submit(client_fd, handler, ctx);
+    return true;
 }
 
 void cwist_http_pool_destroy(void) {
-    if (!g_workers) return;
-    for (int i = 0; i < g_http_thread_count; i++) {
-        if (g_workers[i].reactor) {
-            cwist_reactor_stop(g_workers[i].reactor);
-        }
+    atomic_store_explicit(&g_dyn_pool.running, false, memory_order_release);
+    pthread_mutex_lock(&g_dyn_pool.lock);
+    pthread_cond_broadcast(&g_dyn_pool.cond);
+    pthread_mutex_unlock(&g_dyn_pool.lock);
+
+    /* Drain tasks */
+    pthread_mutex_lock(&g_dyn_pool.lock);
+    http_pool_task_t *node = g_dyn_pool.head;
+    g_dyn_pool.head = NULL;
+    g_dyn_pool.tail = NULL;
+    while (node) {
+        http_pool_task_t *next = node->next;
+        if (node->client_fd >= 0) close(node->client_fd);
+        cwist_free(node);
+        node = next;
     }
-    for (int i = 0; i < g_http_thread_count; i++) {
-        pthread_join(g_workers[i].thread, NULL);
-        if (g_workers[i].reactor) {
-            cwist_reactor_destroy(g_workers[i].reactor);
-            g_workers[i].reactor = NULL;
+    pthread_mutex_unlock(&g_dyn_pool.lock);
+
+    pthread_cond_destroy(&g_dyn_pool.cond);
+    pthread_mutex_destroy(&g_dyn_pool.lock);
+
+    if (g_workers) {
+        for (int i = 0; i < g_http_thread_count; i++) {
+            if (g_workers[i].reactor) {
+                cwist_reactor_stop(g_workers[i].reactor);
+            }
         }
+        for (int i = 0; i < g_http_thread_count; i++) {
+            pthread_join(g_workers[i].thread, NULL);
+            if (g_workers[i].reactor) {
+                cwist_reactor_destroy(g_workers[i].reactor);
+                g_workers[i].reactor = NULL;
+            }
+        }
+        cwist_free(g_workers);
+        g_workers = NULL;
     }
-    cwist_free(g_workers);
-    g_workers = NULL;
-    g_http_thread_count = 0;
 }
 /* --- End Thread Pool --- */
 
@@ -1593,6 +1677,92 @@ cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) 
 }
 
 /**
+ * @brief Send only the status line and headers of a response (RFC 9110 §9.3.2
+ * HEAD semantics): Content-Length reflects the would-be body, but no body
+ * bytes are written. Body resources are released as in the full send path.
+ */
+cwist_error_t cwist_http_send_response_head(int client_fd, cwist_http_response *res) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (client_fd < 0 || !res) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    char header_buf[CWIST_HTTP_MAX_HEADER_SIZE];
+    size_t header_len = serialize_headers(res, header_buf, sizeof(header_buf));
+
+    struct iovec iov = { .iov_base = header_buf, .iov_len = header_len };
+    int flags = 0;
+    #if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+    #endif
+    #if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+    #endif
+
+    err.error.err_i16 = (cwist_http_sendmsg_all(client_fd, &iov, 1, flags) == 0) ? 0 : -1;
+
+    cwist_http_response_release_ptr_body(res);
+    cwist_http_response_release_file_stream(res);
+    return err;
+}
+
+/**
+ * @brief Send a minimal error response with Connection: close, used to answer
+ * malformed requests (400/413/417/431/501) before the connection is dropped.
+ * @param fd Connected client socket descriptor.
+ * @param status HTTP status code (reason phrase is derived from it).
+ * @param msg Plain-text body; NULL falls back to the reason phrase.
+ */
+void cwist_http_send_error_response(int fd, int status, const char *msg) {
+    if (fd < 0) return;
+
+    const char *reason;
+    switch (status) {
+        case 400: reason = "Bad Request"; break;
+        case 413: reason = "Content Too Large"; break;
+        case 417: reason = "Expectation Failed"; break;
+        case 431: reason = "Request Header Fields Too Large"; break;
+        case 500: reason = "Internal Server Error"; break;
+        case 501: reason = "Not Implemented"; break;
+        case 503: reason = "Service Unavailable"; break;
+        default:  reason = "Error"; break;
+    }
+    if (!msg) msg = reason;
+
+    char buf[512];
+    int n = snprintf(buf, sizeof(buf),
+                     "HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n%s",
+                     status, reason, strlen(msg), msg);
+    if (n <= 0) return;
+    size_t len = (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf) - 1;
+
+    struct iovec iov = { .iov_base = buf, .iov_len = len };
+    int flags = 0;
+    #if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+    #endif
+    #if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+    #endif
+    (void)cwist_http_sendmsg_all(fd, &iov, 1, flags);
+}
+
+/**
+ * @brief Emit the interim 100 Continue response (RFC 9110 §10.1.1) before the
+ * request body is read. Best effort: a failed write surfaces on the next recv.
+ */
+static void http_send_100_continue(int fd) {
+    static const char k_continue[] = "HTTP/1.1 100 Continue\r\n\r\n";
+    struct iovec iov = { .iov_base = (void *)k_continue, .iov_len = sizeof(k_continue) - 1 };
+    int flags = 0;
+    #if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+    #endif
+    (void)cwist_http_sendmsg_all(fd, &iov, 1, flags);
+}
+
+/**
  * @brief Materialize an HTTP response into a contiguous string for debugging or TLS writes.
  * @param res Response object to stringify.
  * @return Heap-allocated response string, or NULL on invalid input.
@@ -1618,19 +1788,65 @@ cwist_sstring *cwist_http_stringify_response(cwist_http_response *res) {
  * @return Parsed request object, or NULL on malformed input.
  */
 /**
- * @brief Internal helper to parse request when header_end is already known.
+ * @brief Validate the combined Transfer-Encoding header list (RFC 9112 §6.1).
+ * Headers are prepended during parsing, so the first TE node found is the
+ * last one on the wire and carries the final coding.
+ * @return 0 valid, 1 when the final coding is not chunked, 2 when an
+ *         unsupported transfer coding is present.
  */
-static cwist_http_request *cwist_http_parse_request_with_header_end(const char *raw_request, const char *header_end) {
+static int http_validate_transfer_encoding(cwist_http_header_node *headers) {
+    bool seen = false;
+    bool final_is_chunked = false;
+    bool bad_coding = false;
+    for (cwist_http_header_node *n = headers; n; n = n->next) {
+        if (!n->key || !n->key->data || strcasecmp(n->key->data, "Transfer-Encoding") != 0) continue;
+        const char *p = (n->value && n->value->data) ? n->value->data : "";
+        bool any_token = false;
+        bool last_chunked = false;
+        while (*p) {
+            while (*p == ' ' || *p == '\t' || *p == ',') p++;
+            const char *tok = p;
+            while (*p && *p != ',') p++;
+            const char *end = p;
+            while (end > tok && (end[-1] == ' ' || end[-1] == '\t')) end--;
+            if (*p) p++;
+            if (end == tok) continue;
+            any_token = true;
+            /* A token with parameters (e.g. "chunked;x=1") is not chunked. */
+            last_chunked = ((size_t)(end - tok) == 7 && strncasecmp(tok, "chunked", 7) == 0);
+            if (!last_chunked) bad_coding = true;
+        }
+        if (!seen) {
+            final_is_chunked = any_token && last_chunked;
+            seen = true;
+        }
+    }
+    if (!seen) return 0;
+    if (!final_is_chunked) return 1;
+    if (bad_coding) return 2;
+    return 0;
+}
+
+/**
+ * @brief Internal helper to parse request when header_end is already known.
+ * On NULL return, *err_out (when given) says whether the client deserves a
+ * 4xx/5xx response or a quiet close (CWIST_HTTP_PARSE_EOF).
+ */
+static cwist_http_request *cwist_http_parse_request_with_header_end(const char *raw_request, const char *header_end, cwist_http_parse_error_t *err_out) {
     if (!raw_request || !header_end) return NULL;
 
     const char *line_start = raw_request;
     const char *line_end = cwist_simd_find_crlf(line_start, (size_t)(header_end - line_start + 2));
-    if (!line_end || line_end > header_end) { 
-        return NULL; 
+    if (!line_end || line_end > header_end) {
+        if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+        return NULL;
     }
 
     cwist_http_request *req = cwist_http_request_create();
-    if (!req) return NULL;
+    if (!req) {
+        if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
+        return NULL;
+    }
 
     // Fast path for root GET / HTTP/1.1\r\n
     if (line_start[0] == 'G' && line_start[1] == 'E' && line_start[2] == 'T' &&
@@ -1646,9 +1862,9 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
     } else {
         // 1. Request Line (Optimized: SIMD space search)
         const char *sp1 = cwist_simd_find_char(line_start, (size_t)(line_end - line_start), ' ');
-        if (!sp1 || sp1 > line_end) { cwist_http_request_destroy(req); return NULL; }
+        if (!sp1 || sp1 > line_end) { cwist_http_request_destroy(req); if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED; return NULL; }
         const char *sp2 = cwist_simd_find_char(sp1 + 1, (size_t)(line_end - (sp1 + 1)), ' ');
-        if (!sp2 || sp2 > line_end) { cwist_http_request_destroy(req); return NULL; }
+        if (!sp2 || sp2 > line_end) { cwist_http_request_destroy(req); if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED; return NULL; }
 
         req->method = cwist_http_string_to_method_len(line_start, sp1 - line_start);
         
@@ -1677,7 +1893,14 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
     }
 
     // 2. Headers (SIMD colon and CRLF scanning + SWAR)
-    line_start = line_end + 2; 
+    /* RFC 9110/9112 validation state tracked during the single header pass. */
+    bool has_host = false, host_dup = false, host_empty = false;
+    bool cl_seen = false, cl_bad = false;
+    size_t cl_value = 0;
+    bool te_seen = false;
+    const bool is_http11 = req->version->data && strncmp(req->version->data, "HTTP/1.1", 8) == 0;
+
+    line_start = line_end + 2;
     while (line_start < header_end) {
         line_end = cwist_simd_find_crlf(line_start, (size_t)(header_end + 2 - line_start));
         if (!line_end || line_end == line_start) break;
@@ -1688,9 +1911,9 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
             const char *val_start = colon + 1;
             while (val_start < line_end && *val_start == ' ') val_start++;
             size_t val_len = line_end - val_start;
-            
+
             cwist_http_header_add_ex_len(&req->headers, (cwist_arena_t *)req->arena, line_start, key_len, val_start, val_len);
-            
+
             char k0 = line_start[0];
             if (key_len == 10 && (k0 == 'C' || k0 == 'c')) {
                 uint64_t w0;
@@ -1708,19 +1931,85 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
                 }
             } else if (key_len == 14 && (k0 == 'C' || k0 == 'c')) {
                 if (strncasecmp(line_start, "Content-Length", 14) == 0) {
-                    size_t len = 0;
-                    for (size_t i = 0; i < val_len; i++) {
-                        if (val_start[i] >= '0' && val_start[i] <= '9') {
-                            len = len * 10 + (val_start[i] - '0');
+                    /* RFC 9112 §6.3: strict digits-only parse; duplicate CL is
+                     * idempotent only when every value matches. */
+                    size_t vlen = val_len;
+                    while (vlen > 0 && (val_start[vlen - 1] == ' ' || val_start[vlen - 1] == '\t')) vlen--;
+                    if (vlen == 0) {
+                        cl_bad = true;
+                    } else {
+                        size_t len = 0;
+                        bool valid = true;
+                        for (size_t i = 0; i < vlen; i++) {
+                            if (val_start[i] >= '0' && val_start[i] <= '9') {
+                                if (len > (SIZE_MAX - 9) / 10) { valid = false; break; }
+                                len = len * 10 + (size_t)(val_start[i] - '0');
+                            } else {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        if (!valid) {
+                            cl_bad = true;
                         } else {
-                            break;
+                            if (cl_seen && cl_value != len) cl_bad = true;
+                            cl_seen = true;
+                            cl_value = len;
+                            req->content_length = len;
                         }
                     }
-                    req->content_length = len;
                 }
+            } else if (key_len == 4 && (k0 == 'H' || k0 == 'h')) {
+                if (strncasecmp(line_start, "Host", 4) == 0) {
+                    if (has_host) host_dup = true;
+                    has_host = true;
+                    size_t vlen = val_len;
+                    while (vlen > 0 && (val_start[vlen - 1] == ' ' || val_start[vlen - 1] == '\t')) vlen--;
+                    if (vlen == 0) host_empty = true;
+                }
+            } else if (key_len == 17 && (k0 == 'T' || k0 == 't')) {
+                if (strncasecmp(line_start, "Transfer-Encoding", 17) == 0) te_seen = true;
             }
         }
         line_start = line_end + 2;
+    }
+
+    /* RFC 9112 §3.2: HTTP/1.1 requests must carry exactly one non-empty Host. */
+    if (is_http11 && (!has_host || host_dup || host_empty)) {
+        cwist_http_request_destroy(req);
+        if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+        return NULL;
+    }
+    if (cl_bad) {
+        cwist_http_request_destroy(req);
+        if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+        return NULL;
+    }
+    if (te_seen) {
+        /* RFC 9112 §6.3: TE and CL together are a request-smuggling vector. */
+        if (cl_seen) {
+            cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+            return NULL;
+        }
+        int tev = http_validate_transfer_encoding(req->headers);
+        if (tev != 0) {
+            cwist_http_request_destroy(req);
+            if (err_out) *err_out = (tev == 1) ? CWIST_HTTP_PARSE_MALFORMED
+                                               : CWIST_HTTP_PARSE_TE_UNSUPPORTED;
+            return NULL;
+        }
+    }
+    /* RFC 9110 §10.1.1: only the 100-continue expectation is supported. */
+    const char *expect = cwist_http_header_get(req->headers, "Expect");
+    if (expect) {
+        size_t elen = strlen(expect);
+        while (elen > 0 && (expect[elen - 1] == ' ' || expect[elen - 1] == '\t')) elen--;
+        if (!(elen == 12 && strncasecmp(expect, "100-continue", 12) == 0)) {
+            cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_EXPECT_FAILED;
+            return NULL;
+        }
     }
 
     const char *body_start = header_end + 4;
@@ -1732,6 +2021,7 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
         cwist_http_sstring_assign_arena(req->body, (cwist_arena_t *)req->arena, body_start, to_take);
     }
 
+    if (err_out) *err_out = CWIST_HTTP_PARSE_OK;
     return req;
 }
 
@@ -1740,7 +2030,7 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     size_t raw_len = strlen(raw_request);
     const char *header_end = cwist_simd_find_crlfcrlf(raw_request, raw_len);
     if (!header_end) return NULL;
-    return cwist_http_parse_request_with_header_end(raw_request, header_end);
+    return cwist_http_parse_request_with_header_end(raw_request, header_end, NULL);
 }
 
 
@@ -1863,7 +2153,8 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
     return 0;
 }
 
-cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len) {
+cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len, cwist_http_parse_error_t *err_out) {
+    if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
     size_t total_received = *buf_len;
     char *header_end = NULL;
 
@@ -1875,6 +2166,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
              * is indistinguishable from a client vanish. */
             cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_HTTP_HEADER_OVERFLOW);
             CWIST_LOG_WARN("[http] dropping connection: headers exceed %zu-byte read buffer", buf_size);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_HEADER_OVERFLOW;
             return NULL;
         }
 
@@ -1887,16 +2179,25 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         read_buf[total_received] = '\0';
     }
 
-    cwist_http_request *req = cwist_http_parse_request_with_header_end(read_buf, header_end);
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(read_buf, header_end, err_out);
     if (!req) return NULL;
 
     size_t header_len = (size_t)(header_end + 4 - read_buf);
     size_t body_received = total_received - header_len;
 
+    /* RFC 9110 §10.1.1: the parser already validated that any Expect value is
+     * exactly "100-continue"; answer it before waiting on the body. */
+    const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
+    const char *expect = cwist_http_header_get(req->headers, "Expect");
+    if (expect && ((size_t)req->content_length > body_received || (te && req->content_length == 0))) {
+        http_send_100_continue(client_fd);
+    }
+
     // 2. Read body based on Content-Length or Transfer-Encoding
     if (req->content_length > 0) {
         if (req->content_length > CWIST_HTTP_MAX_BODY_SIZE) {
             cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_BODY_TOO_LARGE;
             return NULL;
         }
 
@@ -1904,6 +2205,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         char *body = cwist_alloc(req->content_length + 1);
         if (!body) {
             cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
             return NULL;
         }
 
@@ -1950,8 +2252,9 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             *buf_len = 0;
         }
     } else {
-        const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
-        if (te && strcasecmp(te, "chunked") == 0) {
+        /* A surviving Transfer-Encoding header was validated by the parser as
+         * chunked-only with chunked final, so presence alone selects framing. */
+        if (te) {
             if (body_received > 0) {
                 memmove(read_buf, header_end + 4, body_received);
             }
@@ -1966,6 +2269,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             if (http_read_chunked_body(client_fd, read_buf, buf_len, buf_size, chunked) != 0) {
                 cwist_sstring_destroy(chunked);
                 cwist_http_request_destroy(req);
+                if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
                 return NULL;
             }
             /* Move the assembled buffer into the request body instead of
@@ -1988,6 +2292,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
     }
     read_buf[*buf_len] = '\0';
 
+    if (err_out) *err_out = CWIST_HTTP_PARSE_OK;
     return req;
 }
 
@@ -2081,8 +2386,9 @@ static int http_chunked_scan(const char *buf, size_t avail, size_t *consumed, cw
  * blocking IO.  On CWIST_RECV_OK the consumed bytes are removed from the
  * stash and *out holds a fully parsed request.
  */
-cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out) {
+cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out, cwist_http_parse_error_t *err_out) {
     *out = NULL;
+    if (err_out) *err_out = CWIST_HTTP_PARSE_OK;
     if (!conn->rbuf || conn->len == 0) return CWIST_RECV_NEED_MORE;
 
     char *header_end = (char *)cwist_simd_find_crlfcrlf(conn->rbuf, conn->len);
@@ -2091,27 +2397,40 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
             cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_HTTP_HEADER_OVERFLOW);
             CWIST_LOG_WARN("[http] dropping async connection: headers exceed %d-byte read buffer",
                            CWIST_HTTP_READ_BUFFER_SIZE);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_HEADER_OVERFLOW;
             return CWIST_RECV_FATAL;
         }
         return CWIST_RECV_NEED_MORE;
     }
 
-    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, header_end);
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, header_end, err_out);
     if (!req) return CWIST_RECV_FATAL;
 
     size_t header_len = (size_t)(header_end + 4 - conn->rbuf);
     size_t body_received = conn->len - header_len;
     size_t consumed = header_len;
 
+    /* RFC 9110 §10.1.1: answer a validated Expect: 100-continue once, before
+     * the stash accumulates the full body. */
+    const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
+    const char *expect = cwist_http_header_get(req->headers, "Expect");
+    if (expect && !conn->expect_continue_sent &&
+        ((size_t)req->content_length > body_received || (te && req->content_length == 0))) {
+        http_send_100_continue(conn->fd);
+        conn->expect_continue_sent = true;
+    }
+
     if (req->content_length > 0) {
         if (req->content_length > CWIST_HTTP_MAX_BODY_SIZE) {
             cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_BODY_TOO_LARGE;
             return CWIST_RECV_FATAL;
         }
         if (body_received < (size_t)req->content_length) {
             /* Not all here yet; make sure the stash can hold the full message. */
             if (!http_async_stash_grow(conn, header_len + (size_t)req->content_length + 1)) {
                 cwist_http_request_destroy(req);
+                if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
                 return CWIST_RECV_FATAL;
             }
             cwist_http_request_destroy(req);
@@ -2120,6 +2439,7 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
         char *body = cwist_alloc((size_t)req->content_length + 1);
         if (!body) {
             cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
             return CWIST_RECV_FATAL;
         }
         memcpy(body, conn->rbuf + header_len, (size_t)req->content_length);
@@ -2127,11 +2447,12 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
         cwist_sstring_adopt_len(req->body, body, (size_t)req->content_length);
         consumed += (size_t)req->content_length;
     } else {
-        const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
-        if (te && strcasecmp(te, "chunked") == 0) {
+        /* Presence of TE implies parser-validated chunked framing. */
+        if (te) {
             cwist_sstring *assembled = cwist_sstring_create();
             if (!assembled) {
                 cwist_http_request_destroy(req);
+                if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
                 return CWIST_RECV_FATAL;
             }
             size_t chunk_bytes = 0;
@@ -2139,10 +2460,15 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
             if (scan <= 0) {
                 cwist_sstring_destroy(assembled);
                 cwist_http_request_destroy(req);
-                if (scan == 0 && !http_async_stash_grow(conn, conn->len + 4096)) {
-                    return CWIST_RECV_FATAL;
+                if (scan == 0) {
+                    if (!http_async_stash_grow(conn, conn->len + 4096)) {
+                        if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
+                        return CWIST_RECV_FATAL;
+                    }
+                    return CWIST_RECV_NEED_MORE;
                 }
-                return scan == 0 ? CWIST_RECV_NEED_MORE : CWIST_RECV_FATAL;
+                if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+                return CWIST_RECV_FATAL;
             }
             char *data = assembled->data;
             size_t dlen = assembled->size;
@@ -2159,6 +2485,7 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
     if (leftover > 0) memmove(conn->rbuf, conn->rbuf + consumed, leftover);
     conn->len = leftover;
     conn->rbuf[leftover] = '\0';
+    conn->expect_continue_sent = false;
 
     req->client_fd = conn->fd;
     *out = req;
@@ -2556,20 +2883,21 @@ cwist_error_t cwist_http_server_loop(int server_fd, cwist_server_config *config,
             int client_fd = accept(server_fd, NULL, NULL);
             if (client_fd < 0) {
                 int accept_err = errno;
-                if (accept_err == EBADF || accept_err == EINVAL) break;
+                if (accept_err == EINTR) continue;
+                if (accept_err == EBADF || accept_err == EINVAL || accept_err == ENOTSOCK) break;
                 if (cwist_accept_error_should_retry(accept_err)) {
                     cwist_accept_error_backoff(accept_err);
                     continue;
                 }
-                err.error.err_i16 = -1;
-                cwist_http_pool_destroy();
-                return err;
+                continue;
             }
             int nodelay = 1;
             setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
             cwist_http_pool_submit(client_fd, handler, ctx);
         }
         cwist_http_pool_destroy();
+        err.error.err_i16 = 0;
+        return err;
     }
 
 #ifdef __linux__

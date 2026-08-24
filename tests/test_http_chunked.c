@@ -31,7 +31,7 @@ void test_chunked_parsing() {
     char buf[4096];
     memset(buf, 0, sizeof(buf));
     size_t buf_len = 0;
-    cwist_http_request *req = cwist_http_receive_request(sv[0], buf, sizeof(buf), &buf_len);
+    cwist_http_request *req = cwist_http_receive_request(sv[0], buf, sizeof(buf), &buf_len, NULL);
     close(sv[0]);
 
     assert(req != NULL);
@@ -68,7 +68,7 @@ void test_chunked_with_trailers() {
     char buf[4096];
     memset(buf, 0, sizeof(buf));
     size_t buf_len = 0;
-    cwist_http_request *req = cwist_http_receive_request(sv[0], buf, sizeof(buf), &buf_len);
+    cwist_http_request *req = cwist_http_receive_request(sv[0], buf, sizeof(buf), &buf_len, NULL);
     close(sv[0]);
 
     assert(req != NULL);
@@ -89,7 +89,7 @@ void test_chunked_rejects_corrupted_boundary() {
     assert(write(sv[1], request, strlen(request)) == (ssize_t)strlen(request));
     close(sv[1]);
     char buf[4096] = {0}; size_t buf_len = 0;
-    assert(cwist_http_receive_request(sv[0], buf, sizeof(buf), &buf_len) == NULL);
+    assert(cwist_http_receive_request(sv[0], buf, sizeof(buf), &buf_len, NULL) == NULL);
     close(sv[0]);
     puts("Rejected corrupted chunk boundary.");
 }
