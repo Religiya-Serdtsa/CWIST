@@ -471,6 +471,7 @@ static bool h3_same_dest(const struct lsquic_out_spec *a, const struct lsquic_ou
 }
 #endif
 
+#if defined(__linux__)
 /* Whether UDP GSO has been disabled at runtime.  Starts at -1 (unknown),
  * set to 1 if CWIST_H3_NO_GSO=1 env or if GSO sendmsg fails with a
  * hard error (ENOPROTOOPT, EIO, EMSGSIZE on a coalesced send).
@@ -519,6 +520,7 @@ static int h3_sendmmsg_batch(int udp_fd,
     }
     return (int)i;
 }
+#endif
 
 static int cwist_h3_packets_out(void *ctx,
                                   const struct lsquic_out_spec *specs,
