@@ -162,51 +162,23 @@ systems use the portable polling path. ECN metadata is enabled only when the
 host exposes the required socket options, so a missing optional API never
 blocks an HTTP/3 build.
 
-## I/O model: io_uring at the wait layer only
+## Execution & I/O models: C1M Reactor and Classic Pool
 
-On Linux, CWIST uses io_uring (raw syscalls, no liburing dependency) strictly
-as a readiness multiplexer, replacing `epoll_wait` in `src/sys/io/reactor.c`.
-The reactor arms one-shot `IORING_OP_POLL_ADD` requests. When a completion
-arrives, the woken worker performs ordinary blocking `recv`/`send` inline and
-runs the request to completion on the spot. If io_uring setup fails, the
-reactor falls back to epoll (kqueue on macOS/BSD) with identical behavior.
+CWIST provides two operational execution models tailored for different workload profiles:
 
-**Why the request hot path is not completion-based.** A full completion model
-(submitting `recv`/`send` as SQEs and reacting to CQEs) pushes every request
-through the ring multiple times and ties progress to loop ticks. That is the
-design point where async runtimes land at 2-3ms average latency (Axum/Tokio
-territory). CWIST's 0.0x ms latency comes from the opposite choice: the worker
-that wakes up for an event owns the request synchronously until it is finished,
-so no SQE ever sits between a packet and its handler. Keeping io_uring at the
-wait layer, and out of the hot path, is a deliberate design strength, not an
-unfinished integration:
+1. **C1M Reactor Mode (`CWIST_C1M_MODE=1`, default)**: An event-driven asynchronous reactor designed for massive concurrent connections (`epoll` on Linux, `kqueue` on macOS/BSD). It uses non-blocking I/O multiplexing and cooperative scheduling with lock-free coordination to maintain low latency under high concurrency without per-connection thread overhead.
+2. **Classic Pool Mode (`CWIST_C1M_MODE=0`)**: A worker thread pool model designed for low-jitter, predictable throughput on compute-bound workloads. In this mode, incoming requests are assigned to worker threads using thread-pinned queues and executed to completion inline on the worker stack.
 
-- **No queues.** A request passes through no queue between the readiness
-  notification and its handler; the woken worker completes it inline. That
-  absence, not any single optimization, is where the 0.0x ms latency comes
-  from. A completion model routes each request through a ring 3-4 times and
-  binds it to loop ticks, which is exactly the 2-3ms regime.
-- **Structural backpressure.** Callbacks block, so unfinished work cannot
-  accumulate in the kernel or in userland. One in-flight cap per worker thread
-  (`32` in `src/net/http/http.c`) is the entire flow-control story; past the
-  cap the server sheds load with a fixed 503 instead of inflating tail latency.
-- **Cache locality.** A request's whole lifetime runs on one thread's
-  contiguous stack and reuses L1/L2 lines. A completion model splits the
-  handler into fragments and lifts per-stage state onto the heap.
-- **No state machines.** Handlers are straight-line code; a stack trace is the
-  request's execution history.
-- **Deterministic tail.** With no queue waiting anywhere, p99/p999 converge on
-  the mean.
+### Readiness multiplexing vs full completion rings
 
-The trade-off is explicit: per-connection concurrency is bounded by the worker
-count (cores x 8), and horizontal headroom comes from multi-process scaling
-(fork + SO_REUSEPORT) rather than per-core async fan-out. The retired
-completion-based backend (`io_uring_backend.c`) was removed; its ring
-setup/teardown and free-stack slot infrastructure were absorbed into the
-reactor.
+On Linux, CWIST uses `io_uring` (raw syscalls, no liburing dependency) strictly as a readiness multiplexer, replacing `epoll_wait` in `src/sys/io/reactor.c`. The reactor arms one-shot `IORING_OP_POLL_ADD` requests. When a completion arrives, the woken worker performs inline I/O operations directly. If io_uring setup fails, the reactor falls back to epoll (kqueue on macOS/BSD) with identical behavior.
 
-**Operational gate.** Average request latency crossing **1ms** is treated as a
-regression and a build/benchmark failure, regardless of throughput gains.
+- **Direct readiness handling.** When a readiness notification arrives, the worker processes the event directly rather than routing multiple intermediate completion steps through userspace ring buffers on every tick.
+- **Structural backpressure.** Work cannot unboundedly accumulate; per-worker concurrency limits allow the server to shed excess load under saturation rather than inflating tail latency.
+- **Cache locality.** Handling request execution on contiguous worker stacks minimizes cache misses and fragmentation compared to multi-stage heap-allocated callback chains.
+- **Deterministic tail.** Thread-pinned worker execution and generational arenas keep latency variance minimal across percentiles.
+
+**Operational gate.** Average request latency crossing **1ms** is treated as a regression and a build/benchmark failure, regardless of throughput gains.
 
 ## Development hot reload
 
