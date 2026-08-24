@@ -1034,7 +1034,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
              * with an empty body), otherwise compute it like a GET. */
             char cl_str[32];
             const char *cl_val = user_cl;
-            if (!cl_val) {
+            if (!is_head && body_len == 0) {
+                /* Never announce non-zero body when payload is actually 0 bytes */
+                cl_val = "0";
+            } else if (!cl_val) {
                 snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
                 cl_val = cl_str;
             }
