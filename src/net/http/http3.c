@@ -471,14 +471,17 @@ static bool h3_same_dest(const struct lsquic_out_spec *a, const struct lsquic_ou
 }
 #endif
 
-static int cwist_h3_packets_out(void *ctx,
-                                  const struct lsquic_out_spec *specs,
-                                  unsigned n_specs) {
-    int udp_fd = *(int *)ctx;
-#if defined(__linux__) && defined(_GNU_SOURCE)
+/* Whether UDP GSO has been disabled at runtime.  Starts at -1 (unknown),
+ * set to 1 if CWIST_H3_NO_GSO=1 env or if GSO sendmsg fails with a
+ * hard error (ENOPROTOOPT, EIO, EMSGSIZE on a coalesced send).
+ * 0 means GSO is confirmed working. */
+static int h3_gso_state = -1; /* -1 = unknown, 0 = enabled, 1 = disabled */
+
+static int h3_sendmmsg_batch(int udp_fd,
+                              const struct lsquic_out_spec *specs,
+                              unsigned i, unsigned n_specs) {
     struct mmsghdr msgs[64];
     char ctrl_bufs[64][256];
-    unsigned i = 0;
 
     while (i < n_specs) {
         unsigned batch = n_specs - i;
@@ -515,6 +518,86 @@ static int cwist_h3_packets_out(void *ctx,
         break;
     }
     return (int)i;
+}
+
+static int cwist_h3_packets_out(void *ctx,
+                                  const struct lsquic_out_spec *specs,
+                                  unsigned n_specs) {
+    int udp_fd = *(int *)ctx;
+#if defined(__linux__)
+    /* One-time GSO probe: check env var on first call. */
+    if (__builtin_expect(h3_gso_state < 0, 0)) {
+        const char *no_gso = getenv("CWIST_H3_NO_GSO");
+        h3_gso_state = (no_gso && no_gso[0] == '1') ? 1 : 0;
+    }
+
+    if (!h3_gso_state) {
+        /* GSO fast path: coalesce runs of equal-size datagrams to the same
+         * peer into one sendmsg with UDP_SEGMENT. */
+        unsigned i = 0;
+        while (i < n_specs) {
+            size_t seg = h3_spec_len(&specs[i]);
+            unsigned run = 1;
+            unsigned niov = specs[i].iovlen;
+            if (seg > 0 && seg <= 65535) {
+                unsigned max_segs = (unsigned)(65536 / seg);
+                if (max_segs > 48) max_segs = 48;
+                while (i + run < n_specs && run < max_segs &&
+                       specs[i + run].ecn == specs[i].ecn &&
+                       h3_same_dest(&specs[i], &specs[i + run]) &&
+                       h3_spec_len(&specs[i + run]) == seg &&
+                       niov + specs[i + run].iovlen <= 128) {
+                    niov += specs[i + run].iovlen;
+                    run++;
+                }
+            }
+            if (run >= 2) {
+                struct iovec iov[128];
+                unsigned n = 0;
+                for (unsigned k = 0; k < run; k++)
+                    for (unsigned m = 0; m < specs[i + k].iovlen; m++)
+                        iov[n++] = specs[i + k].iov[m];
+
+                char ctrl[512];
+                struct msghdr msg = {0};
+                msg.msg_name = (void *)specs[i].dest_sa;
+                msg.msg_namelen = (specs[i].dest_sa && specs[i].dest_sa->sa_family == AF_INET)
+                                  ? sizeof(struct sockaddr_in)
+                                  : sizeof(struct sockaddr_in6);
+                msg.msg_iov = iov;
+                msg.msg_iovlen = n;
+                h3_setup_cmsg(&msg, ctrl, sizeof(ctrl), &specs[i], (uint16_t)seg);
+
+                ssize_t nw = sendmsg(udp_fd, &msg, MSG_DONTWAIT);
+                if (nw >= 0) {
+                    i += run;
+                    continue;
+                }
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    break;
+                /* GSO rejected: permanently disable and fall back to sendmmsg. */
+                h3_gso_state = 1;
+                return h3_sendmmsg_batch(udp_fd, specs, i, n_specs);
+            }
+            /* Single packet: send directly. */
+            int nw = h3_send_one(udp_fd, &specs[i]);
+            if (nw < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    return (int)i;
+                if (errno == ECONNREFUSED || errno == ENETUNREACH ||
+                    errno == EHOSTUNREACH || errno == EMSGSIZE) {
+                    i++;
+                    continue;
+                }
+                return (i > 0) ? (int)i : -1;
+            }
+            i++;
+        }
+        return (int)i;
+    }
+
+    /* sendmmsg fallback path (GSO disabled). */
+    return h3_sendmmsg_batch(udp_fd, specs, 0, n_specs);
 #else
     unsigned i = 0;
     for (; i < n_specs; ++i) {
