@@ -222,10 +222,10 @@ static lsquic_wt_session_t *cwist_wt_handle_session(void *handle) {
 /* Browsers routinely send more than 64 HTTP/3 headers once Client Hints,
  * security metadata and cookies are included.  Keep a firm per-stream cap,
  * but leave enough headroom that a late Cookie or :path is never discarded. */
-#define H3_MAX_HEADERS 128
-#define H3_DECODE_BUF_SIZE 65536
-#define H3_MAX_RESPONSE_HEADERS 128
-#define H3_RESPONSE_HEADER_BUF_SIZE 16384
+#define H3_MAX_HEADERS 256
+#define H3_DECODE_BUF_SIZE 131072
+#define H3_MAX_RESPONSE_HEADERS 256
+#define H3_RESPONSE_HEADER_BUF_SIZE 32768
 
 typedef struct cwist_h3_hset {
     lsquic_stream_t *stream;
@@ -282,12 +282,10 @@ static int cwist_h3_hsi_process_header(void *hset_p, struct lsxpack_header *xhdr
         return 0;
 
     /* The QPACK decoder exposes the exact storage used by this completed
-     * header.  Do not derive it from offsets: val_offset is relative to the
-     * shared buffer, and the old subtraction underflowed after :method,
-     * exhausting the buffer and silently losing :path and Cookie. */
+     * header. */
     size_t total = lsxpack_header_get_dec_size(xhdr);
-    if (total == 0 || total > sizeof(hset->decode_buf) - hset->decode_off) {
-        fprintf(stderr, "[HTTP/3] Rejecting malformed QPACK header (size=%zu, used=%zu)\n",
+    if (total > sizeof(hset->decode_buf) - hset->decode_off) {
+        fprintf(stderr, "[HTTP/3] Rejecting oversized QPACK header (size=%zu, used=%zu)\n",
                 total, hset->decode_off);
         return -1;
     }
@@ -698,7 +696,9 @@ static void h3_apply_header(cwist_http_request *req,
     } else if (strcmp(name, ":path") == 0) {
         h3_parse_path(req, value);
     } else if (strcmp(name, ":authority") == 0 || strcmp(name, "host") == 0) {
-        cwist_http_header_add(&req->headers, "host", value);
+        if (!cwist_http_header_get(req->headers, "host")) {
+            cwist_http_header_add(&req->headers, "host", value);
+        }
     } else if (strcmp(name, ":scheme") == 0) {
         /* RFC 9114: silently ignore pseudo-headers we don't need to expose */
     } else if (strcmp(name, "content-length") == 0) {
@@ -793,6 +793,52 @@ static int h3_seq_append_and_feed(h3_stream_ctx_t *st,
     return 0;
 }
 
+static bool h3_process_stream_headers(lsquic_stream_t *stream, h3_stream_ctx_t *st) {
+    if (st->headers_done) return true;
+    void *hset = lsquic_stream_get_hset(stream);
+    if (!hset) return false;
+    cwist_h3_hset_t *hs = (cwist_h3_hset_t *)hset;
+    for (size_t i = 0; i < hs->count; ++i) {
+        const struct lsxpack_header *xhdr = &hs->headers[i];
+        const char *raw_name  = lsxpack_header_get_name(xhdr);
+        const char *raw_value = lsxpack_header_get_value(xhdr);
+        size_t name_len = xhdr->name_len;
+        size_t value_len = xhdr->val_len;
+        if (raw_name && raw_value && name_len > 0 &&
+            name_len <= 1024 && value_len <= H3_DECODE_BUF_SIZE - 1) {
+            /* lsxpack exposes counted slices, not C strings. */
+            char *name = malloc(name_len + 1);
+            char *value = malloc(value_len + 1);
+            if (!name || !value) {
+                free(name);
+                free(value);
+                lsquic_stream_close(stream);
+                return false;
+            }
+            memcpy(name, raw_name, name_len);
+            name[name_len] = '\0';
+            memcpy(value, raw_value, value_len);
+            value[value_len] = '\0';
+            h3_apply_header(st->req, name, value);
+#ifdef CWIST_WEBTRANSPORT
+            if (strcmp(name, ":protocol") == 0 && strcmp(value, "webtransport") == 0) {
+                if (st->req && st->req->method == CWIST_HTTP_CONNECT) {
+                    st->is_webtransport = 1;
+                }
+            }
+#endif
+            free(value);
+            free(name);
+        }
+    }
+    st->headers_done = 1;
+    char *seq_header = cwist_http_header_get(st->req->headers,
+                                              "x-cwist-sequenced-data");
+    st->sequenced_data = seq_header &&
+        (strcmp(seq_header, "1") == 0 || strcasecmp(seq_header, "true") == 0);
+    return true;
+}
+
 static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
     h3_stream_ctx_t *st = (h3_stream_ctx_t *)st_h;
     if (!st) return;
@@ -800,55 +846,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     unsigned char buf[8192];
     ssize_t nread;
 
-    if (!st->headers_done) {
-        void *hset = lsquic_stream_get_hset(stream);
-        if (hset) {
-            cwist_h3_hset_t *hs = hset;
-            size_t i;
-            for (i = 0; i < hs->count; ++i) {
-                const struct lsxpack_header *xhdr = &hs->headers[i];
-                const char *raw_name  = lsxpack_header_get_name(xhdr);
-                const char *raw_value = lsxpack_header_get_value(xhdr);
-                size_t name_len = xhdr->name_len;
-                size_t value_len = xhdr->val_len;
-                if (raw_name && raw_value && name_len > 0 &&
-                    name_len <= 1024 && value_len <= H3_DECODE_BUF_SIZE - 1) {
-                    /* lsxpack exposes counted slices, not C strings.  A later
-                     * header may immediately follow either slice in the shared
-                     * QPACK output buffer, so strcmp()/header storage must never
-                     * consume them directly. */
-                    char *name = malloc(name_len + 1);
-                    char *value = malloc(value_len + 1);
-                    if (!name || !value) {
-                        free(name);
-                        free(value);
-                        lsquic_stream_close(stream);
-                        return;
-                    }
-                    memcpy(name, raw_name, name_len);
-                    name[name_len] = '\0';
-                    memcpy(value, raw_value, value_len);
-                    value[value_len] = '\0';
-                    h3_apply_header(st->req, name, value);
-#ifdef CWIST_WEBTRANSPORT
-                    if (strcmp(name, ":protocol") == 0 && strcmp(value, "webtransport") == 0) {
-                        /* WebTransport requires CONNECT method per RFC 9114 */
-                        if (st->req && st->req->method == CWIST_HTTP_CONNECT) {
-                            st->is_webtransport = 1;
-                        }
-                    }
-#endif
-                    free(value);
-                    free(name);
-                }
-            }
-            st->headers_done = 1;
-            char *seq_header = cwist_http_header_get(st->req->headers,
-                                                      "x-cwist-sequenced-data");
-            st->sequenced_data = seq_header &&
-                (strcmp(seq_header, "1") == 0 || strcasecmp(seq_header, "true") == 0);
-        }
-    }
+    h3_process_stream_headers(stream, st);
 
     while ((nread = lsquic_stream_read(stream, buf, sizeof(buf))) > 0) {
         if (st->sequenced_data) {
@@ -882,6 +880,8 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
     if (nread == 0) {
         /* End of stream (FIN received) */
+        h3_process_stream_headers(stream, st);
+
         if (!st->headers_done) {
             /* Malformed request: no headers before FIN */
             st->res = cwist_http_response_create();
@@ -890,6 +890,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             }
             st->response_ready = 1;
             lsquic_stream_wantread(stream, 0);
+            lsquic_stream_shutdown(stream, 0);
             lsquic_stream_wantwrite(stream, 1);
             return;
         }
@@ -899,9 +900,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             size_t assembled_len = 0;
             if (st->seq_len != 0 || !st->body_assembler ||
                 !cwist_seq_assembler_get_data(st->body_assembler, &assembled, &assembled_len)) {
-                /* Do not dispatch a partial request.  QUIC already repairs
-                 * transport loss; this catches application fragmentation loss
-                 * and lets the client resend the idempotent request. */
+                /* Do not dispatch a partial request. */
                 st->res = cwist_http_response_create();
                 if (st->res) {
                     st->res->status_code = CWIST_HTTP_BAD_REQUEST;
@@ -909,6 +908,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                 }
                 st->response_ready = 1;
                 lsquic_stream_wantread(stream, 0);
+                lsquic_stream_shutdown(stream, 0);
                 lsquic_stream_wantwrite(stream, 1);
                 return;
             }
@@ -951,6 +951,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                 if (lsquic_wt_accept(stream, &params) == 0) {
                     st->wt_taken = 1;
                     lsquic_stream_wantread(stream, 0);
+                    lsquic_stream_shutdown(stream, 0);
                     lsquic_stream_wantwrite(stream, 0);
                     return;
                 }
@@ -962,6 +963,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         }
         st->response_ready = 1;
         lsquic_stream_wantread(stream, 0);
+        lsquic_stream_shutdown(stream, 0);
         lsquic_stream_wantwrite(stream, 1);
     } else if (nread < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         lsquic_stream_close(stream);
@@ -1624,10 +1626,11 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 
     struct lsquic_engine_settings settings;
     lsquic_engine_init_settings(&settings, LSENG_HTTP_SERVER);
-    settings.es_versions = (1 << LSQVER_I001) | (1 << LSQVER_I002);
-    settings.es_init_max_data = 1048576;
-    settings.es_init_max_stream_data_bidi_local = 524288;
-    settings.es_init_max_stream_data_bidi_remote = 524288;
+    settings.es_versions = (1 << LSQVER_I001) | (1 << LSQVER_ID29);
+    settings.es_init_max_data = 16777216;
+    settings.es_init_max_stream_data_bidi_local = 8388608;
+    settings.es_init_max_stream_data_bidi_remote = 8388608;
+    settings.es_init_max_stream_data_uni = 1048576;
     settings.es_max_streams_in = 100;
     settings.es_support_push = ctx->push_enabled;
     settings.es_allow_migration = ctx->allow_migration ? ctx->allow_migration : 1;
