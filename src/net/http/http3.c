@@ -1140,8 +1140,8 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         st->write_state = 1;
         if (!send_content) {
             st->write_state = 2;
+            lsquic_stream_flush(stream);
             lsquic_stream_shutdown(stream, 1);
-            lsquic_stream_wantwrite(stream, 0);
             return;
         }
     }
@@ -1215,6 +1215,14 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             body_data = st->res->body->data;
         }
 
+        /* Skip payload writing entirely if body is empty or already fully sent */
+        if (body_len == 0 || st->body_sent >= body_len) {
+            st->write_state = 2;
+            lsquic_stream_flush(stream);
+            lsquic_stream_shutdown(stream, 1);
+            return;
+        }
+
         while (body_data && body_len > 0 && st->body_sent < body_len) {
             ssize_t n = lsquic_stream_write(stream, body_data + st->body_sent,
                                             body_len - st->body_sent);
@@ -1243,7 +1251,6 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             st->write_state = 2;
             lsquic_stream_flush(stream);
             lsquic_stream_shutdown(stream, 1);
-            lsquic_stream_wantwrite(stream, 0);
         } else {
             lsquic_stream_wantwrite(stream, 1);
         }
