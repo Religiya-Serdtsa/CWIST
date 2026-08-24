@@ -17,11 +17,11 @@ sub-0.2ms average latency in ~14MB of RSS.
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 44927 req/s | Latency 8.94ms (P90 18.44ms, P99 27.08ms) | RSS 31756KiB | Csw 0
-- **CWIST (C1M reactor)**: 118654 req/s | Latency 3.26ms (P90 8.58ms, P99 17.45ms) | RSS 39148KiB | Csw 0
-- **Axum**: 122898 req/s | Latency 3.18ms (P90 5.42ms, P99 8.09ms) | RSS 16380KiB | Csw 0
-- **Gin (Go)**: 90696 req/s | Latency 5.18ms (P90 11.60ms, P99 23.69ms) | RSS 29516KiB | Csw 0
-- **Spring Boot**: 59007 req/s | Latency 6.77ms (P90 9.09ms, P99 14.88ms) | RSS 1298956KiB | Csw 0
+- **CWIST (classic pool)**: 0 req/s | Latency 0.00ms (P90 0.00ms, P99 0.00ms) | RSS 0KiB | Csw 0
+- **CWIST (C1M reactor)**: 0 req/s | Latency 0.00ms (P90 0.00ms, P99 0.00ms) | RSS 0KiB | Csw 0
+- **Axum**: 110224 req/s | Latency 3.52ms (P90 5.92ms, P99 8.73ms) | RSS 13976KiB | Csw 0
+- **Gin (Go)**: 77649 req/s | Latency 6.86ms (P90 16.65ms, P99 35.99ms) | RSS 29476KiB | Csw 0
+- **Spring Boot**: 43492 req/s | Latency 9.30ms (P90 12.03ms, P99 21.99ms) | RSS 1323016KiB | Csw 0
 
 Spring runtime env: **openjdk version "25.0.4" 2026-07-21 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
