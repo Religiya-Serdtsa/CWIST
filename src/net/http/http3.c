@@ -345,36 +345,41 @@ static void h3_setup_cmsg(struct msghdr *msg, char *cbuf, size_t cbuf_sz,
 #endif
 
     if (spec->local_sa && spec->dest_sa) {
-        if (spec->dest_sa->sa_family == AF_INET) {
-#if defined(__linux__) && defined(IP_PKTINFO)
-            struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
-            cmsg->cmsg_level = IPPROTO_IP;
-            cmsg->cmsg_type = IP_PKTINFO;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
-            struct in_pktinfo info = {0};
-            info.ipi_spec_dst = ((const struct sockaddr_in *)spec->local_sa)->sin_addr;
-            memcpy(CMSG_DATA(cmsg), &info, sizeof(info));
-            ctl_len += CMSG_SPACE(sizeof(struct in_pktinfo));
-#elif defined(IP_SENDSRCADDR)
-            struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
-            cmsg->cmsg_level = IPPROTO_IP;
-            cmsg->cmsg_type = IP_SENDSRCADDR;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
+        if (spec->dest_sa->sa_family == AF_INET && spec->local_sa->sa_family == AF_INET) {
             struct in_addr addr = ((const struct sockaddr_in *)spec->local_sa)->sin_addr;
-            memcpy(CMSG_DATA(cmsg), &addr, sizeof(addr));
-            ctl_len += CMSG_SPACE(sizeof(struct in_addr));
+            if (addr.s_addr != INADDR_ANY) {
+#if defined(__linux__) && defined(IP_PKTINFO)
+                struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+                cmsg->cmsg_level = IPPROTO_IP;
+                cmsg->cmsg_type = IP_PKTINFO;
+                cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+                struct in_pktinfo info = {0};
+                info.ipi_spec_dst = addr;
+                memcpy(CMSG_DATA(cmsg), &info, sizeof(info));
+                ctl_len += CMSG_SPACE(sizeof(struct in_pktinfo));
+#elif defined(IP_SENDSRCADDR)
+                struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+                cmsg->cmsg_level = IPPROTO_IP;
+                cmsg->cmsg_type = IP_SENDSRCADDR;
+                cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
+                memcpy(CMSG_DATA(cmsg), &addr, sizeof(addr));
+                ctl_len += CMSG_SPACE(sizeof(struct in_addr));
 #endif
-        } else if (spec->dest_sa->sa_family == AF_INET6) {
+            }
+        } else if (spec->dest_sa->sa_family == AF_INET6 && spec->local_sa->sa_family == AF_INET6) {
+            const struct in6_addr *addr6 = &((const struct sockaddr_in6 *)spec->local_sa)->sin6_addr;
+            if (memcmp(addr6, &in6addr_any, sizeof(struct in6_addr)) != 0) {
 #if defined(IPV6_PKTINFO)
-            struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
-            cmsg->cmsg_level = IPPROTO_IPV6;
-            cmsg->cmsg_type = IPV6_PKTINFO;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
-            struct in6_pktinfo info6 = {0};
-            info6.ipi6_addr = ((const struct sockaddr_in6 *)spec->local_sa)->sin6_addr;
-            memcpy(CMSG_DATA(cmsg), &info6, sizeof(info6));
-            ctl_len += CMSG_SPACE(sizeof(struct in6_pktinfo));
+                struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+                cmsg->cmsg_level = IPPROTO_IPV6;
+                cmsg->cmsg_type = IPV6_PKTINFO;
+                cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
+                struct in6_pktinfo info6 = {0};
+                info6.ipi6_addr = *addr6;
+                memcpy(CMSG_DATA(cmsg), &info6, sizeof(info6));
+                ctl_len += CMSG_SPACE(sizeof(struct in6_pktinfo));
 #endif
+            }
         }
     }
 
@@ -1741,9 +1746,8 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
         ctx->engine = NULL;
         return err;
     }
-    int cur_epoll_events = EPOLLIN;
     struct epoll_event ev;
-    ev.events = cur_epoll_events;
+    ev.events = EPOLLIN;
     ev.data.fd = udp_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_fd, &ev) < 0) {
         free(pkt_buf);
@@ -1756,37 +1760,19 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 #endif
 
     while (ctx && ctx->running && atomic_load(&g_cwist_running)) {
-        if (lsquic_engine_has_unsent_packets(engine)) {
-            lsquic_engine_send_unsent_packets(engine);
-        }
-
-        int target_events = EPOLLIN;
+        int diff = 100000;
         int timeout_ms = 100;
-
-        if (lsquic_engine_has_unsent_packets(engine)) {
-            target_events |= EPOLLOUT;
-            timeout_ms = 0;
-        } else {
-            int diff = 100000;
-            bool has_tick = lsquic_engine_earliest_adv_tick(engine, &diff);
-            if (has_tick) {
-                if (diff <= 0) {
-                    timeout_ms = 0;
-                } else {
-                    timeout_ms = (diff + 999) / 1000;
-                    if (timeout_ms > 1000) timeout_ms = 1000;
-                }
-            }
+        bool has_tick = lsquic_engine_earliest_adv_tick(engine, &diff);
+        if (has_tick) {
+            if (diff < 1000)
+                timeout_ms = 1;
+            else if (diff > 1000000)
+                timeout_ms = 1000;
+            else
+                timeout_ms = (diff + 999) / 1000;
         }
 
 #ifdef __linux__
-        if (cur_epoll_events != target_events) {
-            ev.events = target_events;
-            ev.data.fd = udp_fd;
-            epoll_ctl(epoll_fd, EPOLL_CTL_MOD, udp_fd, &ev);
-            cur_epoll_events = target_events;
-        }
-
         struct epoll_event events[1];
         int pret = epoll_wait(epoll_fd, events, 1, timeout_ms);
         if (pret < 0) {
@@ -1798,15 +1784,9 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
             fprintf(stderr, "[HTTP/3] UDP socket error, exiting loop.\n");
             break;
         }
-        if (pret > 0 && (events[0].events & EPOLLOUT)) {
-            if (lsquic_engine_has_unsent_packets(engine)) {
-                lsquic_engine_send_unsent_packets(engine);
-            }
-        }
         bool can_read = (pret > 0 && (events[0].events & EPOLLIN));
 #else
-        short pfd_events = POLLIN | (target_events & EPOLLOUT ? POLLOUT : 0);
-        struct pollfd pfd = { .fd = udp_fd, .events = pfd_events };
+        struct pollfd pfd = { .fd = udp_fd, .events = POLLIN };
         int pret = poll(&pfd, 1, timeout_ms);
 
         if (pret < 0) {
@@ -1819,16 +1799,9 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
             break;
         }
 
-        if (pret > 0) {
-            if (pfd.revents & (POLLERR | POLLNVAL)) {
-                fprintf(stderr, "[HTTP/3] UDP socket error, exiting loop.\n");
-                break;
-            }
-            if (pfd.revents & POLLOUT) {
-                if (lsquic_engine_has_unsent_packets(engine)) {
-                    lsquic_engine_send_unsent_packets(engine);
-                }
-            }
+        if (pret > 0 && (pfd.revents & (POLLERR | POLLNVAL))) {
+            fprintf(stderr, "[HTTP/3] UDP socket error, exiting loop.\n");
+            break;
         }
         bool can_read = (pret > 0 && (pfd.revents & POLLIN));
 #endif
@@ -1865,19 +1838,22 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                     }
                     break;
                 }
+
                 int ecn = 0;
                 for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
                     if (cmsg->cmsg_level == IPPROTO_IP) {
 #ifdef IP_PKTINFO
                         if (cmsg->cmsg_type == IP_PKTINFO) {
                             struct in_pktinfo *pi = (struct in_pktinfo *)CMSG_DATA(cmsg);
-                            struct sockaddr_in *sin = (struct sockaddr_in *)&cur_local_addr;
-                            sin->sin_family = AF_INET;
-                            sin->sin_addr = pi->ipi_addr;
-                            if (local_addr_len >= sizeof(struct sockaddr_in)) {
-                                sin->sin_port = ((struct sockaddr_in *)&local_addr)->sin_port;
+                            if (pi->ipi_addr.s_addr != INADDR_ANY) {
+                                struct sockaddr_in *sin = (struct sockaddr_in *)&cur_local_addr;
+                                sin->sin_family = AF_INET;
+                                sin->sin_addr = pi->ipi_addr;
+                                if (local_addr_len >= sizeof(struct sockaddr_in)) {
+                                    sin->sin_port = ((struct sockaddr_in *)&local_addr)->sin_port;
+                                }
+                                cur_local_len = sizeof(struct sockaddr_in);
                             }
-                            cur_local_len = sizeof(struct sockaddr_in);
                         }
 #endif
 #ifdef IP_TOS
@@ -1889,13 +1865,15 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 #ifdef IPV6_PKTINFO
                         if (cmsg->cmsg_type == IPV6_PKTINFO) {
                             struct in6_pktinfo *pi6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
-                            struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&cur_local_addr;
-                            sin6->sin6_family = AF_INET6;
-                            sin6->sin6_addr = pi6->ipi6_addr;
-                            if (local_addr_len >= sizeof(struct sockaddr_in6)) {
-                                sin6->sin6_port = ((struct sockaddr_in6 *)&local_addr)->sin6_port;
+                            if (memcmp(&pi6->ipi6_addr, &in6addr_any, sizeof(struct in6_addr)) != 0) {
+                                struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&cur_local_addr;
+                                sin6->sin6_family = AF_INET6;
+                                sin6->sin6_addr = pi6->ipi6_addr;
+                                if (local_addr_len >= sizeof(struct sockaddr_in6)) {
+                                    sin6->sin6_port = ((struct sockaddr_in6 *)&local_addr)->sin6_port;
+                                }
+                                cur_local_len = sizeof(struct sockaddr_in6);
                             }
-                            cur_local_len = sizeof(struct sockaddr_in6);
                         }
 #endif
 #ifdef IPV6_TCLASS
