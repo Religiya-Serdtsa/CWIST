@@ -135,24 +135,13 @@ memory management to the user. CWIST ships the whole stack:
 
 ## Why C, when Axum and Gin exist?
 
-The numbers above are the point. Concretely:
+The benchmark results above demonstrate the advantages in latency, memory footprint, and determinism:
 
-1. **Latency.** CWIST averages 0.09ms per request under load, versus 2.56ms for
-   Axum and 4.27ms for Gin in the same benchmark. CWIST has no runtime scheduler:
-   the worker that reads a packet runs the handler to completion on the same
-   thread. Tokio-style work stealing trades per-request latency for global
-   throughput; CWIST does not make that trade.
-2. **Memory.** Baseline RSS is ~13MB, versus ~14MB for Axum and ~30MB for Gin.
-   At thousands of container replicas, that difference is hundreds of gigabytes
-   of RAM.
-3. **Tail latency.** Thread-pinned queues and arena allocators give near-zero
-   variance, which matters for trading systems, game servers, and packet
-   switching.
-4. **FFI.** Production code in automotive, defense, finance, and databases is
-   already C/C++. CWIST links against it directly, with no FFI boundary or
-   async-runtime bridging.
-5. **Cold start.** No runtime bootstrap or GC init; the server answers at full
-   speed from the first packet.
+1. **Latency & Throughput.** Under 400 concurrency (`wrk -t12 -c400`), CWIST Classic Pool delivers 2.16ms average latency and ~111k req/s, and C1M Reactor delivers 2.41ms (versus 3.52ms for Axum, 7.18ms for Gin, and 9.11ms for Spring Boot). In tuned low-latency configurations (`wrk -t4 -c100`), CWIST achieves 0.59ms average latency (P50 0.46ms, P90 1.12ms) at ~108k req/s.
+2. **Memory Efficiency.** CWIST maintains a lean memory footprint (~15.9MB RSS in C1M mode, ~21.7MB in Classic Pool), compared to ~29.5MB for Gin and ~1.34GB for Spring Boot. In high-density container environments, this significantly reduces memory consumption across thousands of instances.
+3. **Tail Latency & Predictability.** Zero-copy framing, thread-pinned worker execution, and generational arena allocators minimize latency variance and GC pauses.
+4. **Zero-Overhead FFI.** Production libraries in finance, game servers, machine learning, and systems software written in C/C++ link directly into CWIST with zero FFI conversion or runtime bridge penalty.
+5. **Instant Cold Start.** With no runtime VM warmup or GC initialization required, CWIST starts in milliseconds and immediately serves requests at full capacity.
 
 ## Platform support
 
