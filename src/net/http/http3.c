@@ -326,7 +326,93 @@ static SSL_CTX *cwist_h3_get_ssl_ctx(void *peer_ctx,
 /* Packet-out callback                                                */
 /* ------------------------------------------------------------------ */
 
+static void h3_setup_cmsg(struct msghdr *msg, char *cbuf, size_t cbuf_sz,
+                          const struct lsquic_out_spec *spec, uint16_t gso_seg) {
+    msg->msg_control = cbuf;
+    msg->msg_controllen = cbuf_sz;
+    memset(cbuf, 0, cbuf_sz);
+    size_t ctl_len = 0;
+
+#if defined(__linux__) && defined(UDP_SEGMENT)
+    if (gso_seg > 0) {
+        struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+        cmsg->cmsg_level = SOL_UDP;
+        cmsg->cmsg_type = UDP_SEGMENT;
+        cmsg->cmsg_len = CMSG_LEN(sizeof(uint16_t));
+        memcpy(CMSG_DATA(cmsg), &gso_seg, sizeof(uint16_t));
+        ctl_len += CMSG_SPACE(sizeof(uint16_t));
+    }
+#else
+    (void)gso_seg;
+#endif
+
+    if (spec->local_sa && spec->dest_sa) {
+        if (spec->dest_sa->sa_family == AF_INET) {
+#if defined(__linux__) && defined(IP_PKTINFO)
+            struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+            cmsg->cmsg_level = IPPROTO_IP;
+            cmsg->cmsg_type = IP_PKTINFO;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+            struct in_pktinfo info = {0};
+            info.ipi_spec_dst = ((const struct sockaddr_in *)spec->local_sa)->sin_addr;
+            memcpy(CMSG_DATA(cmsg), &info, sizeof(info));
+            ctl_len += CMSG_SPACE(sizeof(struct in_pktinfo));
+#elif defined(IP_SENDSRCADDR)
+            struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+            cmsg->cmsg_level = IPPROTO_IP;
+            cmsg->cmsg_type = IP_SENDSRCADDR;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
+            struct in_addr addr = ((const struct sockaddr_in *)spec->local_sa)->sin_addr;
+            memcpy(CMSG_DATA(cmsg), &addr, sizeof(addr));
+            ctl_len += CMSG_SPACE(sizeof(struct in_addr));
+#endif
+        } else if (spec->dest_sa->sa_family == AF_INET6) {
+#if defined(IPV6_PKTINFO)
+            struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+            cmsg->cmsg_level = IPPROTO_IPV6;
+            cmsg->cmsg_type = IPV6_PKTINFO;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
+            struct in6_pktinfo info6 = {0};
+            info6.ipi6_addr = ((const struct sockaddr_in6 *)spec->local_sa)->sin6_addr;
+            memcpy(CMSG_DATA(cmsg), &info6, sizeof(info6));
+            ctl_len += CMSG_SPACE(sizeof(struct in6_pktinfo));
+#endif
+        }
+    }
+
+#if defined(CWIST_H3_HAVE_ECN_CMSG)
+    if (spec->ecn && spec->dest_sa) {
+        if (spec->dest_sa->sa_family == AF_INET) {
+            struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+            cmsg->cmsg_level = IPPROTO_IP;
+            cmsg->cmsg_type = IP_TOS;
+            int tos = spec->ecn;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(tos));
+            memcpy(CMSG_DATA(cmsg), &tos, sizeof(tos));
+            ctl_len += CMSG_SPACE(sizeof(tos));
+        }
+#if defined(IPV6_TCLASS)
+        else if (spec->dest_sa->sa_family == AF_INET6) {
+            struct cmsghdr *cmsg = (struct cmsghdr *)(cbuf + ctl_len);
+            cmsg->cmsg_level = IPPROTO_IPV6;
+            cmsg->cmsg_type = IPV6_TCLASS;
+            int tos = spec->ecn;
+            cmsg->cmsg_len = CMSG_LEN(sizeof(tos));
+            memcpy(CMSG_DATA(cmsg), &tos, sizeof(tos));
+            ctl_len += CMSG_SPACE(sizeof(tos));
+        }
+#endif
+    }
+#endif
+
+    msg->msg_controllen = ctl_len;
+    if (ctl_len == 0) {
+        msg->msg_control = NULL;
+    }
+}
+
 static int h3_send_one(int udp_fd, const struct lsquic_out_spec *spec) {
+    char ctrl[256];
     struct msghdr msg = {0};
     msg.msg_name = (void *)spec->dest_sa;
     msg.msg_namelen = (spec->dest_sa && spec->dest_sa->sa_family == AF_INET)
@@ -334,6 +420,7 @@ static int h3_send_one(int udp_fd, const struct lsquic_out_spec *spec) {
                       : sizeof(struct sockaddr_in6);
     msg.msg_iov = (struct iovec *)spec->iov;
     msg.msg_iovlen = spec->iovlen;
+    h3_setup_cmsg(&msg, ctrl, sizeof(ctrl), spec, 0);
     return (int)sendmsg(udp_fd, &msg, MSG_DONTWAIT);
 }
 
@@ -354,6 +441,19 @@ static size_t h3_spec_len(const struct lsquic_out_spec *spec) {
 static bool h3_same_dest(const struct lsquic_out_spec *a, const struct lsquic_out_spec *b) {
     if (!a->dest_sa || !b->dest_sa) return false;
     if (a->dest_sa->sa_family != b->dest_sa->sa_family) return false;
+    if (a->local_sa != b->local_sa) {
+        if (!a->local_sa || !b->local_sa) return false;
+        if (a->local_sa->sa_family != b->local_sa->sa_family) return false;
+        if (a->local_sa->sa_family == AF_INET) {
+            const struct sockaddr_in *x = (const struct sockaddr_in *)a->local_sa;
+            const struct sockaddr_in *y = (const struct sockaddr_in *)b->local_sa;
+            if (x->sin_port != y->sin_port || x->sin_addr.s_addr != y->sin_addr.s_addr) return false;
+        } else {
+            const struct sockaddr_in6 *x = (const struct sockaddr_in6 *)a->local_sa;
+            const struct sockaddr_in6 *y = (const struct sockaddr_in6 *)b->local_sa;
+            if (x->sin6_port != y->sin6_port || memcmp(&x->sin6_addr, &y->sin6_addr, sizeof(x->sin6_addr)) != 0) return false;
+        }
+    }
     if (a->dest_sa->sa_family == AF_INET) {
         const struct sockaddr_in *x = (const struct sockaddr_in *)a->dest_sa;
         const struct sockaddr_in *y = (const struct sockaddr_in *)b->dest_sa;
@@ -399,7 +499,7 @@ static int cwist_h3_packets_out(void *ctx,
                 for (unsigned m = 0; m < specs[i + k].iovlen; m++)
                     iov[n++] = specs[i + k].iov[m];
 
-            char ctrl[CMSG_SPACE(sizeof(uint16_t))];
+            char ctrl[512];
             struct msghdr msg = {0};
             msg.msg_name = (void *)specs[i].dest_sa;
             msg.msg_namelen = (specs[i].dest_sa && specs[i].dest_sa->sa_family == AF_INET)
@@ -407,14 +507,7 @@ static int cwist_h3_packets_out(void *ctx,
                               : sizeof(struct sockaddr_in6);
             msg.msg_iov = iov;
             msg.msg_iovlen = n;
-            msg.msg_control = ctrl;
-            msg.msg_controllen = sizeof(ctrl);
-            struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-            cmsg->cmsg_level = SOL_UDP;
-            cmsg->cmsg_type = UDP_SEGMENT;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(uint16_t));
-            uint16_t gso_seg = (uint16_t)seg;
-            memcpy(CMSG_DATA(cmsg), &gso_seg, sizeof(gso_seg));
+            h3_setup_cmsg(&msg, ctrl, sizeof(ctrl), &specs[i], (uint16_t)seg);
 
             ssize_t nw = sendmsg(udp_fd, &msg, MSG_DONTWAIT);
             if (nw >= 0) {
@@ -1606,13 +1699,26 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     int flags = fcntl(udp_fd, F_GETFL, 0);
     if (flags >= 0) fcntl(udp_fd, F_SETFL, flags | O_NONBLOCK);
 
-    /* Enable ECN reception for congestion control feedback */
+    /* Enlarge socket buffers to handle packet bursts without OS drops */
+    int buf_size = 4 * 1024 * 1024;
+    setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(buf_size));
+    setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
+
+    /* Enable ECN & PKTINFO reception for congestion feedback & precise source IP routing */
     int on = 1;
 #ifdef IP_RECVTOS
     setsockopt(udp_fd, IPPROTO_IP, IP_RECVTOS, &on, sizeof(on));
 #endif
+#ifdef IP_PKTINFO
+    setsockopt(udp_fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof(on));
+#endif
 #ifdef IPV6_RECVTCLASS
     setsockopt(udp_fd, IPPROTO_IPV6, IPV6_RECVTCLASS, &on, sizeof(on));
+#endif
+#ifdef IPV6_RECVPKTINFO
+    setsockopt(udp_fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on));
+#elif defined(IPV6_PKTINFO)
+    setsockopt(udp_fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on));
 #endif
 
     unsigned char *pkt_buf = malloc(65535);
@@ -1626,15 +1732,18 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 #ifdef __linux__
     int epoll_fd = epoll_create1(0);
     if (epoll_fd < 0) {
+        free(pkt_buf);
         err.error.err_i16 = -1;
         lsquic_engine_destroy(engine);
         ctx->engine = NULL;
         return err;
     }
+    int cur_epoll_events = EPOLLIN;
     struct epoll_event ev;
-    ev.events = EPOLLIN;
+    ev.events = cur_epoll_events;
     ev.data.fd = udp_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_fd, &ev) < 0) {
+        free(pkt_buf);
         close(epoll_fd);
         err.error.err_i16 = -1;
         lsquic_engine_destroy(engine);
@@ -1644,25 +1753,39 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 #endif
 
     while (ctx && ctx->running && atomic_load(&g_cwist_running)) {
-        /* With no active QUIC connections lsquic has no earlier deadline.
-         * Sleeping for only 1 ms in that state turns an otherwise idle
-         * listener into a permanent polling loop.  Active connections still
-         * replace this with their precise earliest timer below. */
-        int diff = 100000; /* default 100 ms (microseconds) */
-        bool has_engine_tick = lsquic_engine_earliest_adv_tick(engine, &diff);
-        if (has_engine_tick) {
-            /* Enforce a small floor so pacing timers or back-to-back zero
-             * ticks cannot turn this loop into a busy-wait. */
-            if (diff < 1000)
-                diff = 1000;
-            else if (diff > 1000000)
-                diff = 1000000;
+        if (lsquic_engine_has_unsent_packets(engine)) {
+            lsquic_engine_send_unsent_packets(engine);
         }
 
-        bool received_packet = false;
+        int target_events = EPOLLIN;
+        int timeout_ms = 100;
+
+        if (lsquic_engine_has_unsent_packets(engine)) {
+            target_events |= EPOLLOUT;
+            timeout_ms = 0;
+        } else {
+            int diff = 100000;
+            bool has_tick = lsquic_engine_earliest_adv_tick(engine, &diff);
+            if (has_tick) {
+                if (diff <= 0) {
+                    timeout_ms = 0;
+                } else {
+                    timeout_ms = (diff + 999) / 1000;
+                    if (timeout_ms > 1000) timeout_ms = 1000;
+                }
+            }
+        }
+
 #ifdef __linux__
+        if (cur_epoll_events != target_events) {
+            ev.events = target_events;
+            ev.data.fd = udp_fd;
+            epoll_ctl(epoll_fd, EPOLL_CTL_MOD, udp_fd, &ev);
+            cur_epoll_events = target_events;
+        }
+
         struct epoll_event events[1];
-        int pret = epoll_wait(epoll_fd, events, 1, diff / 1000);
+        int pret = epoll_wait(epoll_fd, events, 1, timeout_ms);
         if (pret < 0) {
             if (errno == EINTR)
                 continue;
@@ -1672,11 +1795,16 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
             fprintf(stderr, "[HTTP/3] UDP socket error, exiting loop.\n");
             break;
         }
-        if (pret > 0 && (events[0].events & EPOLLIN)) {
-            received_packet = true;
+        if (pret > 0 && (events[0].events & EPOLLOUT)) {
+            if (lsquic_engine_has_unsent_packets(engine)) {
+                lsquic_engine_send_unsent_packets(engine);
+            }
+        }
+        bool can_read = (pret > 0 && (events[0].events & EPOLLIN));
 #else
-        struct pollfd pfd = { .fd = udp_fd, .events = POLLIN };
-        int pret = poll(&pfd, 1, diff / 1000);
+        short pfd_events = POLLIN | (target_events & EPOLLOUT ? POLLOUT : 0);
+        struct pollfd pfd = { .fd = udp_fd, .events = pfd_events };
+        int pret = poll(&pfd, 1, timeout_ms);
 
         if (pret < 0) {
             if (errno == EINTR)
@@ -1685,7 +1813,6 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                 fprintf(stderr, "[HTTP/3] UDP socket closed, exiting loop.\n");
                 break;
             }
-            /* Other fatal poll errors */
             break;
         }
 
@@ -1694,10 +1821,23 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                 fprintf(stderr, "[HTTP/3] UDP socket error, exiting loop.\n");
                 break;
             }
-            if (pfd.revents & POLLIN) {
+            if (pfd.revents & POLLOUT) {
+                if (lsquic_engine_has_unsent_packets(engine)) {
+                    lsquic_engine_send_unsent_packets(engine);
+                }
+            }
+        }
+        bool can_read = (pret > 0 && (pfd.revents & POLLIN));
 #endif
+
+        if (can_read) {
+            while (1) {
                 struct sockaddr_storage peer_addr;
                 socklen_t peer_addr_len = sizeof(peer_addr);
+                struct sockaddr_storage cur_local_addr;
+                socklen_t cur_local_len = local_addr_len;
+                if (local_addr_len) memcpy(&cur_local_addr, &local_addr, local_addr_len);
+
                 struct msghdr msg = {0};
                 struct iovec iov = { pkt_buf, 65535 };
                 msg.msg_name = &peer_addr;
@@ -1705,58 +1845,75 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
                 msg.msg_iov = &iov;
                 msg.msg_iovlen = 1;
 
-                /* ECN support is optional on BSD-derived socket APIs. */
-#ifdef CWIST_H3_HAVE_ECN_CMSG
-                char cmsg_buf[CMSG_SPACE(sizeof(int))];
+                char cmsg_buf[512];
                 msg.msg_control = cmsg_buf;
                 msg.msg_controllen = sizeof(cmsg_buf);
-#endif
 
-                ssize_t nr = recvmsg(udp_fd, &msg, 0);
-                if (nr > 0) {
-                    int ecn = 0;
-#ifdef CWIST_H3_HAVE_ECN_CMSG
-                    for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-                         cmsg != NULL;
-                         cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-                        if (cmsg->cmsg_level == IPPROTO_IP &&
-                            cmsg->cmsg_type == IP_TOS) {
-                            ecn = *(int *)CMSG_DATA(cmsg) & 0x3;
+                ssize_t nr = recvmsg(udp_fd, &msg, MSG_DONTWAIT);
+                if (nr <= 0) {
+                    if (nr < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                        if (errno == ECONNREFUSED || errno == ENETUNREACH || errno == EHOSTUNREACH) {
+                            continue;
+                        }
+                        if (errno == EBADF) {
+                            fprintf(stderr, "[HTTP/3] UDP socket closed.\n");
                             break;
                         }
-#ifdef IPV6_TCLASS
-                        if (cmsg->cmsg_level == IPPROTO_IPV6 &&
-                            cmsg->cmsg_type == IPV6_TCLASS) {
-                            ecn = *(int *)CMSG_DATA(cmsg) & 0x3;
-                            break;
-                        }
-#endif
                     }
+                    break;
+                }
+                int ecn = 0;
+                for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+                    if (cmsg->cmsg_level == IPPROTO_IP) {
+#ifdef IP_PKTINFO
+                        if (cmsg->cmsg_type == IP_PKTINFO) {
+                            struct in_pktinfo *pi = (struct in_pktinfo *)CMSG_DATA(cmsg);
+                            struct sockaddr_in *sin = (struct sockaddr_in *)&cur_local_addr;
+                            sin->sin_family = AF_INET;
+                            sin->sin_addr = pi->ipi_addr;
+                            if (local_addr_len >= sizeof(struct sockaddr_in)) {
+                                sin->sin_port = ((struct sockaddr_in *)&local_addr)->sin_port;
+                            }
+                            cur_local_len = sizeof(struct sockaddr_in);
+                        }
 #endif
-                    lsquic_engine_packet_in(engine, pkt_buf, (size_t)nr,
-                                            local_addr_len ? (struct sockaddr *)&local_addr : NULL,
-                                            (struct sockaddr *)&peer_addr,
-                                            ctx, ecn);
-                } else if (nr < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                    if (errno == ECONNREFUSED || errno == ENETUNREACH ||
-                        errno == EHOSTUNREACH) {
-                        /* Transient error, keep going */
-                    } else if (errno == EBADF) {
-                        fprintf(stderr, "[HTTP/3] UDP socket closed.\n");
-                        break;
+#ifdef IP_TOS
+                        if (cmsg->cmsg_type == IP_TOS) {
+                            ecn = *(int *)CMSG_DATA(cmsg) & 0x3;
+                        }
+#endif
+                    } else if (cmsg->cmsg_level == IPPROTO_IPV6) {
+#ifdef IPV6_PKTINFO
+                        if (cmsg->cmsg_type == IPV6_PKTINFO) {
+                            struct in6_pktinfo *pi6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
+                            struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&cur_local_addr;
+                            sin6->sin6_family = AF_INET6;
+                            sin6->sin6_addr = pi6->ipi6_addr;
+                            if (local_addr_len >= sizeof(struct sockaddr_in6)) {
+                                sin6->sin6_port = ((struct sockaddr_in6 *)&local_addr)->sin6_port;
+                            }
+                            cur_local_len = sizeof(struct sockaddr_in6);
+                        }
+#endif
+#ifdef IPV6_TCLASS
+                        if (cmsg->cmsg_type == IPV6_TCLASS) {
+                            ecn = *(int *)CMSG_DATA(cmsg) & 0x3;
+                        }
+#endif
                     }
                 }
-#ifdef __linux__
-            }
-#else
+
+                lsquic_engine_packet_in(engine, pkt_buf, (size_t)nr,
+                                        cur_local_len ? (struct sockaddr *)&cur_local_addr : NULL,
+                                        (struct sockaddr *)&peer_addr,
+                                        ctx, ecn);
             }
         }
-#endif
 
-        /* Do not run lsquic's connection sweep for an empty engine.  With no
-         * packet and no advertised timer this is pure idle CPU work. */
-        if (received_packet || has_engine_tick)
-            lsquic_engine_process_conns(engine);
+        lsquic_engine_process_conns(engine);
+        if (lsquic_engine_has_unsent_packets(engine)) {
+            lsquic_engine_send_unsent_packets(engine);
+        }
     }
 
 #ifdef __linux__
