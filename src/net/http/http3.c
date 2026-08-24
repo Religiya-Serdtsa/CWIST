@@ -930,10 +930,8 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
              * the handler-provided value when present (e.g. static file size
              * with an empty body), otherwise compute it like a GET. */
             char cl_str[32];
-            const char *cl_val = NULL;
-            if (is_head && user_cl) {
-                cl_val = user_cl;
-            } else if (body_len > 0 || (is_head && body_len == 0)) {
+            const char *cl_val = user_cl;
+            if (!cl_val) {
                 snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
                 cl_val = cl_str;
             }
@@ -1051,7 +1049,8 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             /* Fill the congestion window on each callback: loop chunk writes
              * until the stream says EAGAIN instead of one 64 KiB chunk per
              * tick. */
-            while (st->res->file_stream_fd >= 0 && st->body_sent < st->res->file_stream_len) {                static __thread char file_buf[65536];
+            while (st->res->file_stream_fd >= 0 && st->body_sent < st->res->file_stream_len) {
+                static __thread char file_buf[65536];
                 off_t offset = st->res->file_stream_offset + (off_t)st->body_sent;
                 size_t to_read = st->res->file_stream_len - st->body_sent;
                 if (to_read > sizeof(file_buf)) to_read = sizeof(file_buf);
@@ -1064,6 +1063,10 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                             return;
                         }
                         lsquic_stream_close(stream);
+                        return;
+                    }
+                    if (nw == 0) {
+                        lsquic_stream_wantwrite(stream, 1);
                         return;
                     }
                     st->send_xor ^= h3_xor_bytes((const unsigned char *)file_buf, (size_t)nw);
@@ -1084,7 +1087,8 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 } else {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         /* Retry next tick */
-                        break;
+                        lsquic_stream_wantwrite(stream, 1);
+                        return;
                     }
                     lsquic_stream_close(stream);
                     return;
@@ -1106,9 +1110,17 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             body_data = st->res->body->data;
         }
 
-        if (body_data && body_len > 0 && st->body_sent < body_len) {
+        while (body_data && body_len > 0 && st->body_sent < body_len) {
             ssize_t n = lsquic_stream_write(stream, body_data + st->body_sent,
                                             body_len - st->body_sent);
+            if (n > 0) {
+                st->send_xor ^= h3_xor_bytes((const unsigned char *)(body_data + st->body_sent), (size_t)n);
+                st->body_sent += (size_t)n;
+                if (st->body_sent < body_len) {
+                    lsquic_stream_wantwrite(stream, 1);
+                }
+                continue;
+            }
             if (n < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     lsquic_stream_wantwrite(stream, 1);
@@ -1117,14 +1129,17 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 lsquic_stream_close(stream);
                 return;
             }
-            st->send_xor ^= h3_xor_bytes((const unsigned char *)(body_data + st->body_sent), (size_t)n);
-            st->body_sent += (size_t)n;
+            /* n == 0: stream buffer full for now; re-arm wantwrite and come back */
+            lsquic_stream_wantwrite(stream, 1);
+            return;
         }
 
         if (st->body_sent >= body_len) {
             st->write_state = 2;
             lsquic_stream_shutdown(stream, 1);
             lsquic_stream_wantwrite(stream, 0);
+        } else {
+            lsquic_stream_wantwrite(stream, 1);
         }
     }
 }
