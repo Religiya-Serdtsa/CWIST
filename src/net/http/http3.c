@@ -1028,16 +1028,13 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         const char *user_cl = st->res->headers
             ? cwist_http_header_get(st->res->headers, "content-length") : NULL;
 
-        if (!bodyless && hdr_count < H3_MAX_RESPONSE_HEADERS) {
+        if (!bodyless && (body_len > 0 || is_head) && hdr_count < H3_MAX_RESPONSE_HEADERS) {
             /* For HEAD, content-length describes the would-be GET body: keep
              * the handler-provided value when present (e.g. static file size
              * with an empty body), otherwise compute it like a GET. */
             char cl_str[32];
             const char *cl_val = user_cl;
-            if (!is_head && body_len == 0) {
-                /* Never announce non-zero body when payload is actually 0 bytes */
-                cl_val = "0";
-            } else if (!cl_val) {
+            if (!cl_val) {
                 snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
                 cl_val = cl_str;
             }
@@ -1056,8 +1053,8 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             }
         }
 
-        /* content-type (if present) */
-        if (st->res->headers) {
+        /* content-type (if body is present or HEAD request) */
+        if (st->res->headers && (body_len > 0 || is_head)) {
             char *ct = cwist_http_header_get(st->res->headers, "content-type");
             if (ct && ct[0] != '\0' && hdr_count < H3_MAX_RESPONSE_HEADERS) {
                 size_t klen = 12;
@@ -1125,13 +1122,6 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             .count = (unsigned)hdr_count,
             .headers = headers_arr,
         };
-        /* HEAD responses and 1xx/204/304 statuses never carry content. */
-        bool send_content = !bodyless && !is_head && body_len > 0;
-        /* NB: the eos argument of lsquic_stream_send_headers is ignored for
-         * IETF QUIC, so an empty body must be finished with an explicit
-         * shutdown(1) below; relying on eos left every empty-body response
-         * (204 preflights, 304s, HEAD, error statuses) hanging until the
-         * browser gave up with ERR_INVALID_RESPONSE. */
         if (lsquic_stream_send_headers(stream, &headers, 0) != 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 lsquic_stream_wantwrite(stream, 1);
@@ -1141,15 +1131,13 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             return;
         }
         st->write_state = 1;
-        if (!send_content) {
-            st->write_state = 2;
-            lsquic_stream_flush(stream);
-            lsquic_stream_shutdown(stream, 1);
-            return;
-        }
+        lsquic_stream_wantwrite(stream, 1);
+        return;
     }
 
     if (st->write_state == 1 && st->res) {
+        bool bodyless = h3_status_forbids_body(st->res->status_code);
+        bool is_head = st->req && st->req->method == CWIST_HTTP_HEAD;
         size_t body_len = 0;
         const char *body_data = NULL;
 
@@ -1218,11 +1206,11 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             body_data = st->res->body->data;
         }
 
-        /* Skip payload writing entirely if body is empty or already fully sent */
-        if (body_len == 0 || st->body_sent >= body_len) {
+        /* Skip payload writing entirely if body is empty, forbidden, or already fully sent */
+        if (bodyless || is_head || body_len == 0 || st->body_sent >= body_len) {
             st->write_state = 2;
-            lsquic_stream_flush(stream);
             lsquic_stream_shutdown(stream, 1);
+            lsquic_stream_wantread(stream, 1);
             return;
         }
 
@@ -1252,8 +1240,8 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
 
         if (st->body_sent >= body_len) {
             st->write_state = 2;
-            lsquic_stream_flush(stream);
             lsquic_stream_shutdown(stream, 1);
+            lsquic_stream_wantread(stream, 1);
         } else {
             lsquic_stream_wantwrite(stream, 1);
         }
