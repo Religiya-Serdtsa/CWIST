@@ -3388,6 +3388,10 @@ int cwist_app_listen(cwist_app *app, int port) {
         if (server_fd >= 0) {
             g_cwist_listen_fd = server_fd;
         }
+        if (udp_fd >= 0) {
+            close(udp_fd);
+            udp_fd = -1;
+        }
     }
 
     // Per-process threads start here.  Each worker gets its own watcher and
