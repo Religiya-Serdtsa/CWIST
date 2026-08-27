@@ -922,17 +922,9 @@ static void cwist_static_handler(cwist_http_request *req, cwist_http_response *r
             const char *cc = info->mapping->cache_control ? info->mapping->cache_control : "public, max-age=3600";
             cwist_http_header_add(&res->headers, "Cache-Control", cc);
             cwist_sstring_assign(res->body, "");
-        } else if (req->method == CWIST_HTTP_HEAD) {
-            const char *cc = info->mapping->cache_control ? info->mapping->cache_control : "public, max-age=3600";
-            char len_buf[32];
-            snprintf(len_buf, sizeof(len_buf), "%zu", file->size);
-            cwist_http_header_add(&res->headers, "Content-Length", len_buf);
-            cwist_http_header_add(&res->headers, "Content-Type", mime);
-            cwist_http_header_add(&res->headers, "ETag", etag);
-            cwist_http_header_add(&res->headers, "Last-Modified", last_mod_buf);
-            cwist_http_header_add(&res->headers, "Cache-Control", cc);
-            cwist_sstring_assign(res->body, "");
         } else {
+            /* HEAD falls through here: app_serve_parsed_request suppresses the
+             * body at send time for every route, so only the headers matter. */
             size_t send_offset = 0;
             size_t send_len = file->size;
 
@@ -2163,6 +2155,28 @@ static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx) {
 }
 
 /**
+ * @brief Map a request parse failure to the RFC 9110/9112 error status the
+ * client must see before close; 0 means close quietly (EOF/OOM).
+ */
+static int app_parse_error_status(cwist_http_parse_error_t perr) {
+    switch (perr) {
+        case CWIST_HTTP_PARSE_MALFORMED:       return 400;
+        case CWIST_HTTP_PARSE_BODY_TOO_LARGE:  return 413;
+        case CWIST_HTTP_PARSE_EXPECT_FAILED:   return 417;
+        case CWIST_HTTP_PARSE_HEADER_OVERFLOW: return 431;
+        case CWIST_HTTP_PARSE_TE_UNSUPPORTED:  return 501;
+        default:                               return 0;
+    }
+}
+
+static void app_maybe_send_parse_error(int client_fd, cwist_http_parse_error_t perr) {
+    int status = app_parse_error_status(perr);
+    if (status > 0) {
+        cwist_http_send_error_response(client_fd, status, NULL);
+    }
+}
+
+/**
  * @brief Route and respond to one fully parsed HTTP/1.1 request.
  * Shared by the blocking keep-alive loop and the event-driven async path.
  * @return true when the connection stays open (keep-alive), false to close.
@@ -2205,7 +2219,12 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
     bool upgraded = req->upgraded;
 
     if (!upgraded) {
-        if (cwist_http_send_response(client_fd, res).error.err_i16 < 0) {
+        /* RFC 9110 §9.3.2: HEAD replies carry the GET headers (Content-Length
+         * included) but no body bytes, for every route. */
+        cwist_error_t send_err = (req->method == CWIST_HTTP_HEAD)
+            ? cwist_http_send_response_head(client_fd, res)
+            : cwist_http_send_response(client_fd, res);
+        if (send_err.error.err_i16 < 0) {
             cwist_http_response_destroy(res);
             cwist_http_request_destroy(req);
             return false;
@@ -2291,9 +2310,11 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
 
     for (;;) {
         cwist_http_request *req = NULL;
-        cwist_recv_status_t st = cwist_http_receive_request_nb(conn, &req);
+        cwist_http_parse_error_t perr = CWIST_HTTP_PARSE_OK;
+        cwist_recv_status_t st = cwist_http_receive_request_nb(conn, &req, &perr);
         if (st == CWIST_RECV_NEED_MORE) return CWIST_ASYNC_REARM;
         if (st == CWIST_RECV_FATAL) {
+            app_maybe_send_parse_error(client_fd, perr);
             if (dbg) {
                 long n = atomic_fetch_add(&dbg_fatal, 1) + 1;
                 if (n <= 5 || n % 10000 == 0)
@@ -2393,8 +2414,10 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
             }
         }
 
-        cwist_http_request *req = cwist_http_receive_request(client_fd, read_buf, sizeof(read_buf), &buf_len);
+        cwist_http_parse_error_t perr = CWIST_HTTP_PARSE_OK;
+        cwist_http_request *req = cwist_http_receive_request(client_fd, read_buf, sizeof(read_buf), &buf_len, &perr);
         if (!req) {
+            app_maybe_send_parse_error(client_fd, perr);
             break;
         }
         req->client_fd = client_fd;

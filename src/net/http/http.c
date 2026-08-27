@@ -1677,6 +1677,92 @@ cwist_error_t cwist_http_send_response(int client_fd, cwist_http_response *res) 
 }
 
 /**
+ * @brief Send only the status line and headers of a response (RFC 9110 §9.3.2
+ * HEAD semantics): Content-Length reflects the would-be body, but no body
+ * bytes are written. Body resources are released as in the full send path.
+ */
+cwist_error_t cwist_http_send_response_head(int client_fd, cwist_http_response *res) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (client_fd < 0 || !res) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    char header_buf[CWIST_HTTP_MAX_HEADER_SIZE];
+    size_t header_len = serialize_headers(res, header_buf, sizeof(header_buf));
+
+    struct iovec iov = { .iov_base = header_buf, .iov_len = header_len };
+    int flags = 0;
+    #if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+    #endif
+    #if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+    #endif
+
+    err.error.err_i16 = (cwist_http_sendmsg_all(client_fd, &iov, 1, flags) == 0) ? 0 : -1;
+
+    cwist_http_response_release_ptr_body(res);
+    cwist_http_response_release_file_stream(res);
+    return err;
+}
+
+/**
+ * @brief Send a minimal error response with Connection: close, used to answer
+ * malformed requests (400/413/417/431/501) before the connection is dropped.
+ * @param fd Connected client socket descriptor.
+ * @param status HTTP status code (reason phrase is derived from it).
+ * @param msg Plain-text body; NULL falls back to the reason phrase.
+ */
+void cwist_http_send_error_response(int fd, int status, const char *msg) {
+    if (fd < 0) return;
+
+    const char *reason;
+    switch (status) {
+        case 400: reason = "Bad Request"; break;
+        case 413: reason = "Content Too Large"; break;
+        case 417: reason = "Expectation Failed"; break;
+        case 431: reason = "Request Header Fields Too Large"; break;
+        case 500: reason = "Internal Server Error"; break;
+        case 501: reason = "Not Implemented"; break;
+        case 503: reason = "Service Unavailable"; break;
+        default:  reason = "Error"; break;
+    }
+    if (!msg) msg = reason;
+
+    char buf[512];
+    int n = snprintf(buf, sizeof(buf),
+                     "HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n%s",
+                     status, reason, strlen(msg), msg);
+    if (n <= 0) return;
+    size_t len = (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf) - 1;
+
+    struct iovec iov = { .iov_base = buf, .iov_len = len };
+    int flags = 0;
+    #if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+    #endif
+    #if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+    #endif
+    (void)cwist_http_sendmsg_all(fd, &iov, 1, flags);
+}
+
+/**
+ * @brief Emit the interim 100 Continue response (RFC 9110 §10.1.1) before the
+ * request body is read. Best effort: a failed write surfaces on the next recv.
+ */
+static void http_send_100_continue(int fd) {
+    static const char k_continue[] = "HTTP/1.1 100 Continue\r\n\r\n";
+    struct iovec iov = { .iov_base = (void *)k_continue, .iov_len = sizeof(k_continue) - 1 };
+    int flags = 0;
+    #if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+    #endif
+    (void)cwist_http_sendmsg_all(fd, &iov, 1, flags);
+}
+
+/**
  * @brief Materialize an HTTP response into a contiguous string for debugging or TLS writes.
  * @param res Response object to stringify.
  * @return Heap-allocated response string, or NULL on invalid input.
@@ -1702,19 +1788,65 @@ cwist_sstring *cwist_http_stringify_response(cwist_http_response *res) {
  * @return Parsed request object, or NULL on malformed input.
  */
 /**
- * @brief Internal helper to parse request when header_end is already known.
+ * @brief Validate the combined Transfer-Encoding header list (RFC 9112 §6.1).
+ * Headers are prepended during parsing, so the first TE node found is the
+ * last one on the wire and carries the final coding.
+ * @return 0 valid, 1 when the final coding is not chunked, 2 when an
+ *         unsupported transfer coding is present.
  */
-static cwist_http_request *cwist_http_parse_request_with_header_end(const char *raw_request, const char *header_end) {
+static int http_validate_transfer_encoding(cwist_http_header_node *headers) {
+    bool seen = false;
+    bool final_is_chunked = false;
+    bool bad_coding = false;
+    for (cwist_http_header_node *n = headers; n; n = n->next) {
+        if (!n->key || !n->key->data || strcasecmp(n->key->data, "Transfer-Encoding") != 0) continue;
+        const char *p = (n->value && n->value->data) ? n->value->data : "";
+        bool any_token = false;
+        bool last_chunked = false;
+        while (*p) {
+            while (*p == ' ' || *p == '\t' || *p == ',') p++;
+            const char *tok = p;
+            while (*p && *p != ',') p++;
+            const char *end = p;
+            while (end > tok && (end[-1] == ' ' || end[-1] == '\t')) end--;
+            if (*p) p++;
+            if (end == tok) continue;
+            any_token = true;
+            /* A token with parameters (e.g. "chunked;x=1") is not chunked. */
+            last_chunked = ((size_t)(end - tok) == 7 && strncasecmp(tok, "chunked", 7) == 0);
+            if (!last_chunked) bad_coding = true;
+        }
+        if (!seen) {
+            final_is_chunked = any_token && last_chunked;
+            seen = true;
+        }
+    }
+    if (!seen) return 0;
+    if (!final_is_chunked) return 1;
+    if (bad_coding) return 2;
+    return 0;
+}
+
+/**
+ * @brief Internal helper to parse request when header_end is already known.
+ * On NULL return, *err_out (when given) says whether the client deserves a
+ * 4xx/5xx response or a quiet close (CWIST_HTTP_PARSE_EOF).
+ */
+static cwist_http_request *cwist_http_parse_request_with_header_end(const char *raw_request, const char *header_end, cwist_http_parse_error_t *err_out) {
     if (!raw_request || !header_end) return NULL;
 
     const char *line_start = raw_request;
     const char *line_end = cwist_simd_find_crlf(line_start, (size_t)(header_end - line_start + 2));
-    if (!line_end || line_end > header_end) { 
-        return NULL; 
+    if (!line_end || line_end > header_end) {
+        if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+        return NULL;
     }
 
     cwist_http_request *req = cwist_http_request_create();
-    if (!req) return NULL;
+    if (!req) {
+        if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
+        return NULL;
+    }
 
     // Fast path for root GET / HTTP/1.1\r\n
     if (line_start[0] == 'G' && line_start[1] == 'E' && line_start[2] == 'T' &&
@@ -1730,9 +1862,9 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
     } else {
         // 1. Request Line (Optimized: SIMD space search)
         const char *sp1 = cwist_simd_find_char(line_start, (size_t)(line_end - line_start), ' ');
-        if (!sp1 || sp1 > line_end) { cwist_http_request_destroy(req); return NULL; }
+        if (!sp1 || sp1 > line_end) { cwist_http_request_destroy(req); if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED; return NULL; }
         const char *sp2 = cwist_simd_find_char(sp1 + 1, (size_t)(line_end - (sp1 + 1)), ' ');
-        if (!sp2 || sp2 > line_end) { cwist_http_request_destroy(req); return NULL; }
+        if (!sp2 || sp2 > line_end) { cwist_http_request_destroy(req); if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED; return NULL; }
 
         req->method = cwist_http_string_to_method_len(line_start, sp1 - line_start);
         
@@ -1761,7 +1893,14 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
     }
 
     // 2. Headers (SIMD colon and CRLF scanning + SWAR)
-    line_start = line_end + 2; 
+    /* RFC 9110/9112 validation state tracked during the single header pass. */
+    bool has_host = false, host_dup = false, host_empty = false;
+    bool cl_seen = false, cl_bad = false;
+    size_t cl_value = 0;
+    bool te_seen = false;
+    const bool is_http11 = req->version->data && strncmp(req->version->data, "HTTP/1.1", 8) == 0;
+
+    line_start = line_end + 2;
     while (line_start < header_end) {
         line_end = cwist_simd_find_crlf(line_start, (size_t)(header_end + 2 - line_start));
         if (!line_end || line_end == line_start) break;
@@ -1772,9 +1911,9 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
             const char *val_start = colon + 1;
             while (val_start < line_end && *val_start == ' ') val_start++;
             size_t val_len = line_end - val_start;
-            
+
             cwist_http_header_add_ex_len(&req->headers, (cwist_arena_t *)req->arena, line_start, key_len, val_start, val_len);
-            
+
             char k0 = line_start[0];
             if (key_len == 10 && (k0 == 'C' || k0 == 'c')) {
                 uint64_t w0;
@@ -1792,19 +1931,85 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
                 }
             } else if (key_len == 14 && (k0 == 'C' || k0 == 'c')) {
                 if (strncasecmp(line_start, "Content-Length", 14) == 0) {
-                    size_t len = 0;
-                    for (size_t i = 0; i < val_len; i++) {
-                        if (val_start[i] >= '0' && val_start[i] <= '9') {
-                            len = len * 10 + (val_start[i] - '0');
+                    /* RFC 9112 §6.3: strict digits-only parse; duplicate CL is
+                     * idempotent only when every value matches. */
+                    size_t vlen = val_len;
+                    while (vlen > 0 && (val_start[vlen - 1] == ' ' || val_start[vlen - 1] == '\t')) vlen--;
+                    if (vlen == 0) {
+                        cl_bad = true;
+                    } else {
+                        size_t len = 0;
+                        bool valid = true;
+                        for (size_t i = 0; i < vlen; i++) {
+                            if (val_start[i] >= '0' && val_start[i] <= '9') {
+                                if (len > (SIZE_MAX - 9) / 10) { valid = false; break; }
+                                len = len * 10 + (size_t)(val_start[i] - '0');
+                            } else {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        if (!valid) {
+                            cl_bad = true;
                         } else {
-                            break;
+                            if (cl_seen && cl_value != len) cl_bad = true;
+                            cl_seen = true;
+                            cl_value = len;
+                            req->content_length = len;
                         }
                     }
-                    req->content_length = len;
                 }
+            } else if (key_len == 4 && (k0 == 'H' || k0 == 'h')) {
+                if (strncasecmp(line_start, "Host", 4) == 0) {
+                    if (has_host) host_dup = true;
+                    has_host = true;
+                    size_t vlen = val_len;
+                    while (vlen > 0 && (val_start[vlen - 1] == ' ' || val_start[vlen - 1] == '\t')) vlen--;
+                    if (vlen == 0) host_empty = true;
+                }
+            } else if (key_len == 17 && (k0 == 'T' || k0 == 't')) {
+                if (strncasecmp(line_start, "Transfer-Encoding", 17) == 0) te_seen = true;
             }
         }
         line_start = line_end + 2;
+    }
+
+    /* RFC 9112 §3.2: HTTP/1.1 requests must carry exactly one non-empty Host. */
+    if (is_http11 && (!has_host || host_dup || host_empty)) {
+        cwist_http_request_destroy(req);
+        if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+        return NULL;
+    }
+    if (cl_bad) {
+        cwist_http_request_destroy(req);
+        if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+        return NULL;
+    }
+    if (te_seen) {
+        /* RFC 9112 §6.3: TE and CL together are a request-smuggling vector. */
+        if (cl_seen) {
+            cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+            return NULL;
+        }
+        int tev = http_validate_transfer_encoding(req->headers);
+        if (tev != 0) {
+            cwist_http_request_destroy(req);
+            if (err_out) *err_out = (tev == 1) ? CWIST_HTTP_PARSE_MALFORMED
+                                               : CWIST_HTTP_PARSE_TE_UNSUPPORTED;
+            return NULL;
+        }
+    }
+    /* RFC 9110 §10.1.1: only the 100-continue expectation is supported. */
+    const char *expect = cwist_http_header_get(req->headers, "Expect");
+    if (expect) {
+        size_t elen = strlen(expect);
+        while (elen > 0 && (expect[elen - 1] == ' ' || expect[elen - 1] == '\t')) elen--;
+        if (!(elen == 12 && strncasecmp(expect, "100-continue", 12) == 0)) {
+            cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_EXPECT_FAILED;
+            return NULL;
+        }
     }
 
     const char *body_start = header_end + 4;
@@ -1816,6 +2021,7 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
         cwist_http_sstring_assign_arena(req->body, (cwist_arena_t *)req->arena, body_start, to_take);
     }
 
+    if (err_out) *err_out = CWIST_HTTP_PARSE_OK;
     return req;
 }
 
@@ -1824,7 +2030,7 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     size_t raw_len = strlen(raw_request);
     const char *header_end = cwist_simd_find_crlfcrlf(raw_request, raw_len);
     if (!header_end) return NULL;
-    return cwist_http_parse_request_with_header_end(raw_request, header_end);
+    return cwist_http_parse_request_with_header_end(raw_request, header_end, NULL);
 }
 
 
@@ -1947,7 +2153,8 @@ static int http_read_chunked_body(int client_fd, char *buf, size_t *avail, size_
     return 0;
 }
 
-cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len) {
+cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len, cwist_http_parse_error_t *err_out) {
+    if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
     size_t total_received = *buf_len;
     char *header_end = NULL;
 
@@ -1959,6 +2166,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
              * is indistinguishable from a client vanish. */
             cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_HTTP_HEADER_OVERFLOW);
             CWIST_LOG_WARN("[http] dropping connection: headers exceed %zu-byte read buffer", buf_size);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_HEADER_OVERFLOW;
             return NULL;
         }
 
@@ -1971,16 +2179,25 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         read_buf[total_received] = '\0';
     }
 
-    cwist_http_request *req = cwist_http_parse_request_with_header_end(read_buf, header_end);
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(read_buf, header_end, err_out);
     if (!req) return NULL;
 
     size_t header_len = (size_t)(header_end + 4 - read_buf);
     size_t body_received = total_received - header_len;
 
+    /* RFC 9110 §10.1.1: the parser already validated that any Expect value is
+     * exactly "100-continue"; answer it before waiting on the body. */
+    const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
+    const char *expect = cwist_http_header_get(req->headers, "Expect");
+    if (expect && ((size_t)req->content_length > body_received || (te && req->content_length == 0))) {
+        http_send_100_continue(client_fd);
+    }
+
     // 2. Read body based on Content-Length or Transfer-Encoding
     if (req->content_length > 0) {
         if (req->content_length > CWIST_HTTP_MAX_BODY_SIZE) {
             cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_BODY_TOO_LARGE;
             return NULL;
         }
 
@@ -1988,6 +2205,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         char *body = cwist_alloc(req->content_length + 1);
         if (!body) {
             cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
             return NULL;
         }
 
@@ -2034,8 +2252,9 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             *buf_len = 0;
         }
     } else {
-        const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
-        if (te && strcasecmp(te, "chunked") == 0) {
+        /* A surviving Transfer-Encoding header was validated by the parser as
+         * chunked-only with chunked final, so presence alone selects framing. */
+        if (te) {
             if (body_received > 0) {
                 memmove(read_buf, header_end + 4, body_received);
             }
@@ -2050,6 +2269,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
             if (http_read_chunked_body(client_fd, read_buf, buf_len, buf_size, chunked) != 0) {
                 cwist_sstring_destroy(chunked);
                 cwist_http_request_destroy(req);
+                if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
                 return NULL;
             }
             /* Move the assembled buffer into the request body instead of
@@ -2072,6 +2292,7 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
     }
     read_buf[*buf_len] = '\0';
 
+    if (err_out) *err_out = CWIST_HTTP_PARSE_OK;
     return req;
 }
 
@@ -2165,8 +2386,9 @@ static int http_chunked_scan(const char *buf, size_t avail, size_t *consumed, cw
  * blocking IO.  On CWIST_RECV_OK the consumed bytes are removed from the
  * stash and *out holds a fully parsed request.
  */
-cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out) {
+cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out, cwist_http_parse_error_t *err_out) {
     *out = NULL;
+    if (err_out) *err_out = CWIST_HTTP_PARSE_OK;
     if (!conn->rbuf || conn->len == 0) return CWIST_RECV_NEED_MORE;
 
     char *header_end = (char *)cwist_simd_find_crlfcrlf(conn->rbuf, conn->len);
@@ -2175,27 +2397,40 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
             cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_HTTP_HEADER_OVERFLOW);
             CWIST_LOG_WARN("[http] dropping async connection: headers exceed %d-byte read buffer",
                            CWIST_HTTP_READ_BUFFER_SIZE);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_HEADER_OVERFLOW;
             return CWIST_RECV_FATAL;
         }
         return CWIST_RECV_NEED_MORE;
     }
 
-    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, header_end);
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, header_end, err_out);
     if (!req) return CWIST_RECV_FATAL;
 
     size_t header_len = (size_t)(header_end + 4 - conn->rbuf);
     size_t body_received = conn->len - header_len;
     size_t consumed = header_len;
 
+    /* RFC 9110 §10.1.1: answer a validated Expect: 100-continue once, before
+     * the stash accumulates the full body. */
+    const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
+    const char *expect = cwist_http_header_get(req->headers, "Expect");
+    if (expect && !conn->expect_continue_sent &&
+        ((size_t)req->content_length > body_received || (te && req->content_length == 0))) {
+        http_send_100_continue(conn->fd);
+        conn->expect_continue_sent = true;
+    }
+
     if (req->content_length > 0) {
         if (req->content_length > CWIST_HTTP_MAX_BODY_SIZE) {
             cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_BODY_TOO_LARGE;
             return CWIST_RECV_FATAL;
         }
         if (body_received < (size_t)req->content_length) {
             /* Not all here yet; make sure the stash can hold the full message. */
             if (!http_async_stash_grow(conn, header_len + (size_t)req->content_length + 1)) {
                 cwist_http_request_destroy(req);
+                if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
                 return CWIST_RECV_FATAL;
             }
             cwist_http_request_destroy(req);
@@ -2204,6 +2439,7 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
         char *body = cwist_alloc((size_t)req->content_length + 1);
         if (!body) {
             cwist_http_request_destroy(req);
+            if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
             return CWIST_RECV_FATAL;
         }
         memcpy(body, conn->rbuf + header_len, (size_t)req->content_length);
@@ -2211,11 +2447,12 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
         cwist_sstring_adopt_len(req->body, body, (size_t)req->content_length);
         consumed += (size_t)req->content_length;
     } else {
-        const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
-        if (te && strcasecmp(te, "chunked") == 0) {
+        /* Presence of TE implies parser-validated chunked framing. */
+        if (te) {
             cwist_sstring *assembled = cwist_sstring_create();
             if (!assembled) {
                 cwist_http_request_destroy(req);
+                if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
                 return CWIST_RECV_FATAL;
             }
             size_t chunk_bytes = 0;
@@ -2223,10 +2460,15 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
             if (scan <= 0) {
                 cwist_sstring_destroy(assembled);
                 cwist_http_request_destroy(req);
-                if (scan == 0 && !http_async_stash_grow(conn, conn->len + 4096)) {
-                    return CWIST_RECV_FATAL;
+                if (scan == 0) {
+                    if (!http_async_stash_grow(conn, conn->len + 4096)) {
+                        if (err_out) *err_out = CWIST_HTTP_PARSE_EOF;
+                        return CWIST_RECV_FATAL;
+                    }
+                    return CWIST_RECV_NEED_MORE;
                 }
-                return scan == 0 ? CWIST_RECV_NEED_MORE : CWIST_RECV_FATAL;
+                if (err_out) *err_out = CWIST_HTTP_PARSE_MALFORMED;
+                return CWIST_RECV_FATAL;
             }
             char *data = assembled->data;
             size_t dlen = assembled->size;
@@ -2243,6 +2485,7 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
     if (leftover > 0) memmove(conn->rbuf, conn->rbuf + consumed, leftover);
     conn->len = leftover;
     conn->rbuf[leftover] = '\0';
+    conn->expect_continue_sent = false;
 
     req->client_fd = conn->fd;
     *out = req;
