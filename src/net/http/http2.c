@@ -40,7 +40,10 @@
 #define CWIST_HTTP2_CONNECTION_PREFACE "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 #define CWIST_HTTP2_CONNECTION_PREFACE_LEN 24
 #define CWIST_HTTP2_MAX_FRAME_SIZE 16384
-#define CWIST_HTTP2_MAX_CONCURRENT_STREAMS 32
+#define CWIST_HTTP2_MAX_CONCURRENT_STREAMS 100
+/* HPACK dynamic table capacity advertised via SETTINGS_HEADER_TABLE_SIZE
+ * (RFC 7541 §4.2 default). */
+#define CWIST_HTTP2_HEADER_TABLE_SIZE 4096
 
 #define CWIST_HTTP2_FLAG_END_STREAM 0x01
 #define CWIST_HTTP2_FLAG_END_HEADERS 0x04
@@ -116,6 +119,15 @@ typedef struct h2_stream {
     struct h2_stream *next;
 } h2_stream;
 
+/* HPACK dynamic table entry (RFC 7541 §4).  Entries are chained newest-first;
+ * dynamic index 62 addresses the head (most recently inserted). */
+typedef struct h2_hpack_entry {
+    char *name;
+    char *value;
+    size_t size; /* name_len + value_len + 32 (RFC 7541 §4.1) */
+    struct h2_hpack_entry *next;
+} h2_hpack_entry;
+
 typedef struct h2_deferred_frame {
     unsigned char hdr[9];
     unsigned char *payload; /* owned; NULL when the frame has no payload */
@@ -156,6 +168,16 @@ typedef struct {
      * drains these before touching the socket again. */
     h2_deferred_frame *deferred_head;
     h2_deferred_frame *deferred_tail;
+    /* HPACK decoder dynamic table state (RFC 7541 §4). */
+    h2_hpack_entry *hpack_head;
+    uint32_t hpack_size;
+    uint32_t hpack_capacity;
+    /* Number of currently open streams; enforced against
+     * CWIST_HTTP2_MAX_CONCURRENT_STREAMS on new-stream HEADERS (§5.1.2). */
+    uint32_t active_streams;
+    /* True when a header block was refused (stream limit) but its
+     * CONTINUATION frames must still be consumed and discarded. */
+    bool cont_discard;
 } h2_conn;
 
 static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
@@ -174,6 +196,7 @@ static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
      * h2c: its ordering metadata is not an integrity mechanism.  HTTPS/TLS
      * supplies authenticated transport protection against on-path mutation. */
     hc->sequenced_data = conn && conn->ssl && conn->http2_sequenced_data;
+    hc->hpack_capacity = CWIST_HTTP2_HEADER_TABLE_SIZE;
 }
 
 static void h2_conn_destroy(h2_conn *hc) {
@@ -187,6 +210,16 @@ static void h2_conn_destroy(h2_conn *hc) {
     }
     cwist_free(hc->cont_buf);
     cwist_free(hc->out_buf);
+    h2_hpack_entry *he = hc->hpack_head;
+    while (he) {
+        h2_hpack_entry *next = he->next;
+        cwist_free(he->name);
+        cwist_free(he->value);
+        cwist_free(he);
+        he = next;
+    }
+    hc->hpack_head = NULL;
+    hc->hpack_size = 0;
     h2_deferred_frame *df = hc->deferred_head;
     while (df) {
         h2_deferred_frame *next = df->next;
@@ -217,6 +250,7 @@ static h2_stream *h2_stream_create(h2_conn *hc, uint32_t stream_id) {
     s->fc.send_window = hc->peer_initial_window_size;
     s->next = hc->streams;
     hc->streams = s;
+    hc->active_streams++;
     return s;
 }
 
@@ -226,6 +260,7 @@ static void h2_stream_remove(h2_conn *hc, uint32_t stream_id) {
         h2_stream *s = *pp;
         if (s->stream_id == stream_id) {
             *pp = s->next;
+            if (hc->active_streams > 0) hc->active_streams--;
             if (s->req) cwist_http_request_destroy(s->req);
             cwist_seq_assembler_destroy(s->body_assembler);
             cwist_free(s);
@@ -555,7 +590,17 @@ static int h2_send_goaway(h2_conn *hc, uint32_t last_stream_id, uint32_t error_c
     return h2_write_frame(hc, CWIST_HTTP2_FRAME_GOAWAY, 0, 0, payload, 8);
 }
 
+static int h2_send_rst_stream(h2_conn *hc, uint32_t stream_id, uint32_t error_code) {
+    unsigned char payload[4];
+    payload[0] = (unsigned char)((error_code >> 24) & 0xff);
+    payload[1] = (unsigned char)((error_code >> 16) & 0xff);
+    payload[2] = (unsigned char)((error_code >> 8) & 0xff);
+    payload[3] = (unsigned char)(error_code & 0xff);
+    return h2_write_frame(hc, CWIST_HTTP2_FRAME_RST_STREAM, 0, stream_id, payload, 4);
+}
+
 static int h2_send_window_update(h2_conn *hc, uint32_t stream_id, int32_t increment) {
+
     unsigned char payload[4];
     payload[0] = (unsigned char)((increment >> 24) & 0x7f);
     payload[1] = (unsigned char)((increment >> 16) & 0xff);
@@ -1104,6 +1149,69 @@ static const cwist_http2_static_header *h2_static_header(uint32_t index) {
     return &cwist_http2_static_table[index];
 }
 
+/* --- HPACK Dynamic Table (RFC 7541 §4) --- */
+
+/* Evict the oldest entries (list tail) until the table fits within limit. */
+static void h2_hpack_evict_to(h2_conn *hc, uint32_t limit) {
+    while (hc->hpack_size > limit && hc->hpack_head) {
+        h2_hpack_entry **pp = &hc->hpack_head;
+        while ((*pp)->next) pp = &(*pp)->next;
+        h2_hpack_entry *old = *pp;
+        *pp = NULL;
+        hc->hpack_size -= (uint32_t)old->size;
+        cwist_free(old->name);
+        cwist_free(old->value);
+        cwist_free(old);
+    }
+}
+
+/* Resolve a full HPACK index: 1..61 static, 62.. dynamic (62 = newest). */
+static const h2_hpack_entry *h2_hpack_dynamic_get(const h2_conn *hc, uint32_t index) {
+    size_t static_count = sizeof(cwist_http2_static_table) / sizeof(cwist_http2_static_table[0]);
+    if (index < static_count) return NULL;
+    uint32_t pos = index - (uint32_t)static_count + 1; /* 1-based into dynamic table */
+    const h2_hpack_entry *e = hc->hpack_head;
+    while (e && --pos) e = e->next;
+    return e;
+}
+
+/* Insert a name/value pair at the head of the dynamic table, evicting as
+ * needed.  An entry larger than the capacity empties the table and is not
+ * added (RFC 7541 §4.4). */
+static int h2_hpack_insert(h2_conn *hc, const char *name, const char *value) {
+    size_t entry_size = strlen(name) + strlen(value) + 32;
+    if (entry_size > hc->hpack_capacity) {
+        h2_hpack_evict_to(hc, 0);
+        return 0;
+    }
+    h2_hpack_entry *e = (h2_hpack_entry *)cwist_alloc(sizeof(*e));
+    if (!e) return -1;
+    e->name = cwist_strdup(name);
+    e->value = cwist_strdup(value);
+    if (!e->name || !e->value) {
+        cwist_free(e->name);
+        cwist_free(e->value);
+        cwist_free(e);
+        return -1;
+    }
+    e->size = entry_size;
+    h2_hpack_evict_to(hc, hc->hpack_capacity - (uint32_t)entry_size);
+    e->next = hc->hpack_head;
+    hc->hpack_head = e;
+    hc->hpack_size += (uint32_t)entry_size;
+    return 0;
+}
+
+/* Apply a dynamic table size update from the peer's encoder, bounded by the
+ * capacity we advertised in SETTINGS_HEADER_TABLE_SIZE. */
+static int h2_hpack_set_capacity(h2_conn *hc, uint32_t new_size) {
+    if (new_size > CWIST_HTTP2_HEADER_TABLE_SIZE) return -1;
+    hc->hpack_capacity = new_size;
+    h2_hpack_evict_to(hc, new_size);
+    return 0;
+}
+
+
 static void h2_parse_path(cwist_http_request *req, const char *path) {
     const char *q = strchr(path, '?');
     if (q) {
@@ -1122,22 +1230,67 @@ static void h2_parse_path(cwist_http_request *req, const char *path) {
     }
 }
 
-static void h2_apply_header(cwist_http_request *req, const char *name, const char *value) {
-    if (!req || !name || !value) return;
+/* Per-header-block decode state for pseudo-header validation
+ * (RFC 7540 §8.1.2.3). */
+typedef struct h2_header_state {
+    bool seen_method;
+    bool seen_path;
+    bool seen_scheme;
+    bool seen_authority;
+    bool seen_regular;
+} h2_header_state;
 
-    if (strcmp(name, ":method") == 0) {
-        req->method = cwist_http_string_to_method(value);
-    } else if (strcmp(name, ":path") == 0) {
-        h2_parse_path(req, value);
-    } else if (strcmp(name, ":authority") == 0 || strcmp(name, "host") == 0) {
+static int h2_apply_header(cwist_http_request *req, const char *name, const char *value,
+                           h2_header_state *st) {
+    if (!req || !name || !value || !st) return -1;
+
+    if (name[0] == ':') {
+        /* Pseudo-headers must precede all regular headers. */
+        if (st->seen_regular) return -1;
+        bool *flag = NULL;
+        if (strcmp(name, ":method") == 0) flag = &st->seen_method;
+        else if (strcmp(name, ":path") == 0) flag = &st->seen_path;
+        else if (strcmp(name, ":scheme") == 0) flag = &st->seen_scheme;
+        else if (strcmp(name, ":authority") == 0) flag = &st->seen_authority;
+        if (flag) {
+            if (*flag) return -1; /* duplicate pseudo-header */
+            *flag = true;
+        }
+        if (strcmp(name, ":method") == 0) {
+            req->method = cwist_http_string_to_method(value);
+        } else if (strcmp(name, ":path") == 0) {
+            h2_parse_path(req, value);
+        } else if (strcmp(name, ":authority") == 0) {
+            cwist_http_header_add(&req->headers, "host", value);
+        }
+        /* :scheme and unknown pseudo-headers are accepted but not mapped. */
+        return 0;
+    }
+
+    st->seen_regular = true;
+    if (strcmp(name, "host") == 0) {
         cwist_http_header_add(&req->headers, "host", value);
-    } else if (strcmp(name, ":scheme") != 0 && name[0] != ':') {
+    } else {
         cwist_http_header_add(&req->headers, name, value);
     }
+    return 0;
 }
 
-static void h2_decode_header_block(cwist_http_request *req, const unsigned char *payload, size_t len) {
+/* Decode result codes: OK, stream-level error (RST_STREAM/PROTOCOL_ERROR),
+ * or compression error (connection-level, GOAWAY). */
+#define H2_DECODE_OK 0
+#define H2_DECODE_STREAM_ERROR 1
+#define H2_DECODE_COMPRESSION_ERROR 2
+
+static int h2_decode_header_block(h2_conn *hc, cwist_http_request *req,
+                                  const unsigned char *payload, size_t len,
+                                  bool is_request) {
     size_t pos = 0;
+    h2_header_state st;
+    memset(&st, 0, sizeof(st));
+    /* Pseudo-headers are forbidden outside the request header block
+     * (e.g. trailers); seed the state so any ':' name errors out. */
+    st.seen_regular = !is_request;
 
     while (pos < len) {
         uint8_t b = payload[pos];
@@ -1146,49 +1299,60 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
         char *value = NULL;
 
         if (b & 0x80) {
+            /* Indexed header field: static table or dynamic table. */
             uint32_t index = 0;
-            if (h2_decode_integer(payload, len, &pos, 7, &index) != 0) break;
+            if (h2_decode_integer(payload, len, &pos, 7, &index) != 0) return H2_DECODE_COMPRESSION_ERROR;
             const cwist_http2_static_header *entry = h2_static_header(index);
             if (entry && entry->name) {
-                h2_apply_header(req, entry->name, entry->value);
-            } else {
-                /* Client referenced the HPACK dynamic table despite
-                 * SETTINGS_HEADER_TABLE_SIZE=0: the header is lost, so make
-                 * the loss observable instead of a silent session break. */
-                cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_H2_HEADERS_DROPPED);
-                CWIST_LOG_WARN("[h2] dropping header field: indexed name/value index=%u beyond static table", index);
+                if (h2_apply_header(req, entry->name, entry->value, &st) != 0)
+                    return H2_DECODE_STREAM_ERROR;
+                continue;
             }
+            const h2_hpack_entry *dyn = h2_hpack_dynamic_get(hc, index);
+            if (!dyn) {
+                CWIST_LOG_WARN("[h2] header field index=%u beyond static+dynamic tables", index);
+                return H2_DECODE_COMPRESSION_ERROR;
+            }
+            if (h2_apply_header(req, dyn->name, dyn->value, &st) != 0)
+                return H2_DECODE_STREAM_ERROR;
             continue;
         }
 
         if ((b & 0xE0) == 0x20) {
+            /* Dynamic table size update. */
             uint32_t new_size = 0;
-            if (h2_decode_integer(payload, len, &pos, 5, &new_size) != 0) break;
+            if (h2_decode_integer(payload, len, &pos, 5, &new_size) != 0) return H2_DECODE_COMPRESSION_ERROR;
+            if (h2_hpack_set_capacity(hc, new_size) != 0) {
+                CWIST_LOG_WARN("[h2] dynamic table size update %u exceeds advertised capacity", new_size);
+                return H2_DECODE_COMPRESSION_ERROR;
+            }
             continue;
         }
 
+        bool incremental_indexing = false;
         if ((b & 0x40) == 0x40) {
-            if (h2_decode_integer(payload, len, &pos, 6, &name_index) != 0) break;
+            incremental_indexing = true;
+            if (h2_decode_integer(payload, len, &pos, 6, &name_index) != 0) return H2_DECODE_COMPRESSION_ERROR;
         } else if ((b & 0xf0) == 0x00) {
-            if (h2_decode_integer(payload, len, &pos, 4, &name_index) != 0) break;
+            if (h2_decode_integer(payload, len, &pos, 4, &name_index) != 0) return H2_DECODE_COMPRESSION_ERROR;
         } else if ((b & 0xf0) == 0x10) {
-            if (h2_decode_integer(payload, len, &pos, 4, &name_index) != 0) break;
+            if (h2_decode_integer(payload, len, &pos, 4, &name_index) != 0) return H2_DECODE_COMPRESSION_ERROR;
         } else {
-            break;
+            return H2_DECODE_COMPRESSION_ERROR;
         }
 
         if (name_index > 0) {
             const cwist_http2_static_header *entry = h2_static_header(name_index);
-            if (!entry || !entry->name) {
-                /* Same dynamic-table reference case as above, on the name
-                 * side of a literal field. */
-                cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_H2_HEADERS_DROPPED);
-                CWIST_LOG_WARN("[h2] dropping header field: literal with name index=%u beyond static table", name_index);
-                char *discard = h2_decode_string(payload, len, &pos);
-                cwist_free(discard);
-                continue;
+            if (entry && entry->name) {
+                name = cwist_strdup(entry->name);
+            } else {
+                const h2_hpack_entry *dyn = h2_hpack_dynamic_get(hc, name_index);
+                if (dyn) name = cwist_strdup(dyn->name);
             }
-            name = strdup(entry->name);
+            if (!name) {
+                CWIST_LOG_WARN("[h2] literal field name index=%u beyond static+dynamic tables", name_index);
+                return H2_DECODE_COMPRESSION_ERROR;
+            }
         } else {
             name = h2_decode_string(payload, len, &pos);
         }
@@ -1196,12 +1360,24 @@ static void h2_decode_header_block(cwist_http_request *req, const unsigned char 
         if (!name || !value) {
             cwist_free(name);
             cwist_free(value);
-            break;
+            return H2_DECODE_COMPRESSION_ERROR;
         }
-        h2_apply_header(req, name, value);
-        free(name);
-        free(value);
+        int rc = h2_apply_header(req, name, value, &st);
+        if (rc == 0 && incremental_indexing) {
+            if (h2_hpack_insert(hc, name, value) != 0) rc = -2;
+        }
+        cwist_free(name);
+        cwist_free(value);
+        if (rc == -2) return H2_DECODE_COMPRESSION_ERROR;
+        if (rc != 0) return H2_DECODE_STREAM_ERROR;
     }
+
+    /* RFC 7540 §8.1.2.3: request header blocks must carry :method and :path. */
+    if (is_request && (!st.seen_method || !st.seen_path)) {
+        CWIST_LOG_WARN("[h2] request header block missing :method or :path");
+        return H2_DECODE_STREAM_ERROR;
+    }
+    return H2_DECODE_OK;
 }
 
 /* --- HPACK Response Encoder --- */
@@ -1850,6 +2026,48 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
 
 /* --- CONTINUATION & Header Assembly --- */
 
+/* Create a stream for an incoming request header block, enforcing
+ * CWIST_HTTP2_MAX_CONCURRENT_STREAMS (RFC 7540 §5.1.2).
+ * Returns the stream, or NULL with *refused set when the peer exceeded the
+ * limit (RST_STREAM/REFUSED_STREAM already queued). */
+static h2_stream *h2_request_stream_create(h2_conn *hc, uint32_t stream_id, bool *refused) {
+    *refused = false;
+    if (hc->active_streams >= CWIST_HTTP2_MAX_CONCURRENT_STREAMS) {
+        CWIST_LOG_WARN("[h2] refusing stream %u: concurrent stream limit %u reached",
+                       stream_id, (unsigned)CWIST_HTTP2_MAX_CONCURRENT_STREAMS);
+        h2_send_rst_stream(hc, stream_id, H2_ERR_REFUSED_STREAM);
+        *refused = true;
+        return NULL;
+    }
+    h2_stream *s = h2_stream_create(hc, stream_id);
+    if (!s) return NULL;
+    s->req = cwist_http_request_create();
+    if (!s->req) {
+        h2_stream_remove(hc, stream_id);
+        return NULL;
+    }
+    cwist_sstring_assign(s->req->version, "HTTP/2");
+    s->req->stream_id = stream_id;
+    s->req->private_data = hc->conn;
+    return s;
+}
+
+/* Decode a completed header block into the stream's request, translating
+ * decode failures into RST_STREAM.  Returns 0 on success, 1 when a
+ * stream-level error was answered with RST_STREAM, -1 on connection error. */
+static int h2_decode_stream_headers(h2_conn *hc, h2_stream *s,
+                                    const unsigned char *block, size_t block_len,
+                                    bool is_request) {
+    int rc = h2_decode_header_block(hc, s->req, block, block_len, is_request);
+    if (rc == H2_DECODE_COMPRESSION_ERROR) return -1;
+    if (rc == H2_DECODE_STREAM_ERROR) {
+        h2_send_rst_stream(hc, s->stream_id, H2_ERR_PROTOCOL_ERROR);
+        h2_stream_remove(hc, s->stream_id);
+        return 1;
+    }
+    return 0;
+}
+
 static int h2_begin_headers(h2_conn *hc, uint32_t stream_id,
                             const unsigned char *payload, size_t len,
                             bool end_headers, bool end_stream) {
@@ -1860,30 +2078,47 @@ static int h2_begin_headers(h2_conn *hc, uint32_t stream_id,
     size_t block_offset = 0;
     size_t block_len = len;
 
+    bool is_new = (h2_stream_find(hc, stream_id) == NULL);
+
     if (end_headers) {
         h2_stream *s = h2_stream_find(hc, stream_id);
         if (!s) {
-            s = h2_stream_create(hc, stream_id);
-            if (!s) return -1;
-            s->req = cwist_http_request_create();
-            if (!s->req) {
-                h2_stream_remove(hc, stream_id);
-                return -1;
-            }
-            cwist_sstring_assign(s->req->version, "HTTP/2");
-            s->req->stream_id = stream_id;
-            s->req->private_data = hc->conn;
+            bool refused = false;
+            s = h2_request_stream_create(hc, stream_id, &refused);
+            if (!s) return refused ? 1 : -1;
         }
         if (payload && block_len > 0) {
-            h2_decode_header_block(s->req, payload + block_offset, block_len);
+            return h2_decode_stream_headers(hc, s, payload + block_offset, block_len, is_new);
+        }
+        /* An empty request header block still owes :method and :path. */
+        if (is_new) {
+            h2_send_rst_stream(hc, stream_id, H2_ERR_PROTOCOL_ERROR);
+            h2_stream_remove(hc, stream_id);
+            return 1;
         }
         return 0;
+    }
+
+    /* Refused streams must still have their CONTINUATION sequence consumed
+     * (and their header block ignored) so the connection framing stays in
+     * sync. */
+    if (is_new && hc->active_streams >= CWIST_HTTP2_MAX_CONCURRENT_STREAMS) {
+        CWIST_LOG_WARN("[h2] refusing stream %u: concurrent stream limit %u reached",
+                       stream_id, (unsigned)CWIST_HTTP2_MAX_CONCURRENT_STREAMS);
+        h2_send_rst_stream(hc, stream_id, H2_ERR_REFUSED_STREAM);
+        hc->expecting_continuation = true;
+        hc->cont_stream_id = stream_id;
+        hc->cont_end_stream = end_stream;
+        hc->cont_discard = true;
+        hc->cont_len = 0;
+        return 1;
     }
 
     /* Need continuation */
     hc->expecting_continuation = true;
     hc->cont_stream_id = stream_id;
     hc->cont_end_stream = end_stream;
+    hc->cont_discard = false;
     hc->cont_len = block_len;
     hc->cont_cap = block_len < 1024 ? 1024 : block_len * 2;
     hc->cont_buf = (unsigned char *)cwist_alloc(hc->cont_cap);
@@ -1904,6 +2139,17 @@ static int h2_handle_continuation(h2_conn *hc, uint32_t stream_id,
         return -1; /* PROTOCOL_ERROR */
     }
 
+    /* Header block of a stream we already refused: consume the frames so
+     * framing stays in sync, but do not decode or buffer them. */
+    if (hc->cont_discard) {
+        if (end_headers) {
+            hc->expecting_continuation = false;
+            hc->cont_discard = false;
+            hc->cont_stream_id = 0;
+        }
+        return 0;
+    }
+
     if (len > 0) {
         if (hc->cont_len + len > hc->cont_cap) {
             size_t new_cap = hc->cont_cap * 2;
@@ -1919,28 +2165,25 @@ static int h2_handle_continuation(h2_conn *hc, uint32_t stream_id,
 
     if (end_headers) {
         h2_stream *s = h2_stream_find(hc, hc->cont_stream_id);
+        bool is_new = (s == NULL);
+        int rc = 0;
         if (!s) {
-            s = h2_stream_create(hc, hc->cont_stream_id);
-            if (!s) {
-                hc->expecting_continuation = false;
-                return -1;
-            }
-            s->req = cwist_http_request_create();
-            if (!s->req) {
-                h2_stream_remove(hc, hc->cont_stream_id);
-                hc->expecting_continuation = false;
-                return -1;
-            }
-            cwist_sstring_assign(s->req->version, "HTTP/2");
-            s->req->stream_id = hc->cont_stream_id;
-            s->req->private_data = hc->conn;
+            bool refused = false;
+            s = h2_request_stream_create(hc, hc->cont_stream_id, &refused);
+            if (!s) rc = refused ? 1 : -1;
         }
-        if (hc->cont_buf && hc->cont_len > 0) {
-            h2_decode_header_block(s->req, hc->cont_buf, hc->cont_len);
+        if (s && hc->cont_buf && hc->cont_len > 0) {
+            rc = h2_decode_stream_headers(hc, s, hc->cont_buf, hc->cont_len, is_new);
+        } else if (s && is_new) {
+            /* Empty request header block: mandatory pseudo-headers missing. */
+            h2_send_rst_stream(hc, s->stream_id, H2_ERR_PROTOCOL_ERROR);
+            h2_stream_remove(hc, s->stream_id);
+            rc = 1;
         }
         hc->expecting_continuation = false;
         hc->cont_len = 0;
         hc->cont_stream_id = 0;
+        return rc;
     }
     return 0;
 }
@@ -2097,8 +2340,9 @@ cwist_error_t cwist_http2_serve_connection(
         return result;
     }
 
-    unsigned char settings[12] = {
-        0x00, 0x01, 0x00, 0x00, 0x00, 0x00, // SETTINGS_HEADER_TABLE_SIZE = 0 (Disable dynamic table compression to guarantee full literal header transmission)
+    unsigned char settings[18] = {
+        0x00, 0x01, 0x00, 0x00, 0x10, 0x00, // SETTINGS_HEADER_TABLE_SIZE = 4096 (CWIST_HTTP2_HEADER_TABLE_SIZE; HPACK dynamic table enabled)
+        0x00, 0x03, 0x00, 0x00, 0x00, 0x64, // SETTINGS_MAX_CONCURRENT_STREAMS = 100 (CWIST_HTTP2_MAX_CONCURRENT_STREAMS)
         0x00, 0x04, 0x7f, 0xff, 0xff, 0xff  // SETTINGS_INITIAL_WINDOW_SIZE = 2147483647 (2GB)
     };
     if (h2_write_frame(&hc, CWIST_HTTP2_FRAME_SETTINGS, 0, 0, settings, sizeof(settings)) != 0) {
@@ -2211,12 +2455,17 @@ cwist_error_t cwist_http2_serve_connection(
                     block_offset += 5;
                     block_len -= 5;
                 }
-                if (h2_begin_headers(&hc, stream_id,
-                                     payload + block_offset, block_len,
-                                     flags & CWIST_HTTP2_FLAG_END_HEADERS,
-                                     flags & CWIST_HTTP2_FLAG_END_STREAM) != 0) {
+                int hdr_rc = h2_begin_headers(&hc, stream_id,
+                                              payload + block_offset, block_len,
+                                              flags & CWIST_HTTP2_FLAG_END_HEADERS,
+                                              flags & CWIST_HTTP2_FLAG_END_STREAM);
+                if (hdr_rc < 0) {
                     h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_PROTOCOL_ERROR);
                     connected = false;
+                    break;
+                }
+                if (hdr_rc > 0) {
+                    /* Stream refused or malformed: RST_STREAM already queued. */
                     break;
                 }
                 hc.last_processed_stream_id = stream_id;
@@ -2242,10 +2491,15 @@ cwist_error_t cwist_http2_serve_connection(
                     connected = false;
                     break;
                 }
-                if (h2_handle_continuation(&hc, stream_id, payload, len,
-                                           flags & CWIST_HTTP2_FLAG_END_HEADERS) != 0) {
+                int cont_rc = h2_handle_continuation(&hc, stream_id, payload, len,
+                                                     flags & CWIST_HTTP2_FLAG_END_HEADERS);
+                if (cont_rc < 0) {
                     h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_PROTOCOL_ERROR);
                     connected = false;
+                    break;
+                }
+                if (cont_rc > 0) {
+                    /* Refused/malformed header block: RST_STREAM already sent. */
                     break;
                 }
                 if (flags & CWIST_HTTP2_FLAG_END_STREAM) {
