@@ -2272,7 +2272,15 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
 cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_async_conn_t *conn) {
     cwist_app *app = (cwist_app *)conn->user_ctx;
     static _Atomic long dbg_fill_fail, dbg_fatal, dbg_serve_close;
-    const bool dbg = getenv("CWIST_ASYNC_DEBUG") != NULL;
+    /* getenv walks the whole environ vector; cache it instead of paying a
+     * scan on every event.  The racy recompute is benign (same result). */
+    static _Atomic int dbg_cached = -1;
+    int d = atomic_load_explicit(&dbg_cached, memory_order_relaxed);
+    if (d < 0) {
+        d = getenv("CWIST_ASYNC_DEBUG") != NULL;
+        atomic_store_explicit(&dbg_cached, d, memory_order_relaxed);
+    }
+    const bool dbg = d != 0;
 
     if (cwist_http_async_conn_fill(conn) != 0) {
         if (dbg) {
