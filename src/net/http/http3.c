@@ -1242,6 +1242,13 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
             return;
         }
         if (eos) {
+            /* NB: the eos argument of lsquic_stream_send_headers is ignored
+             * for IETF QUIC, so an empty body must be finished with an
+             * explicit shutdown(1) here.  Relying on eos leaves every
+             * empty-body response (204s, 304s, HEAD, error statuses) without
+             * FIN, which browsers surface as a protocol error — timing- and
+             * RTT-dependent because of header-block stashing under low cwnd. */
+            lsquic_stream_shutdown(stream, 1);
             st->write_state = 2;
             lsquic_stream_wantread(stream, 1);
             return;
