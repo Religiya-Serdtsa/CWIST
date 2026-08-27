@@ -13,12 +13,17 @@ COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
 
 UNAME_S := $(shell uname -s)
 CC_VERSION_OUTPUT := $(shell $(CC) --version 2>/dev/null)
-IS_CLANG := $(strip $(findstring clang,$(notdir $(CC))) $(findstring Clang,$(CC_VERSION_OUTPUT)))
+IS_CLANG := $(strip $(findstring clang,$(notdir $(CC))) $(findstring Clang,$(CC_VERSION_OUTPUT)) $(findstring clang,$(CC_VERSION_OUTPUT)))
 ifneq (,$(IS_CLANG))
     ifeq ($(origin CXX),default)
         CXX = clang++
     endif
 endif
+
+# Probe flag support instead of trusting compiler detection: Apple Clang
+# reaches the GCC flag block (its --version says "Apple clang") and lacks
+# -ffat-lto-objects, so only enable LTO where the flag actually compiles.
+SUPPORTS_FAT_LTO := $(shell $(CC) -ffat-lto-objects -x c -c /dev/null -o /dev/null 2>/dev/null && echo 1)
 
 BUILD_PROFILE = perf
 ifneq (,$(findstring tcc,$(notdir $(CC))))
@@ -54,8 +59,9 @@ endif
 # -flto=auto lets the final link inline across TUs (event loop <-> handlers);
 # -ffat-lto-objects keeps plain code in the objects so a link without -flto
 # (or a consumer that just unpacks libcwist.a) still works unchanged.
+# Only probed-in (see SUPPORTS_FAT_LTO): Apple Clang lacks the fat flag.
 GCC_STACK_FLAGS = -Ofast -g \
-                  -flto=auto -ffat-lto-objects \
+                  $(if $(SUPPORTS_FAT_LTO),-flto=auto -ffat-lto-objects) \
                   -fno-plt \
                   -falign-functions=32 \
                   -falign-loops=32 \
