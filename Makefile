@@ -51,7 +51,11 @@ ifeq ($(UNAME_S),Linux)
 endif
 
 # GCC-specific aggressive optimizations
+# -flto=auto lets the final link inline across TUs (event loop <-> handlers);
+# -ffat-lto-objects keeps plain code in the objects so a link without -flto
+# (or a consumer that just unpacks libcwist.a) still works unchanged.
 GCC_STACK_FLAGS = -Ofast -g \
+                  -flto=auto -ffat-lto-objects \
                   -fno-plt \
                   -falign-functions=32 \
                   -falign-loops=32 \

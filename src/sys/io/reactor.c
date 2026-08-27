@@ -49,7 +49,11 @@ static inline int sys_io_uring_enter(int ring_fd, unsigned to_submit, unsigned m
 
 /* Ring setup helpers absorbed from the retired io_uring_backend.c. */
 static void *mmap_ring(int fd, size_t sz, off_t off) {
-    void *p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, off);
+    /* No MAP_POPULATE: with one ring per worker thread the pre-faulted pages
+     * dominate idle RSS (~400 KiB per reactor) while a worker under real
+     * load only ever touches the head of each ring.  On-demand paging keeps
+     * RSS proportional to actual concurrency. */
+    void *p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, off);
     return (p == MAP_FAILED) ? NULL : p;
 }
 
@@ -106,7 +110,10 @@ typedef struct {
     unsigned char payload[CWIST_REACTOR_PAYLOAD_SIZE];
 } reactor_event_ctx_t;
 
-#define REACTOR_CHUNK_EVENTS 4096
+/* Slot chunks grow on demand (see struct cwist_reactor below); 512 slots per
+ * chunk keeps a mostly-idle worker's footprint small (~40 KiB vs ~320 KiB at
+ * 4096) while busy reactors simply chain more chunks. */
+#define REACTOR_CHUNK_EVENTS 512
 
 typedef struct reactor_slot_chunk {
     struct reactor_slot_chunk *next;
