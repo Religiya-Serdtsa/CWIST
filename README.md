@@ -306,13 +306,18 @@ These variables are read directly by the framework runtime (no prefix required):
 
 **C1M mode is now measured, not theoretical.** With the event-driven one-shot
 connection path (connections live in the io_uring/epoll reactor instead of
-parking a worker thread each), a single cwist process on loopback served:
+parking a worker thread each), a single cwist server on loopback served:
 
-| Scale | Result | Wall time |
-|-------|--------|-----------|
-| C10K | 10,000 / 10,000 established + responded (100%) | ~0.5 s |
-| C100K | 100,000 / 100,000 responded (100%) | ~9 s |
-| C1M (8×125K) | 1,000,000 / 1,000,000 responded (100%) | ~20 s per client process |
+| Scale | Result | Wall time | Server peak RSS |
+|-------|--------|-----------|-----------------|
+| C10K | 10,000 / 10,000 established + responded (100%) | ~0.7 s | ~111 MB |
+| C100K | 100,000 / 100,000 responded (100%) | ~8.7 s | ~124 MB |
+| C1M (8×125K) | 1,000,000 / 1,000,000 responded (100%) | ~14–16 s per client process | ~244 MB |
+
+Peak RSS is the summed `VmHWM` high-water mark across the 12 forked
+worker processes (the server defaults to one worker per core); the arena
+bump allocator with a shared per-request arena keeps a million held
+connections inside a quarter gigabyte of resident memory.
 
 The classic thread-per-connection path (`CWIST_C1M_MODE=0`) is no longer
 capped at `cores*8` held connections either: every accepted connection gets
@@ -320,16 +325,17 @@ its own on-demand detached thread with a 256 KiB stack, so held connections
 scale with the task budget instead of parking a fixed worker pool. Measured
 on the same machine, same client:
 
-| Scale | Result | Wall time |
-|-------|--------|-----------|
-| C10K | 10,000 / 10,000 responded (100%) | ~0.6 s |
-| C100K | 100,000 / 100,000 responded (100%) | ~9 s |
+| Scale | Result | Wall time | Server peak RSS |
+|-------|--------|-----------|-----------------|
+| C10K | 10,000 / 10,000 responded (100%) | ~0.8 s | ~950 MB |
+| C100K | 100,000 / 100,000 responded (100%) | ~9.6 s | ~9.2 GB |
 
 C100K classic needs task-count headroom (one thread per held connection:
 `pids.max` / `TasksMax` above 100K — desktop app scopes often cap this near
 76K — and `kernel.threads-max` is fine by default) and roughly 26 GB of
-virtual commit budget for 100K x 256 KiB stacks (raise
-`vm.overcommit_ratio` when RAMxratio + swap is tight). C1M is out of reach
+virtual commit budget for 100K x 256 KiB stacks (about 9.2 GB of that
+actually resident; raise `vm.overcommit_ratio` when RAMxratio + swap is
+tight). C1M is out of reach
 for this model — a million threads exceeds `threads-max` — which is exactly
 what the reactor path is for.
 
