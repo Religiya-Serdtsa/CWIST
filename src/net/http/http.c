@@ -274,9 +274,25 @@ static bool http_spawn_worker(void) {
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    /* Cap worker stack reservation: the default 8MB dwarfs the worker's real
+     * worst case (16KB read_buf + 8KB header_buf + 64KB file-stream fallback
+     * buffer plus call-chain slack).  Note glibc rejects sizes smaller than
+     * the process' static TLS footprint (allocatestack.c), which is why the
+     * HTTP/3 batch scratch buffers must stay out of TLS. */
+    if (pthread_attr_setstacksize(&attr, CWIST_POOL_STACK_SIZE) != 0) {
+        CWIST_LOG_WARN("[http] pthread_attr_setstacksize(%d) failed; using default stack",
+                       CWIST_POOL_STACK_SIZE);
+    }
     pthread_t tid;
     atomic_fetch_add_explicit(&g_dyn_pool.active_workers, 1, memory_order_relaxed);
     int rc = pthread_create(&tid, &attr, http_dynamic_worker_thread, NULL);
+    if (rc != 0) {
+        /* Retry with the default stack rather than losing the worker. */
+        pthread_attr_destroy(&attr);
+        pthread_attr_init(&attr);
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        rc = pthread_create(&tid, &attr, http_dynamic_worker_thread, NULL);
+    }
     pthread_attr_destroy(&attr);
     if (rc != 0) {
         atomic_fetch_sub_explicit(&g_dyn_pool.active_workers, 1, memory_order_relaxed);
@@ -1141,13 +1157,9 @@ static void cwist_http_response_release_ptr_body(cwist_http_response *res) {
  * @brief Allocate and initialize a default HTTP response object.
  * @return Newly allocated response, or NULL on allocation failure.
  */
-cwist_http_response *cwist_http_response_create(void) {
-    cwist_arena_t *arena = cwist_arena_create(0);
+static cwist_http_response *cwist_http_response_create_impl(cwist_arena_t *arena, bool arena_borrowed) {
     cwist_http_response *res = (cwist_http_response *)cwist_http_struct_alloc(arena, sizeof(cwist_http_response));
-    if (!res) {
-        cwist_arena_destroy(arena);
-        return NULL;
-    }
+    if (!res) return NULL;
 
     res->version = cwist_http_sstring_create(arena);
     res->status_code = CWIST_HTTP_OK;
@@ -1167,12 +1179,28 @@ cwist_http_response *cwist_http_response_create(void) {
     res->file_stream_offset = 0;
     res->file_stream_auto_close = false;
     res->arena = arena;
+    res->arena_borrowed = arena_borrowed;
 
     // Defaults (borrowed statics; handlers may overwrite via regular assign)
     cwist_sstring_borrow(res->version, "HTTP/1.1", 8);
     cwist_sstring_borrow(res->status_text, "OK", 2);
 
     return res;
+}
+
+cwist_http_response *cwist_http_response_create(void) {
+    cwist_arena_t *arena = cwist_arena_create(0);
+    cwist_http_response *res = cwist_http_response_create_impl(arena, false);
+    if (!res) {
+        cwist_arena_destroy(arena);
+        return NULL;
+    }
+    return res;
+}
+
+cwist_http_response *cwist_http_response_create_in_arena(void *arena) {
+    if (!arena) return cwist_http_response_create();
+    return cwist_http_response_create_impl((cwist_arena_t *)arena, true);
 }
 
 /**
@@ -1192,7 +1220,9 @@ void cwist_http_response_destroy(cwist_http_response *res) {
         if (!arena || !cwist_arena_owns(arena, res)) {
             cwist_free(res);
         }
-        cwist_arena_destroy(arena);
+        if (!res->arena_borrowed) {
+            cwist_arena_destroy(arena);
+        }
     }
 }
 
@@ -1832,7 +1862,7 @@ static int http_validate_transfer_encoding(cwist_http_header_node *headers) {
  * On NULL return, *err_out (when given) says whether the client deserves a
  * 4xx/5xx response or a quiet close (CWIST_HTTP_PARSE_EOF).
  */
-static cwist_http_request *cwist_http_parse_request_with_header_end(const char *raw_request, const char *header_end, cwist_http_parse_error_t *err_out) {
+static cwist_http_request *cwist_http_parse_request_with_header_end(const char *raw_request, size_t raw_len, const char *header_end, cwist_http_parse_error_t *err_out) {
     if (!raw_request || !header_end) return NULL;
 
     const char *line_start = raw_request;
@@ -1898,6 +1928,7 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
     bool cl_seen = false, cl_bad = false;
     size_t cl_value = 0;
     bool te_seen = false;
+    bool expect_100 = false, expect_bad = false;
     const bool is_http11 = req->version->data && strncmp(req->version->data, "HTTP/1.1", 8) == 0;
 
     line_start = line_end + 2;
@@ -1969,6 +2000,19 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
                 }
             } else if (key_len == 17 && (k0 == 'T' || k0 == 't')) {
                 if (strncasecmp(line_start, "Transfer-Encoding", 17) == 0) te_seen = true;
+            } else if (key_len == 6 && (k0 == 'E' || k0 == 'e')) {
+                if (strncasecmp(line_start, "Expect", 6) == 0) {
+                    /* RFC 9110 §10.1.1: only the 100-continue expectation is
+                     * supported; record it here so the receive paths need no
+                     * second header walk. */
+                    size_t vlen = val_len;
+                    while (vlen > 0 && (val_start[vlen - 1] == ' ' || val_start[vlen - 1] == '\t')) vlen--;
+                    if (vlen == 12 && strncasecmp(val_start, "100-continue", 12) == 0) {
+                        expect_100 = true;
+                    } else {
+                        expect_bad = true;
+                    }
+                }
             }
         }
         line_start = line_end + 2;
@@ -2001,20 +2045,17 @@ static cwist_http_request *cwist_http_parse_request_with_header_end(const char *
         }
     }
     /* RFC 9110 §10.1.1: only the 100-continue expectation is supported. */
-    const char *expect = cwist_http_header_get(req->headers, "Expect");
-    if (expect) {
-        size_t elen = strlen(expect);
-        while (elen > 0 && (expect[elen - 1] == ' ' || expect[elen - 1] == '\t')) elen--;
-        if (!(elen == 12 && strncasecmp(expect, "100-continue", 12) == 0)) {
-            cwist_http_request_destroy(req);
-            if (err_out) *err_out = CWIST_HTTP_PARSE_EXPECT_FAILED;
-            return NULL;
-        }
+    if (expect_bad) {
+        cwist_http_request_destroy(req);
+        if (err_out) *err_out = CWIST_HTTP_PARSE_EXPECT_FAILED;
+        return NULL;
     }
+    req->te_chunked_seen = te_seen;
+    req->expect_100_seen = expect_100;
 
     const char *body_start = header_end + 4;
-    if (*body_start != '\0') {
-        size_t available = strlen(body_start);
+    size_t available = raw_len - (size_t)(body_start - raw_request);
+    if (available > 0) {
         size_t to_take = (req->content_length > 0 && req->content_length < available)
                          ? req->content_length
                          : available;
@@ -2030,7 +2071,7 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     size_t raw_len = strlen(raw_request);
     const char *header_end = cwist_simd_find_crlfcrlf(raw_request, raw_len);
     if (!header_end) return NULL;
-    return cwist_http_parse_request_with_header_end(raw_request, header_end, NULL);
+    return cwist_http_parse_request_with_header_end(raw_request, raw_len, header_end, NULL);
 }
 
 
@@ -2179,16 +2220,17 @@ cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, si
         read_buf[total_received] = '\0';
     }
 
-    cwist_http_request *req = cwist_http_parse_request_with_header_end(read_buf, header_end, err_out);
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(read_buf, total_received, header_end, err_out);
     if (!req) return NULL;
 
     size_t header_len = (size_t)(header_end + 4 - read_buf);
     size_t body_received = total_received - header_len;
 
     /* RFC 9110 §10.1.1: the parser already validated that any Expect value is
-     * exactly "100-continue"; answer it before waiting on the body. */
-    const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
-    const char *expect = cwist_http_header_get(req->headers, "Expect");
+     * exactly "100-continue"; answer it before waiting on the body. Flags were
+     * recorded during the header pass — no second walk needed. */
+    const bool te = req->te_chunked_seen;
+    const bool expect = req->expect_100_seen;
     if (expect && ((size_t)req->content_length > body_received || (te && req->content_length == 0))) {
         http_send_100_continue(client_fd);
     }
@@ -2409,7 +2451,7 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
         return CWIST_RECV_NEED_MORE;
     }
 
-    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, header_end, err_out);
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, conn->len, header_end, err_out);
     if (!req) return CWIST_RECV_FATAL;
 
     size_t header_len = (size_t)(header_end + 4 - conn->rbuf);
@@ -2417,9 +2459,9 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
     size_t consumed = header_len;
 
     /* RFC 9110 §10.1.1: answer a validated Expect: 100-continue once, before
-     * the stash accumulates the full body. */
-    const char *te = cwist_http_header_get(req->headers, "Transfer-Encoding");
-    const char *expect = cwist_http_header_get(req->headers, "Expect");
+     * the stash accumulates the full body. Flags come from the header pass. */
+    const bool te = req->te_chunked_seen;
+    const bool expect = req->expect_100_seen;
     if (expect && !conn->expect_continue_sent &&
         ((size_t)req->content_length > body_received || (te && req->content_length == 0))) {
         http_send_100_continue(conn->fd);

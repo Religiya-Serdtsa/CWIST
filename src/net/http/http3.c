@@ -2036,11 +2036,14 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 #if defined(__linux__) && defined(_GNU_SOURCE)
 #define H3_RECV_BATCH 32
         if (can_read) {
-            static __thread unsigned char batch_bufs[H3_RECV_BATCH][65535];
-            static __thread struct sockaddr_storage batch_peers[H3_RECV_BATCH];
-            static __thread char batch_cmsgs[H3_RECV_BATCH][512];
-            static __thread struct iovec batch_iovs[H3_RECV_BATCH];
-            static __thread struct mmsghdr batch_msgs[H3_RECV_BATCH];
+            /* Batch scratch buffers live on this (dedicated, default-stack)
+             * H3 thread's stack, not in TLS: 2.1MB of .tbss here forced glibc
+             * to reject every explicit pthread stack size below ~2.2MB. */
+            unsigned char batch_bufs[H3_RECV_BATCH][65535];
+            struct sockaddr_storage batch_peers[H3_RECV_BATCH];
+            char batch_cmsgs[H3_RECV_BATCH][512];
+            struct iovec batch_iovs[H3_RECV_BATCH];
+            struct mmsghdr batch_msgs[H3_RECV_BATCH];
 
             while (1) {
                 for (int b = 0; b < H3_RECV_BATCH; b++) {
