@@ -1062,8 +1062,19 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                 if (is_early_data && st->req &&
                     !h3_method_is_idempotent(st->req->method)) {
                     /* RFC 8470: refuse replayable non-idempotent early data
-                     * so the client retries after the handshake. */
+                     * so the client retries after the handshake.  Attach a
+                     * body: without one the response goes out as HEADERS+FIN
+                     * with no content-length, which some clients surface as
+                     * an empty (0-byte) reply instead of status 425. */
                     st->res->status_code = 425; /* Too Early */
+                    if (st->res->body) {
+                        cwist_sstring_assign(st->res->body,
+                            "{\"error\":\"too early, retry after handshake\"}");
+                    }
+                    if (st->res->headers) {
+                        cwist_http_header_add(&st->res->headers,
+                                              "Content-Type", "application/json");
+                    }
                 } else {
                     h3_ctx->handler(h3_ctx->user_ctx, st->req, st->res);
                 }
