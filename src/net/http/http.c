@@ -1217,10 +1217,14 @@ void cwist_http_response_destroy(cwist_http_response *res) {
         cwist_sstring_destroy(res->body);
         cwist_http_header_free_all(res->headers);
         cwist_free(res->alt_svc);
+        /* Snapshot before the possible free: when the arena was full the
+         * struct fell back to the heap, so res may be freed below and any
+         * later field read is a use-after-free. */
+        bool borrowed = res->arena_borrowed;
         if (!arena || !cwist_arena_owns(arena, res)) {
             cwist_free(res);
         }
-        if (!res->arena_borrowed) {
+        if (!borrowed) {
             cwist_arena_destroy(arena);
         }
     }

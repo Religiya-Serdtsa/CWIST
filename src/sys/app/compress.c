@@ -62,7 +62,15 @@ static int zlib_compress(void *state, const char *in, size_t in_len,
     zs->next_out = (Bytef *)out;
     zs->avail_out = (uInt)(*out_len);
     int rc = deflate(zs, flush ? Z_FINISH : Z_NO_FLUSH);
-    if (rc != Z_OK && rc != Z_STREAM_END && rc != Z_BUF_ERROR) return -1;
+    /* All-or-nothing: the caller advances the input by the full chunk, so a
+     * partially consumed chunk would silently drop the tail of the body.
+     * Report an error instead; the middleware then serves the body
+     * uncompressed. */
+    if (flush) {
+        if (rc != Z_STREAM_END) return -1;
+    } else {
+        if (rc != Z_OK || zs->avail_in != 0) return -1;
+    }
     *out_len = (size_t)(*out_len - zs->avail_out);
     return 0;
 }
@@ -74,7 +82,9 @@ static int zlib_finish(void *state, char *out, size_t *out_len) {
     zs->next_out = (Bytef *)out;
     zs->avail_out = (uInt)(*out_len);
     int rc = deflate(zs, Z_FINISH);
-    if (rc != Z_OK && rc != Z_STREAM_END && rc != Z_BUF_ERROR) return -1;
+    /* Z_BUF_ERROR here means the trailer did not fit; accepting it would
+     * emit a truncated gzip stream. */
+    if (rc != Z_STREAM_END) return -1;
     *out_len = (size_t)(*out_len - zs->avail_out);
     return 0;
 }
@@ -455,22 +465,26 @@ static void cwist_mw_compress_handler(cwist_http_request *req, cwist_http_respon
     }
 
     if (ok) {
-        size_t tail = out_cap - total_out;
-        if (tail == 0) {
-            size_t new_cap = out_cap + 256;
-            char *new_buf = (char *)cwist_realloc(out_buf, new_cap);
-            if (new_buf) {
+        /* Drain trailing bytes, growing the buffer until the backend is
+         * exhausted (brotli/zstd buffer the whole stream internally, so a
+         * single fixed-size tail can truncate the output). */
+        for (;;) {
+            size_t tail = out_cap - total_out;
+            if (tail == 0) {
+                size_t new_cap = out_cap * 2;
+                char *new_buf = (char *)cwist_realloc(out_buf, new_cap);
+                if (!new_buf) { ok = 0; break; }
                 out_buf = new_buf;
                 out_cap = new_cap;
-                tail = out_cap - total_out;
+                continue;
             }
-        }
-        if (tail > 0) {
-            if (backend->finish(state, out_buf + total_out, &tail) != 0) {
+            size_t wrote = tail;
+            if (backend->finish(state, out_buf + total_out, &wrote) != 0) {
                 ok = 0;
-            } else {
-                total_out += tail;
+                break;
             }
+            total_out += wrote;
+            if (wrote < tail) break; /* drained */
         }
     }
 
