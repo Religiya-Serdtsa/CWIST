@@ -16,18 +16,18 @@ to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
 <!-- BENCHMARKS:START -->
-Latest automated benchmark: **Darwin** — 12.06 M leases/s, 106.01% CPU, 628048 KiB RSS.
+Latest automated benchmark: **Darwin** — 16.25 M leases/s, 107.63% CPU, 705184 KiB RSS.
 
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 118073 req/s | Latency 2.02ms (P90 3.90ms, P99 8.15ms) | RSS 211096KiB | Csw 0
-- **CWIST (C1M reactor)**: 119582 req/s | Latency 2.01ms (P90 4.12ms, P99 9.61ms) | RSS 32592KiB | Csw 0
-- **Axum**: 119762 req/s | Latency 3.27ms (P90 5.59ms, P99 8.38ms) | RSS 15844KiB | Csw 0
-- **Gin (Go)**: 90853 req/s | Latency 5.46ms (P90 12.66ms, P99 26.41ms) | RSS 29848KiB | Csw 0
-- **Spring Boot**: 59304 req/s | Latency 6.73ms (P90 8.79ms, P99 15.06ms) | RSS 1324644KiB | Csw 0
+- **CWIST (classic pool)**: 116220 req/s | Latency 1.79ms (P90 3.76ms, P99 7.66ms) | RSS 15916KiB | Csw 0
+- **CWIST (C1M reactor)**: 114442 req/s | Latency 2.07ms (P90 4.16ms, P99 8.84ms) | RSS 10372KiB | Csw 0
+- **Axum**: 113565 req/s | Latency 3.45ms (P90 5.84ms, P99 8.74ms) | RSS 16724KiB | Csw 0
+- **Gin (Go)**: 80797 req/s | Latency 6.44ms (P90 15.31ms, P99 33.38ms) | RSS 30080KiB | Csw 0
+- **Spring Boot**: 45377 req/s | Latency 8.73ms (P90 11.15ms, P99 17.80ms) | RSS 1309936KiB | Csw 0
 
 Spring runtime env: **openjdk version "25.0.4.1" 2026-08-18 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
