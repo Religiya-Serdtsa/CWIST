@@ -207,9 +207,18 @@ void https_pool_destroy(void) {
  *
  * The shepherd owns every in-progress handshake: cwist_https_dispatch()
  * tries SSL_accept once on a non-blocking socket; incomplete handshakes are
- * parked in a private epoll set and retried by a single shepherd thread,
- * which also reaps connections that exceed CWIST_HTTPS_HANDSHAKE_TIMEOUT_MS.
- * Only fully established sessions enter the worker pool.
+ * parked in a private epoll set and retried by a shepherd thread, which also
+ * reaps connections whose handshake stalls for CWIST_HTTPS_HANDSHAKE_TIMEOUT_MS
+ * (any completed event round refreshes the budget — the deadline bounds
+ * stalls, not queueing, so healthy clients under connect bursts are never
+ * swept for waiting).  Only fully established sessions enter the worker pool.
+ *
+ * The shepherd is sharded (CWIST_HTTPS_HS_MAX_SHARDS threads, hashed by fd):
+ * a single thread caps per-process handshake crypto at one core, and under
+ * C100k-scale connect bursts the backlog outlived the handshake deadline,
+ * resetting clients mid-connect ("errored" in h2load).  Shards carry
+ * independent epoll sets, locks and pending lists, so throughput scales with
+ * cores exactly like the pre-shepherd pool path did.
  *
  * The shepherd is epoll-based and therefore Linux-only.  On other platforms
  * cwist_https_dispatch() falls back to the legacy blocking pool path. */
@@ -226,30 +235,40 @@ typedef struct https_hs_pending {
     struct https_hs_pending *next;
 } https_hs_pending_t;
 
-static int g_hs_epoll_fd = -1;
-static int g_hs_wakeup_rd = -1, g_hs_wakeup_wr = -1;
-static pthread_t g_hs_thread;
-static bool g_hs_running = false;
-static pthread_mutex_t g_hs_lock = PTHREAD_MUTEX_INITIALIZER;
-static https_hs_pending_t *g_hs_head = NULL;
-static _Atomic long g_hs_pending_count = 0;
+typedef struct https_hs_shard {
+    int epoll_fd;
+    int wakeup_rd;
+    int wakeup_wr;
+    pthread_t thread;
+    bool running;
+    pthread_mutex_t lock;
+    https_hs_pending_t *head;
+    _Atomic long pending;
+} https_hs_shard_t;
 
-static void https_hs_forget_locked(https_hs_pending_t *prev, https_hs_pending_t *p) {
+/* One shepherd thread per shard; the count is fixed at start (see below). */
+#define CWIST_HTTPS_HS_MAX_SHARDS 8
+
+static https_hs_shard_t g_hs_shards[CWIST_HTTPS_HS_MAX_SHARDS];
+static long g_hs_shard_count = 0;
+static pthread_mutex_t g_hs_start_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void https_hs_forget_locked(https_hs_shard_t *sh, https_hs_pending_t *prev, https_hs_pending_t *p) {
     if (prev) prev->next = p->next;
-    else g_hs_head = p->next;
-    atomic_fetch_sub_explicit(&g_hs_pending_count, 1, memory_order_release);
+    else sh->head = p->next;
+    atomic_fetch_sub_explicit(&sh->pending, 1, memory_order_release);
 }
 
-static void https_hs_abort(https_hs_pending_t *p) {
-    if (g_hs_epoll_fd >= 0) epoll_ctl(g_hs_epoll_fd, EPOLL_CTL_DEL, p->fd, NULL);
+static void https_hs_abort(https_hs_shard_t *sh, https_hs_pending_t *p) {
+    if (sh->epoll_fd >= 0) epoll_ctl(sh->epoll_fd, EPOLL_CTL_DEL, p->fd, NULL);
     SSL_free(p->ssl);
     close(p->fd);
     cwist_free(p);
 }
 
 /* Move a completed handshake into the request worker pool. */
-static void https_hs_complete(https_hs_pending_t *p) {
-    if (g_hs_epoll_fd >= 0) epoll_ctl(g_hs_epoll_fd, EPOLL_CTL_DEL, p->fd, NULL);
+static void https_hs_complete(https_hs_shard_t *sh, https_hs_pending_t *p) {
+    if (sh->epoll_fd >= 0) epoll_ctl(sh->epoll_fd, EPOLL_CTL_DEL, p->fd, NULL);
     /* The request phase (cwist_https_receive_request & friends) predates
      * non-blocking sockets; restore blocking mode before handing over. */
     int fl = fcntl(p->fd, F_GETFL, 0);
@@ -259,10 +278,10 @@ static void https_hs_complete(https_hs_pending_t *p) {
 }
 
 static void *https_hs_shepherd(void *arg) {
-    (void)arg;
+    https_hs_shard_t *sh = (https_hs_shard_t *)arg;
     struct epoll_event events[512];
-    while (g_hs_running) {
-        int n = epoll_wait(g_hs_epoll_fd, events, 512, 500);
+    while (sh->running) {
+        int n = epoll_wait(sh->epoll_fd, events, 512, 500);
         if (n < 0) {
             if (errno == EINTR) continue;
             break;
@@ -272,134 +291,102 @@ static void *https_hs_shepherd(void *arg) {
             if (events[i].data.ptr == NULL) {
                 /* wakeup pipe: drain so writers never block */
                 char drain[256];
-                while (read(g_hs_wakeup_rd, drain, sizeof(drain)) > 0) { /* discard */ }
+                while (read(sh->wakeup_rd, drain, sizeof(drain)) > 0) { /* discard */ }
                 continue;
             }
             https_hs_pending_t *p = events[i].data.ptr;
 
             /* Detach from the list first: every event path below either
              * re-arms (re-add) or finishes with p freed. */
-            pthread_mutex_lock(&g_hs_lock);
-            https_hs_pending_t *prev = NULL, *cur = g_hs_head;
+            pthread_mutex_lock(&sh->lock);
+            https_hs_pending_t *prev = NULL, *cur = sh->head;
             bool found = false;
             while (cur) {
-                if (cur == p) { https_hs_forget_locked(prev, cur); found = true; break; }
+                if (cur == p) { https_hs_forget_locked(sh, prev, cur); found = true; break; }
                 prev = cur; cur = cur->next;
             }
-            pthread_mutex_unlock(&g_hs_lock);
+            pthread_mutex_unlock(&sh->lock);
             if (!found) continue; /* already reaped by the sweeper */
 
             int rc = SSL_accept(p->ssl);
             if (rc > 0) {
-                https_hs_complete(p);
+                https_hs_complete(sh, p);
                 continue;
             }
             int ssl_err = SSL_get_error(p->ssl, rc);
             if ((ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) &&
                 now < p->deadline_ms) {
+                /* The deadline bounds *stall*, not queueing: every completed
+                 * event round means the client is alive and the handshake is
+                 * progressing, so refresh the budget.  Under C100k-scale
+                 * bursts a fixed from-accept deadline was consumed by queue
+                 * delay alone and healthy handshakes were swept en masse. */
+                p->deadline_ms = now + CWIST_HTTPS_HANDSHAKE_TIMEOUT_MS;
                 struct epoll_event ev = {
                     .events = (ssl_err == SSL_ERROR_WANT_WRITE ? EPOLLOUT : EPOLLIN) | EPOLLRDHUP,
                     .data.ptr = p,
                 };
-                pthread_mutex_lock(&g_hs_lock);
-                p->next = g_hs_head;
-                g_hs_head = p;
-                atomic_fetch_add_explicit(&g_hs_pending_count, 1, memory_order_release);
-                pthread_mutex_unlock(&g_hs_lock);
-                if (epoll_ctl(g_hs_epoll_fd, EPOLL_CTL_MOD, p->fd, &ev) != 0 &&
-                    epoll_ctl(g_hs_epoll_fd, EPOLL_CTL_ADD, p->fd, &ev) != 0) {
-                    pthread_mutex_lock(&g_hs_lock);
-                    prev = NULL; cur = g_hs_head;
+                pthread_mutex_lock(&sh->lock);
+                p->next = sh->head;
+                sh->head = p;
+                atomic_fetch_add_explicit(&sh->pending, 1, memory_order_release);
+                pthread_mutex_unlock(&sh->lock);
+                if (epoll_ctl(sh->epoll_fd, EPOLL_CTL_MOD, p->fd, &ev) != 0 &&
+                    epoll_ctl(sh->epoll_fd, EPOLL_CTL_ADD, p->fd, &ev) != 0) {
+                    pthread_mutex_lock(&sh->lock);
+                    prev = NULL; cur = sh->head;
                     while (cur) {
-                        if (cur == p) { https_hs_forget_locked(prev, cur); break; }
+                        if (cur == p) { https_hs_forget_locked(sh, prev, cur); break; }
                         prev = cur; cur = cur->next;
                     }
-                    pthread_mutex_unlock(&g_hs_lock);
-                    https_hs_abort(p);
+                    pthread_mutex_unlock(&sh->lock);
+                    https_hs_abort(sh, p);
                 }
                 continue;
             }
-            https_hs_abort(p); /* hard failure or deadline exceeded */
+            https_hs_abort(sh, p); /* hard failure or deadline exceeded */
         }
 
         /* Sweep expired handshakes that never became readable. */
         uint64_t sweep_now = cwist_https_now_ms();
-        pthread_mutex_lock(&g_hs_lock);
-        https_hs_pending_t *prev = NULL, *cur = g_hs_head;
+        pthread_mutex_lock(&sh->lock);
+        https_hs_pending_t *prev = NULL, *cur = sh->head;
         while (cur) {
             https_hs_pending_t *next = cur->next;
             if (sweep_now >= cur->deadline_ms) {
-                https_hs_forget_locked(prev, cur);
-                pthread_mutex_unlock(&g_hs_lock);
-                https_hs_abort(cur);
-                pthread_mutex_lock(&g_hs_lock);
-                cur = prev ? prev->next : g_hs_head;
+                https_hs_forget_locked(sh, prev, cur);
+                pthread_mutex_unlock(&sh->lock);
+                https_hs_abort(sh, cur);
+                pthread_mutex_lock(&sh->lock);
+                cur = prev ? prev->next : sh->head;
                 continue;
             }
             prev = cur;
             cur = next;
         }
-        pthread_mutex_unlock(&g_hs_lock);
+        pthread_mutex_unlock(&sh->lock);
     }
     return NULL;
 }
 
-int https_hs_shepherd_start(void) {
-    pthread_mutex_lock(&g_hs_lock);
-    if (g_hs_running) {
-        pthread_mutex_unlock(&g_hs_lock);
-        return 0;
-    }
-    g_hs_epoll_fd = epoll_create1(0);
-    if (g_hs_epoll_fd < 0) {
-        pthread_mutex_unlock(&g_hs_lock);
-        return -1;
-    }
-    int pfd[2];
-    if (pipe(pfd) != 0) {
-        close(g_hs_epoll_fd);
-        g_hs_epoll_fd = -1;
-        pthread_mutex_unlock(&g_hs_lock);
-        return -1;
-    }
-    g_hs_wakeup_rd = pfd[0];
-    g_hs_wakeup_wr = pfd[1];
-    fcntl(g_hs_wakeup_rd, F_SETFL, O_NONBLOCK);
-    fcntl(g_hs_wakeup_wr, F_SETFL, O_NONBLOCK);
-    struct epoll_event ev = { .events = EPOLLIN, .data.ptr = NULL };
-    epoll_ctl(g_hs_epoll_fd, EPOLL_CTL_ADD, g_hs_wakeup_rd, &ev);
-    g_hs_running = true;
-    if (pthread_create(&g_hs_thread, NULL, https_hs_shepherd, NULL) != 0) {
-        g_hs_running = false;
-        close(g_hs_wakeup_rd);
-        close(g_hs_wakeup_wr);
-        close(g_hs_epoll_fd);
-        g_hs_epoll_fd = -1;
-        pthread_mutex_unlock(&g_hs_lock);
-        return -1;
-    }
-    pthread_mutex_unlock(&g_hs_lock);
-    return 0;
-}
-
-void https_hs_shepherd_stop(void) {
-    pthread_mutex_lock(&g_hs_lock);
-    if (!g_hs_running) {
-        pthread_mutex_unlock(&g_hs_lock);
+static void https_hs_shard_stop(https_hs_shard_t *sh) {
+    pthread_mutex_lock(&sh->lock);
+    if (!sh->running) {
+        pthread_mutex_unlock(&sh->lock);
         return;
     }
-    g_hs_running = false;
-    if (g_hs_wakeup_wr >= 0) {
+    sh->running = false;
+    if (sh->wakeup_wr >= 0) {
         char b = 1;
-        if (write(g_hs_wakeup_wr, &b, 1) < 0) { /* shutdown path */ }
+        if (write(sh->wakeup_wr, &b, 1) < 0) { /* shutdown path */ }
     }
-    pthread_mutex_unlock(&g_hs_lock);
-    pthread_join(g_hs_thread, NULL);
+    pthread_mutex_unlock(&sh->lock);
+    pthread_join(sh->thread, NULL);
 
-    pthread_mutex_lock(&g_hs_lock);
-    https_hs_pending_t *cur = g_hs_head;
-    g_hs_head = NULL;
-    pthread_mutex_unlock(&g_hs_lock);
+    pthread_mutex_lock(&sh->lock);
+    https_hs_pending_t *cur = sh->head;
+    sh->head = NULL;
+    pthread_mutex_unlock(&sh->lock);
     while (cur) {
         https_hs_pending_t *next = cur->next;
         SSL_free(cur->ssl);
@@ -407,15 +394,86 @@ void https_hs_shepherd_stop(void) {
         cwist_free(cur);
         cur = next;
     }
-    if (g_hs_epoll_fd >= 0) close(g_hs_epoll_fd);
-    if (g_hs_wakeup_rd >= 0) close(g_hs_wakeup_rd);
-    if (g_hs_wakeup_wr >= 0) close(g_hs_wakeup_wr);
-    g_hs_epoll_fd = -1;
-    g_hs_wakeup_rd = g_hs_wakeup_wr = -1;
+    if (sh->epoll_fd >= 0) close(sh->epoll_fd);
+    if (sh->wakeup_rd >= 0) close(sh->wakeup_rd);
+    if (sh->wakeup_wr >= 0) close(sh->wakeup_wr);
+    sh->epoll_fd = -1;
+    sh->wakeup_rd = sh->wakeup_wr = -1;
+}
+
+int https_hs_shepherd_start(void) {
+    pthread_mutex_lock(&g_hs_start_lock);
+    if (g_hs_shard_count > 0) {
+        pthread_mutex_unlock(&g_hs_start_lock);
+        return 0;
+    }
+    /* Spread handshakes across as many shepherd threads as this process has
+     * request workers (bounded), matching the parallelism of the legacy
+     * blocking pool path without parking request workers on handshakes. */
+    long want = get_optimal_thread_count();
+    if (want < 2) want = 2;
+    if (want > CWIST_HTTPS_HS_MAX_SHARDS) want = CWIST_HTTPS_HS_MAX_SHARDS;
+
+    long started = 0;
+    for (long i = 0; i < want; i++) {
+        https_hs_shard_t *sh = &g_hs_shards[i];
+        memset(sh, 0, sizeof(*sh));
+        sh->epoll_fd = -1;
+        sh->wakeup_rd = sh->wakeup_wr = -1;
+        pthread_mutex_init(&sh->lock, NULL);
+        atomic_init(&sh->pending, 0);
+
+        sh->epoll_fd = epoll_create1(0);
+        if (sh->epoll_fd < 0) break;
+        int pfd[2];
+        if (pipe(pfd) != 0) {
+            close(sh->epoll_fd);
+            sh->epoll_fd = -1;
+            break;
+        }
+        sh->wakeup_rd = pfd[0];
+        sh->wakeup_wr = pfd[1];
+        fcntl(sh->wakeup_rd, F_SETFL, O_NONBLOCK);
+        fcntl(sh->wakeup_wr, F_SETFL, O_NONBLOCK);
+        struct epoll_event ev = { .events = EPOLLIN, .data.ptr = NULL };
+        epoll_ctl(sh->epoll_fd, EPOLL_CTL_ADD, sh->wakeup_rd, &ev);
+        sh->running = true;
+        if (pthread_create(&sh->thread, NULL, https_hs_shepherd, sh) != 0) {
+            sh->running = false;
+            close(sh->wakeup_rd);
+            close(sh->wakeup_wr);
+            close(sh->epoll_fd);
+            sh->epoll_fd = -1;
+            sh->wakeup_rd = sh->wakeup_wr = -1;
+            break;
+        }
+        started++;
+    }
+    if (started == 0) {
+        pthread_mutex_unlock(&g_hs_start_lock);
+        return -1;
+    }
+    g_hs_shard_count = started;
+    pthread_mutex_unlock(&g_hs_start_lock);
+    return 0;
+}
+
+void https_hs_shepherd_stop(void) {
+    pthread_mutex_lock(&g_hs_start_lock);
+    long count = g_hs_shard_count;
+    g_hs_shard_count = 0;
+    pthread_mutex_unlock(&g_hs_start_lock);
+    for (long i = 0; i < count; i++) {
+        https_hs_shard_stop(&g_hs_shards[i]);
+    }
 }
 
 long cwist_https_pending_handshakes(void) {
-    return atomic_load_explicit(&g_hs_pending_count, memory_order_acquire);
+    long total = 0;
+    for (long i = 0; i < g_hs_shard_count; i++) {
+        total += atomic_load_explicit(&g_hs_shards[i].pending, memory_order_acquire);
+    }
+    return total;
 }
 
 /**
@@ -476,19 +534,20 @@ void cwist_https_dispatch(int client_fd, cwist_https_context *ctx, void (*handle
         .events = (ssl_err == SSL_ERROR_WANT_WRITE ? EPOLLOUT : EPOLLIN) | EPOLLRDHUP,
         .data.ptr = p,
     };
-    pthread_mutex_lock(&g_hs_lock);
-    p->next = g_hs_head;
-    g_hs_head = p;
-    atomic_fetch_add_explicit(&g_hs_pending_count, 1, memory_order_release);
-    pthread_mutex_unlock(&g_hs_lock);
-    if (epoll_ctl(g_hs_epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) != 0) {
-        pthread_mutex_lock(&g_hs_lock);
-        https_hs_pending_t *prev = NULL, *cur = g_hs_head;
+    https_hs_shard_t *sh = &g_hs_shards[(unsigned)client_fd % (unsigned long)g_hs_shard_count];
+    pthread_mutex_lock(&sh->lock);
+    p->next = sh->head;
+    sh->head = p;
+    atomic_fetch_add_explicit(&sh->pending, 1, memory_order_release);
+    pthread_mutex_unlock(&sh->lock);
+    if (epoll_ctl(sh->epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) != 0) {
+        pthread_mutex_lock(&sh->lock);
+        https_hs_pending_t *prev = NULL, *cur = sh->head;
         while (cur) {
-            if (cur == p) { https_hs_forget_locked(prev, cur); break; }
+            if (cur == p) { https_hs_forget_locked(sh, prev, cur); break; }
             prev = cur; cur = cur->next;
         }
-        pthread_mutex_unlock(&g_hs_lock);
+        pthread_mutex_unlock(&sh->lock);
         SSL_free(ssl);
         close(client_fd);
         cwist_free(p);
@@ -496,7 +555,7 @@ void cwist_https_dispatch(int client_fd, cwist_https_context *ctx, void (*handle
     }
     /* Wake the shepherd so near-expiry deadlines are honored promptly. */
     char b = 1;
-    if (write(g_hs_wakeup_wr, &b, 1) < 0) { /* non-fatal */ }
+    if (write(sh->wakeup_wr, &b, 1) < 0) { /* non-fatal */ }
 }
 
 #else /* !__linux__ */
