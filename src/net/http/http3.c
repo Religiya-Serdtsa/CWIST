@@ -16,6 +16,7 @@
 #endif
 #include <cwist/net/http/http3.h>
 #include <cwist/net/http/http2.h>
+#include <cwist/core/log.h>
 #include <cwist/core/mem/alloc.h>
 #include <cwist/core/seq/seq.h>
 #include <cwist/sys/err/cwist_err.h>
@@ -979,6 +980,14 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             st->res = cwist_http_response_create();
             if (st->res) {
                 st->res->status_code = CWIST_HTTP_BAD_REQUEST;
+                if (st->res->body) {
+                    cwist_sstring_assign(st->res->body,
+                        "{\"error\":\"malformed request\"}");
+                }
+                if (st->res->headers) {
+                    cwist_http_header_add(&st->res->headers,
+                                          "Content-Type", "application/json");
+                }
             }
             st->response_ready = 1;
             lsquic_stream_wantread(stream, 0);
@@ -997,6 +1006,12 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                 if (st->res) {
                     st->res->status_code = CWIST_HTTP_BAD_REQUEST;
                     cwist_http_header_add(&st->res->headers, "x-cwist-retry", "1");
+                    if (st->res->body) {
+                        cwist_sstring_assign(st->res->body,
+                            "{\"error\":\"incomplete sequenced body, retry\"}");
+                    }
+                    cwist_http_header_add(&st->res->headers,
+                                          "Content-Type", "application/json");
                 }
                 st->response_ready = 1;
                 lsquic_stream_wantread(stream, 0);
@@ -1004,14 +1019,24 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                 lsquic_stream_wantwrite(stream, 1);
                 return;
             }
-            st->body = realloc(st->body, assembled_len);
-            if (!st->body) {
-                lsquic_stream_close(stream);
-                return;
+            if (assembled_len == 0) {
+                /* realloc(p, 0) may legally return NULL; do not mistake an
+                 * empty assembled body for an allocation failure (which used
+                 * to reset the stream instead of dispatching the request). */
+                free(st->body);
+                st->body = NULL;
+                st->body_len = 0;
+                st->body_cap = 0;
+            } else {
+                st->body = realloc(st->body, assembled_len);
+                if (!st->body) {
+                    lsquic_stream_close(stream);
+                    return;
+                }
+                memcpy(st->body, assembled, assembled_len);
+                st->body_len = assembled_len;
+                st->body_cap = assembled_len;
             }
-            memcpy(st->body, assembled, assembled_len);
-            st->body_len = assembled_len;
-            st->body_cap = assembled_len;
         }
 
         if (st->body_len > 0 && st->req && st->req->body) {
@@ -1046,6 +1071,18 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                     lsquic_stream_shutdown(stream, 0);
                     lsquic_stream_wantwrite(stream, 0);
                     return;
+                }
+                /* Accept failed: falling through with the default 200/empty
+                 * response used to send the client a silent 0-byte body. */
+                CWIST_LOG_WARN("[HTTP/3] WebTransport accept failed; answering 500");
+                st->res->status_code = CWIST_HTTP_INTERNAL_ERROR;
+                if (st->res->body && st->res->body->size == 0) {
+                    cwist_sstring_assign(st->res->body,
+                        "{\"error\":\"webtransport accept failed\"}");
+                }
+                if (st->res->headers) {
+                    cwist_http_header_add(&st->res->headers,
+                                          "Content-Type", "application/json");
                 }
             } else
 #endif
@@ -1115,8 +1152,36 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         bool bodyless = h3_status_forbids_body(st->res->status_code);
         bool is_head = st->req && st->req->method == CWIST_HTTP_HEAD;
 
+        /* Handler attached a body source that cannot produce bytes
+         * (NULL pointer body / invalid file fd with a non-zero length).
+         * Sending HEADERS would announce (or imply) a body we cannot
+         * deliver; close the stream so the client sees an explicit error
+         * instead of a silent empty 200. */
+        if (!bodyless && !is_head &&
+            ((st->res->is_ptr_body && !st->res->ptr_body &&
+              st->res->ptr_body_len > 0) ||
+             (st->res->use_file_stream && st->res->file_stream_fd < 0 &&
+              st->res->file_stream_len > 0))) {
+            CWIST_LOG_WARN("[HTTP/3] unusable response body source; resetting stream");
+            lsquic_stream_close(stream);
+            return;
+        }
+
         /* :status */
-        int status_code = (st->res->status_code > 0) ? st->res->status_code : 200;
+        if (st->res->status_code <= 0) {
+            /* A handler that leaves the status unset/invalid must not emit
+             * "200" for what is almost certainly a failed request. */
+            CWIST_LOG_WARN("[HTTP/3] invalid status %d; coercing to 500",
+                           st->res->status_code);
+            st->res->status_code = CWIST_HTTP_INTERNAL_ERROR;
+            bodyless = false;
+            if (!is_head && st->res->body && st->res->body->size == 0 &&
+                !st->res->is_ptr_body && !st->res->use_file_stream) {
+                cwist_sstring_assign(st->res->body,
+                    "{\"error\":\"internal server error\"}");
+            }
+        }
+        int status_code = st->res->status_code;
         char status_str[16];
         snprintf(status_str, sizeof(status_str), "%d", status_code);
         size_t slen = strlen(status_str);
@@ -1143,9 +1208,12 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         if (!bodyless && (body_len > 0 || is_head) && hdr_count < H3_MAX_RESPONSE_HEADERS) {
             /* For HEAD, content-length describes the would-be GET body: keep
              * the handler-provided value when present (e.g. static file size
-             * with an empty body), otherwise compute it like a GET. */
+             * with an empty body), otherwise compute it like a GET.  For all
+             * other methods the computed body length is authoritative: it is
+             * exactly what the write path below will send, so trusting a
+             * divergent handler value would announce bytes never delivered. */
             char cl_str[32];
-            const char *cl_val = user_cl;
+            const char *cl_val = (is_head && user_cl) ? user_cl : NULL;
             if (!cl_val) {
                 snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
                 cl_val = cl_str;
@@ -1228,6 +1296,14 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                 }
             }
             node = node->next;
+        }
+
+        if (status_code == CWIST_HTTP_OK && !bodyless && !is_head &&
+            body_len == 0) {
+            /* Legal per RFC 9110, but a 200 with no body and no
+             * content-length usually means a handler forgot to assign one;
+             * make it diagnosable in the logs. */
+            CWIST_LOG_WARN("[HTTP/3] handler produced 200 with empty body");
         }
 
         size_t initial_body_len = 0;
