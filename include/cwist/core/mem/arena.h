@@ -13,8 +13,11 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/** @brief Default capacity of one arena generation buffer. */
-#define CWIST_ARENA_DEFAULT_GENERATION_BYTES (32 * 1024)
+/** @brief Default capacity of one arena generation buffer.
+ *  A full HTTP/1.1 request+response pair (headers, query map, bodies,
+ *  default security headers) bump-allocates ~3.5KB; spills fall back to
+ *  the heap, so this only needs to cover the common case. */
+#define CWIST_ARENA_DEFAULT_GENERATION_BYTES (8 * 1024)
 
 typedef struct cwist_arena cwist_arena_t;
 

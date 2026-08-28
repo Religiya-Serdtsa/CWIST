@@ -96,6 +96,8 @@ typedef struct cwist_http_request {
     cwist_http_header_node *headers;
     cwist_sstring *body;
     bool keep_alive;
+    bool te_chunked_seen;  ///< Parser saw and validated Transfer-Encoding: chunked (HTTP/1.1).
+    bool expect_100_seen;  ///< Parser saw and validated Expect: 100-continue (HTTP/1.1).
     int client_fd;
     struct cwist_app *app;  ///< Owning app context (if any).
     cwist_db *db;           ///< Shared database handle from cwist_app.
@@ -145,6 +147,7 @@ typedef struct cwist_http_response {
     char *alt_svc;
 
     void *arena;            ///< Per-response arena for bump-allocated structs (internal).
+    bool arena_borrowed;    ///< True when arena is shared (e.g. the request's) and must not be destroyed here.
 } cwist_http_response;
 
 /** --- API Functions --- */
@@ -181,6 +184,13 @@ time_t cwist_http_parse_date(const char *str);
 /** @name Response Lifecycle */
 /** @{ */
 cwist_http_response *cwist_http_response_create(void);
+/**
+ * @brief Create a response inside an existing (request) arena.
+ * The response is bump-allocated from @p arena and shares its lifetime:
+ * cwist_http_response_destroy releases body/header resources but leaves the
+ * arena itself to the owner. @p arena must outlive the response.
+ */
+cwist_http_response *cwist_http_response_create_in_arena(void *arena);
 void cwist_http_response_destroy(cwist_http_response *res);
 
 /**
