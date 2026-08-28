@@ -2113,7 +2113,7 @@ static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
         req->app = app;
         req->db = app->db;
 
-        cwist_http_response *res = cwist_http_response_create();
+        cwist_http_response *res = cwist_http_response_create_in_arena(req->arena);
         if (!res) {
             cwist_http_request_destroy(req);
             return;
@@ -2195,7 +2195,9 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
     }
     // -----------------------------
 
-    cwist_http_response *res = cwist_http_response_create();
+    /* Share the request arena: saves one arena create/destroy per request and
+     * the response is always destroyed just before the request below. */
+    cwist_http_response *res = cwist_http_response_create_in_arena(req->arena);
     if (!res) {
         cwist_http_request_destroy(req);
         return false;
