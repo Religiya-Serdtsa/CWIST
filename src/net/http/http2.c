@@ -1798,7 +1798,18 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
                                  int fd, off_t offset, size_t body_len,
                                  uint32_t max_frame_size) {
     uint16_t chunk_payload = h2_seq_chunk_payload(hc, s, max_frame_size);
-    if (chunk_payload == 0 || body_len == 0) return -1;
+    while (chunk_payload == 0 && body_len > 0) {
+        /* Window exhausted below one sequenced chunk: the HEADERS block is
+         * already on the wire, so failing here tears down the connection
+         * and the client sees a 0-byte body.  Wait for WINDOW_UPDATE. */
+        if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
+        if (s && s->send_aborted) return -1;
+        if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
+        struct timespec ts = {0, 2000000};
+        nanosleep(&ts, NULL);
+        chunk_payload = h2_seq_chunk_payload(hc, s, max_frame_size);
+    }
+    if (body_len == 0) return -1;
 
     uint32_t total_chunks = (uint32_t)((body_len + chunk_payload - 1) / chunk_payload);
     size_t remaining = body_len;
@@ -1855,7 +1866,17 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
                                    const uint8_t *body_data, size_t body_len,
                                    uint32_t max_frame_size) {
     uint16_t chunk_payload = h2_seq_chunk_payload(hc, s, max_frame_size);
-    if (chunk_payload == 0) return -1;
+    while (chunk_payload == 0) {
+        /* Window exhausted below one sequenced chunk: the HEADERS block is
+         * already on the wire, so failing here tears down the connection
+         * and the client sees a 0-byte body.  Wait for WINDOW_UPDATE. */
+        if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
+        if (s && s->send_aborted) return -1;
+        if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
+        struct timespec ts = {0, 2000000};
+        nanosleep(&ts, NULL);
+        chunk_payload = h2_seq_chunk_payload(hc, s, max_frame_size);
+    }
 
     cwist_seq_message_t msg;
     if (!cwist_seq_split(body_data, body_len, chunk_payload, &msg)) return -1;
