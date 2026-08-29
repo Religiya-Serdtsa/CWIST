@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     /* The bundled server sample uses a self-signed development certificate. */
-    cwist_http3_client_set_ca_bundle(client, NULL);
+    cwist_http3_client_set_insecure(client, 1);
 
     cwist_webtransport_client_session *session = NULL;
     cwist_error_t result = cwist_http3_client_webtransport_connect(

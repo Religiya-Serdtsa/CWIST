@@ -264,7 +264,14 @@ static lsquic_conn_ctx_t *h3c_on_new_conn(void *stream_if_ctx,
 }
 
 static void h3c_on_conn_closed(lsquic_conn_t *conn) {
-    (void)conn;
+    /* The engine destroys the connection after this callback; drop our
+     * cached pointer so a later request never dereferences freed memory
+     * (e.g. after a certificate verification failure). */
+    cwist_http3_client *client =
+        (cwist_http3_client *)lsquic_conn_get_ctx(conn);
+    if (client && client->conn == conn) {
+        client->conn = NULL;
+    }
 }
 
 static lsquic_stream_ctx_t *h3c_on_new_stream(void *stream_if_ctx,
@@ -653,6 +660,17 @@ static void h3c_process_io(cwist_http3_client *client, int timeout_ms) {
 }
 
 /* ------------------------------------------------------------------ */
+/* SSL context callback: hand lsquic the client SSL_CTX so the        */
+/* handshake honors its trust store and verify mode.                  */
+/* ------------------------------------------------------------------ */
+
+static SSL_CTX *h3c_get_ssl_ctx(void *peer_ctx, const struct sockaddr *local) {
+    (void)local;
+    cwist_http3_client *client = peer_ctx;
+    return client ? client->ssl_ctx : NULL;
+}
+
+/* ------------------------------------------------------------------ */
 /* Client API                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -684,6 +702,10 @@ cwist_http3_client *cwist_http3_client_create(void) {
 
     SSL_CTX_set_min_proto_version(client->ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(client->ssl_ctx, TLS1_3_VERSION);
+    /* Secure default: verify the peer certificate chain and hostname
+     * (SNI set by lsquic also feeds BoringSSL's X509_VERIFY_PARAM host
+     * check).  cwist_http3_client_set_insecure() opts out explicitly. */
+    SSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_PEER, NULL);
     SSL_CTX_set_default_verify_paths(client->ssl_ctx);
 
     struct lsquic_engine_settings settings;
@@ -719,6 +741,7 @@ cwist_http3_client *cwist_http3_client_create(void) {
         .ea_stream_if_ctx    = client,
         .ea_packets_out      = h3c_packets_out,
         .ea_packets_out_ctx  = client,
+        .ea_get_ssl_ctx      = h3c_get_ssl_ctx,
         .ea_hsi_if           = &h3c_hset_if,
         .ea_hsi_ctx          = NULL,
         .ea_settings         = &settings,
@@ -774,13 +797,20 @@ int cwist_http3_client_set_server(cwist_http3_client *client,
 int cwist_http3_client_set_ca_bundle(cwist_http3_client *client,
                                      const char *ca_path) {
     if (!client || !client->ssl_ctx) return -1;
+    /* Verification stays on either way; this only selects the trust store. */
     if (ca_path) {
         if (SSL_CTX_load_verify_locations(client->ssl_ctx, ca_path, NULL) != 1)
             return -1;
     } else {
-        SSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_NONE, NULL);
+        SSL_CTX_set_default_verify_paths(client->ssl_ctx);
     }
     return 0;
+}
+
+void cwist_http3_client_set_insecure(cwist_http3_client *client, int enabled) {
+    if (!client || !client->ssl_ctx) return;
+    SSL_CTX_set_verify(client->ssl_ctx,
+                       enabled ? SSL_VERIFY_NONE : SSL_VERIFY_PEER, NULL);
 }
 
 void cwist_http3_client_set_timeout_ms(cwist_http3_client *client,
@@ -912,6 +942,22 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
             pthread_mutex_lock(&client->mtx);
             st = client->active_stream;
             pthread_mutex_unlock(&client->mtx);
+            if (st) break;
+            /* Fail fast when the handshake is dead (e.g. certificate
+             * verification failure) instead of waiting out the timeout.
+             * h3c_on_conn_closed() NULLs client->conn once the engine
+             * tears the connection down. */
+            if (!client->conn) break;
+            enum LSQUIC_CONN_STATUS cst =
+                lsquic_conn_status(client->conn, NULL, 0);
+            if (cst == LSCONN_ST_HSK_FAILURE || cst == LSCONN_ST_ERROR ||
+                cst == LSCONN_ST_CLOSED || cst == LSCONN_ST_TIMED_OUT ||
+                cst == LSCONN_ST_RESET) {
+                /* The engine owns and may already have destroyed the failed
+                 * connection; drop our pointer before the next attempt. */
+                client->conn = NULL;
+                break;
+            }
             struct timespec now;
             clock_gettime(CLOCK_REALTIME, &now);
             if (now.tv_sec > stream_deadline.tv_sec ||
