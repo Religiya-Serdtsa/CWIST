@@ -951,8 +951,27 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         }
         size_t need = st->body_len + (size_t)nread;
         if (need > CWIST_HTTP_MAX_BODY_SIZE) {
-            /* Body too large: abort stream */
-            lsquic_stream_close(stream);
+            /* Body too large: answer 413 with a small JSON body instead of a
+             * bare stream close, so the client sees an explicit status
+             * (RFC 9110 Section 15.5.14). */
+            if (!st->res) st->res = cwist_http_response_create();
+            if (st->res) {
+                st->res->status_code = 413; /* Payload Too Large */
+                if (st->res->body) {
+                    cwist_sstring_assign(st->res->body,
+                        "{\"error\":\"payload too large\"}");
+                }
+                if (st->res->headers) {
+                    cwist_http_header_add(&st->res->headers,
+                                          "Content-Type", "application/json");
+                }
+                st->response_ready = 1;
+                lsquic_stream_wantread(stream, 0);
+                lsquic_stream_shutdown(stream, 0);
+                lsquic_stream_wantwrite(stream, 1);
+            } else {
+                lsquic_stream_close(stream);
+            }
             return;
         }
         if (need > st->body_cap) {
@@ -1126,7 +1145,18 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 }
 
-/* RFC 9114 §4.1.2: 1xx/204/304 responses carry no content, and
+/* RFC 9110 Section 8.6: content-length must be a non-empty run of digits.
+ * Anything else from a handler (whitespace, junk, negative, empty) is
+ * rejected rather than forwarded into the response headers. */
+static bool h3_content_length_is_valid(const char *cl) {
+    if (!cl || cl[0] < '0' || cl[0] > '9') return false;
+    for (const char *p = cl + 1; *p; ++p) {
+        if (*p < '0' || *p > '9') return false;
+    }
+    return true;
+}
+
+/* RFC 9114 Section 4.1.2: 1xx/204/304 responses carry no content, and
  * content-length on them makes the message malformed at connection level. */
 static bool h3_status_forbids_body(int status_code) {
     return (status_code >= 100 && status_code < 200) ||
@@ -1168,9 +1198,13 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         }
 
         /* :status */
-        if (st->res->status_code <= 0) {
-            /* A handler that leaves the status unset/invalid must not emit
-             * "200" for what is almost certainly a failed request. */
+        if (st->res->status_code < 200 || st->res->status_code > 999) {
+            /* RFC 9110 Section 15: a final response needs a status in
+             * 200-999 (RFC 9114 Section 4.1.2 requires three digits).
+             * A handler that leaves the status unset, picks 1xx (an
+             * interim response, illegal as the complete answer), or an
+             * out-of-range value gets coerced to 500 instead of putting
+             * a malformed :status on the wire. */
             CWIST_LOG_WARN("[HTTP/3] invalid status %d; coercing to 500",
                            st->res->status_code);
             st->res->status_code = CWIST_HTTP_INTERNAL_ERROR;
@@ -1213,7 +1247,17 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
              * exactly what the write path below will send, so trusting a
              * divergent handler value would announce bytes never delivered. */
             char cl_str[32];
-            const char *cl_val = (is_head && user_cl) ? user_cl : NULL;
+            const char *cl_val = NULL;
+            if (is_head && user_cl) {
+                if (h3_content_length_is_valid(user_cl)) {
+                    cl_val = user_cl;
+                } else {
+                    /* Malformed handler content-length must not reach the
+                     * wire; fall back to the computed body length. */
+                    CWIST_LOG_WARN("[HTTP/3] dropping invalid HEAD content-length '%s'",
+                                   user_cl);
+                }
+            }
             if (!cl_val) {
                 snprintf(cl_str, sizeof(cl_str), "%zu", body_len);
                 cl_val = cl_str;
@@ -1901,9 +1945,26 @@ cwist_error_t cwist_http3_init_context_ephemeral(cwist_http3_context **ctx) {
     return err;
 }
 
+/* Graceful shutdown: send GOAWAY on every live connection (and stop
+ * accepting new ones), then give the engine one chance to flush the queued
+ * packets before teardown.  lsquic_engine_cooldown() marks full
+ * connections going away (GOAWAY per RFC 9114 Section 5.2); the ensuing
+ * lsquic_engine_destroy() closes them with CONNECTION_CLOSE/H3_NO_ERROR
+ * instead of leaving clients hanging on silence. */
+static void cwist_h3_engine_graceful_stop(cwist_http3_context *ctx) {
+    lsquic_engine_t *engine = (lsquic_engine_t *)ctx->engine;
+    if (!engine) return;
+    lsquic_engine_cooldown(engine);
+    lsquic_engine_process_conns(engine);
+    if (ctx->udp_fd >= 0 && lsquic_engine_has_unsent_packets(engine)) {
+        lsquic_engine_send_unsent_packets(engine);
+    }
+}
+
 void cwist_http3_destroy_context(cwist_http3_context *ctx) {
     if (ctx) {
         if (ctx->engine) {
+            cwist_h3_engine_graceful_stop(ctx);
             lsquic_engine_destroy((lsquic_engine_t *)ctx->engine);
             ctx->engine = NULL;
         }
@@ -1938,10 +1999,18 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     settings.es_max_delayed_0rtt_packets = 32;
     settings.es_datagrams = ctx->datagram_enabled;
 #ifdef CWIST_WEBTRANSPORT
-    settings.es_http_datagrams = ctx->datagram_enabled || ctx->wt_handler != NULL;
-    if (settings.es_webtransport) {
+    if (ctx->wt_handler) {
+        /* Required lsquic settings for WebTransport (see DEV_LSQUIC.md).
+         * RFC 9297 Section 3.1: H3_DATAGRAM is only meaningful when the
+         * QUIC DATAGRAM transport parameter is also sent, so enabling
+         * WebTransport (or H3 datagrams) must force es_datagrams on. */
+        settings.es_webtransport = 1;
+        settings.es_http_datagrams = 1;
+        settings.es_datagrams = 1;
         settings.es_max_webtransport_sessions = 1;
         settings.es_reset_stream_at = 1;
+    } else {
+        settings.es_http_datagrams = ctx->datagram_enabled;
     }
 #endif
     settings.es_max_cfcw = 16 * 1024 * 1024;
@@ -1972,11 +2041,17 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
         return err;
     }
 
+    /* ea_packets_out_ctx points at ctx->udp_fd (not the udp_fd local) so the
+     * pointer stays valid for the graceful-shutdown flush in
+     * cwist_http3_destroy_context(), which may run after this function's
+     * frame is gone. */
+    ctx->udp_fd = udp_fd;
+
     struct lsquic_engine_api api = {
         .ea_stream_if        = &cwist_h3_stream_if,
         .ea_stream_if_ctx    = ctx,
         .ea_packets_out      = cwist_h3_packets_out,
-        .ea_packets_out_ctx  = &udp_fd,
+        .ea_packets_out_ctx  = &ctx->udp_fd,
         .ea_get_ssl_ctx      = cwist_h3_get_ssl_ctx,
         .ea_hsi_if           = &cwist_h3_hset_if,
         .ea_hsi_ctx          = NULL,
@@ -1991,7 +2066,6 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     }
 
     ctx->engine = engine;
-    ctx->udp_fd = udp_fd;
     ctx->handler = handler;
     ctx->user_ctx = user_ctx;
     ctx->running = 1;
@@ -2303,6 +2377,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 
     free(pkt_buf);
     if (ctx && ctx->engine) {
+        cwist_h3_engine_graceful_stop(ctx);
         lsquic_engine_destroy((lsquic_engine_t *)ctx->engine);
         ctx->engine = NULL;
     }
