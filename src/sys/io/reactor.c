@@ -46,6 +46,12 @@ static inline int sys_io_uring_setup(unsigned entries, struct io_uring_params *p
 static inline int sys_io_uring_enter(int ring_fd, unsigned to_submit, unsigned min_complete, unsigned flags, sigset_t *sig) {
     return (int)syscall(__NR_io_uring_enter, ring_fd, to_submit, min_complete, flags, sig);
 }
+static inline int sys_io_uring_enter_timeout(int ring_fd, unsigned to_submit, unsigned min_complete,
+                                             unsigned flags, const struct __kernel_timespec *ts) {
+    struct io_uring_getevents_arg arg = { .ts = (uint64_t)(uintptr_t)ts };
+    return (int)syscall(__NR_io_uring_enter, ring_fd, to_submit, min_complete,
+                        flags | IORING_ENTER_EXT_ARG, &arg, sizeof(arg));
+}
 
 /* Ring setup helpers absorbed from the retired io_uring_backend.c. */
 static void *mmap_ring(int fd, size_t sz, off_t off) {
@@ -549,11 +555,24 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
         reactor->owner = pthread_self();
         while (reactor->running && atomic_load(&g_cwist_running)) {
             /* One enter per round: submit the re-arms queued by the previous
-             * dispatch batch and wait for the next event in the same call. */
+             * dispatch batch and wait for the next event in the same call.
+             * The wait is bounded (like the epoll path's 100 ms poll) because
+             * the shutdown handler runs with SA_RESTART: an unbounded enter
+             * would be restarted after SIGTERM and hang an idle reactor
+             * forever. */
+            static const struct __kernel_timespec idle_ts = { .tv_sec = 0, .tv_nsec = 100000000 };
             uint32_t to_submit = reactor->sq_unsubmitted;
-            int ret = sys_io_uring_enter(reactor->impl.ring_fd, to_submit, 1, IORING_ENTER_GETEVENTS, NULL);
+            int ret = sys_io_uring_enter_timeout(reactor->impl.ring_fd, to_submit, 1,
+                                                 IORING_ENTER_GETEVENTS, &idle_ts);
             if (ret < 0) {
                 if (errno == EINTR) continue; /* sq_unsubmitted kept, retried */
+                if (errno == ETIME) {
+                    /* Timed out with no completion: the SQEs were already
+                     * submitted before the wait, so drop the stale count
+                     * and re-check the shutdown flags. */
+                    reactor->sq_unsubmitted = 0;
+                    continue;
+                }
                 break;
             }
             reactor->sq_unsubmitted = 0;
