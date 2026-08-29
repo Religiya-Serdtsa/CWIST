@@ -590,6 +590,7 @@ const char *cwist_http_method_to_string(cwist_http_method_t method) {
         case CWIST_HTTP_PATCH: return "PATCH";
         case CWIST_HTTP_HEAD: return "HEAD";
         case CWIST_HTTP_OPTIONS: return "OPTIONS";
+        case CWIST_HTTP_CONNECT: return "CONNECT";
         default: return "UNKNOWN";
     }
 }
