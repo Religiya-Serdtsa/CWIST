@@ -1,4 +1,5 @@
 #include <cwist/net/http/http3.h>
+#include <cwist/net/http/http3_client.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <assert.h>
 #include <stdio.h>
@@ -195,6 +196,83 @@ int main(void) {
     assert(cwist_http3_method_is_idempotent(NULL) == 0);
     assert(cwist_http3_method_is_idempotent("garbage") == 0);
     printf("[PASS] HTTP/3 replay guard method classification.\n");
+
+    /* --- Test 10: RFC 9114 Section 4.3.1 pseudo-header validation over the
+     * wire: a well-formed request is dispatched, an unknown pseudo-header is
+     * rejected with 400 and never reaches the handler. --- */
+    ctx = NULL;
+    err = cwist_http3_init_context_ephemeral(&ctx);
+    assert(err.error.err_i16 == 0);
+
+    udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    assert(udp_fd >= 0);
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(0);
+    assert(bind(udp_fd, (struct sockaddr *)&addr, sizeof(addr)) == 0);
+    socklen_t addr_len = sizeof(addr);
+    assert(getsockname(udp_fd, (struct sockaddr *)&addr, &addr_len) == 0);
+
+    server_thread_args_t args10 = { .udp_fd = udp_fd, .ctx = ctx };
+    rc = pthread_create(&tid, NULL, http3_server_thread, &args10);
+    assert(rc == 0);
+    usleep(50000);
+
+    cwist_http3_client *client = cwist_http3_client_create();
+    assert(client != NULL);
+    assert(cwist_http3_client_set_server(client, "127.0.0.1",
+                                         ntohs(addr.sin_port)) == 0);
+    /* The ephemeral server cert is self-signed: disable verification. */
+    assert(cwist_http3_client_set_ca_bundle(client, NULL) == 0);
+    cwist_http3_client_set_timeout_ms(client, 10000);
+
+    /* Well-formed request: handler runs, 200 comes back. */
+    g_handler_called = 0;
+    cwist_http_response *res = NULL;
+    err = cwist_http3_client_request(client, "/", CWIST_HTTP_GET,
+                                     NULL, NULL, 0, &res);
+    assert(err.error.err_i16 == 0);
+    assert(res != NULL);
+    assert(g_handler_called == 1);
+    assert(res->status_code == 200);
+    cwist_http_response_destroy(res);
+    printf("[PASS] HTTP/3 well-formed request is dispatched (200).\n");
+
+    /* Unknown pseudo-header: malformed, 400, handler must not run. */
+    g_handler_called = 0;
+    cwist_http_header_node *hdrs = NULL;
+    cwist_http_header_add(&hdrs, ":bogus", "1");
+    res = NULL;
+    err = cwist_http3_client_request(client, "/", CWIST_HTTP_GET,
+                                     hdrs, NULL, 0, &res);
+    cwist_http_header_free_all(hdrs);
+    assert(err.error.err_i16 == 0);
+    assert(res != NULL);
+    assert(res->status_code == CWIST_HTTP_BAD_REQUEST);
+    assert(g_handler_called == 0);
+    cwist_http_response_destroy(res);
+    printf("[PASS] HTTP/3 unknown pseudo-header rejected with 400.\n");
+
+    /* Plain CONNECT carrying :scheme/:path is malformed (RFC 9114 4.3.1):
+     * the client always sends :scheme and :path, so this must be rejected. */
+    g_handler_called = 0;
+    res = NULL;
+    err = cwist_http3_client_request(client, "/", CWIST_HTTP_CONNECT,
+                                     NULL, NULL, 0, &res);
+    assert(err.error.err_i16 == 0);
+    assert(res != NULL);
+    assert(res->status_code == CWIST_HTTP_BAD_REQUEST);
+    assert(g_handler_called == 0);
+    cwist_http_response_destroy(res);
+    printf("[PASS] HTTP/3 CONNECT with :scheme/:path rejected with 400.\n");
+
+    cwist_http3_client_destroy(client);
+    ctx->running = 0;
+    rc = pthread_join(tid, NULL);
+    assert(rc == 0);
+    cwist_http3_destroy_context(ctx);
+    close(udp_fd);
 
     printf("All HTTP/3 infrastructure tests passed!\n");
     return 0;
