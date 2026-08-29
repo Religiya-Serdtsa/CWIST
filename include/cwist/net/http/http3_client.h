@@ -48,11 +48,24 @@ int cwist_http3_client_set_server(cwist_http3_client *client,
 /**
  * @brief Load CA bundle for TLS certificate verification.
  * @param client Client handle.
- * @param ca_path Path to PEM CA bundle, or NULL to disable verification.
+ * @param ca_path Path to PEM CA bundle, or NULL to reload the system
+ *        default trust store.  Verification stays enabled either way;
+ *        use cwist_http3_client_set_insecure() to opt out.
  * @return 0 on success, -1 on failure.
  */
 int cwist_http3_client_set_ca_bundle(cwist_http3_client *client,
                                      const char *ca_path);
+
+/**
+ * @brief Disable or re-enable TLS certificate verification.
+ *
+ * Verification is ON by default.  Opt out explicitly for self-signed
+ * development setups; opting out trusts any server certificate.
+ *
+ * @param client Client handle.
+ * @param enabled Non-zero to disable verification (default: 0).
+ */
+void cwist_http3_client_set_insecure(cwist_http3_client *client, int enabled);
 
 /**
  * @brief Set request timeout in milliseconds.

@@ -223,13 +223,27 @@ int main(void) {
     assert(client != NULL);
     assert(cwist_http3_client_set_server(client, "127.0.0.1",
                                          ntohs(addr.sin_port)) == 0);
-    /* The ephemeral server cert is self-signed: disable verification. */
-    assert(cwist_http3_client_set_ca_bundle(client, NULL) == 0);
     cwist_http3_client_set_timeout_ms(client, 10000);
+    cwist_http3_client_set_conn_timeout_ms(client, 10000);
+
+    /* Verification is on by default: the ephemeral self-signed certificate
+     * must fail the handshake, and the failure must surface as a request
+     * error, not a crash or a fake response. */
+    g_handler_called = 0;
+    cwist_http_response *res = NULL;
+    err = cwist_http3_client_request(client, "/", CWIST_HTTP_GET,
+                                     NULL, NULL, 0, &res);
+    assert(err.error.err_i16 != 0);
+    assert(res == NULL);
+    assert(g_handler_called == 0);
+    printf("[PASS] HTTP/3 self-signed server rejected by default verify.\n");
+
+    /* Explicit opt-out for the self-signed development certificate. */
+    cwist_http3_client_set_insecure(client, 1);
 
     /* Well-formed request: handler runs, 200 comes back. */
     g_handler_called = 0;
-    cwist_http_response *res = NULL;
+    res = NULL;
     err = cwist_http3_client_request(client, "/", CWIST_HTTP_GET,
                                      NULL, NULL, 0, &res);
     assert(err.error.err_i16 == 0);
@@ -266,6 +280,54 @@ int main(void) {
     assert(g_handler_called == 0);
     cwist_http_response_destroy(res);
     printf("[PASS] HTTP/3 CONNECT with :scheme/:path rejected with 400.\n");
+
+    cwist_http3_client_destroy(client);
+    ctx->running = 0;
+    rc = pthread_join(tid, NULL);
+    assert(rc == 0);
+    cwist_http3_destroy_context(ctx);
+    close(udp_fd);
+
+    /* --- Test 11: certificate verification succeeds when the self-signed
+     * server certificate (CA:TRUE) is loaded as the trust anchor. --- */
+    ctx = NULL;
+    err = cwist_http3_init_context(&ctx, TEST_CERT, TEST_KEY);
+    assert(err.error.err_i16 == 0);
+
+    udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    assert(udp_fd >= 0);
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(0);
+    assert(bind(udp_fd, (struct sockaddr *)&addr, sizeof(addr)) == 0);
+    addr_len = sizeof(addr);
+    assert(getsockname(udp_fd, (struct sockaddr *)&addr, &addr_len) == 0);
+
+    server_thread_args_t args11 = { .udp_fd = udp_fd, .ctx = ctx };
+    rc = pthread_create(&tid, NULL, http3_server_thread, &args11);
+    assert(rc == 0);
+    usleep(50000);
+
+    client = cwist_http3_client_create();
+    assert(client != NULL);
+    /* TEST_CERT is issued for CN=localhost */
+    assert(cwist_http3_client_set_server(client, "localhost",
+                                         ntohs(addr.sin_port)) == 0);
+    assert(cwist_http3_client_set_ca_bundle(client, TEST_CERT) == 0);
+    cwist_http3_client_set_timeout_ms(client, 10000);
+    cwist_http3_client_set_conn_timeout_ms(client, 10000);
+
+    g_handler_called = 0;
+    res = NULL;
+    err = cwist_http3_client_request(client, "/", CWIST_HTTP_GET,
+                                     NULL, NULL, 0, &res);
+    assert(err.error.err_i16 == 0);
+    assert(res != NULL);
+    assert(res->status_code == 200);
+    assert(g_handler_called == 1);
+    cwist_http_response_destroy(res);
+    printf("[PASS] HTTP/3 verify succeeds with CA bundle for server cert.\n");
 
     cwist_http3_client_destroy(client);
     ctx->running = 0;
