@@ -112,6 +112,8 @@ struct cwist_http3_client {
     int udp_fd;
     struct sockaddr_storage peer_addr;
     socklen_t peer_addr_len;
+    struct sockaddr_storage local_addr;
+    socklen_t local_addr_len;
     char *host;
     uint16_t port;
     int timeout_ms;
@@ -151,10 +153,15 @@ static int h3c_packets_out(void *ctx, const struct lsquic_out_spec *specs,
     for (i = 0; i < n_specs; ++i) {
         const struct lsquic_out_spec *spec = &specs[i];
         struct msghdr msg = {0};
-        msg.msg_name = (void *)spec->dest_sa;
-        msg.msg_namelen = (spec->dest_sa && spec->dest_sa->sa_family == AF_INET)
-                          ? sizeof(struct sockaddr_in)
-                          : sizeof(struct sockaddr_in6);
+        /* The socket is connected once the peer is known (see
+         * cwist_http3_client_request); specifying a destination on a
+         * connected UDP socket fails with EISCONN. */
+        if (client->local_addr_len == 0) {
+            msg.msg_name = (void *)spec->dest_sa;
+            msg.msg_namelen = (spec->dest_sa && spec->dest_sa->sa_family == AF_INET)
+                              ? sizeof(struct sockaddr_in)
+                              : sizeof(struct sockaddr_in6);
+        }
         msg.msg_iov = (struct iovec *)spec->iov;
         msg.msg_iovlen = spec->iovlen;
         ssize_t nw = sendmsg(client->udp_fd, &msg, MSG_DONTWAIT);
@@ -193,16 +200,21 @@ static void *h3c_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
 static struct lsxpack_header *
 h3c_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
     h3c_hset_t *hset = hset_p;
+    if (!hset) return NULL;
+
+    /* lsquic calls us again with the same header when its initial output
+     * buffer was too small.  Preserve the decoded name and grow only the
+     * value capacity; reinitializing the slot here loses the header. */
     if (xhdr) {
-        /* Advance by the exact decoded size lsquic reports
-         * (name_len + val_len + dec_overhead). */
-        size_t total = lsxpack_header_get_dec_size(xhdr);
-        if (total > sizeof(hset->decode_buf) - hset->decode_off)
-            total = sizeof(hset->decode_buf) - hset->decode_off;
-        hset->decode_off += total;
-        if (hset->count < H3C_MAX_HEADERS)
-            hset->count++;
+        if (req_space > LSXPACK_MAX_STRLEN || xhdr->name_offset < 0 ||
+            (size_t)xhdr->name_offset >= sizeof(hset->decode_buf) ||
+            req_space > sizeof(hset->decode_buf) - (size_t)xhdr->name_offset) {
+            return NULL;
+        }
+        xhdr->val_len = (lsxpack_strlen_t)req_space;
+        return xhdr;
     }
+
     if (hset->count >= H3C_MAX_HEADERS)
         return NULL;
     if (req_space > sizeof(hset->decode_buf) - hset->decode_off)
@@ -214,8 +226,18 @@ h3c_hsi_prepare(void *hset_p, struct lsxpack_header *xhdr, size_t req_space) {
 }
 
 static int h3c_hsi_process_header(void *hset_p, struct lsxpack_header *xhdr) {
-    (void)hset_p;
-    (void)xhdr;
+    h3c_hset_t *hset = hset_p;
+    /* A NULL header marks the end of a header block. */
+    if (!hset || !xhdr)
+        return 0;
+
+    /* The QPACK decoder exposes the exact storage used by this completed
+     * header. */
+    size_t total = lsxpack_header_get_dec_size(xhdr);
+    if (total > sizeof(hset->decode_buf) - hset->decode_off)
+        return -1;
+    hset->decode_off += total;
+    hset->count++;
     return 0;
 }
 
@@ -252,7 +274,10 @@ static lsquic_stream_ctx_t *h3c_on_new_stream(void *stream_if_ctx,
     if (!st) return NULL;
     st->stream = stream;
     st->req_method = CWIST_HTTP_GET;
-    lsquic_stream_wantwrite(stream, 1);
+    /* Do not wantwrite() here: the engine would dispatch h3c_on_write
+     * before cwist_http3_client_request() has populated req_path/method/
+     * headers/body, sending a default "GET /" instead of the real request.
+     * The request function arms the write side once the fields are set. */
     pthread_mutex_lock(&client->mtx);
     client->active_stream = st;
     pthread_mutex_unlock(&client->mtx);
@@ -320,15 +345,34 @@ static void h3c_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
             h3c_hset_t *hs = hset;
             st->res = cwist_http_response_create();
             size_t i;
-            for (i = 0; i < hs->count; ++i) {
-                const char *name  = lsxpack_header_get_name(&hs->headers[i]);
-                const char *value = lsxpack_header_get_value(&hs->headers[i]);
-                if (!name || !value) continue;
+            for (i = 0; i < hs->count && st->res; ++i) {
+                const char *raw_name  = lsxpack_header_get_name(&hs->headers[i]);
+                const char *raw_value = lsxpack_header_get_value(&hs->headers[i]);
+                size_t name_len  = hs->headers[i].name_len;
+                size_t value_len = hs->headers[i].val_len;
+                if (!raw_name || !raw_value || name_len == 0 ||
+                    name_len > 1024 || value_len > H3C_DECODE_BUF_SIZE - 1)
+                    continue;
+                /* lsxpack exposes counted slices, not C strings: copy before
+                 * using strcmp/atoi, which read past the slice end. */
+                char *name = malloc(name_len + 1);
+                char *value = malloc(value_len + 1);
+                if (!name || !value) {
+                    free(name);
+                    free(value);
+                    break;
+                }
+                memcpy(name, raw_name, name_len);
+                name[name_len] = '\0';
+                memcpy(value, raw_value, value_len);
+                value[value_len] = '\0';
                 if (strcmp(name, ":status") == 0) {
                     st->res->status_code = (cwist_http_status_t)atoi(value);
                 } else {
                     cwist_http_header_add(&st->res->headers, name, value);
                 }
+                free(value);
+                free(name);
             }
             st->headers_done = 1;
 #ifdef CWIST_WEBTRANSPORT
@@ -503,6 +547,10 @@ static void h3c_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h) {
         }
     } else {
         st->write_done = 1;
+        /* lsquic ignores the eos argument of lsquic_stream_send_headers()
+         * for IETF QUIC; shut down the write side explicitly so the server
+         * sees FIN on a bodyless request. */
+        lsquic_stream_shutdown(stream, 1);
         lsquic_stream_wantwrite(stream, 0);
         lsquic_stream_wantread(stream, 1);
     }
@@ -593,7 +641,10 @@ static void h3c_process_io(cwist_http3_client *client, int timeout_ms) {
                               (struct sockaddr *)&peer_addr, &peer_addr_len);
         if (nr > 0) {
             lsquic_engine_packet_in(engine, buf, (size_t)nr,
-                                    NULL, (struct sockaddr *)&peer_addr,
+                                    client->local_addr_len
+                                        ? (struct sockaddr *)&client->local_addr
+                                        : NULL,
+                                    (struct sockaddr *)&peer_addr,
                                     NULL, 0);
         }
     }
@@ -793,6 +844,24 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
         freeaddrinfo(res);
     }
 
+    /* lsquic dereferences the local address in client mode
+     * (ietf_full_conn_ci_record_addrs), so a NULL local_sa segfaults.
+     * Connect the UDP socket to the peer and learn the local endpoint. */
+    if (client->local_addr_len == 0) {
+        if (connect(client->udp_fd, (struct sockaddr *)&client->peer_addr,
+                    client->peer_addr_len) != 0) {
+            err.error.err_i16 = -1;
+            return err;
+        }
+        client->local_addr_len = sizeof(client->local_addr);
+        if (getsockname(client->udp_fd, (struct sockaddr *)&client->local_addr,
+                        &client->local_addr_len) != 0) {
+            client->local_addr_len = 0;
+            err.error.err_i16 = -1;
+            return err;
+        }
+    }
+
     /* ---------------------------------------------------------------- */
     /* Retry loop with exponential backoff                               */
     /* ---------------------------------------------------------------- */
@@ -811,7 +880,7 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
 
         if (!client->conn) {
             client->conn = lsquic_engine_connect(client->engine, N_LSQVER,
-                                                  NULL,
+                                                  (struct sockaddr *)&client->local_addr,
                                                   (struct sockaddr *)&client->peer_addr,
                                                   client, NULL,
                                                   client->host, 0,
@@ -884,6 +953,9 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
             st->req_body_len = body_len;
         }
 
+        /* All request fields are in place: arm the write side now. */
+        lsquic_stream_wantwrite(st->stream, 1);
+
         /* I/O loop until response is ready or timeout */
         struct timespec deadline;
         clock_gettime(CLOCK_REALTIME, &deadline);
@@ -915,16 +987,20 @@ cwist_error_t cwist_http3_client_request(cwist_http3_client *client,
             return err;
         }
 
-        /* Timeout on this attempt – clean up stream state and retry */
+        /* Timeout on this attempt: close the stream so lsquic releases the
+         * context via h3c_on_close.  Freeing it here would leave lsquic
+         * holding a dangling stream ctx (use-after-free on the next event). */
         err.error.err_i16 = -1;
         pthread_mutex_lock(&client->mtx);
-        client->active_stream = NULL;
+        if (client->active_stream == st) {
+            client->active_stream = NULL;
+        }
         pthread_mutex_unlock(&client->mtx);
-        free(st->req_body);
-        free(st->req_path);
-        st->req_body = NULL;
-        st->req_path = NULL;
-        free(st);
+        if (st->res) {
+            cwist_http_response_destroy(st->res);
+            st->res = NULL;
+        }
+        lsquic_stream_close(st->stream);
 
     retry_backoff:
         attempt++;
