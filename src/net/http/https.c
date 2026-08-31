@@ -1199,8 +1199,9 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
         return err;
     }
 
-    // Inject Alt-Svc when HTTP/3 is enabled so clients discover the QUIC endpoint
-    if (conn->http3_enabled) {
+    // Inject Alt-Svc when HTTP/3 is enabled so clients discover the QUIC endpoint,
+    // unless the application already set or cleared the Alt-Svc header.
+    if (conn->http3_enabled && !cwist_http_header_get(res->headers, "Alt-Svc")) {
         struct sockaddr_storage ss;
         socklen_t ss_len = sizeof(ss);
         int port = 443;
