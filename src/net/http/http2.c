@@ -2319,7 +2319,7 @@ static int cwist_http2_verify_preface(h2_conn *hc) {
 /* --- Alt-Svc Injection Helper --- */
 
 static void h2_inject_alt_svc(cwist_https_connection *conn, cwist_http_response *res) {
-    if (conn->http3_enabled) {
+    if (conn->http3_enabled && !cwist_http_header_get(res->headers, "Alt-Svc")) {
         struct sockaddr_storage ss;
         socklen_t ss_len = sizeof(ss);
         int port = 443;
