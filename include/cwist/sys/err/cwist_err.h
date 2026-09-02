@@ -81,6 +81,39 @@ typedef struct cwist_error_t {
     __prim_cwist_error_t error;   /**< The actual error data value */
 } cwist_error_t;
 
+/**
+ * @brief Test whether an error object represents success.
+ *
+ * Callers must use this instead of open-coding
+ * `err.errtype != CWIST_ERR_YY || err.error.err_ZZ != 0`: guessing the wrong
+ * channel reads the wrong union member and has repeatedly misreported
+ * success as failure (e.g. an INT8-channel function checked as INT16).
+ *
+ * Success means the active channel holds its zero/empty value.
+ */
+static inline bool cwist_error_is_ok(const cwist_error_t *err) {
+    if (!err) return true;
+    switch (err->errtype) {
+        case CWIST_ERR_INT8:   return err->error.err_i8 == 0;
+        case CWIST_ERR_INT16:  return err->error.err_i16 == 0;
+        case CWIST_ERR_INT32:  return err->error.err_i32 == 0;
+        case CWIST_ERR_INT64:  return err->error.err_i64 == 0;
+#if (defined(__clang__) || defined(__GNUC__)) && defined(USE_128BIT_ERRCODE)
+        case CWIST_ERR_INT128: return err->error.err_i128 == 0;
+#endif
+        case CWIST_ERR_UINT8:  return err->error.err_u8 == 0;
+        case CWIST_ERR_UINT16: return err->error.err_u16 == 0;
+        case CWIST_ERR_UINT32: return err->error.err_u32 == 0;
+        case CWIST_ERR_UINT64: return err->error.err_u64 == 0;
+#if (defined(__clang__) || defined(__GNUC__)) && defined(USE_128BIT_ERRCODE)
+        case CWIST_ERR_UINT128: return err->error.err_u128 == 0;
+#endif
+        case CWIST_ERR_STRING: return err->error.err_string == NULL;
+        case CWIST_ERR_JSON:   return err->error.err_json == NULL;
+        default:               return false;
+    }
+}
+
 /* --- Function Prototypes --- */
 
 /**

@@ -2409,7 +2409,17 @@ cwist_error_t cwist_http2_serve_connection(
     bool connected = true;
     bool sent_goaway = false;
     uint64_t goaway_close_at = 0; /* monotonic ms; set once GOAWAY is out */
-    while (connected && atomic_load(&g_cwist_running)) {
+    while (connected) {
+        /* Process shutdown: announce GOAWAY and keep serving in-flight
+         * streams for the grace window instead of dropping them mid-flight. */
+        if (!sent_goaway && !atomic_load(&g_cwist_running)) {
+            if (h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR) != 0) {
+                connected = false;
+                break;
+            }
+            sent_goaway = true;
+            goaway_close_at = h2_now_ms() + (uint64_t)h2_goaway_grace_ms();
+        }
         /* The post-GOAWAY grace window elapsed: close as announced. */
         if (sent_goaway && goaway_close_at && h2_now_ms() >= goaway_close_at) {
             connected = false;

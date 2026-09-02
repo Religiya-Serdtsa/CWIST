@@ -233,6 +233,12 @@ cwist_error_t cwist_http_header_add(cwist_http_header_node **head, const char *k
  * @return Raw C-string pointer (NULL if not found).
  */
 char *cwist_http_header_get(cwist_http_header_node *head, const char *key);
+/**
+ * @brief Remove all headers matching a name, honoring per-node ownership
+ * (heap vs arena vs borrowed buffers).
+ * @return Number of nodes removed.
+ */
+size_t cwist_http_header_remove(cwist_http_header_node **head, const char *key);
 void cwist_http_header_free_all(cwist_http_header_node *head);
 
 /**
