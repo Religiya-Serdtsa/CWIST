@@ -104,6 +104,22 @@ static int h2_idle_timeout_ms(void) {
     return timeout_ms;
 }
 
+/* Grace window between sending GOAWAY on idle timeout and closing the
+ * connection.  A client that raced a request onto the connection just as it
+ * went idle needs time to see the GOAWAY and retry; closing the socket the
+ * instant GOAWAY leaves makes strict clients (Firefox) surface a protocol
+ * error where lenient ones silently retry.  Overridable via
+ * CWIST_HTTP2_GOAWAY_GRACE_MS. */
+#define CWIST_HTTP2_GOAWAY_GRACE_MS_DEFAULT 2000
+static int h2_goaway_grace_ms(void) {
+    static int grace_ms = -1;
+    if (grace_ms < 0) {
+        const char *env = getenv("CWIST_HTTP2_GOAWAY_GRACE_MS");
+        grace_ms = (env && atoi(env) >= 0) ? atoi(env) : CWIST_HTTP2_GOAWAY_GRACE_MS_DEFAULT;
+    }
+    return grace_ms;
+}
+
 /* --- Stream & Connection State --- */
 
 typedef struct h2_stream {
@@ -384,10 +400,13 @@ static int h2_wait_socket(cwist_https_connection *conn, int ssl_error, int timeo
 
 /* Poll until frame bytes can be read or the connection idle deadline
  * expires.  Skips the poll when decrypted bytes are already buffered.
- * Returns 0 when readable, -1 on idle timeout or socket error. */
+ * @p deadline_ms optionally bounds the wait to an absolute monotonic
+ * timestamp (used for the post-GOAWAY grace window); 0 disables it.
+ * Returns 0 when readable, -1 on idle timeout, deadline expiry, or socket
+ * error. */
 static int h2_out_flush(h2_conn *hc);
 
-static int h2_wait_readable(h2_conn *hc) {
+static int h2_wait_readable(h2_conn *hc, uint64_t deadline_ms) {
     /* Never block with unflushed frames in the batch buffer. */
     if (h2_out_flush(hc) != 0) return -1;
     while (hc->conn->ssl ? (SSL_pending(hc->conn->ssl) <= 0) : true) {
@@ -395,6 +414,11 @@ static int h2_wait_readable(h2_conn *hc) {
         uint64_t now = h2_now_ms();
         if (now - hc->last_activity >= idle_ms) return -1;
         uint64_t idle_left = idle_ms - (now - hc->last_activity);
+        if (deadline_ms) {
+            if (now >= deadline_ms) return -1;
+            uint64_t deadline_left = deadline_ms - now;
+            if (deadline_left < idle_left) idle_left = deadline_left;
+        }
         int wait_ms = CWIST_HTTP_TIMEOUT_MS;
         if (idle_left < (uint64_t)wait_ms) wait_ms = (int)idle_left;
         struct pollfd pfd = { .fd = hc->conn->fd, .events = POLLIN };
@@ -2384,7 +2408,13 @@ cwist_error_t cwist_http2_serve_connection(
 
     bool connected = true;
     bool sent_goaway = false;
+    uint64_t goaway_close_at = 0; /* monotonic ms; set once GOAWAY is out */
     while (connected && atomic_load(&g_cwist_running)) {
+        /* The post-GOAWAY grace window elapsed: close as announced. */
+        if (sent_goaway && goaway_close_at && h2_now_ms() >= goaway_close_at) {
+            connected = false;
+            break;
+        }
         unsigned char hdr[9];
         unsigned char *payload = NULL;
 
@@ -2400,11 +2430,20 @@ cwist_error_t cwist_http2_serve_connection(
         } else {
             /* Bound the wait for the next frame with the idle deadline so an
              * idle connection cannot monopolize a pool worker forever. */
-            if (h2_wait_readable(&hc) != 0) {
+            if (h2_wait_readable(&hc, sent_goaway ? goaway_close_at : 0) != 0) {
+                uint64_t now = h2_now_ms();
                 if (!sent_goaway &&
-                    h2_now_ms() - hc.last_activity >= (uint64_t)h2_idle_timeout_ms()) {
-                    h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR);
+                    now - hc.last_activity >= (uint64_t)h2_idle_timeout_ms()) {
+                    /* Announce the shutdown, then keep serving briefly so a
+                     * request that raced onto the connection just before the
+                     * idle expiry still gets its response instead of a reset. */
+                    if (h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_NO_ERROR) != 0) {
+                        connected = false;
+                        break;
+                    }
                     sent_goaway = true;
+                    goaway_close_at = now + (uint64_t)h2_goaway_grace_ms();
+                    continue;
                 }
                 connected = false;
                 break;
