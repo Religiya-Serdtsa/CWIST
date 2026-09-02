@@ -151,6 +151,14 @@ ifeq ($(UNAME_S),FreeBSD)
     IO_SRC = src/sys/io/kqueue.c
 endif
 
+# Sanitizer toggle: `make SANITIZE=address,undefined test check` builds the
+# library and every test with the given sanitizers.  -fno-lto must come last
+# so it wins over the LTO flags baked into the optimization profiles.
+ifdef SANITIZE
+    CFLAGS += -fsanitize=$(SANITIZE) -fno-lto -fno-omit-frame-pointer
+    LIBS += -fsanitize=$(SANITIZE)
+endif
+
 # Source Files
 SRCS = src/core/sstring/sstring.c \
        src/core/seq/seq.c \
