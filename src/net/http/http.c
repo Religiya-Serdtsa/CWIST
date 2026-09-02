@@ -895,6 +895,36 @@ char *cwist_http_header_get(cwist_http_header_node *head, const char *key) {
 }
 
 /**
+ * @brief Unlink and release every header node matching a name.
+ * @param head Pointer to the header-list head; updated as nodes are removed.
+ * @param key Header name (case-insensitive) to remove; all duplicates go.
+ * @return Number of nodes removed.
+ *
+ * Ownership is handled per node: heap-owned nodes are freed, arena-owned
+ * nodes are left for the arena to reclaim, and borrowed key/value buffers
+ * are never freed individually.  Applications should call this instead of
+ * hand-rolling unlink loops, which have repeatedly gotten that bookkeeping
+ * wrong.
+ */
+size_t cwist_http_header_remove(cwist_http_header_node **head, const char *key) {
+    if (!head || !key) return 0;
+    size_t removed = 0;
+    while (*head) {
+        cwist_http_header_node *node = *head;
+        if (node->key && node->key->data && strcasecmp(node->key->data, key) == 0) {
+            *head = node->next;
+            cwist_sstring_destroy(node->key);
+            cwist_sstring_destroy(node->value);
+            if (!node->arena_owned) cwist_free(node);
+            removed++;
+        } else {
+            head = &node->next;
+        }
+    }
+    return removed;
+}
+
+/**
  * @brief Add default security headers to an HTTP response if not already present.
  * @param res Response object to populate.
  */

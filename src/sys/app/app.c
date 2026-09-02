@@ -2123,6 +2123,13 @@ static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
         bool keep_alive = req->keep_alive && res->keep_alive;
         bool upgraded = req->upgraded;
 
+        /* During shutdown, answer in flight but mark the connection as
+         * closing so the client does not race another request onto it. */
+        if (!atomic_load(&g_cwist_running)) {
+            res->keep_alive = false;
+            keep_alive = false;
+        }
+
         cwist_https_send_response(conn, res);
 
         bool detached = false;
@@ -2219,6 +2226,13 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
 
     bool keep_alive = req->keep_alive && res->keep_alive;
     bool upgraded = req->upgraded;
+
+    /* During shutdown, answer in flight but mark the connection as closing
+     * so the client does not race another request onto it. */
+    if (!atomic_load(&g_cwist_running)) {
+        res->keep_alive = false;
+        keep_alive = false;
+    }
 
     if (!upgraded) {
         /* RFC 9110 §9.3.2: HEAD replies carry the GET headers (Content-Length

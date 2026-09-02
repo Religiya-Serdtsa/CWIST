@@ -804,7 +804,7 @@ cwist_error_t cwist_https_init_context_with_options(cwist_https_context **ctx,
 
     if (enable_http2) {
         err = cwist_https_apply_http2_tls_profile(ssl_ctx);
-        if (err.errtype != CWIST_ERR_INT16 || err.error.err_i16 != 0) {
+        if (!cwist_error_is_ok(&err)) {
             SSL_CTX_free(ssl_ctx);
             return err;
         }
@@ -966,7 +966,7 @@ cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_
     }
 
     cwist_error_t wrap_err = https_wrap_established(ctx, client_fd, ssl, conn);
-    if (wrap_err.errtype == CWIST_ERR_INT16 && wrap_err.error.err_i16 != 0) {
+    if (!cwist_error_is_ok(&wrap_err)) {
         SSL_free(ssl);
         return wrap_err;
     }
@@ -1018,6 +1018,7 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
      * headers; resume 3 bytes back so a terminator split across two reads
      * is still found. */
     size_t scan_from = 0;
+    bool deadline_grace_used = false;
 
     while (1) {
         header_end = strstr(conn->read_buf + scan_from, "\r\n\r\n");
@@ -1031,16 +1032,31 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
         if (SSL_pending(conn->ssl) == 0) {
             uint64_t now = cwist_https_now_ms();
             if (now >= headers_deadline) {
-                return NULL;
-            }
-            int wait_ms = CWIST_HTTP_TIMEOUT_MS;
-            uint64_t remaining = headers_deadline - now;
-            if (remaining < (uint64_t)wait_ms) wait_ms = (int)remaining;
+                /* A request may have landed just as the idle deadline
+                 * expired; dropping it here makes strict clients surface a
+                 * network protocol error where lenient ones silently retry.
+                 * Give the wire one non-blocking chance before closing.
+                 * Bounded to a single retry so a dribbling peer cannot pin
+                 * the worker past the deadline. */
+                bool readable = false;
+                if (!deadline_grace_used) {
+                    deadline_grace_used = true;
+                    struct pollfd gfd = { .fd = conn->fd, .events = POLLIN };
+                    readable = (poll(&gfd, 1, 0) > 0 && (gfd.revents & POLLIN));
+                }
+                if (!readable) {
+                    return NULL;
+                }
+            } else {
+                int wait_ms = CWIST_HTTP_TIMEOUT_MS;
+                uint64_t remaining = headers_deadline - now;
+                if (remaining < (uint64_t)wait_ms) wait_ms = (int)remaining;
 
-            struct pollfd pfd = { .fd = conn->fd, .events = POLLIN };
-            int pret = poll(&pfd, 1, wait_ms);
-            if (pret <= 0) {
-                return NULL;
+                struct pollfd pfd = { .fd = conn->fd, .events = POLLIN };
+                int pret = poll(&pfd, 1, wait_ms);
+                if (pret <= 0) {
+                    return NULL;
+                }
             }
         }
 
@@ -1279,14 +1295,14 @@ static void *https_thread_handler(void *arg) {
     if (payload->pres_ssl) {
         /* Handshake already completed by the shepherd thread. */
         hs_err = https_wrap_established(payload->ctx, payload->client_fd, payload->pres_ssl, &conn);
-        if (!(hs_err.errtype == CWIST_ERR_INT16 && hs_err.error.err_i16 == 0)) {
+        if (!cwist_error_is_ok(&hs_err)) {
             SSL_free(payload->pres_ssl);
         }
     } else {
         hs_err = cwist_https_accept(payload->ctx, payload->client_fd, &conn);
     }
 
-    if (hs_err.errtype == CWIST_ERR_INT16 && hs_err.error.err_i16 == 0) {
+    if (cwist_error_is_ok(&hs_err)) {
         payload->handler(conn, payload->user_ctx);
         cwist_https_close_connection(conn);
     } else {

@@ -1,0 +1,39 @@
+name: "ASan/UBSan"
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+    branches: [main, master, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanitize:
+    name: Address/UB Sanitizer (build + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake libcurl4-openssl-dev libnghttp2-dev libbrotli-dev libzstd-dev
+
+    # The test targets execute their binaries, so `make test` is build + run.
+    # Leak detection is enabled by default under ASan; keep it on.
+    - name: Build and run test suite under sanitizers
+      shell: bash
+      run: |
+        make clean
+        make -j$(nproc) SANITIZE=address,undefined
+        make SANITIZE=address,undefined test
+      env:
+        ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:halt_on_error=1
+        UBSAN_OPTIONS: halt_on_error=1:abort_on_error=1
