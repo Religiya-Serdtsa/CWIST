@@ -664,6 +664,11 @@ static int cwist_h3_alpn_select_cb(SSL *ssl, const uint8_t **out, uint8_t *outle
 /* Stream callbacks                                                   */
 /* ------------------------------------------------------------------ */
 
+static int cwist_h3_log_stderr(void *ctx, const char *buf, size_t len) {
+    (void)ctx;
+    return (int)fwrite(buf, 1, len, stderr);
+}
+
 static lsquic_conn_ctx_t *cwist_h3_on_new_conn(void *stream_if_ctx,
                                                 lsquic_conn_t *conn) {
     cwist_http3_context *h3_ctx = stream_if_ctx;
@@ -673,6 +678,10 @@ static lsquic_conn_ctx_t *cwist_h3_on_new_conn(void *stream_if_ctx,
 
 static void cwist_h3_on_conn_closed(lsquic_conn_t *conn) {
     if (!conn) return;
+    char errbuf[256] = {0};
+    enum LSQUIC_CONN_STATUS status = lsquic_conn_status(conn, errbuf, sizeof(errbuf));
+    fprintf(stderr, "[HTTP/3] Conn close status=%d msg=%s\n", (int)status,
+            errbuf[0] ? errbuf : "(none)");
     struct lsquic_conn_info info;
     if (lsquic_conn_get_info(conn, &info) == 0) {
         fprintf(stderr,
@@ -710,8 +719,11 @@ static lsquic_stream_ctx_t *cwist_h3_on_new_stream(void *stream_if_ctx,
         return (lsquic_stream_ctx_t *)st;
     }
 
-    /* Default priority (middle of 1-256 range) */
-    lsquic_stream_set_priority(stream, 128);
+    /* RFC 9218 Section 6: a server MUST NOT send a PRIORITY_UPDATE frame for
+     * a request stream.  lsquic_stream_set_priority() emits exactly that
+     * frame when ext priorities are negotiated, and strict clients (Firefox/
+     * neqo) close the connection with H3_FRAME_UNEXPECTED.  Keep the default
+     * scheduling priority instead of touching the stream. */
     lsquic_stream_wantread(stream, 1);
 
     return (lsquic_stream_ctx_t *)st;
@@ -819,21 +831,12 @@ static void h3_apply_header(cwist_http_request *req,
     } else if (strcmp(name, "x-requested-with") == 0) {
         cwist_http_header_add(&req->headers, name, value);
     } else if (strcmp(name, "priority") == 0) {
-        /* RFC 9218 Extensible Priorities: u=urgency, i=incremental */
+        /* RFC 9218 Extensible Priorities: u=urgency, i=incremental.
+         * Record the header only: calling lsquic_stream_set_priority() here
+         * would emit a PRIORITY_UPDATE frame for a request stream, which a
+         * server MUST NOT send (strict clients abort with
+         * H3_FRAME_UNEXPECTED). */
         cwist_http_header_add(&req->headers, name, value);
-        /* Parse urgency value (u=N) where N is 0-7 */
-        const char *u = strstr(value, "u=");
-        if (u) {
-            int urgency = atoi(u + 2);
-            if (urgency >= 0 && urgency <= 7) {
-                /* Map HTTP urgency (0=high, 7=low) to lsquic priority (1=high, 256=low) */
-                unsigned pri = 1 + (unsigned)(urgency * 36);
-                if (pri > 256) pri = 256;
-                if (req->private_data) {
-                    lsquic_stream_set_priority((lsquic_stream_t *)req->private_data, pri);
-                }
-            }
-        }
     } else if (name[0] != ':') {
         /* Any other non-pseudo header */
         cwist_http_header_add(&req->headers, name, value);
@@ -2170,6 +2173,16 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     if (!engine) {
         err.error.err_i16 = -1;
         return err;
+    }
+
+    /* Diagnostic hook: CWIST_H3_DEBUG=1 routes lsquic's internal logger to
+     * stderr so CONNECTION_CLOSE error codes become visible in the journal. */
+    if (getenv("CWIST_H3_DEBUG")) {
+        static const struct lsquic_logger_if h3_log_if = {
+            .log_buf = cwist_h3_log_stderr,
+        };
+        lsquic_logger_init(&h3_log_if, NULL, LLTS_HHMMSSMS);
+        lsquic_logger_lopt("engine=debug,conn=debug,event=debug");
     }
 
     ctx->engine = engine;
