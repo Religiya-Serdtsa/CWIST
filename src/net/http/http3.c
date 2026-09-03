@@ -2609,9 +2609,16 @@ int cwist_http3_push_resource(cwist_http_request *req,
 }
 
 int cwist_http3_set_stream_priority(cwist_http_request *req, unsigned priority) {
-    if (!req || !req->private_data) return -1;
-    if (priority < 1 || priority > 256) return -1;
-    return lsquic_stream_set_priority((lsquic_stream_t *)req->private_data, priority);
+    /* Refused on purpose: lsquic_stream_set_priority() on a request stream
+     * emits a PRIORITY_UPDATE frame on the control stream, which violates
+     * RFC 9218 (PRIORITY_UPDATE may only reference client-opened streams).
+     * Strict stacks (Firefox/neqo) then kill the connection with
+     * H3_FRAME_UNEXPECTED. Use the RFC 9218 `Priority` header instead.
+     * See the deprecation note in include/cwist/net/http/http3.h. */
+    (void)req; (void)priority;
+    CWIST_LOG_WARN("[HTTP/3] cwist_http3_set_stream_priority() is deprecated "
+                   "and refused (RFC 9218 violation); use the Priority header");
+    return -1;
 }
 
 /* ------------------------------------------------------------------ */

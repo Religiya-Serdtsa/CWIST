@@ -165,6 +165,17 @@ int cwist_http3_push_resource(cwist_http_request *req,
 /**
  * @brief Set stream priority for the current response.
  *
+ * @deprecated Do NOT call this on a request stream. lsquic implements it by
+ * emitting a PRIORITY_UPDATE frame on the control stream, which violates
+ * RFC 9218 (PRIORITY_UPDATE is only valid for streams the client opened).
+ * Strict HTTP/3 stacks (Firefox/neqo) abort the whole connection with
+ * H3_FRAME_UNEXPECTED (0x105), surfacing in the browser as a network
+ * protocol error. Express response priority with the `Priority` response
+ * header (RFC 9218) instead.
+ *
+ * This function is kept for ABI compatibility but currently always refuses:
+ * it logs a warning and returns -1 without touching the stream.
+ *
  * Valid priority values are 1 through 256, inclusive.
  * Lower value means higher priority.
  */
