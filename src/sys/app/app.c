@@ -10,6 +10,7 @@
 #include <cwist/net/http/async.h>
 #include <cwist/net/http/https.h>
 #include <cwist/net/http/http2.h>
+#include <cwist/net/grpc/grpc.h>
 #include <cwist/net/http/http3.h>
 #include <cwist/net/http/async_server.h>
 #include "../../net/http/simd_parser.h"
@@ -2156,7 +2157,8 @@ static void static_ssl_http2_handler(cwist_https_connection *conn, void *ctx) {
         return;
     }
 
-    cwist_error_t err = cwist_http2_serve_connection(conn, app, static_http2_route_bridge);
+    cwist_error_t err = cwist_http2_serve_connection_ex(conn, app, static_http2_route_bridge,
+                                        cwist_grpc_http2_hooks());
     if (err.errtype == CWIST_ERR_JSON && err.error.err_json) {
         cJSON_Delete(err.error.err_json);
     }
@@ -2332,7 +2334,8 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
          * already consumed them.  Replay by parsing is not supported, so only
          * take this branch when the stash holds exactly the preface. */
         if (conn->len == 24) {
-            cwist_http2_serve_connection(&h2c, app, static_http2_route_bridge);
+            cwist_http2_serve_connection_ex(&h2c, app, static_http2_route_bridge,
+                                        cwist_grpc_http2_hooks());
             close(client_fd);
             return CWIST_ASYNC_DETACH;
         }
@@ -2387,7 +2390,8 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
         ssize_t peeked = recv(client_fd, peek_buf, 24, MSG_PEEK);
         if (peeked >= 24 && memcmp(peek_buf, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24) == 0) {
             cwist_https_connection conn = { .fd = client_fd, .ssl = NULL, .negotiated_http2 = true, .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2 };
-            cwist_http2_serve_connection(&conn, app, static_http2_route_bridge);
+            cwist_http2_serve_connection_ex(&conn, app, static_http2_route_bridge,
+                                        cwist_grpc_http2_hooks());
             close(client_fd);
             return;
         }

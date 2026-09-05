@@ -408,7 +408,9 @@ TEST_TARGETS = test_sstring \
                test_async_defer \
                test_test_client \
                test_multiport \
-               test_grpc
+               test_grpc \
+               test_grpc_stream \
+               test_proto_gen
 
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples
 
@@ -799,3 +801,12 @@ test_multiport: $(LIB_NAME) tests/test_multiport.c
 test_grpc: $(LIB_NAME) tests/test_grpc.c
 	$(CC) $(CFLAGS) -o test_grpc tests/test_grpc.c $(LIB_NAME) $(LIBS)
 	./test_grpc
+
+test_grpc_stream: $(LIB_NAME) tests/test_grpc_stream.c
+	$(CC) $(CFLAGS) -o test_grpc_stream tests/test_grpc_stream.c $(LIB_NAME) $(LIBS)
+	./test_grpc_stream
+
+test_proto_gen: $(LIB_NAME) tests/test_proto_gen.c tests/test_proto_gen_sample.proto
+	./tools/cli/cwist proto tests/test_proto_gen_sample.proto --output tests/test_proto_gen_sample.cwist.pb.h
+	$(CC) $(CFLAGS) -Itests -o test_proto_gen tests/test_proto_gen.c $(LIB_NAME) $(LIBS)
+	./test_proto_gen
