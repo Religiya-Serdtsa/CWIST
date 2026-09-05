@@ -38,6 +38,29 @@ _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](
 
 ---
 
+## Table of Contents
+
+- [Install](#install)
+- [Hello world](#hello-world)
+- [What CWIST includes](#what-cwist-includes)
+- [Why C, when Axum and Gin exist?](#why-c-when-axum-and-gin-exist)
+- [Platform support](#platform-support)
+- [Execution & I/O models](#execution--io-models-c1m-reactor-and-classic-pool)
+- [Development hot reload](#development-hot-reload)
+- [Managing a project with the cwist CLI](#managing-a-project-with-the-cwist-cli)
+- [Linking](#linking)
+- [Configuration](#configuration)
+- [Nuke DB](#nuke-db)
+- [PQC TLS layer](#pqc-tls-layer)
+- [WebTransport](#webtransport)
+- [RDBMS auto-mount](#rdbms-auto-mount)
+- [Dependencies](#dependencies)
+- [Stability & conformance](#stability--conformance)
+- [Documentation](#documentation)
+- [Examples](#examples)
+
+---
+
 ## Install
 
 CWIST vendors its dependencies (BoringSSL, lsquic, libttak, SQLite3), so a plain
@@ -535,6 +558,27 @@ See [NOTICE.md](NOTICE.md) for the license summary of every vendored component.
 
 ## Documentation
 
-- [API Reference](https://religiya-serdtsa.github.io/CWIST/)
-- `docs/` — tutorials and Doxygen sources
-- `example/` — runnable demos including `rps-showcase` and `othello-web`
+The full documentation map lives in [docs/README.md](docs/README.md). The short
+version, in suggested reading order:
+
+- **[Tutorials](tutorials/README.md)** — 30 hands-on modules (`tutorials/01..30`),
+  each with a runnable `main.c`, a `CMakeLists.txt`, and a guided README.
+- **[Guides](docs/tutorials/)** — task-oriented walkthroughs: [CRUD blog](docs/tutorials/blog-crud.md),
+  [NATS integration](docs/tutorials/nats-integration.md), [WebTransport server](docs/tutorials/webtransport-server.md).
+- **[API reference](docs/API.md)** — per-module docs under `docs/api/`, plus the
+  [flat quick reference](docs/api-quickref.md) and generated
+  [Doxygen HTML](https://religiya-serdtsa.github.io/CWIST/).
+- **[ROADMAP.md](ROADMAP.md)** — feature status and milestone planning.
+
+## Examples
+
+Runnable demos under [example/](example/): a [minimal server](example/simple-server),
+[step-by-step HTTP](example/http), [SQLite](example/db) and
+[encrypted-column DB](example/db-crypt), [JWT auth](example/jwt), a
+[WebSocket Othello game](example/othello-web), the [rps-showcase](example/rps-showcase)
+throughput demo, rendering helpers ([json-builder](example/json-builder),
+[html](example/html), [template](example/template)), and the experimental
+[WebTransport](example/webtransport) app. See the
+[examples table](docs/README.md#4-runnable-examples) for the full list.
+
+A production deployment built on CWIST: [fly.board](https://github.com/gg582/fly.board).
