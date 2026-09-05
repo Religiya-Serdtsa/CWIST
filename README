@@ -48,18 +48,19 @@ Spring runtime env: **openjdk version "25.0.4.1" 2026-08-18 LTS**, Spring Boot *
   Zero Jitter, and Zero-Friction FFI:
 
   1. Low Latency & High Throughput:
-     Under heavy concurrency (wrk -t12 -c400), CWIST Classic Pool delivers
-     2.16ms average latency (P90 4.45ms, P99 8.80ms) and ~111k req/s,
-     and C1M Reactor delivers 2.41ms (versus 3.52ms for Axum, 7.18ms for
-     Gin, and 9.11ms for Spring Boot). In tuned low-latency profiles,
-     CWIST averages 0.59ms latency (P50 0.46ms, P90 1.12ms).
+     Under heavy concurrency (wrk -t12 -c400, CI benchmark), CWIST Classic
+     Pool delivers 1.52ms average latency (P90 3.20ms, P99 7.15ms) at ~151k
+     req/s, and C1M Reactor delivers 1.59ms at ~153k req/s (versus 2.55ms
+     for Axum, 4.64ms for Gin, and 5.91ms for Spring Boot in the same run).
+     In the tuned low-latency profile (wrk -t4 -c100), CWIST averages
+     0.41ms latency (P50 0.34ms, P90 0.69ms) at ~155k req/s.
 
   2. Predictable Memory & Container Density:
-     CWIST operates with a compact memory footprint (~15.9MB RSS in
-     C1M Reactor mode, ~21.7MB in Classic Pool mode), compared to
-     ~29.5MB for Gin and ~1.34GB for Spring Boot. In containerized
-     deployments with thousands of replicas, this preserves significant
-     memory resources.
+     CWIST operates with a compact memory footprint (~9.1MB RSS in
+     C1M Reactor mode, ~15.4MB in Classic Pool mode, same CI run),
+     compared to ~29.8MB for Gin and ~1.29GB for Spring Boot. In
+     containerized deployments with thousands of replicas, this preserves
+     significant memory resources.
 
   3. Zero GC Pauses & Predictable Tail Latency:
      With generational arenas, EBR GC, and deterministic worker
