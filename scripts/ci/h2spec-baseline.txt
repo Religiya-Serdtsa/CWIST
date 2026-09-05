@@ -1,0 +1,47 @@
+Changes SETTINGS_INITIAL_WINDOW_SIZE after sending HEADERS frame
+Sends HEADERS frame that depends on itself
+Sends HEADERS frames that causes their advertised concurrent stream limit to be exceeded
+Sends PRIORITY frame that depend on itself
+Sends a CONTINUATION frame followed by any frame other than CONTINUATION
+Sends a DATA frame on the stream that is not in "open" or "half-closed (local)" state
+Sends a DATA frame with invalid pad length
+Sends a GOAWAY frame
+Sends a GOAWAY frame with unknown error code
+Sends a HEADERS frame that contains a unknown pseudo-header field
+Sends a HEADERS frame that contains the TE header field with any value other than "trailers"
+Sends a HEADERS frame that contains the connection-specific header field
+Sends a HEADERS frame that contains the header field name in uppercase letters
+Sends a HEADERS frame that contains the pseudo-header field defined for response
+Sends a HEADERS frame that omits ":scheme" pseudo-header field
+Sends a HEADERS frame with empty ":path" pseudo-header field
+Sends a HEADERS frame with invalid pad length
+Sends a HEADERS frame with the "content-length" header field which does not equal the DATA frame payload length
+Sends a HEADERS frame with the "content-length" header field which does not equal the sum of the multiple DATA frames payload length
+Sends a HEADERS frame without the END_HEADERS flag, and a PRIORITY frame
+Sends a Huffman-encoded string literal representation with padding longer than 7 bits
+Sends a PING frame with a stream identifier field value other than 0x0
+Sends a PRIORITY frame while sending the header blocks
+Sends a PRIORITY frame with 0x0 stream identifier
+Sends a PRIORITY frame with a length other than 5 octets
+Sends a PUSH_PROMISE frame
+Sends a RST_STREAM frame on a idle stream
+Sends a SETTINGS frame for window size to be negative
+Sends a SETTINGS frame with ACK flag and payload
+Sends a SETTINGS frame with a stream identifier other than 0x0
+Sends a dynamic table size update at the end of header block
+Sends a large size DATA frame that exceeds the SETTINGS_MAX_FRAME_SIZE
+Sends a second HEADERS frame without the END_STREAM flag
+Sends an invalid PING frame for connection close
+Sends an unknown extension frame in the middle of a header block
+Sends invalid connection preface
+Sends multiple WINDOW_UPDATE frames increasing the flow control window to above 2^31-1 on a stream
+Sends stream identifier that is numerically smaller than previous
+closed: Sends a DATA frame
+closed: Sends a DATA frame after sending RST_STREAM frame
+closed: Sends a HEADERS frame
+closed: Sends a HEADERS frame after sending RST_STREAM frame
+half closed (remote): Sends a DATA frame
+half closed (remote): Sends a HEADERS frame
+idle: Sends a DATA frame
+idle: Sends a RST_STREAM frame
+idle: Sends a WINDOW_UPDATE frame

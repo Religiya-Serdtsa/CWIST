@@ -1,7 +1,9 @@
 /** @file ech.c
  * @brief ech.c interface.
  */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <cwist/security/tls/ech.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <openssl/ssl.h>

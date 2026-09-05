@@ -1,0 +1,19 @@
+# LeakSanitizer suppressions for the CI ASan/UBSan gate.
+#
+# Vendored lsquic teardown: on abortive connection/engine destroy, lsquic
+# releases QPACK decoder pages, bandwidth samplers and the cert cache only on
+# the orderly drain path. These allocations live inside lib/lsquic, not CWIST
+# code.
+leak:lsquic_qdh_header_in_begin
+leak:lsquic_malo_create
+leak:lsquic_crt_init
+leak:lsquic_bw_sampler_init
+leak:lsquic_str_new
+leak:lsquic_str_append
+leak:lsquic_global_init
+#
+# CWIST HTTP/3 header-set (hsi_create) objects for streams that are still open
+# when the engine is destroyed: lsquic never calls hsi_discard_header_set on
+# the abortive teardown path. Tracked in ROADMAP.md ("Known limits"); fix
+# belongs in the h3 stream-teardown path, after which this entry must go.
+leak:cwist_h3_hsi_create

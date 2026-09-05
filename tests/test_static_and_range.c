@@ -65,10 +65,28 @@ static int send_request(int fd, const char *req) {
 
 static int read_response(int fd, char *buf, size_t buf_size) {
     size_t total = 0;
+    size_t want = 0; /* header end + Content-Length once known */
     while (total < buf_size - 1) {
         ssize_t n = recv(fd, buf + total, buf_size - 1 - total, 0);
         if (n <= 0) break;
         total += (size_t)n;
+        buf[total] = '\0';
+        /* Stop as soon as the full response (headers + declared body) has
+         * arrived; the server keeps the connection alive, so waiting for
+         * EOF would block forever. */
+        if (want == 0) {
+            char *end = strstr(buf, "\r\n\r\n");
+            if (end) {
+                size_t header_len = (size_t)(end + 4 - buf);
+                char *cl = strcasestr(buf, "Content-Length:");
+                if (cl && cl < end) {
+                    want = header_len + (size_t)strtoul(cl + 15, NULL, 10);
+                } else {
+                    want = header_len;
+                }
+            }
+        }
+        if (want && total >= want) break;
     }
     buf[total] = '\0';
     return (int)total;

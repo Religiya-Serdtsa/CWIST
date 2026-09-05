@@ -1,6 +1,7 @@
 #include <cwist/net/http/http3.h>
 #include <cwist/net/http/http3_client.h>
 #include <cwist/sys/err/cwist_err.h>
+#include <lsquic.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -337,5 +338,6 @@ int main(void) {
     close(udp_fd);
 
     printf("All HTTP/3 infrastructure tests passed!\n");
+    lsquic_global_cleanup();
     return 0;
 }

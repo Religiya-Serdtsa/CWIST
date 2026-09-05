@@ -1,0 +1,36 @@
+name: "Interop"
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+    branches: [main, master, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  h2spec:
+    name: HTTP/2 conformance (h2spec, baseline diff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake libcurl4-openssl-dev libnghttp2-dev libbrotli-dev libzstd-dev
+
+    - name: Install h2spec
+      run: |
+        curl -sL -o /tmp/h2spec.tar.gz https://github.com/summerwind/h2spec/releases/download/v2.6.0/h2spec_linux_amd64.tar.gz
+        sudo tar -xzf /tmp/h2spec.tar.gz -C /usr/local/bin h2spec
+        h2spec --version
+
+    - name: Run h2spec baseline gate
+      run: scripts/ci/h2spec_gate.sh

@@ -1343,13 +1343,15 @@ static void mw_next_wrapper(cwist_http_request *req, cwist_http_response *res) {
  * @param handler_data Reserved handler payload slot.
  */
 static void execute_chain(cwist_app *app, cwist_http_request *req, cwist_http_response *res, cwist_handler_func final_handler, void *handler_data) {
-    if (__builtin_expect(!app->middlewares, 1)) {
-        if (final_handler) final_handler(req, res);
-        return;
-    }
     mw_executor_ctx ctx = { app->middlewares, final_handler, handler_data };
     req->private_data = &ctx;
-    mw_next_wrapper(req, res);
+    if (__builtin_expect(!app->middlewares, 1)) {
+        /* No middleware: still expose the executor ctx so final handlers
+         * (e.g. the static-file handler) can reach handler_data. */
+        if (final_handler) final_handler(req, res);
+    } else {
+        mw_next_wrapper(req, res);
+    }
     req->private_data = NULL;
 }
 
@@ -2325,20 +2327,24 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
     }
 
     /* h2c preface: hand the whole connection to the blocking HTTP/2 server,
-     * which owns and closes the fd from here on. */
+     * which owns and closes the fd from here on.  The sniff stash already
+     * consumed the preface (and often the first pipelined frames) from the
+     * socket, so replay those bytes through the connection's prebuffer. */
     if (app->use_http2 && conn->len >= 24 &&
         memcmp(conn->rbuf, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 24) == 0) {
-        cwist_https_connection h2c = { .fd = client_fd, .ssl = NULL, .negotiated_http2 = true, .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2 };
-        /* The h2 stack does its own reads; drop the sniffed bytes so the
-         * preface is still available on the socket... it is not: the stash
-         * already consumed them.  Replay by parsing is not supported, so only
-         * take this branch when the stash holds exactly the preface. */
-        if (conn->len == 24) {
+        char *replay = cwist_alloc(conn->len);
+        if (replay) {
+            memcpy(replay, conn->rbuf, conn->len);
+            cwist_https_connection h2c = { .fd = client_fd, .ssl = NULL,
+                                           .read_buf = replay, .buf_len = conn->len,
+                                           .negotiated_http2 = true,
+                                           .negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP2 };
             cwist_http2_serve_connection_ex(&h2c, app, static_http2_route_bridge,
                                         cwist_grpc_http2_hooks());
-            close(client_fd);
-            return CWIST_ASYNC_DETACH;
+            cwist_free(replay);
         }
+        close(client_fd);
+        return CWIST_ASYNC_DETACH;
     }
 
     /* Apply Choi Seok-jeong's Lattice (Sanpan) for priority scaling. */
@@ -3600,8 +3606,8 @@ static void cwist_swagger_json_handler(cwist_http_request *req, cwist_http_respo
     fseek(f, 0, SEEK_SET);
     char *buf = (char *)malloc((size_t)sz + 1);
     if (buf) {
-        fread(buf, 1, (size_t)sz, f);
-        buf[sz] = '\0';
+        size_t rd = fread(buf, 1, (size_t)sz, f);
+        buf[rd] = '\0';
         cwist_sstring_assign(res->body, buf);
         free(buf);
     }

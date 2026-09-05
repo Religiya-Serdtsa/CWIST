@@ -114,10 +114,16 @@ static void SHA1Update(SHA1_CTX *context, const uint8_t *data, uint32_t len) {
     j = (j >> 3) & 63;
     if ((j + len) > 63) {
         memcpy(&context->buffer[j], data, (i = 64 - j));
+        /* GCC's -Wstringop-overread fires on this classic buffered-SHA1
+         * shape: the block buffer is provably full here (j + 64 - j bytes),
+         * and the loop below only runs while i + 63 < len. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overread"
         SHA1Transform(context->state, context->buffer);
         for (; i + 63 < len; i += 64) {
             SHA1Transform(context->state, &data[i]);
         }
+#pragma GCC diagnostic pop
         j = 0;
     } else
         i = 0;
