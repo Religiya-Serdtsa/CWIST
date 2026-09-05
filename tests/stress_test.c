@@ -18,6 +18,7 @@ void api_handler(cwist_http_request *req, cwist_http_response *res) {
 }
 
 void *run_server(void *arg) {
+    (void)arg;
     cwist_app *app = cwist_app_create();
     cwist_app_post(app, "/api", api_handler);
     cwist_app_listen(app, 31744);
