@@ -45,7 +45,7 @@ def write_new_project(name: str, directory: Path | None) -> None:
     (root / "bin").mkdir()
     (root / ".gitignore").write_text("bin/\nopenapi.json\n", encoding="utf-8")
     (root / "Makefile").write_text(
-        f"CC ?= cc\nCFLAGS ?= -std=c2x -Wall -Wextra\nTARGET = bin/{name}\n\n"
+        f"CC ?= cc\nCFLAGS ?= -std=c17 -Wall -Wextra\nTARGET = bin/{name}\n\n"
         "$(TARGET): src/main.c\n\tmkdir -p bin\n\t$(CC) $(CFLAGS) -o $@ $< -lcwist -lpthread\n\n"
         "openapi:\n\tcwist openapi src --project *.cwpro\n\nclean:\n\trm -f $(TARGET)\n",
         encoding="utf-8",

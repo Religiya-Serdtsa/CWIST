@@ -8,7 +8,7 @@ BROTLI_CFLAGS := $(shell pkg-config --cflags libbrotlienc libbrotlicommon libbro
 
 INCLUDE_PATHS = -I./include -I./lib -I./lib/libttak/include -I./lib/cjson -I./lib/sqlite3 -I./lib/uriparser/include -I./lib/cnats/src -I./lib/boringssl/include -I./lib/lsquic/include -I./lib/multipart-parser-c $(CURL_CFLAGS) $(NGHTTP2_CFLAGS) $(BROTLI_CFLAGS)
 COMMON_DEFINES = -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -D_REENTRANT -DSQLITE_ENABLE_DESERIALIZE
-COMMON_WARNINGS = -std=c2x -Wall -pthread -fPIC
+COMMON_WARNINGS = -std=c17 -Wall -pthread -fPIC
 COMMON_CFLAGS = $(INCLUDE_PATHS) $(COMMON_WARNINGS) $(COMMON_DEFINES)
 
 UNAME_S := $(shell uname -s)
@@ -418,7 +418,7 @@ TEST_TARGETS = test_sstring \
 # uses a dedicated clang/libFuzzer toolchain and is not part of `make test`.
 FUZZ_RUNS ?= 10000
 fuzz_seq: $(LIBTTAK_LIB) $(CJSON_LIB) tests/fuzz_seq.c src/core/seq/seq.c src/core/seq/seq_auth.c src/core/mem/alloc.c
-	$(FUZZ_CC) $(INCLUDE_PATHS) $(COMMON_DEFINES) -std=c2x -g -O1 \
+	$(FUZZ_CC) $(INCLUDE_PATHS) $(COMMON_DEFINES) -std=c17 -g -O1 \
 		-fsanitize=fuzzer,address,undefined -o $@ tests/fuzz_seq.c \
 		src/core/seq/seq.c src/core/seq/seq_auth.c src/core/mem/alloc.c \
 		$(LIBTTAK_LIB) $(CJSON_LIB) $(BORINGSSL_SSL_LIB) $(BORINGSSL_CRYPTO_LIB) -pthread
