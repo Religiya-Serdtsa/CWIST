@@ -7,6 +7,7 @@
 #include <cwist/sys/app/big_dumb_reply.h>
 #include <cwist/sys/app/app.h>
 #include <cwist/net/http/http.h>
+#include <cwist/net/http/async.h>
 #include <cwist/net/http/https.h>
 #include <cwist/net/http/http2.h>
 #include <cwist/net/http/http3.h>
@@ -2186,9 +2187,14 @@ static void app_maybe_send_parse_error(int client_fd, cwist_http_parse_error_t p
 /**
  * @brief Route and respond to one fully parsed HTTP/1.1 request.
  * Shared by the blocking keep-alive loop and the event-driven async path.
- * @return true when the connection stays open (keep-alive), false to close.
  */
-static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_request *req, uint32_t priority_weight) {
+typedef enum {
+    APP_SERVE_CLOSE = 0,  /* Close the connection. */
+    APP_SERVE_KEEPALIVE,  /* Connection stays open. */
+    APP_SERVE_DEFERRED    /* Handler deferred via cwist_async_defer; skip everything. */
+} app_serve_result_t;
+
+static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_request *req, uint32_t priority_weight) {
     // --- Big Dumb Reply (Read) ---
     if (app->bdr_ctx && req->method == CWIST_HTTP_GET) {
         size_t cached_len = 0;
@@ -2197,7 +2203,7 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
             send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
             bool keep_alive = req->keep_alive;
             cwist_http_request_destroy(req);
-            return keep_alive;
+            return keep_alive ? APP_SERVE_KEEPALIVE : APP_SERVE_CLOSE;
         }
     }
     // -----------------------------
@@ -2207,7 +2213,7 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
     cwist_http_response *res = cwist_http_response_create_in_arena(req->arena);
     if (!res) {
         cwist_http_request_destroy(req);
-        return false;
+        return APP_SERVE_CLOSE;
     }
 
     bool endpoint_fixed = cwist_endpoint_has(req->endpoint_opts, CWIST_ENDPOINT_FIXED);
@@ -2218,6 +2224,14 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
     }
 
     internal_route_handler(app, req, res);
+
+    /* Deferred-response handoff: ownership of req/res (and the connection)
+     * moved to the cwist_async completion path.  Skip the send, BDR learning,
+     * and both destroys; ack before returning so the completion may free. */
+    if (res->deferred) {
+        cwist_async_dispatch_ack((cwist_async *)res->async);
+        return APP_SERVE_DEFERRED;
+    }
 
     if (app->bdr_ctx && !endpoint_fixed) {
         clock_gettime(CLOCK_MONOTONIC, &end);
@@ -2243,7 +2257,7 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
         if (send_err.error.err_i16 < 0) {
             cwist_http_response_destroy(res);
             cwist_http_request_destroy(req);
-            return false;
+            return APP_SERVE_CLOSE;
         }
 
         // --- Big Dumb Reply (Learn) ---
@@ -2277,7 +2291,7 @@ static bool app_serve_parsed_request(cwist_app *app, int client_fd, cwist_http_r
     cwist_http_response_destroy(res);
     cwist_http_request_destroy(req);
 
-    return keep_alive && !upgraded;
+    return (keep_alive && !upgraded) ? APP_SERVE_KEEPALIVE : APP_SERVE_CLOSE;
 }
 
 /**
@@ -2346,9 +2360,15 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
             }
             return CWIST_ASYNC_CLOSE;
         }
+        req->client_fd = client_fd;
         req->app = app;
         req->db = app->db;
-        if (!app_serve_parsed_request(app, client_fd, req, priority_weight)) {
+        req->async_conn = conn;
+        app_serve_result_t sr = app_serve_parsed_request(app, client_fd, req, priority_weight);
+        /* Deferred: stop draining so pipelined bytes stay in the stash and
+         * responses remain ordered; the completion path re-arms or closes. */
+        if (sr == APP_SERVE_DEFERRED) return CWIST_ASYNC_DEFER;
+        if (sr == APP_SERVE_CLOSE) {
             if (dbg) {
                 long n = atomic_fetch_add(&dbg_serve_close, 1) + 1;
                 if (n <= 5 || n % 10000 == 0)
@@ -2448,7 +2468,13 @@ void cwist_app_http_handler(int client_fd, void *ctx) {
         req->app = app;
         req->db = app->db;
 
-        if (!app_serve_parsed_request(app, client_fd, req, priority_weight)) {
+        app_serve_result_t sr = app_serve_parsed_request(app, client_fd, req, priority_weight);
+        if (sr == APP_SERVE_DEFERRED) {
+            /* The async completion owns the fd now; it re-arms on the pool
+             * (keep-alive) or closes.  Do not close here. */
+            return;
+        }
+        if (sr == APP_SERVE_CLOSE) {
             break;
         }
     }

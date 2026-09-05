@@ -33,12 +33,15 @@
 #include <errno.h>
 #include <poll.h>
 #include <pthread.h>
+#include <stdatomic.h>
+#include <fcntl.h>
 
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <linux/io_uring.h>
 #include <sys/mman.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 
 static inline int sys_io_uring_setup(unsigned entries, struct io_uring_params *p) {
     return (int)syscall(__NR_io_uring_setup, entries, p);
@@ -130,6 +133,13 @@ typedef struct reactor_slot_chunk {
 struct cwist_reactor {
     reactor_impl_t impl;
     bool running;
+    /* Foreign-thread completion stack (Treiber MPSC) plus the self-pipe that
+     * wakes a parked run thread: producers push a node and write a byte to
+     * wake_wr; the run thread drains the stack on the wake event (and once
+     * per loop iteration as a backstop). */
+    _Atomic(cwist_reactor_post_t *) post_head;
+    int wake_fd;   /* Read side registered with the poller. */
+    int wake_wr;   /* Write side (same fd as wake_fd for eventfd). */
     /* Dynamically grown slot chunks: a fixed pool (formerly 4096 slots)
      * capped every reactor at 4096 live connections, which is what shed
      * requests en masse past ~500k concurrent connections.  Chunks are never
@@ -195,6 +205,54 @@ static void free_reactor_ctx(cwist_reactor_t *r, reactor_event_ctx_t *ev_ctx) {
     ev_ctx->ctx = r->free_head;
     r->free_head = ev_ctx;
     pthread_mutex_unlock(&r->pool_lock);
+}
+
+bool cwist_reactor_post(cwist_reactor_t *r, cwist_reactor_post_t *node) {
+    if (!r || !node || !node->cb) return false;
+    cwist_reactor_post_t *head = atomic_load_explicit(&r->post_head, memory_order_relaxed);
+    do {
+        node->next = head;
+    } while (!atomic_compare_exchange_weak_explicit(&r->post_head, &head, node,
+                                                    memory_order_release, memory_order_relaxed));
+    if (r->wake_wr >= 0) {
+        uint64_t one = 1;
+        ssize_t ign = write(r->wake_wr, &one, sizeof(one));
+        (void)ign; /* EAGAIN means the run thread is already awake. */
+    }
+    return true;
+}
+
+/* Pop the whole MPSC stack and run the callbacks oldest-first.  Only ever
+ * called by the reactor's run thread (or destroy, after it has stopped). */
+static void reactor_drain_posts(cwist_reactor_t *r) {
+    cwist_reactor_post_t *list = atomic_exchange_explicit(&r->post_head, NULL, memory_order_acquire);
+    cwist_reactor_post_t *rev = NULL;
+    while (list) {
+        cwist_reactor_post_t *next = list->next;
+        list->next = rev;
+        rev = list;
+        list = next;
+    }
+    while (rev) {
+        cwist_reactor_post_t *next = rev->next;
+        rev->cb(rev->ctx);
+        rev = next;
+    }
+}
+
+static void reactor_wake_cb(int fd, void *ctx) {
+    cwist_reactor_t *r = *(cwist_reactor_t *const *)ctx;
+    uint64_t buf[8];
+    while (read(fd, buf, sizeof(buf)) > 0) {}
+    reactor_drain_posts(r);
+    /* One-shot slots are recycled after firing: re-arm for the next post. */
+    if (!cwist_reactor_add(r, fd, reactor_wake_cb, &r, sizeof(r))) {
+        int wr = r->wake_wr;
+        r->wake_fd = -1;
+        r->wake_wr = -1;
+        close(fd);
+        if (wr >= 0 && wr != fd) close(wr);
+    }
 }
 
 cwist_reactor_t *cwist_reactor_create(void) {
@@ -267,11 +325,42 @@ cwist_reactor_t *cwist_reactor_create(void) {
         return NULL;
     }
 #endif
+    r->wake_fd = -1;
+    r->wake_wr = -1;
+    atomic_init(&r->post_head, NULL);
+#ifdef __linux__
+    r->wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    r->wake_wr = r->wake_fd;
+#else
+    {
+        int pfds[2];
+        if (pipe(pfds) == 0) {
+            for (int i = 0; i < 2; i++) {
+                int fl = fcntl(pfds[i], F_GETFL, 0);
+                if (fl >= 0) fcntl(pfds[i], F_SETFL, fl | O_NONBLOCK);
+            }
+            r->wake_fd = pfds[0];
+            r->wake_wr = pfds[1];
+        }
+    }
+#endif
+    if (r->wake_fd >= 0 &&
+        !cwist_reactor_add(r, r->wake_fd, reactor_wake_cb, &r, sizeof(r))) {
+        /* Wake best-effort: the run loop still drains the stack each round. */
+        close(r->wake_fd);
+        if (r->wake_wr != r->wake_fd) close(r->wake_wr);
+        r->wake_fd = -1;
+        r->wake_wr = -1;
+    }
     return r;
 }
 
 void cwist_reactor_destroy(cwist_reactor_t *reactor) {
     if (!reactor) return;
+    /* Run any completions posted after the run thread parked for good. */
+    reactor_drain_posts(reactor);
+    if (reactor->wake_fd >= 0) close(reactor->wake_fd);
+    if (reactor->wake_wr >= 0 && reactor->wake_wr != reactor->wake_fd) close(reactor->wake_wr);
 #ifdef __linux__
     if (!reactor->impl.use_epoll) {
         /* Teardown absorbed from io_uring_backend.c: unmap all three rings. */
@@ -554,6 +643,7 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
     if (!reactor->impl.use_epoll) {
         reactor->owner = pthread_self();
         while (reactor->running && atomic_load(&g_cwist_running)) {
+            reactor_drain_posts(reactor);
             /* One enter per round: submit the re-arms queued by the previous
              * dispatch batch and wait for the next event in the same call.
              * The wait is bounded (like the epoll path's 100 ms poll) because
@@ -600,6 +690,7 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
     } else {
         struct epoll_event events[1024];
         while (reactor->running && atomic_load(&g_cwist_running)) {
+            reactor_drain_posts(reactor);
             int n = epoll_wait(reactor->impl.epoll_fd, events, 1024, 100);
             if (n < 0) {
                 if (errno == EINTR) continue;
@@ -617,6 +708,7 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     struct kevent events[1024];
     while (reactor->running && atomic_load(&g_cwist_running)) {
+        reactor_drain_posts(reactor);
         int n = kevent(reactor->impl.kq_fd, NULL, 0, events, 1024, NULL);
         if (n < 0) {
             if (errno == EINTR) continue;

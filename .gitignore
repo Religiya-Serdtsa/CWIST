@@ -72,3 +72,5 @@ test_sstring_run
 fly.board/
 test_https
 benchmarks/web-frameworks/cwist_bench
+dist/
+cwist.pc

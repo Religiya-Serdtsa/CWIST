@@ -11,6 +11,7 @@
 #include <cwist/net/http/query.h>
 #include <cwist/core/db/sql.h>
 #include <cwist/sys/app/endpoint_opts.h>
+#include <cwist/sys/io/reactor.h>
 #include <stdint.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -22,6 +23,7 @@ long get_cpu_cores(void);
 long get_optimal_thread_count(void);
 
 struct cwist_app;
+struct cwist_http_async_conn;
 
 /** --- Enums --- */
 
@@ -50,7 +52,8 @@ typedef enum cwist_http_status_t {
     CWIST_HTTP_RANGE_NOT_SATISFIABLE = 416,
     CWIST_HTTP_INTERNAL_ERROR = 500,
     CWIST_HTTP_NOT_IMPLEMENTED = 501,
-    CWIST_HTTP_SERVICE_UNAVAILABLE = 503
+    CWIST_HTTP_SERVICE_UNAVAILABLE = 503,
+    CWIST_HTTP_GATEWAY_TIMEOUT = 504
 } cwist_http_status_t;
 
 /** @brief Failure reason reported by the request receive APIs.
@@ -111,6 +114,7 @@ typedef struct cwist_http_request {
     void *session;          ///< cwist_session_t pointer set by session middleware.
     char *csrf_token;       ///< CSRF token populated by csrf middleware.
     void *arena;            ///< Per-request arena for bump-allocated structs (internal).
+    void *async_conn;       ///< C1M connection shell when on the reactor path (internal).
 } cwist_http_request;
 
 typedef void (*cwist_http_body_cleanup_fn)(const void *ptr, size_t len, void *ctx);
@@ -148,6 +152,10 @@ typedef struct cwist_http_response {
 
     void *arena;            ///< Per-response arena for bump-allocated structs (internal).
     bool arena_borrowed;    ///< True when arena is shared (e.g. the request's) and must not be destroyed here.
+
+    /// Deferred-response handoff (internal; see net/http/async.h)
+    bool deferred;          ///< Handler deferred the response via cwist_async_defer.
+    void *async;            ///< Owning cwist_async while deferred.
 } cwist_http_response;
 
 /** --- API Functions --- */
@@ -287,6 +295,15 @@ void cwist_http_pool_destroy(void);
  * Writes still use the bounded poll wait inside cwist_http_send_response
  * (CWIST_HTTP_TIMEOUT_MS), so a slow client can occupy a reactor thread for
  * that budget; true EPOLLOUT write resumption is future work. */
+typedef enum {
+    CWIST_ASYNC_CLOSE = 0,  /* Close fd and release the connection. */
+    CWIST_ASYNC_REARM,      /* Keep the connection; wait for more reads. */
+    CWIST_ASYNC_DETACH,     /* Handler took ownership of fd (h2c, upgrades). */
+    CWIST_ASYNC_DEFER       /* Response deferred (cwist_async); leave fd and conn untouched. */
+} cwist_async_action_t;
+
+typedef cwist_async_action_t (*cwist_async_handler_t)(int fd, struct cwist_http_async_conn *conn);
+
 typedef struct cwist_http_async_conn {
     int fd;
     void *user_ctx;                       /* Owning app context. */
@@ -295,15 +312,16 @@ typedef struct cwist_http_async_conn {
     size_t len;
     bool virgin;                          /* No bytes seen yet (h2c preface sniff). */
     bool expect_continue_sent;            /* 100 Continue already emitted for the pending request. */
+    cwist_reactor_t *reactor;             /* Owning reactor (deferred-response completion target). */
+    cwist_async_handler_t handler;        /* Connection handler, reused for re-arm after a defer. */
 } cwist_http_async_conn_t;
 
-typedef enum {
-    CWIST_ASYNC_CLOSE = 0,  /* Close fd and release the connection. */
-    CWIST_ASYNC_REARM,      /* Keep the connection; wait for more reads. */
-    CWIST_ASYNC_DETACH      /* Handler took ownership of fd (h2c, upgrades). */
-} cwist_async_action_t;
-
-typedef cwist_async_action_t (*cwist_async_handler_t)(int fd, cwist_http_async_conn_t *conn);
+/* Re-arm a connection after a deferred response completed on the reactor
+ * thread (keep-alive), reusing the same one-shot event slot model as
+ * http_async_event_cb.  On failure the fd is closed and conn released.
+ * cwist_http_async_close closes the fd and releases the connection shell. */
+bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_async_conn_t *conn);
+void cwist_http_async_close(int client_fd, cwist_http_async_conn_t *conn);
 
 typedef enum {
     CWIST_RECV_OK = 0,

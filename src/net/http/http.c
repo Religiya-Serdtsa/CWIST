@@ -466,6 +466,11 @@ static void http_async_event_cb(int fd, void *ctx) {
 
     cwist_async_action_t action = handler(fd, conn);
 
+    if (action == CWIST_ASYNC_DEFER) {
+        /* The handler parked the request on a cwist_async; the completion
+         * path owns fd and conn now and re-arms or closes when done. */
+        return;
+    }
     if (action == CWIST_ASYNC_DETACH) {
         /* The handler owns fd now (h2c preface, protocol upgrade).  Free the
          * shell but never touch the fd. */
@@ -507,6 +512,40 @@ static void http_async_event_cb(int fd, void *ctx) {
     }
 }
 
+bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_async_conn_t *conn) {
+    if (client_fd < 0 || !reactor || !conn) return false;
+    http_async_ctx_t next = {
+        .client_fd = client_fd,
+        .handler = conn->handler,
+        .ctx = conn->user_ctx,
+        .reactor = reactor,
+        .conn = conn,
+    };
+    if (conn->len > 0) {
+        /* Pipelined bytes already sit in the stash: waiting for POLLIN would
+         * hang, so dispatch the pending data as if a read event had fired. */
+        http_async_event_cb(client_fd, &next);
+        return true;
+    }
+    /* Same stash shrink as the REARM path in http_async_event_cb. */
+    if (conn->rbuf) {
+        cwist_free(conn->rbuf);
+        conn->rbuf = NULL;
+        conn->cap = 0;
+    }
+    if (!cwist_reactor_add(reactor, client_fd, http_async_event_cb, &next, sizeof(next))) {
+        close(client_fd);
+        http_async_conn_release(conn);
+        return false;
+    }
+    return true;
+}
+
+void cwist_http_async_close(int client_fd, cwist_http_async_conn_t *conn) {
+    if (client_fd >= 0) close(client_fd);
+    http_async_conn_release(conn);
+}
+
 bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, void *ctx) {
     long limit = cwist_http_inflight_limit();
     long inflight = atomic_fetch_add_explicit(&g_http_inflight, 1, memory_order_acq_rel) + 1;
@@ -538,6 +577,9 @@ bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, 
     size_t worker_idx = g_rr_index;
     g_rr_index = (g_rr_index + 1) % (size_t)g_http_thread_count;
     http_thread_worker_t *w = &g_workers[worker_idx];
+
+    conn->reactor = w->reactor;
+    conn->handler = handler;
 
     http_async_ctx_t c = {
         .client_fd = client_fd,
