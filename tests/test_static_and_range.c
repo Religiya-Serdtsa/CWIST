@@ -92,10 +92,6 @@ static int read_response(int fd, char *buf, size_t buf_size) {
     return (int)total;
 }
 
-static bool response_has_status(const char *response, const char *status_line) {
-    return strstr(response, status_line) != NULL;
-}
-
 static bool response_has_code(const char *response, const char *code) {
     char prefix[16];
     snprintf(prefix, sizeof(prefix), "HTTP/1.1 %s", code);
