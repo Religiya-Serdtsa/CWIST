@@ -1382,6 +1382,17 @@ static int h2_decode_header_block(h2_conn *hc, cwist_http_request *req,
     /* Pseudo-headers are forbidden outside the request header block
      * (e.g. trailers); seed the state so any ':' name errors out. */
     st.seen_regular = !is_request;
+    /* A semantically invalid field (duplicate/misplaced pseudo-header,
+     * missing :method/:path, ...) is a stream error, not a connection
+     * error: the request is answered with RST_STREAM, but the HPACK
+     * dynamic table is a connection-wide compression context shared with
+     * the peer's encoder. Bailing out mid-block on a stream error would
+     * skip any incremental-indexing insertions still to come and desync
+     * the decoder's table from the encoder's, corrupting *unrelated*
+     * requests later on the same connection. So keep decoding the full
+     * block to keep the table in sync, and only report the stream error
+     * once the whole block has been consumed. */
+    bool stream_error = false;
 
     while (pos < len) {
         uint8_t b = payload[pos];
@@ -1396,7 +1407,7 @@ static int h2_decode_header_block(h2_conn *hc, cwist_http_request *req,
             const cwist_http2_static_header *entry = h2_static_header(index);
             if (entry && entry->name) {
                 if (h2_apply_header(req, entry->name, entry->value, &st) != 0)
-                    return H2_DECODE_STREAM_ERROR;
+                    stream_error = true;
                 continue;
             }
             const h2_hpack_entry *dyn = h2_hpack_dynamic_get(hc, index);
@@ -1405,7 +1416,7 @@ static int h2_decode_header_block(h2_conn *hc, cwist_http_request *req,
                 return H2_DECODE_COMPRESSION_ERROR;
             }
             if (h2_apply_header(req, dyn->name, dyn->value, &st) != 0)
-                return H2_DECODE_STREAM_ERROR;
+                stream_error = true;
             continue;
         }
 
@@ -1454,14 +1465,20 @@ static int h2_decode_header_block(h2_conn *hc, cwist_http_request *req,
             return H2_DECODE_COMPRESSION_ERROR;
         }
         int rc = h2_apply_header(req, name, value, &st);
-        if (rc == 0 && incremental_indexing) {
+        /* Insert into the dynamic table regardless of rc: incremental
+         * indexing is a compression-context effect, independent of
+         * whether this particular field made the request semantically
+         * invalid (see comment above stream_error). */
+        if (incremental_indexing) {
             if (h2_hpack_insert(hc, name, value) != 0) rc = -2;
         }
         cwist_free(name);
         cwist_free(value);
         if (rc == -2) return H2_DECODE_COMPRESSION_ERROR;
-        if (rc != 0) return H2_DECODE_STREAM_ERROR;
+        if (rc != 0) stream_error = true;
     }
+
+    if (stream_error) return H2_DECODE_STREAM_ERROR;
 
     /* RFC 7540 §8.1.2.3: request header blocks must carry :method and :path. */
     if (is_request && (!st.seen_method || !st.seen_path)) {
