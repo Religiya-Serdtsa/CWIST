@@ -3880,5 +3880,58 @@
       "virtual_threads": false,
       "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
     }
+  },
+  {
+    "timestamp": "2026-09-05T09:34:46.622082+00:00",
+    "cwist_rps": 151371.0,
+    "cwist_lat_ms": 1.52,
+    "cwist_p90_ms": 3.2,
+    "cwist_p99_ms": 7.15,
+    "cwist_rss_kib": 15768.0,
+    "cwist_csw": 0.0,
+    "cwist_c1m_rps": 152628.16,
+    "cwist_c1m_lat_ms": 1.59,
+    "cwist_c1m_p90_ms": 3.27,
+    "cwist_c1m_p99_ms": 7.87,
+    "cwist_c1m_rss_kib": 9348.0,
+    "cwist_c1m_csw": 0.0,
+    "cwist_tuned_rps": 154702.66,
+    "cwist_tuned_lat_ms": 0.40608,
+    "cwist_tuned_p50_ms": 0.342,
+    "cwist_tuned_p90_ms": 0.693,
+    "cwist_tuned_p99_ms": 1.83,
+    "axum_rps": 154275.58,
+    "axum_lat_ms": 2.55,
+    "axum_p90_ms": 4.47,
+    "axum_p99_ms": 6.87,
+    "axum_rss_kib": 16840.0,
+    "axum_csw": 0.0,
+    "gin_rps": 115427.63,
+    "gin_lat_ms": 4.64,
+    "gin_p90_ms": 11.22,
+    "gin_p99_ms": 24.51,
+    "gin_rss_kib": 30560.0,
+    "gin_csw": 0.0,
+    "spring_rps": 68591.03,
+    "spring_lat_ms": 5.91,
+    "spring_p90_ms": 8.42,
+    "spring_p99_ms": 17.01,
+    "spring_rss_kib": 1318900.0,
+    "spring_csw": 0.0,
+    "wrk_profile": "wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)",
+    "tuned_profile": "wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)",
+    "runner_hw": "4 vCPU | AMD EPYC 9V74 80-Core Processor",
+    "go_env": {
+      "go_version": "go version go1.22.12 linux/amd64",
+      "framework": "Gin v1.10.0 (gin-gonic/gin, release mode)"
+    },
+    "spring_env": {
+      "java_version": "openjdk version \"25.0.4.1\" 2026-08-18 LTS",
+      "spring_boot_version": "3.2.3",
+      "stack": "Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)",
+      "jvm_opts": "-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)",
+      "virtual_threads": false,
+      "aot_cache": "CDS (-XX:ArchiveClassesAtExit training run + -XX:SharedArchiveFile replay)"
+    }
   }
 ]
