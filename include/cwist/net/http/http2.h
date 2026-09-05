@@ -20,6 +20,50 @@ typedef void (*cwist_http2_request_handler_func)(void *user_ctx,
                                                  cwist_http_request *req,
                                                  cwist_http_response *res);
 
+/** Opaque per-stream handle for hook-driven (e.g. gRPC streaming) I/O. */
+typedef struct cwist_h2_stream cwist_h2_stream;
+
+/** A literal header name/value pair for cwist_http2_stream_send_headers(). */
+typedef struct cwist_http2_header {
+    const char *name;
+    const char *value;
+} cwist_http2_header;
+
+/**
+ * Optional per-connection hooks that let a higher layer (gRPC) take over
+ * individual streams: inbound DATA is delivered incrementally instead of
+ * being buffered, and the stream emits its own response frames.
+ */
+typedef struct cwist_http2_stream_hooks {
+    /** Called once per connection; the result backs every other callback.
+     * May be NULL, in which case user_ctx is used as the hook context. */
+    void *(*on_conn_open)(void *user_ctx);
+    void (*on_conn_close)(void *conn_ctx);
+    /** Called when a request header block completes.  Return non-NULL to
+     * take over the stream (incremental DATA delivery, custom response);
+     * NULL keeps the default buffered dispatch. */
+    void *(*on_headers)(void *conn_ctx, cwist_http_request *req, cwist_h2_stream *stream);
+    /** Feed an inbound DATA payload; end_stream marks the client's final
+     * frame.  Return non-zero to tear the stream down. */
+    int (*on_data)(void *conn_ctx, void *stream_ctx,
+                   const unsigned char *data, size_t len, int end_stream);
+    /** Peer sent RST_STREAM (cancellation). */
+    void (*on_cancel)(void *conn_ctx, void *stream_ctx);
+    /** Called on every dispatcher iteration; enforce deadlines here.
+     * Return non-zero when the stream is finished and may be torn down. */
+    int (*on_poll)(void *conn_ctx, void *stream_ctx);
+    /** Nearest deadline (monotonic ms) across taken streams; 0 = none.
+     * Bounds the dispatcher's socket wait so deadlines fire on time. */
+    uint64_t (*next_deadline_ms)(void *conn_ctx);
+    /** Stream teardown; release the ctx returned by on_headers. */
+    void (*on_close)(void *conn_ctx, void *stream_ctx);
+} cwist_http2_stream_hooks;
+
+cwist_error_t cwist_http2_serve_connection_ex(cwist_https_connection *conn,
+                                              void *user_ctx,
+                                              cwist_http2_request_handler_func handler,
+                                              const cwist_http2_stream_hooks *hooks);
+
 /**
  * @brief Starts serving an HTTP/2 connection over an established HTTPS session.
  *
@@ -53,6 +97,25 @@ int cwist_http2_push_resource(cwist_http_request *req,
                               const char *content_type,
                               const unsigned char *data,
                               size_t data_len);
+
+/**
+ * Immediate outbound writes for hook-taken streams.  Safe to call from the
+ * stream handler's own thread; frames bypass the batching delay and are
+ * flushed to the socket before returning.
+ *
+ * cwist_http2_stream_send_headers emits a response HEADERS frame (status is
+ * taken from @p status, the pairs carry the remaining fields).
+ * cwist_http2_stream_send_data emits DATA frames (chunked to the peer's
+ * frame/window limits).  cwist_http2_stream_send_trailers emits a trailer
+ * HEADERS frame with END_STREAM.  All return 0 on success, -1 on failure.
+ */
+int cwist_http2_stream_send_headers(cwist_h2_stream *stream, int status,
+                                    const cwist_http2_header *headers, size_t header_count,
+                                    int end_stream);
+int cwist_http2_stream_send_data(cwist_h2_stream *stream,
+                                 const unsigned char *data, size_t len);
+int cwist_http2_stream_send_trailers(cwist_h2_stream *stream,
+                                     const cwist_http2_header *trailers, size_t trailer_count);
 
 #ifdef __cplusplus
 extern "C" {
