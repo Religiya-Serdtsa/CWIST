@@ -189,6 +189,37 @@ Use `cwist watcher --no-run` for CI or rebuild-only use, or `--poll` to force
 portable polling. `dev.debounce_ms` and `dev.stop_timeout_ms` in the manifest
 control atomic-save coalescing and graceful process shutdown.
 
+## Managing a project with the cwist CLI
+
+`make install` also installs the `cwist` command line tool into `$(PREFIX)/bin`.
+
+```sh
+# Scaffold a project: src/main.c, Makefile, and a demo.cwpro manifest
+cwist new project demo --directory ~/src
+cd ~/src/demo
+
+# Build and run like the generated Makefile does
+make            # cc src/main.c -lcwist -lpthread  (needs CWIST installed)
+./bin/demo
+
+# Develop with hot reload (incremental rebuild + zero-downtime restart)
+cwist watcher
+
+# Generate OpenAPI 3.1 from Doxygen @openapi.* route annotations
+cwist openapi
+
+# Generate C models and gRPC method paths from proto3 definitions
+cwist proto api.proto
+
+# Inspect the project manifest and detected routes
+cwist describe
+```
+
+The `.cwpro` manifest (`cwist-project/v1`) is the single source of truth for
+the watcher and generators: entry point, include paths, dev debounce/stop
+timeouts, and route discovery scope all live there, so builds stay reproducible
+across machines without extra configuration.
+
 ## Linking
 
 CWIST's `libcwist.a` is a **thin static archive**: it contains only CWIST
@@ -489,6 +520,18 @@ MySQL Handshake initiation packet to classify the server.
 - zlib
 - Brotli (`libbrotlienc`, `libbrotlicommon`)
 - Zstandard (`libzstd`)
+
+See [NOTICE.md](NOTICE.md) for the license summary of every vendored component.
+
+## Stability & conformance
+
+- **Versioning**: until CWIST 4.0, minor releases may adjust public APIs; pin
+  an exact tag in production. Draft-level features cycle through `dev` and
+  may appear/disappear between tags without a stability guarantee.
+- **Conformance gates**: every push runs the test suite under ASan/UBSan with
+  `-Werror`, plus an h2spec HTTP/2 conformance diff against a pinned baseline
+  (`scripts/ci/h2spec-baseline.txt`); regressions fail the build. Known
+  conformance gaps are tracked in that baseline file.
 
 ## Documentation
 

@@ -14,6 +14,7 @@
 
 #include <cwist/sys/app/app.h>
 #include <cwist/core/log.h>
+#include <cwist/core/mem/alloc.h>
 
 /**
  * @brief Send a minimal PostgreSQL StartupMessage and check for 'R' response.
@@ -144,7 +145,7 @@ bool cwist_rdbms_mount_runtime(cwist_app *app, cwist_rdbms_provider_t provider, 
         return true;
     }
 
-    struct cwist_rdbms_runtime *rt = (struct cwist_rdbms_runtime *)malloc(sizeof(*rt));
+    struct cwist_rdbms_runtime *rt = (struct cwist_rdbms_runtime *)cwist_alloc_array(1, sizeof(*rt));
     if (!rt) {
         CWIST_LOG_ERROR("RDBMS mount: out of memory");
         return false;

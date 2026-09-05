@@ -21,6 +21,7 @@ static void test_missing_table_query(cwist_db *db) {
     cwist_error_t err = cwist_db_query(db, "SELECT * FROM __cwist_missing_table;", &result);
     assert(err.errtype == CWIST_ERR_JSON);
     assert(result == NULL);
+    cwist_error_dispose(&err);
 }
 
 static void test_null_db_guards(void) {
