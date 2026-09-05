@@ -32,6 +32,20 @@ bool cwist_reactor_del(cwist_reactor_t *reactor, int fd);
 void cwist_reactor_run(cwist_reactor_t *reactor);
 void cwist_reactor_stop(cwist_reactor_t *reactor);
 
+/* Foreign-thread completion posting: cwist_reactor_post pushes a node onto a
+ * Treiber MPSC stack and wakes the reactor's run thread through an internal
+ * eventfd (Linux) / pipe (BSD/macOS).  The run thread drains the stack and
+ * invokes each node's callback on the owner thread.  The node is caller-owned
+ * (typically embedded in the completion object) and may be recycled once its
+ * callback has run. */
+typedef struct cwist_reactor_post {
+    struct cwist_reactor_post *next;
+    void (*cb)(void *ctx);
+    void *ctx;
+} cwist_reactor_post_t;
+
+bool cwist_reactor_post(cwist_reactor_t *reactor, cwist_reactor_post_t *node);
+
 #ifdef __cplusplus
 }
 #endif

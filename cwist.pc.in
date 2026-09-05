@@ -1,0 +1,13 @@
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+depsdir=${libdir}/cwist
+
+Name: cwist
+Description: C17 web framework and application server (HTTP/1.1, HTTP/2, HTTP/3, WebSocket, PQC TLS)
+URL: https://github.com/Religiya-Serdtsa/CWIST
+Version: @VERSION@
+Libs: -L${libdir} -L${depsdir} -lcwist -lnats_static -lttak -lcjson -luriparser -llsquic -lssl -lcrypto -lz -lzstd -lbrotlienc -lbrotlicommon -lbrotlidec -ldl -lpthread -lm -lstdc++
+Libs.private: -lcurl -lnghttp2
+Cflags: -I${includedir} -I${includedir}/cwist/vendor

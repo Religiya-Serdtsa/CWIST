@@ -129,6 +129,7 @@ memory management to the user. CWIST ships the whole stack:
 | **Database** | SQLite3 + ORM, Nuke DB (in-memory + WAL sync), RDBMS auto-detection |
 | **Routing** | Express-style `:param` routes, Mux router, chainable middleware |
 | **Performance** | Zero-copy I/O, generational arenas, EBR GC, lock-free queues, Big Dumb Reply cache |
+| **Async handlers** | Deferred responses (`cwist_async_defer` / `cwist_async_respond`): offload blocking work to a job thread and complete the request later without stalling the reactor |
 | **Observability** | Structured access logs, metrics endpoint, healthz, rate limiting |
 | **gRPC / Protobuf** | Unary and streaming routes, incremental framing, health/reflection services, and `cwist proto` scalar-model generation |
 | **Rendering** | HTML builder, CSS composer, template engine, JSON builder / heal |
@@ -231,6 +232,17 @@ The order above matters for static linking: CWIST first, then its dependencies.
 | `-lngtcp2 -lngtcp2_crypto_quictls` | HTTP/3 / QUIC |
 | `-lnghttp3` | HTTP/3 QPACK |
 | `-lcurl` | RDBMS auto-mount wire probing |
+
+### pkg-config (installed since v3.2)
+
+`make install` ships `cwist.pc`, so the flags above collapse into one line:
+
+```sh
+gcc -o server main.c $(pkg-config --cflags --libs cwist)
+```
+
+For static linking, use `pkg-config --cflags --libs --static cwist`, which also
+pulls in the optional libs (`-lcurl`, `-lnghttp2`).
 
 ### pkg-config snippet for Makefile
 
