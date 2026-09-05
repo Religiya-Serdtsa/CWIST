@@ -157,7 +157,7 @@ static bool write_text_file(const char *path, const char *data) {
 static void remove_tree(const char *dir) {
     char cmd[PATH_MAX + 32];
     snprintf(cmd, sizeof(cmd), "rm -rf -- %s", dir);
-    (void)system(cmd);
+    if (system(cmd) == -1) perror("system");
 }
 
 static bool create_aia_listener(int *out_fd, unsigned short *out_port) {
@@ -208,7 +208,8 @@ static void *aia_cert_server_thread(void *arg) {
     }
 
     char request_buf[1024];
-    (void)read(client_fd, request_buf, sizeof(request_buf));
+    ssize_t got = read(client_fd, request_buf, sizeof(request_buf));
+    (void)got;
 
     FILE *fp = fopen(server->cert_path, "rb");
     if (!fp) {
