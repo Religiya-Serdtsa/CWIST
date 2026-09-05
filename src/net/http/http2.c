@@ -384,6 +384,16 @@ static const cwist_http2_static_header cwist_http2_static_table[] = {
 
 static int h2_read(cwist_https_connection *conn, void *buf, int len) {
     if (conn->ssl) return SSL_read(conn->ssl, buf, len);
+    /* Cleartext connections may carry bytes the accept-path sniffer already
+     * consumed (e.g. the h2c preface and the frames pipelined with it);
+     * drain that prebuffer before touching the socket. */
+    if (conn->read_buf && conn->buf_len > 0) {
+        size_t n = conn->buf_len < (size_t)len ? conn->buf_len : (size_t)len;
+        memcpy(buf, conn->read_buf, n);
+        memmove(conn->read_buf, conn->read_buf + n, conn->buf_len - n);
+        conn->buf_len -= n;
+        return (int)n;
+    }
     return read(conn->fd, buf, len);
 }
 
@@ -2005,11 +2015,11 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
 
     for (size_t i = 0; i < msg.count; i++) {
         while (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
-            if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
-            if (s && s->send_aborted) return -1;
+            if (h2_process_incoming_frames_nonblocking(hc, s) != 0) goto fail;
+            if (s && s->send_aborted) goto fail;
             if (hc->fc.send_window == 0 || (s && s->fc.send_window == 0)) {
                 /* Give up if no frame arrived within the idle deadline. */
-                if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
+                if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) goto fail;
                 struct timespec ts = {0, 2000000};
                 nanosleep(&ts, NULL);
             }
@@ -2018,8 +2028,8 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
         size_t chunk_len = msg.chunk_lens[i];
         if (h2_send_allowance(hc, s, (uint32_t)chunk_len) < chunk_len) {
             /* Window too small for a full sequenced chunk; wait for update. */
-            if (h2_process_incoming_frames_nonblocking(hc, s) != 0) return -1;
-            if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) return -1;
+            if (h2_process_incoming_frames_nonblocking(hc, s) != 0) goto fail;
+            if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) goto fail;
             struct timespec ts = {0, 2000000};
             nanosleep(&ts, NULL);
             i--;
@@ -2029,8 +2039,7 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
         uint8_t flags = (i + 1 == msg.count) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
         if (h2_write_frame(hc, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
                            msg.chunks[i], (uint32_t)chunk_len) != 0) {
-            cwist_seq_message_free(&msg);
-            return -1;
+            goto fail;
         }
         if (s) s->send_xor ^= h2_xor_bytes(msg.chunks[i], chunk_len);
         h2_commit_send(hc, s, (uint32_t)chunk_len);
@@ -2038,6 +2047,10 @@ static int h2_send_seq_memory_body(h2_conn *hc, h2_stream *s, uint32_t stream_id
 
     cwist_seq_message_free(&msg);
     return 0;
+
+fail:
+    cwist_seq_message_free(&msg);
+    return -1;
 }
 
 /* --- Hook-driven stream senders (public API) ---

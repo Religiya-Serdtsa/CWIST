@@ -40,6 +40,7 @@ void test_resize() {
     // Shrink with data loss warning
     err = cwist_sstring_change_size(s, 2, false); // "12345" -> 2 bytes?
     assert(err.errtype == CWIST_ERR_JSON); // Should fail
+    cwist_error_dispose(&err);
 
     // Shrink with blow_data
     err = cwist_sstring_change_size(s, 2, true);

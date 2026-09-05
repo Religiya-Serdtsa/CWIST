@@ -123,6 +123,13 @@ static inline bool cwist_error_is_ok(const cwist_error_t *err) {
  */
 cwist_error_t make_error(cwist_errtype_t type);
 
+/**
+ * @brief Release resources owned by an error value.
+ * Currently only CWIST_ERR_JSON owns memory (the cJSON payload); all other
+ * variants are no-ops. Safe on success values and on NULL.
+ */
+void cwist_error_dispose(cwist_error_t *err);
+
 /* --- Generic Error Macros --- */
 
 /** @name Common Status Codes

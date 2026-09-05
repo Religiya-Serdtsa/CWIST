@@ -32,8 +32,9 @@ jobs:
       shell: bash
       run: |
         make clean
-        make -j$(nproc) SANITIZE=address,undefined
-        make SANITIZE=address,undefined test
+        make -j$(nproc) SANITIZE=address,undefined WERROR=1
+        make SANITIZE=address,undefined WERROR=1 test
       env:
         ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:halt_on_error=1
+        LSAN_OPTIONS: suppressions=tests/lsan.supp
         UBSAN_OPTIONS: halt_on_error=1:abort_on_error=1
