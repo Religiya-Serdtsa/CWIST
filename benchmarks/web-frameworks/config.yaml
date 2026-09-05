@@ -16,7 +16,7 @@ framework:
     - libnghttp2-dev
 
   download:
-    - git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/Religiya-Serdtsa/CWIST.git cwist
+    - git clone --depth 1 --branch v3.2 --recurse-submodules --shallow-submodules https://github.com/Religiya-Serdtsa/CWIST.git cwist
 
   build:
     - cd cwist && make -j$(nproc)
@@ -27,6 +27,7 @@ framework:
         -Lcwist/lib/libttak/lib
         -Lcwist/lib/cnats/build/lib
         -Lcwist/lib/cjson
+        -Lcwist/lib/uriparser/build
         -lcwist -lnats_static -lttak -lcjson -luriparser -llsquic
         -lssl -lcrypto
         $(pkg-config --libs libcurl libnghttp2 libbrotlienc libbrotlicommon libbrotlidec libzstd)
