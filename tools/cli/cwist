@@ -447,17 +447,33 @@ def project_file(value: str | None) -> Path:
     return matches[0]
 
 
-def watched_files(root: Path) -> dict[Path, int]:
+def _is_excluded(path: Path, root: Path, exclude: list[str]) -> bool:
+    """True when path sits under an excluded root-relative directory prefix."""
+    if not exclude:
+        return False
+    try:
+        parts = path.relative_to(root).parts
+    except ValueError:
+        return False
+    for entry in exclude:
+        prefix = Path(entry).parts
+        if prefix and parts[:len(prefix)] == prefix:
+            return True
+    return False
+
+
+def watched_files(root: Path, exclude: list[str] | None = None) -> dict[Path, int]:
     """Return source and build-description mtimes, excluding generated output."""
     names = {"Makefile", "makefile", "GNUmakefile"}
     return {path: path.stat().st_mtime_ns for path in root.rglob("*")
             if path.is_file() and (path.suffix in {".c", ".h", ".cwpro"} or path.name in names)
-            and ".cwist-build" not in path.parts and "bin" not in path.parts}
+            and ".cwist-build" not in path.parts and "bin" not in path.parts
+            and not _is_excluded(path, root, exclude or [])}
 
 
-def impacted_sources(root: Path, changed: set[Path]) -> set[Path]:
+def impacted_sources(root: Path, changed: set[Path], exclude: list[str] | None = None) -> set[Path]:
     """Return C translation units affected through local quoted includes."""
-    files = watched_files(root)
+    files = watched_files(root, exclude)
     reverse: dict[Path, set[Path]] = {}
     include = re.compile(r'^\s*#\s*include\s+"([^"]+)"')
     for path in files:
@@ -485,8 +501,9 @@ class FileEventSource:
     _IN_MASK = 0x00000002 | 0x00000008 | 0x00000040 | 0x00000080 | 0x00000100 | 0x00000200
     _SKIP = {".git", "bin", "build", ".cwist-build", "node_modules", "__pycache__"}
 
-    def __init__(self, root: Path, force_poll: bool = False) -> None:
+    def __init__(self, root: Path, force_poll: bool = False, exclude: list[str] | None = None) -> None:
         self.root = root
+        self.exclude = exclude or []
         self.fd = -1
         self.kq = None
         self.open_fds: list[int] = []
@@ -500,7 +517,8 @@ class FileEventSource:
         dirs = []
         for path in self.root.rglob("*"):
             if path.is_dir() and not any(part in self._SKIP for part in path.parts):
-                dirs.append(path)
+                if not _is_excluded(path, self.root, self.exclude):
+                    dirs.append(path)
         return [self.root, *dirs]
 
     def _open_inotify(self) -> None:
@@ -645,13 +663,18 @@ def watcher(project_arg: str | None, interval: float, once: bool, run: bool, for
     if manifest.get("format") != FORMAT: fail("unsupported .cwpro format")
     root = manifest_path.parent
     source_root = root / manifest.get("openapi", {}).get("source", "src")
-    previous = watched_files(root)
+    watch_cfg = manifest.get("watch", {})
+    exclude = watch_cfg.get("exclude", [])
+    if not isinstance(exclude, list) or not all(isinstance(e, str) for e in exclude):
+        fail("watch.exclude must be a list of root-relative directory paths")
+    previous = watched_files(root, exclude)
     dev = manifest.get("dev", {})
     command = dev.get("command") or f"./{manifest.get('build', {}).get('binary', '')}"
     supervisor = ProcessSupervisor(root, command, int(dev.get("stop_timeout_ms", 5000)))
-    events = FileEventSource(root, force_poll)
+    events = FileEventSource(root, force_poll, exclude)
     debounce = max(int(dev.get("debounce_ms", 150)), 0) / 1000
-    print(f"watching {source_root} ({events.backend}, interval {interval:.2f}s, hot reload {'on' if run else 'off'})")
+    print(f"watching {source_root} ({events.backend}, interval {interval:.2f}s, hot reload {'on' if run else 'off'}"
+          + (f", excluding {', '.join(exclude)}" if exclude else "") + ")")
     last_build_ok = True
     try:
         if run and not once and not supervisor.start():
@@ -661,7 +684,7 @@ def watcher(project_arg: str | None, interval: float, once: bool, run: bool, for
                 changed = {path for path in previous if path.suffix == ".c"}
             else:
                 event_changed = events.wait(interval)
-                current = watched_files(root)
+                current = watched_files(root, exclude)
                 changed = {path for path in set(previous) | set(current) if previous.get(path) != current.get(path)}
                 previous = current
                 if event_changed:
@@ -670,12 +693,12 @@ def watcher(project_arg: str | None, interval: float, once: bool, run: bool, for
                 # Coalesce editor atomic-save bursts before calculating the impact graph.
                 if debounce and not once:
                     time.sleep(debounce)
-                    current = watched_files(root)
+                    current = watched_files(root, exclude)
                     changed |= {path for path in set(previous) | set(current)
                                 if previous.get(path) != current.get(path)}
                     previous = current
                 source_changes = {path for path in changed if path.suffix in {".c", ".h"}}
-                scope = impacted_sources(root, source_changes) if source_changes else set()
+                scope = impacted_sources(root, source_changes, exclude) if source_changes else set()
                 print("changed:", ", ".join(str(path.relative_to(root)) for path in sorted(changed)))
                 print("recompile scope:", ", ".join(str(path.relative_to(root)) for path in sorted(scope)) or "build metadata")
                 env = dict(__import__("os").environ)
