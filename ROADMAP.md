@@ -196,9 +196,9 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 
 ### Ecosystem
 
-* Wire the incremental gRPC output sink directly to HTTP/2 DATA-frame flushing and dedicated trailers.
-* Extend `cwist proto` beyond scalar proto3 models to repeated, nested, enum, and descriptor-set bindings.
-* Add gRPC deadlines, cancellation propagation, metadata normalization, retry policy, and load balancing.
+* Finish `cwist proto` for v3.4: `oneof`, `map`, fixed-width types, and descriptor-set input (scalar/enum/nested/repeated-packed already done).
+* Add gRPC client-side support: h2/h2c client, retry policy, and load balancing.
+* Add gRPC server-side response compression and WINDOW_UPDATE-aware blocking sends.
 * Extend the GraphQL subset with schema validation, mutations, nested selections, and subscriptions.
 * Stabilize the experimental native C WebTransport client after LSQUIC PR #629 merges upstream.
 * Evaluate persistent job backends separately from the in-process queue/scheduler.
@@ -231,9 +231,21 @@ Completed:
 Known limits:
 
 * Server-side response compression is not implemented (requests only); handler-thread sends do not block waiting for WINDOW_UPDATE (a zero-credit send fails with UNAVAILABLE).
-* The proto generator currently supports scalar proto3 model encoders and service paths, not repeated/nested/enum/descriptor-set bindings.
+* The proto generator covers scalar, enum, nested message, and repeated packed-numeric proto3 fields plus service paths; `oneof`, `map`, fixed-width types, and descriptor-set input remain (v3.4).
 * The builtin health `Watch` route stays on the buffered dispatch path.
 * No gRPC client, retry policy, or load-balancing policy exists yet.
+
+---
+
+## v3.4 Milestone (Planned)
+
+Theme: gRPC client side and codegen completeness. v3.3 shipped the wire-level streaming server (DATA-frame wiring, trailers, deadlines, gzip) plus the first proto codegen extension (enums, nested message fields, repeated packed numerics); v3.4 finishes the story instead of moving the already-pushed v3.3 tag.
+
+* **`cwist proto` completion**: `oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`), and `protoc --descriptor_set_out` input bindings. CLI-only work (`tools/cli/cwist`), no library ABI impact.
+* **gRPC client**: h2/h2c client with unary/streaming calls, retry policy, and client-side load balancing.
+* **gRPC server leftovers**: server-side response compression, WINDOW_UPDATE-aware blocking sends, and moving health `Watch` onto the streaming dispatch path.
+* **Async v2**: POLLOUT-resumable writer for deferred completions (slow-client budget removal).
+* **Distribution**: publish the Homebrew formula and vcpkg port beyond the current drafts (P4 #30).
 
 ---
 
