@@ -2,12 +2,18 @@
 # This file is maintained here and mirrored into the benchmark repository as
 # `c/cwist/config.yaml`. The matching application source is `main.c`.
 
+language:
+  engines:
+    default:
+      command: /opt/web/cwist_bench
+
 framework:
   github: Religiya-Serdtsa/CWIST
   version: 3.3
 
   build_deps:
     - git
+    - ca-certificates
     - cmake
     - pkg-config
     - libzstd-dev
@@ -20,7 +26,7 @@ framework:
 
   build:
     - cd cwist && make -j$(nproc)
-    - gcc -O2 -Icwist/include -o cwist_bench main.c
+    - gcc -O2 -Icwist/include -Icwist/lib -o cwist_bench main.c
         -Lcwist
         -Lcwist/lib/boringssl/build
         -Lcwist/lib/lsquic/build/src/liblsquic
@@ -35,5 +41,3 @@ framework:
 
   binaries:
     - cwist_bench
-
-  command: /opt/web/cwist_bench
