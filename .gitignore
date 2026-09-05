@@ -64,6 +64,8 @@ example/micro/*/*
 test_rdbms_auto_mount
 test_webtransport
 test_mux_param
+test_proto_gen
+tests/test_proto_gen_sample.cwist.pb.h
 
 # Runtime artifacts
 example/othello-web/othello.db

@@ -217,13 +217,19 @@ Completed:
 * `cwist_pb_zigzag_encode()` / `cwist_pb_zigzag_decode()` cover signed integer mappings used by `sint32` / `sint64` style fields.
 * `test_grpc` verifies Protobuf request construction, gRPC frame handling, unary dispatch, buffered streaming dispatch, multi-message response parsing, invalid content type handling, and malformed frame rejection.
 
+* HTTP/2 streaming calls are wired end-to-end: inbound DATA frames feed `cwist_grpc_decoder_feed()` directly (client-streaming handlers see messages as they arrive via the blocking `cwist_grpc_stream_recv()`), and `cwist_grpc_stream_send()` flushes DATA frames immediately from the handler thread. The app server wires this via `cwist_http2_serve_connection_ex()` + `cwist_grpc_http2_hooks()`.
+* `grpc-status` / `grpc-message` are emitted in a dedicated HTTP/2 trailer HEADERS frame (END_STREAM) for both unary and streaming responses.
+* `grpc-timeout` is parsed (`cwist_grpc_parse_timeout()`), enforced on streaming calls (DEADLINE_EXCEEDED trailers plus handler cancellation), and client RST_STREAM propagates to handlers via `cwist_grpc_stream_cancelled()` / a `-1` recv.
+* Request metadata is normalized: header names are lowercased at the HTTP/2 layer, lookups are case-insensitive (`cwist_grpc_metadata_get()`), and `*-bin` values are base64-decoded (`cwist_grpc_metadata_get_binary()`).
+* Compression negotiation: `grpc-encoding: gzip` request messages are inflated (zlib), `grpc-accept-encoding: gzip, identity` is advertised, and unsupported encodings are rejected with `UNIMPLEMENTED`.
+* `test_grpc` covers the buffered path (unary/streaming dispatch, metadata, gzip, recv replay, timeout parsing); `test_grpc_stream` covers the wire path over h2c (split DATA delivery, trailer frames, deadline, RST cancellation, gzip, unsupported-encoding rejection).
+
 Known limits:
 
-* The incremental decoder and output sink are available now; the current HTTP/2 dispatcher still buffers inbound bodies and needs direct DATA-frame sink wiring for end-to-end low-latency flushing.
-* Compressed gRPC messages are rejected with `UNIMPLEMENTED`; compression negotiation is not wired yet.
+* Server-side response compression is not implemented (requests only); handler-thread sends do not block waiting for WINDOW_UPDATE (a zero-credit send fails with UNAVAILABLE).
 * The proto generator currently supports scalar proto3 model encoders and service paths, not repeated/nested/enum/descriptor-set bindings.
-* HTTP/2 response trailers are represented as gRPC metadata headers for now; dedicated trailer-frame emission is a follow-up.
-* No gRPC client, deadline propagation, retry policy, or load-balancing policy exists yet.
+* The builtin health `Watch` route stays on the buffered dispatch path.
+* No gRPC client, retry policy, or load-balancing policy exists yet.
 
 ---
 

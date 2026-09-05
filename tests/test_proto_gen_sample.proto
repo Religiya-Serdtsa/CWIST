@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package proto_gen_sample;
+
+enum Color {
+  COLOR_UNSPECIFIED = 0;
+  COLOR_RED = 1;
+  COLOR_GREEN = 2;
+}
+
+message Inner {
+  string note = 1;
+  sint64 delta = 2;
+}
+
+message Outer {
+  string name = 1;
+  int64 id = 2;
+  bool active = 3;
+  repeated int64 ids = 4;
+  repeated string tags = 5;
+  Inner inner = 6;
+  repeated Inner items = 7;
+  Color color = 8;
+  repeated Color shades = 9;
+}
+
+service Greeter {
+  rpc SayHello (Outer) returns (Outer);
+}
