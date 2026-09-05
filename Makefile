@@ -182,6 +182,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/mux.c \
        src/net/http/multipart.c \
        src/net/http/async_server.c \
+       src/net/http/async.c \
        src/net/http/cookie.c \
        src/net/http/session.c \
        src/net/http/query.c \
@@ -256,13 +257,23 @@ CNATS_LIB = $(CNATS_DIR)/build/lib/libnats_static.a
 PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
 INCLUDEDIR ?= $(PREFIX)/include
+PCDIR ?= $(LIBDIR)/pkgconfig
 DEPSDIR ?= $(LIBDIR)/cwist
+
+# Release version: latest git tag without the leading 'v'.
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+ifeq ($(strip $(VERSION)),)
+VERSION = 0.0.0
+endif
+
+PC_FILE = cwist.pc
 VENDOR_INCLUDEDIR ?= $(INCLUDEDIR)/cwist/vendor
 
 INSTALL_LIBDIR = $(DESTDIR)$(LIBDIR)
 INSTALL_INCLUDEDIR = $(DESTDIR)$(INCLUDEDIR)
 INSTALL_DEPSDIR = $(DESTDIR)$(DEPSDIR)
 INSTALL_VENDOR_INCLUDEDIR = $(DESTDIR)$(VENDOR_INCLUDEDIR)
+INSTALL_PCDIR = $(DESTDIR)$(PCDIR)
 
 EXTERNAL_LIBS = $(URIPARSER_LIB) \
                 $(CJSON_LIB) \
@@ -394,11 +405,12 @@ TEST_TARGETS = test_sstring \
                test_db_pool \
                test_redis \
                test_scheduler \
+               test_async_defer \
                test_test_client \
                test_multiport \
                test_grpc
 
-.PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall clean rebuild examples clean-examples
+.PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples
 
 # Run with e.g. `make fuzz_seq FUZZ_RUNS=100000`.  The target intentionally
 # uses a dedicated clang/libFuzzer toolchain and is not part of `make test`.
@@ -528,7 +540,7 @@ test_bdr: $(LIB_NAME) tests/test_bdr.c
 	$(CC) $(CFLAGS) -o test_bdr tests/test_bdr.c $(LIB_NAME) $(LIBS)
 	./test_bdr
 
-install: $(LIB_NAME)
+install: $(LIB_NAME) $(PC_FILE)
 	@echo "Installing CWIST library to $(LIBDIR)..."
 	install -d $(INSTALL_LIBDIR)
 	install -m 644 $(LIB_NAME) $(INSTALL_LIBDIR)/
@@ -550,7 +562,13 @@ install: $(LIB_NAME)
 	install -m 644 $(SQLITE_DIR)/sqlite3.h $(SQLITE_DIR)/sqlite3ext.h $(INSTALL_VENDOR_INCLUDEDIR)/
 	find $(INSTALL_VENDOR_INCLUDEDIR) -type d -exec chmod 755 {} \;
 	find $(INSTALL_VENDOR_INCLUDEDIR) -type f -exec chmod 644 {} \;
-	@echo "Installation complete.  Link with -L$(LIBDIR) -L$(DEPSDIR) -lcwist."
+	@echo "Installing pkg-config file to $(PCDIR)..."
+	install -d $(INSTALL_PCDIR)
+	install -m 644 $(PC_FILE) $(INSTALL_PCDIR)/
+	@echo "Installation complete.  Compile with: pkg-config --cflags --libs cwist"
+
+$(PC_FILE): cwist.pc.in
+	sed -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@VERSION@|$(VERSION)|g' cwist.pc.in > $@
 
 uninstall:
 	@echo "Uninstalling cwist..."
@@ -558,11 +576,28 @@ uninstall:
 	rm -f $(DESTDIR)$(DEPSDIR)/liburiparser.a $(DESTDIR)$(DEPSDIR)/libcjson.a $(DESTDIR)$(DEPSDIR)/libttak.a $(DESTDIR)$(DEPSDIR)/libnats_static.a $(DESTDIR)$(DEPSDIR)/liblsquic.a $(DESTDIR)$(DEPSDIR)/libssl.a $(DESTDIR)$(DEPSDIR)/libcrypto.a
 	rmdir $(DESTDIR)$(DEPSDIR) 2>/dev/null || true
 	rm -rf $(DESTDIR)$(INCLUDEDIR)/cwist
+	rm -f $(INSTALL_PCDIR)/$(PC_FILE)
 	@echo "Uninstallation complete."
+
+# Source release tarball with all vendored submodule sources, so the
+# archive builds on a machine without git submodule access. The SQLite
+# amalgamation is still downloaded by the build itself when absent.
+DIST_DIR = dist
+DIST_NAME = cwist-$(VERSION)
+
+dist:
+	@echo "Creating $(DIST_DIR)/$(DIST_NAME).tar.gz (with vendored sources)..."
+	@mkdir -p $(DIST_DIR)
+	@rm -rf $(DIST_DIR)/$(DIST_NAME)
+	@mkdir -p $(DIST_DIR)/$(DIST_NAME)
+	git ls-files --recurse-submodules | tar cf - -T - | (cd $(DIST_DIR)/$(DIST_NAME) && tar xf -)
+	tar czf $(DIST_DIR)/$(DIST_NAME).tar.gz -C $(DIST_DIR) $(DIST_NAME)
+	@rm -rf $(DIST_DIR)/$(DIST_NAME)
+	@echo "Done: $(DIST_DIR)/$(DIST_NAME).tar.gz"
 
 clean:
 	@echo "Cleaning up build artifacts..."
-	rm -f $(OBJS) $(LIB_NAME)
+	rm -f $(OBJS) $(LIB_NAME) $(PC_FILE)
 	rm -rf include/cwist/vendor
 	rm -f $(TEST_TARGETS)
 	rm -f $(CJSON_DIR)/cJSON.o $(CJSON_LIB)
@@ -747,6 +782,11 @@ cli:
 test_scheduler: $(LIB_NAME) tests/test_scheduler.c
 	$(CC) $(CFLAGS) -o test_scheduler tests/test_scheduler.c $(LIB_NAME) $(LIBS)
 	./test_scheduler
+
+test_async_defer: $(LIB_NAME) tests/test_async_defer.c
+	$(CC) $(CFLAGS) -o test_async_defer tests/test_async_defer.c $(LIB_NAME) $(LIBS)
+	./test_async_defer
+	CWIST_C1M_MODE=0 ./test_async_defer
 
 test_test_client: $(LIB_NAME) tests/test_test_client.c
 	$(CC) $(CFLAGS) -o test_test_client tests/test_test_client.c $(LIB_NAME) $(LIBS)

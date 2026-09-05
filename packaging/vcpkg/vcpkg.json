@@ -1,0 +1,15 @@
+{
+  "name": "cwist",
+  "version": "3.2",
+  "description": "C17 web framework and application server (HTTP/1.1, HTTP/2, HTTP/3, WebSocket, PQC TLS)",
+  "homepage": "https://github.com/Religiya-Serdtsa/CWIST",
+  "license": "MIT",
+  "supports": "linux & !uwp | osx",
+  "dependencies": [
+    "brotli",
+    "curl",
+    "nghttp2",
+    "zlib",
+    "zstd"
+  ]
+}
