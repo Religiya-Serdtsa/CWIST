@@ -244,16 +244,6 @@ void cwist_app_enable_healthz(cwist_app *app);
  */
 cwist_error_t cwist_app_static(cwist_app *app, const char *url_prefix, const char *directory);
 
-/**
- * @brief Enable Prometheus /metrics endpoint.
- */
-void cwist_app_enable_metrics(cwist_app *app);
-
-/**
- * @brief Enable health check endpoints (/healthz, /live, /ready).
- */
-void cwist_app_enable_healthz(cwist_app *app);
-
 /** @} */
 
 /** @name Startup */
