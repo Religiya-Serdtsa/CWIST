@@ -116,23 +116,10 @@ static void cwist_async_complete(cwist_async *a) {
     bool keep = a->keep_alive && atomic_load(&g_cwist_running);
     res->keep_alive = keep;
 
-    cwist_error_t err;
-    if (a->reactor) {
-        /* C1M: the fd is O_NONBLOCK; take a bounded blocking write instead of
-         * a POLLOUT-resumable writer (v2). */
-        int fl = fcntl(a->client_fd, F_GETFL, 0);
-        struct timeval old_tv;
-        socklen_t old_tv_len = sizeof(old_tv);
-        bool have_tv = getsockopt(a->client_fd, SOL_SOCKET, SO_SNDTIMEO, &old_tv, &old_tv_len) == 0;
-        struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
-        setsockopt(a->client_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-        if (fl >= 0) fcntl(a->client_fd, F_SETFL, fl & ~O_NONBLOCK);
-        err = cwist_http_send_response(a->client_fd, res);
-        if (fl >= 0) fcntl(a->client_fd, F_SETFL, fl);
-        if (have_tv) setsockopt(a->client_fd, SOL_SOCKET, SO_SNDTIMEO, &old_tv, old_tv_len);
-    } else {
-        err = cwist_http_send_response(a->client_fd, res);
-    }
+    /* Async v2: The socket is non-blocking (O_NONBLOCK).
+     * Send speculatively without touching fcntl flags or blocking the thread with SO_SNDTIMEO.
+     * cwist_http_send_response uses cwist_http_sendmsg_speculative on the fast path. */
+    cwist_error_t err = cwist_http_send_response(a->client_fd, res);
     bool ok = err.error.err_i16 == 0;
 
     if (a->reactor) {
