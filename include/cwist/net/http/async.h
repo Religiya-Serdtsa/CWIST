@@ -19,6 +19,11 @@
  *  - Classic (thread pool) mode: the completing thread writes the response
  *    itself, then re-arms the connection on the pool (keep-alive) or closes
  *    it.
+ *  - HTTP/2 mode: the completing thread enqueues the finished exchange on
+ *    the owning connection's async queue and pokes its wake fd; the
+ *    connection thread drains the queue and emits HEADERS/DATA itself, so
+ *    HPACK state and flow control stay single-threaded.  Other streams on
+ *    the connection keep being served while a response is deferred.
  *
  * Write-path note (v1): the client fd is O_NONBLOCK in C1M mode; completion
  * temporarily clears it and bounds the write with SO_SNDTIMEO (~5s), so a
