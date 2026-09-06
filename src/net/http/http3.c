@@ -557,7 +557,10 @@ static int cwist_h3_packets_out(void *ctx,
             unsigned run = 1;
             unsigned niov = specs[i].iovlen;
             if (seg > 0 && seg <= 65535) {
-                unsigned max_segs = (unsigned)(65536 / seg);
+                /* Total payload must fit in one UDP datagram (65535 bytes);
+                 * 65536/seg could allow an exactly-64KiB super-packet whose
+                 * sendmsg fails with EMSGSIZE and would disable GSO. */
+                unsigned max_segs = (unsigned)(65535 / seg);
                 if (max_segs > 48) max_segs = 48;
                 while (i + run < n_specs && run < max_segs &&
                        specs[i + run].ecn == specs[i].ecn &&
