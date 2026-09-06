@@ -25,7 +25,41 @@ Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup disc
 - **Gin (Go)**: 77653 req/s | Latency 6.87ms (P90 16.66ms, P99 35.88ms, P99.999 0.00ms) | RSS 28476KiB | Csw 0
 - **Spring Boot**: 42187 req/s | Latency 9.45ms (P90 11.87ms, P99 18.58ms, P99.999 0.00ms) | RSS 1308184KiB | Csw 0
 
-Spring runtime env: **openjdk version "25.0.4.1" 2026-08-18 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
+**Spring runtime environment**
+
+- **JDK:** `openjdk version "25.0.4.1" 2026-08-18 LTS`
+- **Spring Boot:** 3.2.3 (Spring WebFlux + Reactor Netty on native epoll)
+- **Garbage collector:** G1GC
+- **AOT:** JDK 25 Leyden AOT (JEP 483 + JEP 514 single-step AOT)
+- **Virtual threads:** disabled
+
+**JVM options**
+
+```text
+-Xms1024m
+-Xmx1024m
+-XX:+UseG1GC
+-XX:GCTimeRatio=99
+-XX:G1HeapRegionSize=1m
+-XX:+AlwaysPreTouch
+-XX:CompileThreshold=1500
+-XX:CICompilerCount=4
+-Djava.security.egd=file:/dev/urandom
+-Djava.net.preferIPv4Stack=true
+-Dio.netty.allocator.type=pooled
+-Dio.netty.leakDetection.level=disabled
+-Dio.netty.buffer.checkBounds=false
+-Dio.netty.buffer.checkAccessible=false
+-Dreactor.netty.ioWorkerCount=4
+-Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags
+-XX:+AOTClassLinking
+-XX:AOTCache=/tmp/spring_bench/app.aot
+```
+
+**Warmup/profile**
+
+- **Warmup:** 10s (discarded from the results)
+- **Measurement:** `wrk -t12 -c400 -d10s`
 
 ![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)
 <!-- WEBSERVER_BENCHMARKS:END -->
