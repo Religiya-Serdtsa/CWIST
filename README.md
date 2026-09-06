@@ -19,11 +19,11 @@ reaches 0.41ms average at ~155k req/s).
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 117152 req/s | Latency 1.86ms (P90 4.11ms, P99 8.93ms) | RSS 15120KiB | Csw 0
-- **CWIST (C1M reactor)**: 117591 req/s | Latency 2.01ms (P90 4.15ms, P99 9.22ms) | RSS 10956KiB | Csw 0
-- **Axum**: 120608 req/s | Latency 3.24ms (P90 5.51ms, P99 8.19ms) | RSS 15572KiB | Csw 0
-- **Gin (Go)**: 91485 req/s | Latency 5.13ms (P90 11.46ms, P99 23.32ms) | RSS 30384KiB | Csw 0
-- **Spring Boot**: 59503 req/s | Latency 6.69ms (P90 8.89ms, P99 15.91ms) | RSS 1314188KiB | Csw 0
+- **CWIST (classic pool)**: 121331 req/s | Latency 1.70ms (P90 3.59ms, P99 7.25ms) | RSS 13860KiB | Csw 0
+- **CWIST (C1M reactor)**: 118755 req/s | Latency 1.96ms (P90 3.98ms, P99 8.46ms) | RSS 10924KiB | Csw 0
+- **Axum**: 120722 req/s | Latency 3.25ms (P90 5.52ms, P99 8.24ms) | RSS 15804KiB | Csw 0
+- **Gin (Go)**: 89898 req/s | Latency 5.56ms (P90 12.85ms, P99 28.49ms) | RSS 30800KiB | Csw 0
+- **Spring Boot**: 59548 req/s | Latency 6.64ms (P90 8.90ms, P99 14.23ms) | RSS 1329120KiB | Csw 0
 
 Spring runtime env: **openjdk version "25.0.4.1" 2026-08-18 LTS**, Spring Boot **3.2.3** (Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)), JVM opts `-Xms1024m -Xmx1024m   -XX:+UseG1GC -XX:GCTimeRatio=99 -XX:G1HeapRegionSize=1m   -XX:+AlwaysPreTouch   -XX:CompileThreshold=1500 -XX:CICompilerCount=4   -Djava.security.egd=file:/dev/urandom   -Djava.net.preferIPv4Stack=true   -Dio.netty.allocator.type=pooled   -Dio.netty.leakDetection.level=disabled   -Dio.netty.buffer.checkBounds=false   -Dio.netty.buffer.checkAccessible=false   -Dreactor.netty.ioWorkerCount=4   -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags -XX:+AOTClassLinking -XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)`, warmup/profile: wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
@@ -33,7 +33,7 @@ Spring runtime env: **openjdk version "25.0.4.1" 2026-08-18 LTS**, Spring Boot *
 _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
 
 <!-- TUNED_BENCHMARK:START -->
-**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 118,028 req/s at 0.49ms average latency (P50 0.42ms, P90 0.86ms, P99 1.80ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
+**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 116,949 req/s at 0.51ms average latency (P50 0.43ms, P90 0.90ms, P99 2.01ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
 <!-- TUNED_BENCHMARK:END -->
 
 ---
