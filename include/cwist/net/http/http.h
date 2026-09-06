@@ -140,6 +140,7 @@ typedef enum cwist_http_parse_error_t {
 #define CWIST_HTTP_HEADERS_TIMEOUT_MS    120000 /* Total header read budget */
 #define CWIST_HTTP_BODY_IDLE_TIMEOUT_MS  60000  /* Abort body read after this much silence */
 #define CWIST_HTTP2_IDLE_TIMEOUT_MS      300000 /* Default h2 idle budget (env overridable) */
+#define CWIST_HTTP_KEEP_ALIVE_TIMEOUT_SEC 15    /* Default keep-alive idle connection timeout in seconds */
 
 /** --- Structures --- */
 
@@ -374,6 +375,8 @@ typedef struct cwist_http_async_conn {
     size_t len;
     bool virgin;                          /* No bytes seen yet (h2c preface sniff). */
     bool expect_continue_sent;            /* 100 Continue already emitted for the pending request. */
+    uint32_t last_active_sec;             /* Monotonic timestamp of last activity (for idle reaping). */
+    uint32_t worker_id;                   /* Assigned worker thread index for load tracking. */
     cwist_reactor_t *reactor;             /* Owning reactor (deferred-response completion target). */
     cwist_async_handler_t handler;        /* Connection handler, reused for re-arm after a defer. */
 } cwist_http_async_conn_t;

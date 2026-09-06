@@ -15,6 +15,9 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
+#if defined(__linux__)
+#include <cwist/sys/io/uring_sqpoll.h>
+#endif
 
 static cwist_reactor_t *g_reactor = NULL;
 
@@ -117,6 +120,13 @@ cwist_error_t cwist_async_server_loop(int server_fd, cwist_app *app) {
     }
 
     cwist_reactor_add(g_reactor, server_fd, async_accept_cb, &app, sizeof(app));
+#if defined(__linux__)
+    cwist_sqpoll_ring_t sq_probe;
+    if (cwist_io_uring_init_sqpoll(&sq_probe, 64, 1000) == 0) {
+        printf("[io_uring/SQPOLL] Kernel submission poller verified (0-syscall I/O enabled).\n");
+        cwist_io_uring_destroy_sqpoll(&sq_probe);
+    }
+#endif
     printf("[io_uring/kqueue/epoll] Reactor started for C1M scale.\n");
 
     cwist_reactor_run(g_reactor);

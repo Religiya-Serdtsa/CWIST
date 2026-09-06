@@ -13,6 +13,7 @@
 #include <cwist/core/mem/arena.h>
 #include <cwist/sys/app/shutdown.h>
 #include <cwist/sys/io/reactor.h>
+#include <cwist/net/http/writer_fast.h>
 #include <cwist/core/log.h>
 #include <cwist/sys/metrics/metrics.h>
 #include <ttak/mols_control.h>
@@ -162,6 +163,7 @@ typedef struct {
 static size_t g_rr_index = 0;
 static long g_http_thread_count = 0;
 static http_thread_worker_t *g_workers = NULL;
+static _Atomic uint32_t *g_worker_loads = NULL;
 
 static _Atomic long g_http_inflight = 0;
 #define CWIST_HTTP_INFLIGHT_PER_THREAD 32
@@ -316,6 +318,9 @@ int cwist_http_pool_init(void) {
         /* Pre-allocate reactor workers for async path (CWIST_C1M_MODE=1) */
         g_workers = cwist_alloc(g_http_thread_count * sizeof(http_thread_worker_t));
         if (!g_workers) return -1;
+        g_worker_loads = cwist_alloc(g_http_thread_count * sizeof(_Atomic uint32_t));
+        if (!g_worker_loads) { cwist_free(g_workers); g_workers = NULL; return -1; }
+        for (int i = 0; i < g_http_thread_count; i++) atomic_init(&g_worker_loads[i], 0);
         g_rr_index = 0;
         memset(g_workers, 0, g_http_thread_count * sizeof(http_thread_worker_t));
 
@@ -434,6 +439,10 @@ void cwist_http_pool_destroy(void) {
         }
         cwist_free(g_workers);
         g_workers = NULL;
+        if (g_worker_loads) {
+            cwist_free(g_worker_loads);
+            g_worker_loads = NULL;
+        }
     }
 }
 /* --- End Thread Pool --- */
@@ -452,8 +461,21 @@ typedef struct {
     cwist_http_async_conn_t *conn;
 } http_async_ctx_t;
 
+static uint32_t cwist_http_keep_alive_timeout_sec(void) {
+    static int cached_timeout = -1;
+    if (cached_timeout < 0) {
+        const char *env = getenv("CWIST_HTTP_KEEP_ALIVE_TIMEOUT");
+        int val = (env && *env) ? atoi(env) : 0;
+        cached_timeout = (val > 0) ? val : CWIST_HTTP_KEEP_ALIVE_TIMEOUT_SEC;
+    }
+    return (uint32_t)cached_timeout;
+}
+
 static void http_async_conn_release(cwist_http_async_conn_t *conn) {
     if (!conn) return;
+    if (g_worker_loads && conn->worker_id < (uint32_t)g_http_thread_count) {
+        atomic_fetch_sub_explicit(&g_worker_loads[conn->worker_id], 1, memory_order_relaxed);
+    }
     cwist_free(conn->rbuf);
     cwist_free(conn);
     atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
@@ -463,6 +485,17 @@ static void http_async_event_cb(int fd, void *ctx) {
     http_async_ctx_t *c = (http_async_ctx_t *)ctx;
     cwist_http_async_conn_t *conn = c->conn;
     cwist_async_handler_t handler = c->handler;
+
+    uint32_t now = cwist_fast_monotonic_sec();
+    uint32_t timeout_sec = cwist_http_keep_alive_timeout_sec();
+
+    /* Idle connection reaper: close keep-alive sockets that exceeded timeout */
+    if (conn->last_active_sec > 0 && (now - conn->last_active_sec) > timeout_sec) {
+        close(fd);
+        http_async_conn_release(conn);
+        return;
+    }
+    conn->last_active_sec = now;
 
     cwist_async_action_t action = handler(fd, conn);
 
@@ -514,6 +547,7 @@ static void http_async_event_cb(int fd, void *ctx) {
 
 bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_async_conn_t *conn) {
     if (client_fd < 0 || !reactor || !conn) return false;
+    conn->last_active_sec = cwist_fast_monotonic_sec();
     http_async_ctx_t next = {
         .client_fd = client_fd,
         .handler = conn->handler,
@@ -570,14 +604,23 @@ bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, 
     conn->fd = client_fd;
     conn->user_ctx = ctx;
     conn->virgin = true;
+    conn->last_active_sec = cwist_fast_monotonic_sec();
 
-    /* Round-robin worker selection: perfectly even by construction, which the
-     * dynamically grown reactor slots rely on.  (MOLS hashing deviates up to
-     * ±15% per reactor and overflowed the old fixed 4096-slot pool.) */
-    size_t worker_idx = g_rr_index;
-    g_rr_index = (g_rr_index + 1) % (size_t)g_http_thread_count;
+    /* Worker selection: Power of Two Random Choices (P2C) load balancing
+     * to eliminate queue skew without cache-bouncing work stealing. */
+    size_t worker_idx;
+    if (g_worker_loads && g_http_thread_count > 1) {
+        worker_idx = cwist_sched_p2c_select_worker(g_worker_loads, (uint32_t)g_http_thread_count);
+    } else {
+        worker_idx = g_rr_index;
+        g_rr_index = (g_rr_index + 1) % (size_t)g_http_thread_count;
+    }
     http_thread_worker_t *w = &g_workers[worker_idx];
 
+    conn->worker_id = (uint32_t)worker_idx;
+    if (g_worker_loads) {
+        atomic_fetch_add_explicit(&g_worker_loads[worker_idx], 1, memory_order_relaxed);
+    }
     conn->reactor = w->reactor;
     conn->handler = handler;
 
@@ -1597,8 +1640,30 @@ bool cwist_tcp_cork_enabled(void) { return false; }
  * @return 0 on success, -1 on fatal error or timeout.
  */
 static int cwist_http_sendmsg_all(int fd, struct iovec *iov, int iovcnt, int flags) {
+    /* Speculative zero-latency fast-path attempt:
+     * Completes immediately for non-saturated sockets without entering poll() loops. */
+    size_t fast_sent = 0;
+    cwist_write_status_t fast_st = cwist_http_sendmsg_speculative(fd, iov, iovcnt, flags, &fast_sent);
+    if (fast_st == CWIST_WRITE_DONE) {
+        return 0;
+    } else if (fast_st == CWIST_WRITE_ERR) {
+        return -1;
+    }
+
     struct iovec *cur = iov;
     int curcnt = iovcnt;
+
+    /* Advance by bytes already sent in fast-path attempt */
+    while (curcnt > 0 && fast_sent >= cur->iov_len) {
+        fast_sent -= cur->iov_len;
+        cur++;
+        curcnt--;
+    }
+    if (curcnt > 0 && fast_sent > 0) {
+        cur->iov_base = (char *)cur->iov_base + fast_sent;
+        cur->iov_len -= fast_sent;
+    }
+
     while (curcnt > 0) {
         struct msghdr msg = {0};
         msg.msg_iov = cur;
