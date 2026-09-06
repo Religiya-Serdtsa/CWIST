@@ -160,16 +160,11 @@ static void cwist_async_complete(cwist_async *a) {
             cwist_https_close_connection(conn);
         }
     } else if (a->reactor) {
-        cwist_error_t err = (a->req && a->req->method == CWIST_HTTP_HEAD)
-            ? cwist_http_send_response_head(a->client_fd, res)
-            : cwist_http_send_response(a->client_fd, res);
-        bool ok = err.error.err_i16 == 0;
-
-        if (keep && ok) {
-            cwist_http_async_rearm(a->client_fd, a->reactor, a->conn);
-        } else {
-            cwist_http_async_close(a->client_fd, a->conn);
-        }
+        /* Resumable write: on a partial send the remainder is parked on a
+         * POLLOUT slot and the reactor thread is freed immediately; the
+         * parked callback performs the rearm/close when the drain ends. */
+        cwist_http_async_send_response(a->client_fd, res, a->reactor, a->conn,
+                                       keep, a->req && a->req->method == CWIST_HTTP_HEAD);
     } else {
         cwist_error_t err = (a->req && a->req->method == CWIST_HTTP_HEAD)
             ? cwist_http_send_response_head(a->client_fd, res)
