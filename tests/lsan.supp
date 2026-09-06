@@ -11,9 +11,3 @@ leak:lsquic_bw_sampler_init
 leak:lsquic_str_new
 leak:lsquic_str_append
 leak:lsquic_global_init
-#
-# CWIST HTTP/3 header-set (hsi_create) objects for streams that are still open
-# when the engine is destroyed: lsquic never calls hsi_discard_header_set on
-# the abortive teardown path. Tracked in ROADMAP.md ("Known limits"); fix
-# belongs in the h3 stream-teardown path, after which this entry must go.
-leak:cwist_h3_hsi_create
