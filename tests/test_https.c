@@ -1,5 +1,6 @@
 #include <cwist/sys/app/app.h>
 #include <cwist/net/http/https.h>
+#include <cwist/net/http/async.h>
 #include <assert.h>
 #include <arpa/inet.h>
 #include <limits.h>
@@ -400,12 +401,112 @@ static void test_https_autoloads_aia_intermediate(void) {
     printf("Passed HTTPS AIA intermediate autoload.\n");
 }
 
+static void *async_https_worker_fn(void *arg) {
+    cwist_async *a = (cwist_async *)arg;
+    usleep(20000);
+    cwist_async_respond(a, CWIST_HTTP_OK, "text/plain", "async-https-ok", 14);
+    return NULL;
+}
+
+static void async_https_route(cwist_http_request *req, cwist_http_response *res) {
+    cwist_async *a = cwist_async_defer(req, res);
+    assert(a != NULL);
+    pthread_t t;
+    assert(pthread_create(&t, NULL, async_https_worker_fn, a) == 0);
+    pthread_detach(t);
+}
+
+static void normal_https_route(cwist_http_request *req, cwist_http_response *res) {
+    (void)req;
+    res->status_code = CWIST_HTTP_OK;
+    cwist_sstring_assign(res->body, "normal-https-ok");
+    cwist_http_header_add(&res->headers, "Content-Type", "text/plain");
+}
+
+static int ssl_read_http_response(SSL *client, char *buf, size_t buf_size) {
+    size_t total = 0;
+    while (total < buf_size - 1) {
+        int n = SSL_read(client, buf + total, (int)(buf_size - 1 - total));
+        if (n <= 0) break;
+        total += (size_t)n;
+        buf[total] = '\0';
+        char *hdr_end = strstr(buf, "\r\n\r\n");
+        if (hdr_end) {
+            char *cl = strstr(buf, "Content-Length: ");
+            if (!cl) cl = strstr(buf, "content-length: ");
+            size_t body_len = 0;
+            if (cl) {
+                body_len = (size_t)atol(cl + 16);
+            }
+            size_t received_body = total - ((hdr_end + 4) - buf);
+            if (received_body >= body_len) break;
+        }
+    }
+    return (int)total;
+}
+
+static void test_https_async_defer(void) {
+    printf("Testing HTTPS async defer and keep-alive...\n");
+    assert(https_pool_init() == 0);
+
+    cwist_app *app = cwist_app_create();
+    assert(app != NULL);
+    cwist_error_t err = cwist_app_use_https(app, TEST_CERT, TEST_KEY);
+    assert(cwist_error_is_ok(&err));
+
+    cwist_app_get(app, "/defer", async_https_route);
+    cwist_app_get(app, "/normal", normal_https_route);
+
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    https_pool_submit(sv[0], app->ssl_ctx, app->https_request_handler, app);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    // 1. Send deferred request
+    const char *req1 = "GET /defer HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n";
+    assert(SSL_write(client, req1, (int)strlen(req1)) > 0);
+
+    char buf[1024];
+    memset(buf, 0, sizeof(buf));
+    int n = ssl_read_http_response(client, buf, sizeof(buf));
+    assert(n > 0);
+    assert(strstr(buf, "200 OK") != NULL);
+    assert(strstr(buf, "async-https-ok") != NULL);
+
+    // 2. Send follow-up request on same TLS connection (verifying keep-alive re-arm)
+    const char *req2 = "GET /normal HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    assert(SSL_write(client, req2, (int)strlen(req2)) > 0);
+
+    memset(buf, 0, sizeof(buf));
+    n = ssl_read_http_response(client, buf, sizeof(buf));
+    assert(n > 0);
+    assert(strstr(buf, "200 OK") != NULL);
+    assert(strstr(buf, "normal-https-ok") != NULL);
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    cwist_app_destroy(app);
+    printf("Passed HTTPS async defer and keep-alive.\n");
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     test_https_defaults();
     test_https_alpn_negotiates_h2_and_http11_fallback();
     test_app_http2_toggle_rebuilds_context();
     test_https_autoloads_aia_intermediate();
+    test_https_async_defer();
     printf("All HTTPS tests passed!\n");
     return 0;
 }

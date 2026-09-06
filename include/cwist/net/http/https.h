@@ -38,6 +38,7 @@ typedef struct cwist_https_connection {
     cwist_https_protocol negotiated_protocol;
     bool http3_enabled;
     bool http2_sequenced_data; /*< Enable CWIST-specific sequenced DATA frames. */
+    bool deferred;             /*< True when response processing has been deferred. */
 } cwist_https_connection;
 
 typedef struct cwist_app cwist_app;
@@ -104,6 +105,7 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn);
  * serialization blob) and supports pointer bodies and file streams.
  */
 cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http_response *res);
+cwist_error_t cwist_https_send_response_head(cwist_https_connection *conn, cwist_http_response *res);
 
 /**
  * Helper to start a simple HTTPS server loop.
@@ -116,6 +118,7 @@ cwist_error_t cwist_https_server_loop(int server_fd, cwist_https_context *ctx, v
  */
 int https_pool_init(void);
 void https_pool_submit(int client_fd, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx);
+void https_pool_submit_conn(cwist_https_connection *conn, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx);
 void https_pool_destroy(void);
 
 /**

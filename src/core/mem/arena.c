@@ -29,6 +29,7 @@
 struct cwist_arena {
     ttak_arena_generation_t gen;   /**< Active generation descriptor. */
     size_t generation_bytes;       /**< Buffer capacity (cache key). */
+    pthread_t owner_tid;           /**< Thread that allocated the arena. */
 };
 
 /**
@@ -43,6 +44,12 @@ typedef struct cwist_arena_tls {
     uint32_t epoch_seq;            /**< Epoch seed rotating per request. */
 } cwist_arena_tls_t;
 
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
+static _Thread_local cwist_arena_tls_t *t_arena_tls = NULL;
+#elif defined(__GNUC__) || defined(__clang__)
+static __thread cwist_arena_tls_t *t_arena_tls = NULL;
+#endif
+
 static pthread_key_t g_arena_tls_key;
 static pthread_once_t g_arena_tls_once = PTHREAD_ONCE_INIT;
 
@@ -53,6 +60,9 @@ static pthread_once_t g_arena_tls_once = PTHREAD_ONCE_INIT;
 static void cwist_arena_tls_destroy(void *ptr) {
     cwist_arena_tls_t *tls = (cwist_arena_tls_t *)ptr;
     if (!tls) return;
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || defined(__GNUC__) || defined(__clang__)
+    t_arena_tls = NULL;
+#endif
     for (size_t i = 0; i < tls->buf_count; i++) {
         ttak_mem_free(tls->bufs[i]);
     }
@@ -71,12 +81,23 @@ static void cwist_arena_tls_key_init(void) {
  * @brief Fetch (lazily creating) this thread's arena state.
  * @return Thread-local state, or NULL on allocation/setup failure.
  */
-static cwist_arena_tls_t *cwist_arena_tls_get(void) {
+static inline cwist_arena_tls_t *cwist_arena_tls_get(void) {
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || defined(__GNUC__) || defined(__clang__)
+    if (__builtin_expect(t_arena_tls != NULL, 1)) {
+        return t_arena_tls;
+    }
+#endif
+
     if (pthread_once(&g_arena_tls_once, cwist_arena_tls_key_init) != 0) {
         return NULL;
     }
     cwist_arena_tls_t *tls = (cwist_arena_tls_t *)pthread_getspecific(g_arena_tls_key);
-    if (tls) return tls;
+    if (tls) {
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || defined(__GNUC__) || defined(__clang__)
+        t_arena_tls = tls;
+#endif
+        return tls;
+    }
 
     tls = (cwist_arena_tls_t *)calloc(1, sizeof(cwist_arena_tls_t));
     if (!tls) return NULL;
@@ -93,6 +114,9 @@ static cwist_arena_tls_t *cwist_arena_tls_get(void) {
         free(tls);
         return NULL;
     }
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || defined(__GNUC__) || defined(__clang__)
+    t_arena_tls = tls;
+#endif
     return tls;
 }
 
@@ -134,6 +158,7 @@ cwist_arena_t *cwist_arena_create(size_t generation_bytes) {
     arena->gen.used = 0;
     arena->gen.epoch_id = ++tls->epoch_seq;
     arena->generation_bytes = bytes;
+    arena->owner_tid = pthread_self();
     return arena;
 }
 
@@ -163,7 +188,11 @@ void cwist_arena_destroy(cwist_arena_t *arena) {
     size_t bytes = arena->generation_bytes;
     bool default_sized = (bytes == CWIST_ARENA_DEFAULT_GENERATION_BYTES);
 
-    cwist_arena_tls_t *tls = cwist_arena_tls_get();
+    /* If destroyed on a foreign thread (e.g. cross-thread async completion),
+     * release directly to avoid polluting foreign thread-local caches. */
+    bool is_owner = pthread_equal(arena->owner_tid, pthread_self());
+    cwist_arena_tls_t *tls = is_owner ? cwist_arena_tls_get() : NULL;
+
     if (tls && tls->struct_count < CWIST_ARENA_CACHE_MAX) {
         /* Recycle the arena struct itself along with the buffer. */
         tls->structs[tls->struct_count++] = arena;

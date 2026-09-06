@@ -17,6 +17,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 #include <cwist/net/http/async.h>
+#include <cwist/net/http/https.h>
 #include <cwist/sys/app/app.h>
 #include <cwist/sys/app/shutdown.h>
 #include <cwist/sys/job/scheduler.h>
@@ -45,6 +46,7 @@ struct cwist_async {
     struct cwist_app *app;
     cwist_reactor_t *reactor;     /* NULL on the classic pool path. */
     cwist_http_async_conn_t *conn;
+    void *https_conn;             /* cwist_https_connection * on TLS path. */
     cwist_reactor_post_t post;
 };
 
@@ -88,6 +90,10 @@ cwist_async *cwist_async_defer(cwist_http_request *req, cwist_http_response *res
         a->reactor = conn->reactor;
         a->conn = conn;
     }
+    if (req->https_conn) {
+        a->https_conn = req->https_conn;
+        ((cwist_https_connection *)req->https_conn)->deferred = true;
+    }
     a->post.cb = cwist_async_reactor_complete;
     a->post.ctx = a;
     res->async = a;
@@ -116,19 +122,36 @@ static void cwist_async_complete(cwist_async *a) {
     bool keep = a->keep_alive && atomic_load(&g_cwist_running);
     res->keep_alive = keep;
 
-    /* Async v2: The socket is non-blocking (O_NONBLOCK).
-     * Send speculatively without touching fcntl flags or blocking the thread with SO_SNDTIMEO.
-     * cwist_http_send_response uses cwist_http_sendmsg_speculative on the fast path. */
-    cwist_error_t err = cwist_http_send_response(a->client_fd, res);
-    bool ok = err.error.err_i16 == 0;
+    if (a->https_conn) {
+        cwist_https_connection *conn = (cwist_https_connection *)a->https_conn;
+        cwist_error_t err = (a->req && a->req->method == CWIST_HTTP_HEAD)
+            ? cwist_https_send_response_head(conn, res)
+            : cwist_https_send_response(conn, res);
+        bool ok = cwist_error_is_ok(&err);
 
-    if (a->reactor) {
+        if (keep && ok && a->app && a->app->ssl_ctx && a->app->https_request_handler) {
+            conn->deferred = false;
+            https_pool_submit_conn(conn, a->app->ssl_ctx, a->app->https_request_handler, a->app);
+        } else {
+            cwist_https_close_connection(conn);
+        }
+    } else if (a->reactor) {
+        cwist_error_t err = (a->req && a->req->method == CWIST_HTTP_HEAD)
+            ? cwist_http_send_response_head(a->client_fd, res)
+            : cwist_http_send_response(a->client_fd, res);
+        bool ok = err.error.err_i16 == 0;
+
         if (keep && ok) {
             cwist_http_async_rearm(a->client_fd, a->reactor, a->conn);
         } else {
             cwist_http_async_close(a->client_fd, a->conn);
         }
     } else {
+        cwist_error_t err = (a->req && a->req->method == CWIST_HTTP_HEAD)
+            ? cwist_http_send_response_head(a->client_fd, res)
+            : cwist_http_send_response(a->client_fd, res);
+        bool ok = err.error.err_i16 == 0;
+
         if (keep && ok && a->app) {
             cwist_http_pool_rearm_current(a->client_fd, cwist_app_http_handler, a->app);
         } else {
