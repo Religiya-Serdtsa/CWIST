@@ -25,6 +25,11 @@ void cwist_reactor_destroy(cwist_reactor_t *reactor);
  * never NULL. Slots are zeroed on checkout, preserving calloc semantics. */
 bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
                        const void *payload, size_t payload_size);
+/* Same one-shot slot model as cwist_reactor_add, but the callback fires on
+ * write-readiness (POLLOUT/EPOLLOUT/EVFILT_WRITE) instead of read-readiness.
+ * Used by the parked-response writer to resume a partial send. */
+bool cwist_reactor_add_out(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
+                           const void *payload, size_t payload_size);
 bool cwist_reactor_mod(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
                        const void *payload, size_t payload_size);
 bool cwist_reactor_del(cwist_reactor_t *reactor, int fd);

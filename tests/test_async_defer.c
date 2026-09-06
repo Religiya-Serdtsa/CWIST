@@ -99,6 +99,32 @@ static void hello_handler(cwist_http_request *req, cwist_http_response *res) {
     res->status_code = CWIST_HTTP_OK;
 }
 
+/* Large deferred body: big enough that a client which never reads forces the
+ * completion into the parked POLLOUT-resumable writer on the reactor path. */
+#define BIG_BODY_LEN (4 * 1024 * 1024)
+static char *g_big_body;
+
+static char big_body_byte(size_t i) {
+    return (char)('a' + (i % 26));
+}
+
+static void respond_big_job(void *arg) {
+    cwist_async *a = (cwist_async *)arg;
+    cwist_async_respond(a, CWIST_HTTP_OK, "application/octet-stream", g_big_body, BIG_BODY_LEN);
+}
+
+static void bigdefer_handler(cwist_http_request *req, cwist_http_response *res) {
+    cwist_async *a = cwist_async_defer(req, res);
+    if (!a) {
+        res->status_code = CWIST_HTTP_INTERNAL_ERROR;
+        return;
+    }
+    cwist_scheduler_t *s = cwist_app_get_scheduler(req->app);
+    if (!s || !cwist_scheduler_schedule(s, respond_big_job, a, 50)) {
+        cwist_async_abort(a, CWIST_HTTP_INTERNAL_ERROR);
+    }
+}
+
 /* --- Client side --------------------------------------------------------- */
 
 static int connect_to_server(void) {
@@ -206,6 +232,10 @@ int main(void) {
         cwist_app_get(app, "/timeout", timeout_handler);
         cwist_app_get(app, "/race", race_handler);
         cwist_app_get(app, "/hello", hello_handler);
+        cwist_app_get(app, "/bigdefer", bigdefer_handler);
+        g_big_body = malloc(BIG_BODY_LEN);
+        if (!g_big_body) _exit(1);
+        for (size_t i = 0; i < BIG_BODY_LEN; i++) g_big_body[i] = big_body_byte(i);
         g_cwist_drain_timeout_sec = 1;
         int rc = cwist_app_listen(app, TEST_PORT);
         int wins = atomic_load(&g_race_wins);
@@ -311,6 +341,66 @@ int main(void) {
             CHECK(n > 0 && strstr(buf, "second-ok") != NULL,
                   "pipelined second response in order");
             close(c.fd);
+        }
+    }
+
+    /* 7. Slow client: a large deferred response cannot drain immediately, so
+     * the completion parks the remainder on POLLOUT; once the client starts
+     * reading, the full body must arrive and keep-alive must still work. */
+    {
+        int fd = connect_to_server();
+        CHECK(fd >= 0, "connect for slow-client park");
+        if (fd >= 0) {
+            int rcvbuf = 4096;
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+            send_all(fd, "GET /bigdefer HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            /* Do not read: the server's send buffer fills and the deferred
+             * completion must park instead of blocking a worker/reactor. */
+            usleep(500000);
+
+            char hdr[4096];
+            size_t hlen = 0;
+            size_t header_end = 0;
+            while (!header_end && hlen < sizeof(hdr) - 1) {
+                ssize_t n = recv(fd, hdr + hlen, sizeof(hdr) - 1 - hlen, 0);
+                if (n <= 0) break;
+                hlen += (size_t)n;
+                hdr[hlen] = '\0';
+                char *he = strstr(hdr, "\r\n\r\n");
+                if (he) header_end = (size_t)(he - hdr) + 4;
+            }
+            CHECK(header_end > 0 && has_code(hdr, "200"), "parked response headers arrive");
+            size_t content_length = 0;
+            if (header_end > 0) {
+                char *cl = strcasestr(hdr, "Content-Length:");
+                if (cl && (size_t)(cl - hdr) < header_end) content_length = (size_t)atoi(cl + 15);
+            }
+            CHECK(content_length == BIG_BODY_LEN, "parked response Content-Length");
+
+            /* Bytes past the header end are already body. */
+            uint64_t sum = 0;
+            size_t got = 0;
+            for (size_t i = header_end; i < hlen; i++) sum += (unsigned char)hdr[i];
+            got = hlen - header_end;
+            char chunk[16384];
+            while (got < content_length) {
+                ssize_t n = recv(fd, chunk, sizeof(chunk), 0);
+                if (n <= 0) break;
+                for (ssize_t i = 0; i < n; i++) sum += (unsigned char)chunk[i];
+                got += (size_t)n;
+            }
+            uint64_t expected = 0;
+            for (size_t i = 0; i < BIG_BODY_LEN; i++) expected += (unsigned char)big_body_byte(i);
+            CHECK(got == (size_t)BIG_BODY_LEN && sum == expected,
+                  "parked writer delivers the full body intact");
+
+            /* Keep-alive rearm after the parked writer drains. */
+            struct client_conn c = { .fd = fd, .pending_len = 0 };
+            send_all(fd, "GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            int n = read_one_response(&c, buf, sizeof(buf));
+            CHECK(n > 0 && has_code(buf, "200") && strstr(buf, "second-ok"),
+                  "connection reusable after parked write drains");
+            close(fd);
         }
     }
 

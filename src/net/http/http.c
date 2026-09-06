@@ -1889,6 +1889,174 @@ cwist_error_t cwist_http_send_response_head(int client_fd, cwist_http_response *
     return err;
 }
 
+/* --- Parked (POLLOUT-resumable) deferred-response writer --------------------
+ * A deferred completion on the reactor path must never block the reactor
+ * thread in the poll(POLLOUT) fallback of cwist_http_sendmsg_all.  When the
+ * speculative sendmsg cannot drain the whole response, the unsent remainder
+ * is deep-copied into an owned buffer (req/res/the arena are freed right
+ * after the handoff) and parked on a one-shot write-readiness slot; each
+ * POLLOUT event resumes the send, and the final event re-arms keep-alive or
+ * closes exactly like the synchronous completion.  The slot payload carries
+ * everything the callback needs, so no extra heap struct is required. */
+
+typedef struct {
+    cwist_reactor_t *reactor;
+    cwist_http_async_conn_t *conn;
+    char *buf;                    /* Owned copy of the unsent bytes. */
+    size_t off;
+    size_t len;
+    uint32_t deadline_sec;        /* Absolute write deadline (monotonic sec). */
+    bool keep_alive;
+} http_parked_write_t;
+
+_Static_assert(sizeof(http_parked_write_t) <= CWIST_REACTOR_PAYLOAD_SIZE,
+               "parked write state must fit a reactor slot payload");
+
+static uint32_t http_parked_write_deadline(void) {
+    return cwist_fast_monotonic_sec() + cwist_http_keep_alive_timeout_sec();
+}
+
+static void http_parked_write_finish(int fd, http_parked_write_t *w) {
+    cwist_reactor_t *reactor = w->reactor;
+    cwist_http_async_conn_t *conn = w->conn;
+    bool keep = w->keep_alive && w->off == w->len && atomic_load(&g_cwist_running);
+    cwist_free(w->buf);
+    if (keep) {
+        cwist_http_async_rearm(fd, reactor, conn);
+    } else {
+        cwist_http_async_close(fd, conn);
+    }
+}
+
+static void http_parked_write_cb(int fd, void *ctx) {
+    http_parked_write_t *w = (http_parked_write_t *)ctx;
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+#if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+#endif
+    while (w->off < w->len) {
+        ssize_t n = send(fd, w->buf + w->off, w->len - w->off, flags);
+        if (n > 0) {
+            w->off += (size_t)n;
+            /* Progress resets the budget so a slow-but-alive client can
+             * drain a large body; a silent peer hits the absolute deadline. */
+            w->deadline_sec = http_parked_write_deadline();
+            continue;
+        }
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) &&
+            cwist_fast_monotonic_sec() <= w->deadline_sec &&
+            cwist_reactor_add_out(w->reactor, fd, http_parked_write_cb, w, sizeof(*w))) {
+            /* Payload copied into the new slot; buf ownership moves with it. */
+            return;
+        }
+        break; /* Fatal error, timeout, or re-arm failure. */
+    }
+    http_parked_write_finish(fd, w);
+}
+
+void cwist_http_async_send_response(int client_fd, cwist_http_response *res,
+                                    cwist_reactor_t *reactor, cwist_http_async_conn_t *conn,
+                                    bool keep_alive, bool head_only) {
+    if (client_fd < 0 || !res || !reactor || !conn) {
+        cwist_http_async_close(client_fd, conn);
+        return;
+    }
+
+    /* File streams keep the existing bounded-blocking send path: their body
+     * is not resident in memory, so it cannot be deep-copied for parking
+     * without buffering the whole file. */
+    if (!head_only && res->use_file_stream) {
+        cwist_error_t err = cwist_http_send_response(client_fd, res);
+        if (keep_alive && err.error.err_i16 == 0) {
+            cwist_http_async_rearm(client_fd, reactor, conn);
+        } else {
+            cwist_http_async_close(client_fd, conn);
+        }
+        return;
+    }
+
+    char header_buf[CWIST_HTTP_MAX_HEADER_SIZE];
+    size_t header_len = serialize_headers(res, header_buf, sizeof(header_buf));
+
+    const void *body_ptr = NULL;
+    size_t body_len = 0;
+    if (!head_only) {
+        if (res->is_ptr_body) {
+            body_ptr = res->ptr_body;
+            body_len = res->ptr_body_len;
+        } else if (res->body && res->body->data) {
+            body_ptr = res->body->data;
+            body_len = res->body->size;
+        }
+    }
+
+    struct iovec iov[2];
+    int iov_cnt = 1;
+    iov[0].iov_base = header_buf;
+    iov[0].iov_len = header_len;
+    if (body_len > 0 && body_ptr) {
+        iov[1].iov_base = (void *)body_ptr;
+        iov[1].iov_len = body_len;
+        iov_cnt = 2;
+    }
+
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+#if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+#endif
+
+    size_t sent = 0;
+    cwist_write_status_t st = cwist_http_sendmsg_speculative(client_fd, iov, iov_cnt, flags, &sent);
+
+    if (st == CWIST_WRITE_PENDING) {
+        /* Deep-copy the unsent remainder before releasing the body: the
+         * completion frees req/res (and the arena) right after we return. */
+        size_t total = header_len + body_len;
+        size_t left = total - sent;
+        http_parked_write_t w = {
+            .reactor = reactor,
+            .conn = conn,
+            .buf = cwist_alloc(left),
+            .off = 0,
+            .len = left,
+            .deadline_sec = http_parked_write_deadline(),
+            .keep_alive = keep_alive,
+        };
+        if (w.buf) {
+            size_t hd_off = sent < header_len ? sent : header_len;
+            size_t hd_left = header_len - hd_off;
+            memcpy(w.buf, header_buf + hd_off, hd_left);
+            if (left > hd_left) {
+                size_t body_off = sent > header_len ? sent - header_len : 0;
+                memcpy(w.buf + hd_left, (const char *)body_ptr + body_off, left - hd_left);
+            }
+        }
+        cwist_http_response_release_ptr_body(res);
+        cwist_http_response_release_file_stream(res);
+        if (w.buf && cwist_reactor_add_out(reactor, client_fd, http_parked_write_cb, &w, sizeof(w))) {
+            return;
+        }
+        cwist_free(w.buf);
+        cwist_http_async_close(client_fd, conn);
+        return;
+    }
+
+    cwist_http_response_release_ptr_body(res);
+    cwist_http_response_release_file_stream(res);
+    if (st == CWIST_WRITE_DONE && keep_alive && atomic_load(&g_cwist_running)) {
+        cwist_http_async_rearm(client_fd, reactor, conn);
+    } else {
+        cwist_http_async_close(client_fd, conn);
+    }
+}
+
 const char *cwist_http_status_reason(int status) {
     switch (status) {
         case 100: return "Continue";
