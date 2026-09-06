@@ -3107,7 +3107,7 @@ cwist_error_t cwist_http2_serve_connection_ex(
                 if (flags & CWIST_HTTP2_FLAG_END_STREAM) {
                     h2_stream *s = h2_stream_find(&hc, stream_id);
                     if (s && s->req) {
-                        cwist_http_response *res = cwist_http_response_create();
+                        cwist_http_response *res = cwist_http_response_create_in_arena(s->req->arena);
                         if (res) {
                             handler(user_ctx, s->req, res);
                             h2_inject_alt_svc(conn, res);
@@ -3152,7 +3152,7 @@ cwist_error_t cwist_http2_serve_connection_ex(
                         break;
                     }
                     if (s && s->req) {
-                        cwist_http_response *res = cwist_http_response_create();
+                        cwist_http_response *res = cwist_http_response_create_in_arena(s->req->arena);
                         if (res) {
                             handler(user_ctx, s->req, res);
                             h2_inject_alt_svc(conn, res);
@@ -3279,7 +3279,7 @@ cwist_error_t cwist_http2_serve_connection_ex(
                         h2_stream_remove(&hc, stream_id);
                         break;
                     }
-                    cwist_http_response *res = cwist_http_response_create();
+                    cwist_http_response *res = cwist_http_response_create_in_arena(s->req->arena);
                     if (res) {
                         handler(user_ctx, s->req, res);
                         h2_inject_alt_svc(conn, res);
@@ -3469,7 +3469,7 @@ int cwist_http2_push_resource(cwist_http_request *req,
         return -1;
     }
 
-    cwist_http_response *res = cwist_http_response_create();
+    cwist_http_response *res = cwist_http_response_create_in_arena(req ? req->arena : NULL);
     if (!res) return -1;
     res->status_code = CWIST_HTTP_OK;
     if (content_type) {
