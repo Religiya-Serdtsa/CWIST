@@ -61,7 +61,9 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 - **Developer Ecosystem & Tutorials**: 30 comprehensive hands-on tutorial modules with C source (`main.c`), `CMakeLists.txt`, and English documentation guides (`README.md`) are available under `tutorials/`.
 - **CI Automated Web Server Benchmark**: Inline CI job dynamically generates and measures CWIST, Axum, and Spring Boot web servers using `wrk`, rendering real-time RPS, Latency, Peak RSS, and Context Switch metrics. A `the-benchmarker/web-frameworks` contract app lives in `benchmarks/web-frameworks/`, pinned to the `v3.3` tag with the uriparser lib path wired in.
 - **P0 (must-have) is 100% complete**: the framework’s core architecture and protocol stack are locked.
-- **Known issue**: HTTP/3 header-set objects for streams still open at engine destroy are not reclaimed on the abortive teardown path (lsquic never calls `hsi_discard_header_set` there); suppressed in the sanitizer CI via `tests/lsan.supp` pending a dedicated stream-teardown pass.
+- **Resolved**: HTTP/3 header-set objects for streams still open at engine destroy are now tracked per `cwist_http3_context` and swept on the engine/context teardown path; the `leak:cwist_h3_hsi_create` entry was removed from `tests/lsan.supp`.
+- **Resolved**: Deferred async completions on the reactor path now park unsent bytes in an owned buffer and resume via one-shot POLLOUT (`cwist_reactor_add_out`), so slow clients no longer occupy a worker/reactor thread for the send budget; a deadline (keep-alive timeout, refreshed on progress) bounds parked writers.
+- **Resolved**: gRPC handler-thread sends now wait for WINDOW_UPDATE credit via a condvar rendezvous signalled by the dispatcher (`h2_fc_wait_credit`), instead of failing a zero-credit send with UNAVAILABLE; RST/teardown/stall-timeout still fail fast.
 - We are now in the **P2–P4 tooling and ecosystem phase**. Completed multiport, scheduler, test-client, `io_uring`, deferred async handlers, end-to-end streaming gRPC (DATA-frame wiring, trailers, deadlines, gzip), and Protobuf wire-format work remain covered by focused regression tests.
 
 ---
@@ -192,14 +194,13 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 ### Developer Workflow
 
 * Expand benchmark automation (the-benchmarker contract app) and fuzz targets.
-* Add a POLLOUT-resumable writer for deferred async completions so slow clients cannot occupy a reactor thread for the SO_SNDTIMEO budget.
 * Keep test-client, scheduler, multiport, `io_uring`, and deferred-async coverage in the default test harness.
 
 ### Ecosystem
 
 * Finish `cwist proto` for v3.4: `oneof`, `map`, fixed-width types, and descriptor-set input (scalar/enum/nested/repeated-packed already done).
 * Add gRPC client-side support: h2/h2c client, retry policy, and load balancing.
-* Add gRPC server-side response compression and WINDOW_UPDATE-aware blocking sends.
+* Add gRPC server-side response compression.
 * Extend the GraphQL subset with schema validation, mutations, nested selections, and subscriptions.
 * Stabilize the experimental native C WebTransport client after LSQUIC PR #629 merges upstream.
 * Evaluate persistent job backends separately from the in-process queue/scheduler.
@@ -231,7 +232,7 @@ Completed:
 
 Known limits:
 
-* Server-side response compression is not implemented (requests only); handler-thread sends do not block waiting for WINDOW_UPDATE (a zero-credit send fails with UNAVAILABLE).
+* Server-side response compression is not implemented (requests only).
 * The proto generator covers scalar, enum, nested message, and repeated packed-numeric proto3 fields plus service paths; `oneof`, `map`, fixed-width types, and descriptor-set input remain (v3.4).
 * The builtin health `Watch` route stays on the buffered dispatch path.
 * No gRPC client, retry policy, or load-balancing policy exists yet.
@@ -244,8 +245,7 @@ Theme: gRPC client side and codegen completeness. v3.3 (re-tagged to include the
 
 * **`cwist proto` completion**: `oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`), and `protoc --descriptor_set_out` input bindings. CLI-only work (`tools/cli/cwist`), no library ABI impact.
 * **gRPC client**: h2/h2c client with unary/streaming calls, retry policy, and client-side load balancing.
-* **gRPC server leftovers**: server-side response compression, WINDOW_UPDATE-aware blocking sends, and moving health `Watch` onto the streaming dispatch path.
-* **Async v2**: POLLOUT-resumable writer for deferred completions (slow-client budget removal).
+* **gRPC server leftovers**: server-side response compression, and moving health `Watch` onto the streaming dispatch path.
 * **Distribution**: publish the Homebrew formula and vcpkg port beyond the current drafts (P4 #30).
 
 ---
