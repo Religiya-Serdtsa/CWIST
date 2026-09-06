@@ -165,6 +165,8 @@ typedef struct cwist_h2_stream {
      * advertised credit).  Replaces the old hand-rolled window ints. */
     cwist_http2_stream_flow_control fc;
     bool send_aborted;       /* RST_STREAM received while sending */
+    int fc_waiters;          /* handler threads parked in h2_fc_wait_credit */
+    bool fc_detached;        /* stream removed / connection tearing down */
     uint8_t recv_xor;      /* running XOR of received DATA payload bytes */
     uint8_t send_xor;      /* running XOR of sent DATA payload bytes */
     cwist_seq_assembler_t *body_assembler; /* reorders sequenced DATA chunks */
@@ -377,6 +379,13 @@ typedef struct h2_conn {
      * hook-taken stream handler threads that emit frames directly. */
     pthread_mutex_t out_mu;
     bool out_mu_init;
+    /* Send-credit rendezvous for hook-taken handler threads: the dispatcher
+     * owns socket reads, so a handler thread that runs out of send window
+     * parks on fc_cond and is woken when the dispatcher applies WINDOW_UPDATE
+     * credit or when the stream/connection goes away. */
+    pthread_mutex_t fc_mu;
+    pthread_cond_t fc_cond;
+    bool fc_mu_init;
     /* Completed deferred responses, fed by async worker threads and drained
      * by this connection thread (see cwist_h2_async_queue). */
     cwist_h2_async_queue *async_q;
@@ -405,12 +414,43 @@ static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
     hc->sequenced_data = conn && conn->ssl && conn->http2_sequenced_data;
     hc->hpack_capacity = CWIST_HTTP2_HEADER_TABLE_SIZE;
     hc->out_mu_init = (pthread_mutex_init(&hc->out_mu, NULL) == 0);
+    hc->fc_mu_init = (pthread_mutex_init(&hc->fc_mu, NULL) == 0);
+    if (hc->fc_mu_init && pthread_cond_init(&hc->fc_cond, NULL) != 0) {
+        pthread_mutex_destroy(&hc->fc_mu);
+        hc->fc_mu_init = false;
+    }
+}
+
+/* Wake handler threads parked waiting for send-window credit.  Call after
+ * any update that may have restored credit (WINDOW_UPDATE applied, SETTINGS
+ * initial-window delta, stream abort/detach). */
+static void h2_fc_credit_signal(h2_conn *hc) {
+    if (!hc->fc_mu_init) return;
+    pthread_mutex_lock(&hc->fc_mu);
+    pthread_cond_broadcast(&hc->fc_cond);
+    pthread_mutex_unlock(&hc->fc_mu);
+}
+
+/* Detach @p s from send-credit waiters and block until none remain, so the
+ * stream can be freed without a parked handler thread waking up on a
+ * dangling pointer. */
+static void h2_stream_drain_waiters(h2_conn *hc, h2_stream *s) {
+    if (!hc->fc_mu_init) return;
+    pthread_mutex_lock(&hc->fc_mu);
+    s->fc_detached = true;
+    pthread_cond_broadcast(&hc->fc_cond);
+    while (s->fc_waiters > 0)
+        pthread_cond_wait(&hc->fc_cond, &hc->fc_mu);
+    pthread_mutex_unlock(&hc->fc_mu);
 }
 
 static void h2_conn_destroy(h2_conn *hc) {
     h2_stream *s = hc->streams;
     while (s) {
         h2_stream *next = s->next;
+        /* Drain before on_close: a handler thread parked in a send holds its
+         * session write mutex, which on_close needs to detach. */
+        h2_stream_drain_waiters(hc, s);
         if (s->hook_ctx && hc->hooks && hc->hooks->on_close)
             hc->hooks->on_close(hc->hook_ctx, s->hook_ctx);
         if (s->req) cwist_http_request_destroy(s->req);
@@ -440,6 +480,10 @@ static void h2_conn_destroy(h2_conn *hc) {
         df = next;
     }
     if (hc->out_mu_init) pthread_mutex_destroy(&hc->out_mu);
+    if (hc->fc_mu_init) {
+        pthread_cond_destroy(&hc->fc_cond);
+        pthread_mutex_destroy(&hc->fc_mu);
+    }
     if (hc->async_q) {
         /* Pending completions are discarded; completions arriving after the
          * close hit queue->closed and discard themselves.  The handle-held
@@ -531,6 +575,7 @@ static void h2_stream_remove(h2_conn *hc, uint32_t stream_id) {
         if (s->stream_id == stream_id) {
             *pp = s->next;
             if (hc->active_streams > 0) hc->active_streams--;
+            h2_stream_drain_waiters(hc, s);
             if (s->hook_ctx && hc->hooks && hc->hooks->on_close)
                 hc->hooks->on_close(hc->hook_ctx, s->hook_ctx);
             if (s->req) cwist_http_request_destroy(s->req);
@@ -982,6 +1027,35 @@ static void h2_commit_send(h2_conn *hc, h2_stream *s, uint32_t bytes) {
     }
     hc->fc.send_window -= bytes;
     if (s) s->fc.send_window -= bytes;
+}
+
+/* Park a hook-taken handler thread until send credit may be available again,
+ * the stream is aborted/detached, or no frame has arrived for a full idle
+ * deadline.  The dispatcher thread owns socket reads and applies WINDOW_UPDATE
+ * credit, then signals fc_cond; the caller must NOT hold out_mu (the
+ * dispatcher may need it to flush its own frames while we wait).
+ * Returns 0 when credit may be available, -1 on abort, teardown, or stall
+ * timeout. */
+static int h2_fc_wait_credit(h2_conn *hc, h2_stream *s) {
+    if (!hc->fc_mu_init) return -1;
+    pthread_mutex_lock(&hc->fc_mu);
+    s->fc_waiters++;
+    int rc = -1;
+    for (;;) {
+        if (s->send_aborted || s->fc_detached) break;
+        if (h2_send_allowance(hc, s, 1) > 0) { rc = 0; break; }
+        if (h2_now_ms() - hc->last_activity >= (uint64_t)h2_idle_timeout_ms()) break;
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_nsec += 100000000L; /* 100ms recheck: covers pacing-token refill */
+        if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
+        pthread_cond_timedwait(&hc->fc_cond, &hc->fc_mu, &ts);
+    }
+    s->fc_waiters--;
+    /* Wake h2_stream_drain_waiters if it is waiting for us to leave. */
+    pthread_cond_broadcast(&hc->fc_cond);
+    pthread_mutex_unlock(&hc->fc_mu);
+    return rc;
 }
 
 /* Send a PING carrying a monotonic timestamp; the matching ACK yields an
@@ -2161,6 +2235,7 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
                         h2_stream *other = h2_stream_find(hc, stream_id);
                         if (other) cwist_http2_stream_flow_control_add_send_window(&other->fc, (uint32_t)increment);
                     }
+                    h2_fc_credit_signal(hc);
                 }
             }
         } else if (type == 0x06) { // PING
@@ -2438,29 +2513,37 @@ int cwist_http2_stream_send_data(cwist_h2_stream *stream,
     uint32_t max_frame = hc->peer_max_frame_size;
     if (max_frame == 0) max_frame = CWIST_HTTP2_MAX_FRAME_SIZE;
 
-    h2_out_lock(hc);
     size_t sent = 0;
     int rc = 0;
     while (sent < len) {
         uint32_t chunk = (uint32_t)((len - sent) > max_frame ? max_frame : (len - sent));
+        if (h2_send_allowance(hc, stream, chunk) == 0) {
+            /* No peer credit: the handler thread must not read the socket
+             * (the dispatcher owns reads), so flush whatever is batched and
+             * wait for the dispatcher to apply WINDOW_UPDATE credit. */
+            if (h2_out_flush(hc) != 0) { rc = -1; break; }
+            if (h2_fc_wait_credit(hc, stream) != 0) { rc = -1; break; }
+        }
+        h2_out_lock(hc);
+        /* Recheck under out_mu: another handler thread may have consumed the
+         * credit between our wait and the lock. */
         uint32_t allowed = h2_send_allowance(hc, stream, chunk);
         if (allowed == 0) {
-            /* No peer credit: the handler thread must not read the socket
-             * (the dispatcher owns reads), so the send fails instead of
-             * waiting for WINDOW_UPDATE. */
-            rc = -1;
-            break;
+            h2_out_unlock(hc);
+            continue;
         }
         if (h2_stream_write_frame_locked(hc, CWIST_HTTP2_FRAME_DATA, 0,
                                          stream->stream_id, data + sent, allowed) != 0) {
+            h2_out_unlock(hc);
             rc = -1;
             break;
         }
         h2_commit_send(hc, stream, allowed);
         sent += allowed;
+        if (sent >= len) rc = h2_out_flush_raw(hc);
+        h2_out_unlock(hc);
+        if (rc != 0) break;
     }
-    if (rc == 0) rc = h2_out_flush_raw(hc);
-    h2_out_unlock(hc);
     return rc;
 }
 
@@ -2955,6 +3038,7 @@ static int h2_handle_settings(h2_conn *hc, const unsigned char *payload, size_t 
                         }
                         s = s->next;
                     }
+                    h2_fc_credit_signal(hc);
                 }
                 break;
             case 0x5: /* SETTINGS_MAX_FRAME_SIZE */
@@ -2995,6 +3079,7 @@ static int h2_handle_window_update(h2_conn *hc, uint32_t stream_id,
         if ((uint64_t)s->fc.send_window + (uint32_t)increment > CWIST_HTTP2_MAX_WINDOW) return -1;
         s->fc.send_window += (uint32_t)increment;
     }
+    h2_fc_credit_signal(hc);
     return 0;
 }
 

@@ -246,19 +246,56 @@ static lsquic_wt_session_t *cwist_wt_handle_session(void *handle) {
 
 typedef struct cwist_h3_hset {
     lsquic_stream_t *stream;
+    struct cwist_h3_hset *next;  /* intrusive list of live hsets per ctx */
+    struct cwist_h3_hset **prev; /* link to the pointer that points at us */
+    cwist_http3_context *owner;  /* tracking context, NULL if untracked */
     struct lsxpack_header headers[H3_MAX_HEADERS];
     size_t count;
     char decode_buf[H3_DECODE_BUF_SIZE];
     size_t decode_off;
 } cwist_h3_hset_t;
 
+/* The engine loop is single-threaded and all hsi callbacks fire from it (or
+ * from engine destroy after the loop has exited), so the list needs no
+ * locking. */
+static void cwist_h3_hset_track(cwist_http3_context *ctx, cwist_h3_hset_t *hset) {
+    if (!ctx || !hset) return;
+    hset->owner = ctx;
+    hset->next = (cwist_h3_hset_t *)ctx->hsets;
+    hset->prev = (cwist_h3_hset_t **)&ctx->hsets;
+    if (hset->next) hset->next->prev = &hset->next;
+    ctx->hsets = hset;
+}
+
+static void cwist_h3_hset_untrack(cwist_h3_hset_t *hset) {
+    if (!hset || !hset->owner) return;
+    *hset->prev = hset->next;
+    if (hset->next) hset->next->prev = hset->prev;
+    hset->next = NULL;
+    hset->prev = NULL;
+    hset->owner = NULL;
+}
+
+/* lsquic never calls hsi_discard_header_set for streams that are still open
+ * when the engine is destroyed; free whatever is still tracked.  Must run
+ * after lsquic_engine_destroy() so a discard issued during destroy has
+ * already untracked its hset (no double-free). */
+static void cwist_h3_hset_sweep(cwist_http3_context *ctx) {
+    if (!ctx) return;
+    while (ctx->hsets) {
+        cwist_h3_hset_t *hset = (cwist_h3_hset_t *)ctx->hsets;
+        cwist_h3_hset_untrack(hset);
+        free(hset);
+    }
+}
+
 static void *cwist_h3_hsi_create(void *hsi_ctx, lsquic_stream_t *stream,
                                  int is_push_promise) {
-    (void)hsi_ctx;
     (void)is_push_promise;
     cwist_h3_hset_t *hset = calloc(1, sizeof(*hset));
     if (!hset) return NULL;
     hset->stream = stream;
+    cwist_h3_hset_track((cwist_http3_context *)hsi_ctx, hset);
     return hset;
 }
 
@@ -312,6 +349,7 @@ static int cwist_h3_hsi_process_header(void *hset_p, struct lsxpack_header *xhdr
 }
 
 static void cwist_h3_hsi_discard(void *hset_p) {
+    cwist_h3_hset_untrack((cwist_h3_hset_t *)hset_p);
     free(hset_p);
 }
 
@@ -2081,6 +2119,7 @@ void cwist_http3_destroy_context(cwist_http3_context *ctx) {
             lsquic_engine_destroy((lsquic_engine_t *)ctx->engine);
             ctx->engine = NULL;
         }
+        cwist_h3_hset_sweep(ctx);
         if (ctx->ssl_ctx) {
             cwist_h3_free_session_ticket_key(ctx->ssl_ctx);
             SSL_CTX_free(ctx->ssl_ctx);
@@ -2167,7 +2206,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
         .ea_packets_out_ctx  = &ctx->udp_fd,
         .ea_get_ssl_ctx      = cwist_h3_get_ssl_ctx,
         .ea_hsi_if           = &cwist_h3_hset_if,
-        .ea_hsi_ctx          = NULL,
+        .ea_hsi_ctx          = ctx,
         .ea_settings         = &settings,
         .ea_alpn             = "h3",
     };
@@ -2503,6 +2542,7 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
         cwist_h3_engine_graceful_stop(ctx);
         lsquic_engine_destroy((lsquic_engine_t *)ctx->engine);
         ctx->engine = NULL;
+        cwist_h3_hset_sweep(ctx);
     }
     err.error.err_i16 = 0;
     return err;

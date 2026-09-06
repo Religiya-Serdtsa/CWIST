@@ -509,8 +509,8 @@ static void queue_deferred(cwist_reactor_t *reactor) {
 }
 #endif
 
-bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
-                       const void *payload, size_t payload_size) {
+static bool reactor_add_common(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
+                               const void *payload, size_t payload_size, bool for_write) {
     if (!reactor || fd < 0) return false;
     reactor_event_ctx_t *ev_ctx = alloc_reactor_ctx(reactor, fd, cb, payload, payload_size);
     if (!ev_ctx) return false;
@@ -524,7 +524,7 @@ bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
         memset(&sqe, 0, sizeof(sqe));
         sqe.opcode = IORING_OP_POLL_ADD;
         sqe.fd = fd;
-        sqe.poll_events = POLLIN;
+        sqe.poll_events = for_write ? POLLOUT : POLLIN;
         sqe.user_data = (uint64_t)ev_ctx;
         /* Run-thread re-arms defer to the batch flush; everything else
          * submits immediately so remote workers wake from their wait. */
@@ -542,7 +542,7 @@ bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
         return false;
     } else {
         struct epoll_event ev;
-        ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+        ev.events = (for_write ? EPOLLOUT : EPOLLIN) | EPOLLET | EPOLLONESHOT;
         ev.data.ptr = ev_ctx;
         if (epoll_ctl(reactor->impl.epoll_fd, EPOLL_CTL_ADD, fd, &ev) == 0) {
             return true;
@@ -557,7 +557,8 @@ bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
     }
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     struct kevent change;
-    EV_SET(&change, fd, EVFILT_READ, EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 0, ev_ctx);
+    EV_SET(&change, fd, for_write ? EVFILT_WRITE : EVFILT_READ,
+           EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 0, ev_ctx);
     if (kevent(reactor->impl.kq_fd, &change, 1, NULL, 0, NULL) == 0) {
         return true;
     }
@@ -566,6 +567,16 @@ bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
 #endif
     free_reactor_ctx(reactor, ev_ctx);
     return false;
+}
+
+bool cwist_reactor_add(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
+                       const void *payload, size_t payload_size) {
+    return reactor_add_common(reactor, fd, cb, payload, payload_size, false);
+}
+
+bool cwist_reactor_add_out(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,
+                           const void *payload, size_t payload_size) {
+    return reactor_add_common(reactor, fd, cb, payload, payload_size, true);
 }
 
 bool cwist_reactor_mod(cwist_reactor_t *reactor, int fd, cwist_reactor_cb_t cb,

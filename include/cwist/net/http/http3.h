@@ -53,6 +53,7 @@ struct cwist_http3_context {
     int handshake_timeout_ms;  /**< 0 = use lsquic default (10s) */
     int ping_period_ms;        /**< 0 = use lsquic default (server: none) */
     int noprogress_timeout_ms; /**< 0 = use lsquic default (60s server) */
+    void *hsets; /**< Head of tracked cwist_h3_hset list (internal; swept on engine destroy) */
 };
 
 /**
