@@ -67,6 +67,7 @@ struct https_thread_payload {
     void (*handler)(cwist_https_connection *, void *);
     void *user_ctx;
     SSL *pres_ssl;  /* non-NULL when the shepherd already finished the handshake */
+    cwist_https_connection *conn; /* non-NULL when re-arming an established connection */
 };
 
 /* --- Thread Pool for HTTPS --- */
@@ -78,6 +79,7 @@ typedef struct {
     void (*handler)(cwist_https_connection *, void *);
     void *user_ctx;
     SSL *pres_ssl;
+    cwist_https_connection *conn;
 } https_pool_task_t;
 
 typedef struct {
@@ -127,10 +129,15 @@ static void *https_pool_worker(void *arg) {
             payload->handler = task.handler;
             payload->user_ctx = task.user_ctx;
             payload->pres_ssl = task.pres_ssl;
+            payload->conn = task.conn;
             https_thread_handler(payload);
         } else {
-            if (task.pres_ssl) SSL_free(task.pres_ssl);
-            close(task.client_fd);
+            if (task.conn) {
+                cwist_https_close_connection(task.conn);
+            } else {
+                if (task.pres_ssl) SSL_free(task.pres_ssl);
+                close(task.client_fd);
+            }
         }
     }
     return NULL;
@@ -172,6 +179,31 @@ void https_pool_submit_ready(int client_fd, SSL *pres_ssl, cwist_https_context *
     g_https_pool.queue[g_https_pool.tail].handler = handler;
     g_https_pool.queue[g_https_pool.tail].user_ctx = user_ctx;
     g_https_pool.queue[g_https_pool.tail].pres_ssl = pres_ssl;
+    g_https_pool.queue[g_https_pool.tail].conn = NULL;
+    g_https_pool.tail = (g_https_pool.tail + 1) % HTTPS_TASK_QUEUE_SIZE;
+    g_https_pool.count++;
+    pthread_cond_signal(&g_https_pool.cond_not_empty);
+    pthread_mutex_unlock(&g_https_pool.mutex);
+}
+
+/* Submit an established connection back to the worker pool (e.g. keep-alive re-arm after async defer). */
+void https_pool_submit_conn(cwist_https_connection *conn, cwist_https_context *ctx, void (*handler)(cwist_https_connection *, void *), void *user_ctx) {
+    if (!conn) return;
+    pthread_mutex_lock(&g_https_pool.mutex);
+    while (g_https_pool.count >= HTTPS_TASK_QUEUE_SIZE && !g_https_pool.shutdown) {
+        pthread_cond_wait(&g_https_pool.cond_not_full, &g_https_pool.mutex);
+    }
+    if (g_https_pool.shutdown) {
+        pthread_mutex_unlock(&g_https_pool.mutex);
+        cwist_https_close_connection(conn);
+        return;
+    }
+    g_https_pool.queue[g_https_pool.tail].client_fd = conn->fd;
+    g_https_pool.queue[g_https_pool.tail].ctx = ctx;
+    g_https_pool.queue[g_https_pool.tail].handler = handler;
+    g_https_pool.queue[g_https_pool.tail].user_ctx = user_ctx;
+    g_https_pool.queue[g_https_pool.tail].pres_ssl = NULL;
+    g_https_pool.queue[g_https_pool.tail].conn = conn;
     g_https_pool.tail = (g_https_pool.tail + 1) % HTTPS_TASK_QUEUE_SIZE;
     g_https_pool.count++;
     pthread_cond_signal(&g_https_pool.cond_not_empty);
@@ -187,6 +219,17 @@ void https_pool_destroy(void) {
     pthread_mutex_unlock(&g_https_pool.mutex);
     for (int i = 0; i < get_optimal_thread_count(); i++) {
         pthread_join(g_https_pool.threads[i], NULL);
+    }
+    while (g_https_pool.count > 0) {
+        https_pool_task_t task = g_https_pool.queue[g_https_pool.head];
+        g_https_pool.head = (g_https_pool.head + 1) % HTTPS_TASK_QUEUE_SIZE;
+        g_https_pool.count--;
+        if (task.conn) {
+            cwist_https_close_connection(task.conn);
+        } else {
+            if (task.pres_ssl) SSL_free(task.pres_ssl);
+            if (task.client_fd >= 0) close(task.client_fd);
+        }
     }
     pthread_mutex_destroy(&g_https_pool.mutex);
     pthread_cond_destroy(&g_https_pool.cond_not_empty);
@@ -909,6 +952,7 @@ static cwist_error_t https_wrap_established(cwist_https_context *ctx, int client
     (*conn)->negotiated_http2 = false;
     (*conn)->negotiated_protocol = CWIST_HTTPS_PROTOCOL_HTTP11;
     (*conn)->http3_enabled = ctx->http3_enabled;
+    (*conn)->deferred = false;
 
     const unsigned char *alpn = NULL;
     unsigned int alpn_len = 0;
@@ -1079,6 +1123,7 @@ cwist_http_request *cwist_https_receive_request(cwist_https_connection *conn) {
     if (!req) return NULL;
 
     req->client_fd = conn->fd;
+    req->https_conn = conn;
 
     size_t header_len = (header_end + 4) - conn->read_buf;
     size_t body_received = total_received - header_len;
@@ -1283,6 +1328,40 @@ cwist_error_t cwist_https_send_response(cwist_https_connection *conn, cwist_http
     return err;
 }
 
+cwist_error_t cwist_https_send_response_head(cwist_https_connection *conn, cwist_http_response *res) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+
+    if (!conn || !conn->ssl || !res) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    if (conn->http3_enabled && !cwist_http_header_get(res->headers, "Alt-Svc")) {
+        struct sockaddr_storage ss;
+        socklen_t ss_len = sizeof(ss);
+        int port = 443;
+        if (getsockname(conn->fd, (struct sockaddr *)&ss, &ss_len) == 0) {
+            if (ss.ss_family == AF_INET) {
+                port = ntohs(((struct sockaddr_in *)&ss)->sin_port);
+            } else if (ss.ss_family == AF_INET6) {
+                port = ntohs(((struct sockaddr_in6 *)&ss)->sin6_port);
+            }
+        }
+        char alt_svc[64];
+        snprintf(alt_svc, sizeof(alt_svc), "h3=\":%d\"; ma=86400", port);
+        cwist_http_header_add(&res->headers, "Alt-Svc", alt_svc);
+    }
+
+    char header_buf[CWIST_HTTP_MAX_HEADER_SIZE];
+    size_t header_len = cwist_http_serialize_headers(res, header_buf, sizeof(header_buf));
+    if (cwist_ssl_write_all(conn, header_buf, header_len) != 0) {
+        return make_ssl_error("SSL header write failed");
+    }
+
+    err.error.err_i16 = 0;
+    return err;
+}
+
 /**
  * @brief Worker entry point that performs the TLS handshake before dispatching.
  * @param arg Thread payload containing the accepted socket and dispatch callback.
@@ -1293,7 +1372,11 @@ static void *https_thread_handler(void *arg) {
     cwist_https_connection *conn = NULL;
     cwist_error_t hs_err;
 
-    if (payload->pres_ssl) {
+    if (payload->conn) {
+        conn = payload->conn;
+        hs_err = make_error(CWIST_ERR_INT16);
+        hs_err.error.err_i16 = 0;
+    } else if (payload->pres_ssl) {
         /* Handshake already completed by the shepherd thread. */
         hs_err = https_wrap_established(payload->ctx, payload->client_fd, payload->pres_ssl, &conn);
         if (!cwist_error_is_ok(&hs_err)) {
@@ -1305,12 +1388,18 @@ static void *https_thread_handler(void *arg) {
 
     if (cwist_error_is_ok(&hs_err)) {
         payload->handler(conn, payload->user_ctx);
-        cwist_https_close_connection(conn);
+        if (!conn->deferred) {
+            cwist_https_close_connection(conn);
+        }
     } else {
         if (hs_err.errtype == CWIST_ERR_JSON) {
             cJSON_Delete(hs_err.error.err_json);
         }
-        close(payload->client_fd);
+        if (payload->conn) {
+            cwist_https_close_connection(payload->conn);
+        } else {
+            close(payload->client_fd);
+        }
     }
 
     cwist_free(payload);

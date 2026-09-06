@@ -2116,6 +2116,7 @@ static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
         if (!req) return;
         req->app = app;
         req->db = app->db;
+        req->https_conn = conn;
 
         cwist_http_response *res = cwist_http_response_create_in_arena(req->arena);
         if (!res) {
@@ -2123,6 +2124,12 @@ static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
             return;
         }
         internal_route_handler(app, req, res);
+
+        /* Deferred-response handoff: ownership of req/res and conn moved to cwist_async */
+        if (res->deferred) {
+            cwist_async_dispatch_ack((cwist_async *)res->async);
+            return;
+        }
 
         bool keep_alive = req->keep_alive && res->keep_alive;
         bool upgraded = req->upgraded;
@@ -2134,7 +2141,11 @@ static void static_ssl_http1_handler(cwist_https_connection *conn, void *ctx) {
             keep_alive = false;
         }
 
-        cwist_https_send_response(conn, res);
+        if (req->method == CWIST_HTTP_HEAD) {
+            cwist_https_send_response_head(conn, res);
+        } else {
+            cwist_https_send_response(conn, res);
+        }
 
         bool detached = false;
         if (upgraded) {

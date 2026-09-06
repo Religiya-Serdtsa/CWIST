@@ -1129,6 +1129,9 @@ cwist_http_request *cwist_http_request_create(void) {
     req->private_data = NULL;
     req->endpoint_opts = CWIST_ENDPOINT_DEFAULT;
     req->arena = arena;
+    req->async_conn = NULL;
+    req->https_conn = NULL;
+    req->h2_queue = NULL;
 
     // Defaults (borrowed statics; parsing overwrites them via arena/heap assign)
     cwist_sstring_borrow(req->version, "HTTP/1.1", 8);
