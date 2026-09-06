@@ -1,5 +1,6 @@
 #include <cwist/net/http/http2.h>
 #include <cwist/net/http/https.h>
+#include <cwist/net/http/async.h>
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/core/seq/seq.h>
 
@@ -13,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #define TEST_CERT "example/othello-web/server.crt"
@@ -1280,6 +1282,203 @@ static void test_http2_continuation_flood(void) {
     printf("Passed HTTP/2 CONTINUATION flood defense (CVE-2024-27983).\n");
 }
 
+/* Worker that completes a deferred exchange after a short delay. */
+static void *http2_async_respond_thread(void *arg) {
+    cwist_async *a = (cwist_async *)arg;
+    struct timespec ts = { .tv_sec = 0, .tv_nsec = 50 * 1000 * 1000 };
+    nanosleep(&ts, NULL);
+    assert(cwist_async_respond(a, CWIST_HTTP_OK, "text/plain", "slow ok", 7));
+    return NULL;
+}
+
+/* Handler: /slow defers and is answered by a worker thread ~50ms later;
+ * everything else is answered inline. */
+static void http2_async_defer_handler(void *user_ctx, cwist_http_request *req, cwist_http_response *res) {
+    (void)user_ctx;
+    if (strcmp(req->path->data, "/slow") == 0) {
+        cwist_async *a = cwist_async_defer(req, res);
+        assert(a != NULL);
+        pthread_t t;
+        assert(pthread_create(&t, NULL, http2_async_respond_thread, a) == 0);
+        pthread_detach(t);
+        return;
+    }
+    cwist_http_header_add(&res->headers, "content-type", "text/plain");
+    cwist_sstring_assign(res->body, "fast ok");
+}
+
+static void test_http2_async_defer(void) {
+    printf("Testing HTTP/2 async defer...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16),
+        .handler = http2_async_defer_handler
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_handler_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    static const unsigned char headers_slow[] = {
+        0x00, 0x00, 0x09, 0x01, 0x05, 0x00, 0x00, 0x00, 0x01,
+        0x82, 0x87, 0x04, 0x05, '/', 's', 'l', 'o', 'w'
+    };
+    static const unsigned char headers_fast[] = {
+        0x00, 0x00, 0x09, 0x01, 0x05, 0x00, 0x00, 0x00, 0x03,
+        0x82, 0x87, 0x04, 0x05, '/', 'f', 'a', 's', 't'
+    };
+
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+    assert(ssl_write_all(client, headers_slow, sizeof(headers_slow)) == 0);
+    assert(ssl_write_all(client, headers_fast, sizeof(headers_fast)) == 0);
+
+    /* The deferred stream 1 must not stall the connection: stream 3's
+     * response has to arrive first, then stream 1's deferred response. */
+    int first_data_stream = 0;
+    bool saw_stream1 = false;
+    bool saw_stream3 = false;
+    char data_buf1[64] = {0};
+    char data_buf3[64] = {0};
+    for (int i = 0; i < 20; ++i) {
+        unsigned char hdr[9];
+        assert(ssl_read_exact(client, hdr, sizeof(hdr)) == 0);
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | (uint32_t)hdr[2];
+        uint8_t type = hdr[3];
+        uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
+                             ((uint32_t)hdr[7] << 8) | hdr[8];
+        unsigned char payload[4096] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
+
+        if (type == 0x0) {
+            size_t body_len = 0;
+            if (stream_id == 1) {
+                assert(http2_read_seq_payload(payload, len, data_buf1, sizeof(data_buf1), &body_len));
+                saw_stream1 = true;
+            } else if (stream_id == 3) {
+                assert(http2_read_seq_payload(payload, len, data_buf3, sizeof(data_buf3), &body_len));
+                saw_stream3 = true;
+            }
+            if (first_data_stream == 0) first_data_stream = (int)stream_id;
+        }
+        if (saw_stream1 && saw_stream3) break;
+    }
+
+    assert(saw_stream1);
+    assert(saw_stream3);
+    assert(first_data_stream == 3); /* fast stream answered before the deferred one */
+    assert(strcmp(data_buf1, "slow ok") == 0);
+    assert(strcmp(data_buf3, "fast ok") == 0);
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    assert(server_ctx.result.errtype == CWIST_ERR_INT16);
+    assert(server_ctx.result.error.err_i16 == 0);
+    printf("Passed HTTP/2 async defer.\n");
+}
+
+/* RST_STREAM on a deferred stream: the late completion must be dropped
+ * without sending frames or freeing the stream state twice. */
+static void test_http2_async_defer_rst_drops(void) {
+    printf("Testing HTTP/2 async defer RST drop...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16),
+        .handler = http2_async_defer_handler
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_handler_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    static const unsigned char headers_slow[] = {
+        0x00, 0x00, 0x09, 0x01, 0x05, 0x00, 0x00, 0x00, 0x01,
+        0x82, 0x87, 0x04, 0x05, '/', 's', 'l', 'o', 'w'
+    };
+    static const unsigned char rst_stream1[] = {
+        0x00, 0x00, 0x04, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01,
+        0x00, 0x00, 0x00, 0x08 /* CANCEL */
+    };
+    static const unsigned char headers_fast[] = {
+        0x00, 0x00, 0x09, 0x01, 0x05, 0x00, 0x00, 0x00, 0x03,
+        0x82, 0x87, 0x04, 0x05, '/', 'f', 'a', 's', 't'
+    };
+
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+    assert(ssl_write_all(client, headers_slow, sizeof(headers_slow)) == 0);
+    assert(ssl_write_all(client, rst_stream1, sizeof(rst_stream1)) == 0);
+    assert(ssl_write_all(client, headers_fast, sizeof(headers_fast)) == 0);
+
+    /* Read well past the worker's 50ms delay: no frame for stream 1 may
+     * appear, the connection stays healthy, and stream 3 is answered. */
+    bool saw_stream3 = false;
+    char data_buf3[64] = {0};
+    struct timeval tv = { .tv_sec = 0, .tv_usec = 500 * 1000 };
+    assert(setsockopt(sv[1], SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0);
+    for (int i = 0; i < 64; ++i) {
+        unsigned char hdr[9];
+        if (ssl_read_exact(client, hdr, sizeof(hdr)) != 0) break; /* idle: timeout */
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | (uint32_t)hdr[2];
+        uint8_t type = hdr[3];
+        uint32_t stream_id = (((uint32_t)hdr[5] & 0x7f) << 24) | ((uint32_t)hdr[6] << 16) |
+                             ((uint32_t)hdr[7] << 8) | hdr[8];
+        assert(stream_id != 1); /* cancelled stream must never be answered */
+        unsigned char payload[4096] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0) assert(ssl_read_exact(client, payload, len) == 0);
+        if (type == 0x0 && stream_id == 3) {
+            size_t body_len = 0;
+            assert(http2_read_seq_payload(payload, len, data_buf3, sizeof(data_buf3), &body_len));
+            saw_stream3 = true;
+        }
+    }
+
+    assert(saw_stream3);
+    assert(strcmp(data_buf3, "fast ok") == 0);
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    assert(server_ctx.result.errtype == CWIST_ERR_INT16);
+    assert(server_ctx.result.error.err_i16 == 0);
+    printf("Passed HTTP/2 async defer RST drop.\n");
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     test_http2_roundtrip();
@@ -1290,6 +1489,8 @@ int main(void) {
     test_http2_flow_control();
     test_http2_response_headers();
     test_http2_hpack_incremental_indexing();
+    test_http2_async_defer();
+    test_http2_async_defer_rst_drops();
     test_http2_missing_pseudo_header();
     test_http2_max_concurrent_streams();
     test_http2_rapid_reset();

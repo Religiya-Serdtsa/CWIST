@@ -18,6 +18,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <cwist/net/http/async.h>
 #include <cwist/net/http/https.h>
+#include <cwist/net/http/http2.h>
 #include <cwist/sys/app/app.h>
 #include <cwist/sys/app/shutdown.h>
 #include <cwist/sys/job/scheduler.h>
@@ -47,6 +48,8 @@ struct cwist_async {
     cwist_reactor_t *reactor;     /* NULL on the classic pool path. */
     cwist_http_async_conn_t *conn;
     void *https_conn;             /* cwist_https_connection * on TLS path. */
+    cwist_h2_async_queue *h2_queue; /* Per-connection queue on the H2 path. */
+    uint32_t h2_stream_id;
     cwist_reactor_post_t post;
 };
 
@@ -94,6 +97,13 @@ cwist_async *cwist_async_defer(cwist_http_request *req, cwist_http_response *res
         a->https_conn = req->https_conn;
         ((cwist_https_connection *)req->https_conn)->deferred = true;
     }
+    if (req->h2_queue) {
+        /* Keep the queue alive until the completion has been enqueued, even
+         * if the connection tears down first (teardown closes the queue and
+         * releases only its own reference). */
+        a->h2_queue = cwist_h2_async_queue_acquire((cwist_h2_async_queue *)req->h2_queue);
+        a->h2_stream_id = req->stream_id;
+    }
     a->post.cb = cwist_async_reactor_complete;
     a->post.ctx = a;
     res->async = a;
@@ -121,6 +131,20 @@ static void cwist_async_complete(cwist_async *a) {
     cwist_http_response *res = a->final_res;
     bool keep = a->keep_alive && atomic_load(&g_cwist_running);
     res->keep_alive = keep;
+
+    if (a->h2_queue) {
+        /* Plan B handoff: never write frames from a worker thread.  Enqueue
+         * the finished exchange and poke the connection's wake fd; the
+         * connection thread drains the queue, HPACK-encodes, and sends.
+         * Wait for the dispatch ack first: enqueueing transfers req/res
+         * ownership, which is only legal once dispatch observed the defer. */
+        while (!atomic_load_explicit(&a->ack, memory_order_acquire)) sched_yield();
+        cwist_h2_async_queue_enqueue(a->h2_queue, a->h2_stream_id, a->req,
+                                     a->final_res, a->res, a->final_res_owned);
+        cwist_h2_async_queue_release(a->h2_queue);
+        cwist_free(a);
+        return;
+    }
 
     if (a->https_conn) {
         cwist_https_connection *conn = (cwist_https_connection *)a->https_conn;
