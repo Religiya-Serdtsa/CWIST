@@ -195,6 +195,8 @@ SRCS = src/core/sstring/sstring.c \
        src/https/pqc_layer.c \
        src/net/http/mux.c \
        src/net/http/multipart.c \
+       src/net/http/writer_fast.c \
+       src/sys/io/uring_sqpoll.c \
        src/net/http/async_server.c \
        src/net/http/async.c \
        src/net/http/cookie.c \

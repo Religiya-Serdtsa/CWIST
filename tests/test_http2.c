@@ -709,6 +709,7 @@ static void test_http2_flow_control(void) {
                 total_body += chunk_len;
             }
             if (flags & 0x01) got_end_stream = true;
+            if (total_body > 0) break;
         }
     }
 
@@ -1045,6 +1046,240 @@ static void test_http2_max_concurrent_streams(void) {
     printf("Passed HTTP/2 max concurrent streams.\n");
 }
 
+static void test_http2_rapid_reset(void) {
+    printf("Testing HTTP/2 Rapid Reset defense (CVE-2023-44487)...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16),
+        .handler = http2_test_handler
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_handler_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+
+    /* Send rapid reset attack: 150 consecutive HEADERS + RST_STREAM pairs */
+    bool saw_goaway = false;
+    uint32_t goaway_err = 0;
+    for (uint32_t i = 1; i <= 150; i++) {
+        uint32_t stream_id = 2 * i - 1;
+        /* HEADERS frame on stream_id with END_HEADERS only (no END_STREAM) */
+        unsigned char hframe[12] = {
+            0x00, 0x00, 0x03, 0x01, 0x04,
+            (unsigned char)((stream_id >> 24) & 0x7f),
+            (unsigned char)((stream_id >> 16) & 0xff),
+            (unsigned char)((stream_id >> 8) & 0xff),
+            (unsigned char)(stream_id & 0xff),
+            0x82, 0x87, 0x84 /* :method GET, :scheme https, :path / */
+        };
+        /* RST_STREAM frame on stream_id with CANCEL (0x8) */
+        unsigned char rst_frame[13] = {
+            0x00, 0x00, 0x04, 0x03, 0x00,
+            (unsigned char)((stream_id >> 24) & 0x7f),
+            (unsigned char)((stream_id >> 16) & 0xff),
+            (unsigned char)((stream_id >> 8) & 0xff),
+            (unsigned char)(stream_id & 0xff),
+            0x00, 0x00, 0x00, 0x08
+        };
+        if (ssl_write_all(client, hframe, sizeof(hframe)) != 0 ||
+            ssl_write_all(client, rst_frame, sizeof(rst_frame)) != 0) {
+            break;
+        }
+    }
+
+    /* Read incoming frames to find the GOAWAY frame with ENHANCE_YOUR_CALM (0xb) */
+    for (int i = 0; i < 200 && !saw_goaway; ++i) {
+        unsigned char hdr[9];
+        if (ssl_read_exact(client, hdr, sizeof(hdr)) != 0) break;
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | hdr[2];
+        uint8_t type = hdr[3];
+        unsigned char payload[4096] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0 && ssl_read_exact(client, payload, len) != 0) break;
+
+        if (type == 0x07) { /* GOAWAY */
+            assert(len >= 8);
+            goaway_err = ((uint32_t)payload[4] << 24) | ((uint32_t)payload[5] << 16) |
+                         ((uint32_t)payload[6] << 8) | (uint32_t)payload[7];
+            saw_goaway = true;
+        }
+    }
+
+    assert(saw_goaway);
+    assert(goaway_err == 0xb); /* ENHANCE_YOUR_CALM */
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    printf("Passed HTTP/2 Rapid Reset defense (CVE-2023-44487).\n");
+}
+
+static void test_http2_idle_stream_rst(void) {
+    printf("Testing HTTP/2 idle stream RST_STREAM rejection (RFC 7540 §5.1)...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16),
+        .handler = http2_test_handler
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_handler_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+
+    /* Send RST_STREAM on stream 99 (never opened, idle state) */
+    uint32_t idle_stream_id = 99;
+    unsigned char rst_frame[13] = {
+        0x00, 0x00, 0x04, 0x03, 0x00,
+        (unsigned char)((idle_stream_id >> 24) & 0x7f),
+        (unsigned char)((idle_stream_id >> 16) & 0xff),
+        (unsigned char)((idle_stream_id >> 8) & 0xff),
+        (unsigned char)(idle_stream_id & 0xff),
+        0x00, 0x00, 0x00, 0x08
+    };
+    assert(ssl_write_all(client, rst_frame, sizeof(rst_frame)) == 0);
+
+    bool saw_goaway = false;
+    uint32_t goaway_err = 0;
+    for (int i = 0; i < 32 && !saw_goaway; ++i) {
+        unsigned char hdr[9];
+        if (ssl_read_exact(client, hdr, sizeof(hdr)) != 0) break;
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | hdr[2];
+        uint8_t type = hdr[3];
+        unsigned char payload[4096] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0 && ssl_read_exact(client, payload, len) != 0) break;
+
+        if (type == 0x07) { /* GOAWAY */
+            assert(len >= 8);
+            goaway_err = ((uint32_t)payload[4] << 24) | ((uint32_t)payload[5] << 16) |
+                         ((uint32_t)payload[6] << 8) | (uint32_t)payload[7];
+            saw_goaway = true;
+        }
+    }
+
+    assert(saw_goaway);
+    assert(goaway_err == 0x1); /* PROTOCOL_ERROR per RFC 7540 §5.1 */
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    printf("Passed HTTP/2 idle stream RST_STREAM rejection (RFC 7540 §5.1).\n");
+}
+
+static void test_http2_continuation_flood(void) {
+    printf("Testing HTTP/2 CONTINUATION flood defense (CVE-2024-27983)...\n");
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    test_http2_server_ctx server_ctx = {
+        .fd = sv[0],
+        .result = make_error(CWIST_ERR_INT16),
+        .handler = http2_test_handler
+    };
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, http2_handler_server_thread, &server_ctx) == 0);
+
+    SSL_CTX *client_ctx = SSL_CTX_new(TLS_client_method());
+    assert(client_ctx != NULL);
+    SSL_CTX_set_verify(client_ctx, SSL_VERIFY_NONE, NULL);
+    SSL *client = SSL_new(client_ctx);
+    assert(client != NULL);
+    assert(SSL_set_fd(client, sv[1]) == 1);
+    assert(SSL_connect(client) == 1);
+
+    static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static const unsigned char settings_frame[] = {
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    assert(ssl_write_all(client, preface, sizeof(preface) - 1) == 0);
+    assert(ssl_write_all(client, settings_frame, sizeof(settings_frame)) == 0);
+
+    /* HEADERS without END_HEADERS on stream 1 */
+    static const unsigned char headers_start[] = {
+        0x00, 0x00, 0x02, 0x01, 0x00, /* len=2, type=1 (HEADERS), flags=0 (no END_HEADERS) */
+        0x00, 0x00, 0x00, 0x01,
+        0x82, 0x87
+    };
+    assert(ssl_write_all(client, headers_start, sizeof(headers_start)) == 0);
+
+    /* Send 35 empty CONTINUATION frames (limit is 32) */
+    static const unsigned char continuation[] = {
+        0x00, 0x00, 0x00, 0x09, 0x00, /* len=0, type=9 (CONTINUATION), flags=0 */
+        0x00, 0x00, 0x00, 0x01
+    };
+    for (int i = 0; i < 35; i++) {
+        if (ssl_write_all(client, continuation, sizeof(continuation)) != 0) break;
+    }
+
+    bool saw_goaway = false;
+    uint32_t goaway_err = 0;
+    for (int i = 0; i < 64 && !saw_goaway; ++i) {
+        unsigned char hdr[9];
+        if (ssl_read_exact(client, hdr, sizeof(hdr)) != 0) break;
+        uint32_t len = ((uint32_t)hdr[0] << 16) | ((uint32_t)hdr[1] << 8) | hdr[2];
+        uint8_t type = hdr[3];
+        unsigned char payload[4096] = {0};
+        assert(len < sizeof(payload));
+        if (len > 0 && ssl_read_exact(client, payload, len) != 0) break;
+
+        if (type == 0x07) { /* GOAWAY */
+            assert(len >= 8);
+            goaway_err = ((uint32_t)payload[4] << 24) | ((uint32_t)payload[5] << 16) |
+                         ((uint32_t)payload[6] << 8) | (uint32_t)payload[7];
+            saw_goaway = true;
+        }
+    }
+
+    assert(saw_goaway);
+    assert(goaway_err == 0xb); /* ENHANCE_YOUR_CALM */
+
+    SSL_shutdown(client);
+    SSL_free(client);
+    SSL_CTX_free(client_ctx);
+    close(sv[1]);
+
+    pthread_join(tid, NULL);
+    printf("Passed HTTP/2 CONTINUATION flood defense (CVE-2024-27983).\n");
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     test_http2_roundtrip();
@@ -1057,6 +1292,10 @@ int main(void) {
     test_http2_hpack_incremental_indexing();
     test_http2_missing_pseudo_header();
     test_http2_max_concurrent_streams();
+    test_http2_rapid_reset();
+    test_http2_idle_stream_rst();
+    test_http2_continuation_flood();
     printf("All HTTP/2 tests passed!\n");
     return 0;
 }
+

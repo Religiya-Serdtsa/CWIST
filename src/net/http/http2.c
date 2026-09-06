@@ -77,6 +77,17 @@
 #define H2_ERR_FRAME_SIZE_ERROR   0x6
 #define H2_ERR_REFUSED_STREAM     0x7
 #define H2_ERR_COMPRESSION_ERROR  0x9
+#define H2_ERR_CONNECT_ERROR      0xa
+#define H2_ERR_ENHANCE_YOUR_CALM  0xb
+
+/* Rapid Reset (CVE-2023-44487), CONTINUATION Flood (CVE-2024-27983), and DoS mitigation limits */
+#define CWIST_HTTP2_DEFAULT_RST_BURST        100
+#define CWIST_HTTP2_DEFAULT_RST_RATE         100 /* resets per second refill */
+#define CWIST_HTTP2_DEFAULT_PING_BURST       100
+#define CWIST_HTTP2_DEFAULT_PING_RATE        50  /* pings per second refill */
+#define CWIST_HTTP2_MAX_HEADER_BLOCK_SIZE    65536
+#define CWIST_HTTP2_MAX_CONTINUATIONS        32
+#define CWIST_HTTP2_MAX_HEADERS_PER_REQUEST  256
 
 /* Monotonic clock in milliseconds, for the connection idle deadline. */
 static uint64_t h2_now_ms(void) {
@@ -118,6 +129,24 @@ static int h2_goaway_grace_ms(void) {
         grace_ms = (env && atoi(env) >= 0) ? atoi(env) : CWIST_HTTP2_GOAWAY_GRACE_MS_DEFAULT;
     }
     return grace_ms;
+}
+
+static uint32_t h2_max_rst_burst(void) {
+    static uint32_t val = 0;
+    if (val == 0) {
+        const char *env = getenv("CWIST_HTTP2_MAX_RST_BURST");
+        val = (env && atoi(env) > 0) ? (uint32_t)atoi(env) : CWIST_HTTP2_DEFAULT_RST_BURST;
+    }
+    return val;
+}
+
+static uint32_t h2_max_rst_rate(void) {
+    static uint32_t val = 0;
+    if (val == 0) {
+        const char *env = getenv("CWIST_HTTP2_MAX_RST_RATE");
+        val = (env && atoi(env) > 0) ? (uint32_t)atoi(env) : CWIST_HTTP2_DEFAULT_RST_RATE;
+    }
+    return val;
 }
 
 /* --- Stream & Connection State --- */
@@ -199,6 +228,12 @@ typedef struct h2_conn {
     /* True when a header block was refused (stream limit) but its
      * CONTINUATION frames must still be consumed and discarded. */
     bool cont_discard;
+    uint32_t cont_frame_count;
+    /* Token bucket budget for Rapid Reset (CVE-2023-44487) and control frames */
+    uint32_t rst_budget;
+    uint64_t rst_last_refill_ms;
+    uint32_t ping_budget;
+    uint64_t ping_last_refill_ms;
     /* Optional stream hooks (gRPC incremental delivery).  hook_ctx is the
      * per-connection context from hooks->on_conn_open (or user_ctx). */
     const cwist_http2_stream_hooks *hooks;
@@ -221,6 +256,11 @@ static void h2_conn_init(h2_conn *hc, cwist_https_connection *conn) {
     hc->fc.send_window = 65535;
     hc->cont_end_stream = false;
     hc->last_activity = h2_now_ms();
+    hc->rst_budget = h2_max_rst_burst();
+    hc->rst_last_refill_ms = hc->last_activity;
+    hc->ping_budget = CWIST_HTTP2_DEFAULT_PING_BURST;
+    hc->ping_last_refill_ms = hc->last_activity;
+    hc->cont_frame_count = 0;
     /* The extension carries application bodies and must not be enabled over
      * h2c: its ordering metadata is not an integrity mechanism.  HTTPS/TLS
      * supplies authenticated transport protection against on-path mutation. */
@@ -262,6 +302,54 @@ static void h2_conn_destroy(h2_conn *hc) {
         df = next;
     }
     if (hc->out_mu_init) pthread_mutex_destroy(&hc->out_mu);
+}
+
+static bool h2_conn_consume_rst_budget(h2_conn *hc) {
+    uint64_t now = h2_now_ms();
+    uint64_t elapsed = (now > hc->rst_last_refill_ms) ? (now - hc->rst_last_refill_ms) : 0;
+    if (elapsed >= 1000) {
+        hc->rst_budget = h2_max_rst_burst();
+        hc->rst_last_refill_ms = now;
+    } else if (elapsed > 0) {
+        uint32_t add = (uint32_t)((elapsed * h2_max_rst_rate()) / 1000);
+        if (add > 0) {
+            hc->rst_budget += add;
+            if (hc->rst_budget > h2_max_rst_burst()) {
+                hc->rst_budget = h2_max_rst_burst();
+            }
+            hc->rst_last_refill_ms = now;
+        }
+    }
+
+    if (hc->rst_budget == 0) {
+        return false;
+    }
+    hc->rst_budget--;
+    return true;
+}
+
+static bool h2_conn_consume_ping_budget(h2_conn *hc) {
+    uint64_t now = h2_now_ms();
+    uint64_t elapsed = (now > hc->ping_last_refill_ms) ? (now - hc->ping_last_refill_ms) : 0;
+    if (elapsed >= 1000) {
+        hc->ping_budget = CWIST_HTTP2_DEFAULT_PING_BURST;
+        hc->ping_last_refill_ms = now;
+    } else if (elapsed > 0) {
+        uint32_t add = (uint32_t)((elapsed * CWIST_HTTP2_DEFAULT_PING_RATE) / 1000);
+        if (add > 0) {
+            hc->ping_budget += add;
+            if (hc->ping_budget > CWIST_HTTP2_DEFAULT_PING_BURST) {
+                hc->ping_budget = CWIST_HTTP2_DEFAULT_PING_BURST;
+            }
+            hc->ping_last_refill_ms = now;
+        }
+    }
+
+    if (hc->ping_budget == 0) {
+        return false;
+    }
+    hc->ping_budget--;
+    return true;
 }
 
 static h2_stream *h2_stream_find(h2_conn *hc, uint32_t stream_id) {
@@ -1313,11 +1401,18 @@ typedef struct h2_header_state {
     bool seen_scheme;
     bool seen_authority;
     bool seen_regular;
+    uint32_t header_count;
 } h2_header_state;
 
 static int h2_apply_header(cwist_http_request *req, const char *name, const char *value,
                            h2_header_state *st) {
     if (!req || !name || !value || !st) return -1;
+    st->header_count++;
+    if (st->header_count > CWIST_HTTP2_MAX_HEADERS_PER_REQUEST) {
+        CWIST_LOG_WARN("[h2] request exceeds maximum header count %u",
+                       (unsigned)CWIST_HTTP2_MAX_HEADERS_PER_REQUEST);
+        return -1;
+    }
 
     if (name[0] == ':') {
         /* Pseudo-headers must precede all regular headers. */
@@ -1857,6 +1952,11 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
     pfd.fd = hc->conn->fd;
     pfd.events = POLLIN;
 
+    int pr = poll(&pfd, 1, 0);
+    if (pr > 0 && (pfd.revents & (POLLHUP | POLLERR)) && !(pfd.revents & POLLIN)) {
+        if (!hc->conn->ssl || SSL_pending(hc->conn->ssl) == 0) return -1;
+    }
+
     while ((poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN)) ||
            (hc->conn->ssl && SSL_pending(hc->conn->ssl) > 0)) {
         unsigned char hdr[9];
@@ -1903,9 +2003,17 @@ static int h2_process_incoming_frames_nonblocking(h2_conn *hc, h2_stream *s) {
             }
         } else if (type == 0x06) { // PING
             if ((flags & 0x01) == 0 && len == 8) { // ACK flag is 0x01
+                if (!h2_conn_consume_ping_budget(hc)) {
+                    cwist_free(payload);
+                    return -1;
+                }
                 h2_write_frame(hc, 0x06, 0x01, 0, payload, 8);
             }
         } else if (type == 0x03) { // RST_STREAM
+            if (!h2_conn_consume_rst_budget(hc)) {
+                cwist_free(payload);
+                return -1;
+            }
             if (s && stream_id == s->stream_id) {
                 s->send_aborted = true;
             }
@@ -2526,6 +2634,12 @@ static int h2_begin_headers(h2_conn *hc, uint32_t stream_id,
         return 0;
     }
 
+    if (block_len > CWIST_HTTP2_MAX_HEADER_BLOCK_SIZE) {
+        CWIST_LOG_WARN("[h2] HEADERS block length %zu exceeds maximum %u",
+                       block_len, (unsigned)CWIST_HTTP2_MAX_HEADER_BLOCK_SIZE);
+        return -2;
+    }
+
     /* Refused streams must still have their CONTINUATION sequence consumed
      * (and their header block ignored) so the connection framing stays in
      * sync. */
@@ -2537,6 +2651,7 @@ static int h2_begin_headers(h2_conn *hc, uint32_t stream_id,
         hc->cont_stream_id = stream_id;
         hc->cont_end_stream = end_stream;
         hc->cont_discard = true;
+        hc->cont_frame_count = 0;
         hc->cont_len = 0;
         return 1;
     }
@@ -2546,6 +2661,7 @@ static int h2_begin_headers(h2_conn *hc, uint32_t stream_id,
     hc->cont_stream_id = stream_id;
     hc->cont_end_stream = end_stream;
     hc->cont_discard = false;
+    hc->cont_frame_count = 0;
     hc->cont_len = block_len;
     hc->cont_cap = block_len < 1024 ? 1024 : block_len * 2;
     hc->cont_buf = (unsigned char *)cwist_alloc(hc->cont_cap);
@@ -2566,6 +2682,19 @@ static int h2_handle_continuation(h2_conn *hc, uint32_t stream_id,
         return -1; /* PROTOCOL_ERROR */
     }
 
+    hc->cont_frame_count++;
+    if (hc->cont_frame_count > CWIST_HTTP2_MAX_CONTINUATIONS) {
+        CWIST_LOG_WARN("[h2] excessive CONTINUATION frames (%u) received (CVE-2024-27983)",
+                       hc->cont_frame_count);
+        return -2;
+    }
+
+    if (hc->cont_len + len > CWIST_HTTP2_MAX_HEADER_BLOCK_SIZE) {
+        CWIST_LOG_WARN("[h2] CONTINUATION accumulated header block size %zu exceeds maximum %u",
+                       hc->cont_len + len, (unsigned)CWIST_HTTP2_MAX_HEADER_BLOCK_SIZE);
+        return -2;
+    }
+
     /* Header block of a stream we already refused: consume the frames so
      * framing stays in sync, but do not decode or buffer them. */
     if (hc->cont_discard) {
@@ -2573,6 +2702,7 @@ static int h2_handle_continuation(h2_conn *hc, uint32_t stream_id,
             hc->expecting_continuation = false;
             hc->cont_discard = false;
             hc->cont_stream_id = 0;
+            hc->cont_frame_count = 0;
         }
         return 0;
     }
@@ -2610,6 +2740,7 @@ static int h2_handle_continuation(h2_conn *hc, uint32_t stream_id,
         hc->expecting_continuation = false;
         hc->cont_len = 0;
         hc->cont_stream_id = 0;
+        hc->cont_frame_count = 0;
         return rc;
     }
     return 0;
@@ -2778,10 +2909,11 @@ cwist_error_t cwist_http2_serve_connection_ex(
         return result;
     }
 
-    unsigned char settings[18] = {
+    unsigned char settings[24] = {
         0x00, 0x01, 0x00, 0x00, 0x10, 0x00, // SETTINGS_HEADER_TABLE_SIZE = 4096 (CWIST_HTTP2_HEADER_TABLE_SIZE; HPACK dynamic table enabled)
         0x00, 0x03, 0x00, 0x00, 0x00, 0x64, // SETTINGS_MAX_CONCURRENT_STREAMS = 100 (CWIST_HTTP2_MAX_CONCURRENT_STREAMS)
-        0x00, 0x04, 0x7f, 0xff, 0xff, 0xff  // SETTINGS_INITIAL_WINDOW_SIZE = 2147483647 (2GB)
+        0x00, 0x04, 0x7f, 0xff, 0xff, 0xff, // SETTINGS_INITIAL_WINDOW_SIZE = 2147483647 (2GB)
+        0x00, 0x06, 0x00, 0x01, 0x00, 0x00  // SETTINGS_MAX_HEADER_LIST_SIZE = 65536
     };
     if (h2_write_frame(&hc, CWIST_HTTP2_FRAME_SETTINGS, 0, 0, settings, sizeof(settings)) != 0) {
         h2_conn_destroy(&hc);
@@ -2945,15 +3077,17 @@ cwist_error_t cwist_http2_serve_connection_ex(
                                               flags & CWIST_HTTP2_FLAG_END_HEADERS,
                                               flags & CWIST_HTTP2_FLAG_END_STREAM);
                 if (hdr_rc < 0) {
-                    h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_PROTOCOL_ERROR);
+                    uint32_t err = (hdr_rc == -2) ? H2_ERR_ENHANCE_YOUR_CALM : H2_ERR_PROTOCOL_ERROR;
+                    h2_send_goaway(&hc, hc.last_processed_stream_id, err);
                     connected = false;
                     break;
                 }
+                if (stream_id > hc.last_processed_stream_id)
+                    hc.last_processed_stream_id = stream_id;
                 if (hdr_rc > 0) {
                     /* Stream refused or malformed: RST_STREAM already queued. */
                     break;
                 }
-                hc.last_processed_stream_id = stream_id;
                 {
                     h2_stream *s = h2_stream_find(&hc, stream_id);
                     if (s && s->hook_ctx) {
@@ -2995,7 +3129,8 @@ cwist_error_t cwist_http2_serve_connection_ex(
                 int cont_rc = h2_handle_continuation(&hc, stream_id, payload, len,
                                                      flags & CWIST_HTTP2_FLAG_END_HEADERS);
                 if (cont_rc < 0) {
-                    h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_PROTOCOL_ERROR);
+                    uint32_t err = (cont_rc == -2) ? H2_ERR_ENHANCE_YOUR_CALM : H2_ERR_PROTOCOL_ERROR;
+                    h2_send_goaway(&hc, hc.last_processed_stream_id, err);
                     connected = false;
                     break;
                 }
@@ -3169,6 +3304,22 @@ cwist_error_t cwist_http2_serve_connection_ex(
                     connected = false;
                     break;
                 }
+                if (stream_id > hc.last_processed_stream_id) {
+                    /* RFC 7540 §5.1: RST_STREAM frames MUST NOT be sent for a
+                     * stream in the "idle" state. Connection error of type
+                     * PROTOCOL_ERROR. */
+                    CWIST_LOG_WARN("[h2] RST_STREAM received for idle stream %u > last_processed %u",
+                                   stream_id, hc.last_processed_stream_id);
+                    h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_PROTOCOL_ERROR);
+                    connected = false;
+                    break;
+                }
+                if (!h2_conn_consume_rst_budget(&hc)) {
+                    CWIST_LOG_WARN("[h2] peer exceeded RST_STREAM rate limit (Rapid Reset CVE-2023-44487 detected)");
+                    h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_ENHANCE_YOUR_CALM);
+                    connected = false;
+                    break;
+                }
                 {
                     h2_stream *s = h2_stream_find(&hc, stream_id);
                     if (s && s->hook_ctx && hooks && hooks->on_cancel)
@@ -3185,6 +3336,12 @@ cwist_error_t cwist_http2_serve_connection_ex(
                     break;
                 }
                 if ((flags & CWIST_HTTP2_FLAG_ACK) == 0) {
+                    if (!h2_conn_consume_ping_budget(&hc)) {
+                        CWIST_LOG_WARN("[h2] peer exceeded PING rate limit (CVE-2019-9512)");
+                        h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_ENHANCE_YOUR_CALM);
+                        connected = false;
+                        break;
+                    }
                     if (h2_write_frame(&hc, CWIST_HTTP2_FRAME_PING, CWIST_HTTP2_FLAG_ACK, 0, payload, 8) != 0) {
                         connected = false;
                     }
