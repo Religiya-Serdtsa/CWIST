@@ -36,6 +36,7 @@ enum cwist_async_state {
 };
 
 struct cwist_async {
+    _Atomic size_t refs;          /* Completion plus retained producers/timers. */
     _Atomic int state;
     _Atomic bool ack;             /* Dispatch path observed the handoff. */
     cwist_http_request *req;
@@ -80,6 +81,7 @@ cwist_async *cwist_async_defer(cwist_http_request *req, cwist_http_response *res
     cwist_async *a = cwist_alloc(sizeof(*a));
     if (!a) return NULL;
     memset(a, 0, sizeof(*a));
+    atomic_init(&a->refs, 1);
     atomic_init(&a->state, CWIST_ASYNC_ST_PENDING);
     atomic_init(&a->ack, false);
     a->req = req;
@@ -109,6 +111,17 @@ cwist_async *cwist_async_defer(cwist_http_request *req, cwist_http_response *res
     res->async = a;
     res->deferred = true;
     return a;
+}
+
+cwist_async *cwist_async_retain(cwist_async *a) {
+    if (a) atomic_fetch_add_explicit(&a->refs, 1, memory_order_relaxed);
+    return a;
+}
+
+void cwist_async_release(cwist_async *a) {
+    if (a && atomic_fetch_sub_explicit(&a->refs, 1, memory_order_acq_rel) == 1) {
+        cwist_free(a);
+    }
 }
 
 void cwist_async_dispatch_ack(cwist_async *a) {
@@ -142,7 +155,7 @@ static void cwist_async_complete(cwist_async *a) {
         cwist_h2_async_queue_enqueue(a->h2_queue, a->h2_stream_id, a->req,
                                      a->final_res, a->res, a->final_res_owned);
         cwist_h2_async_queue_release(a->h2_queue);
-        cwist_free(a);
+        cwist_async_release(a);
         return;
     }
 
@@ -184,7 +197,7 @@ static void cwist_async_complete(cwist_async *a) {
     if (a->final_res_owned) cwist_http_response_destroy(res);
     cwist_http_response_destroy(a->res);
     cwist_http_request_destroy(a->req);
-    cwist_free(a);
+    cwist_async_release(a);
 }
 
 static void cwist_async_reactor_complete(void *ctx) {
@@ -210,20 +223,27 @@ static void cwist_async_timeout_sched_init(void) {
 
 static void cwist_async_timeout_job(void *arg) {
     cwist_async *a = (cwist_async *)arg;
-    if (!cwist_async_claim(a)) return; /* A real response beat the timeout. */
+    if (!cwist_async_claim(a)) {
+        cwist_async_release(a); /* A real response beat the timeout. */
+        return;
+    }
     cwist_http_response *res = a->res;
     res->status_code = CWIST_HTTP_GATEWAY_TIMEOUT;
     cwist_sstring_assign(res->status_text, (char *)"Gateway Timeout");
     cwist_sstring_assign(res->body, (char *)"Gateway Timeout");
     cwist_http_header_add(&res->headers, "Content-Type", "text/plain");
     cwist_async_finish(a);
+    cwist_async_release(a);
 }
 
 void cwist_async_set_timeout(cwist_async *a, uint64_t ms) {
     if (!a || ms == 0) return;
     pthread_once(&g_timeout_once, cwist_async_timeout_sched_init);
     if (!g_timeout_sched) return;
-    cwist_scheduler_schedule(g_timeout_sched, cwist_async_timeout_job, a, ms);
+    cwist_async_retain(a);
+    if (!cwist_scheduler_schedule(g_timeout_sched, cwist_async_timeout_job, a, ms)) {
+        cwist_async_release(a);
+    }
 }
 
 /* --- Completion API ------------------------------------------------------ */

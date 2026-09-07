@@ -29,15 +29,27 @@
 
 /* --- Server side --------------------------------------------------------- */
 
+static _Atomic int g_response_jobs = 0;
+static _Atomic int g_response_done = 0;
+static _Atomic int g_response_wins = 0;
+
 static void respond_later_job(void *arg) {
     cwist_async *a = (cwist_async *)arg;
-    cwist_async_respond(a, CWIST_HTTP_OK, "text/plain", "deferred-body", 13);
+    if (cwist_async_respond(a, CWIST_HTTP_OK, "text/plain", "deferred-body", 13)) {
+        atomic_fetch_add(&g_response_wins, 1);
+    }
+    cwist_async_release(a);
+    atomic_fetch_add(&g_response_done, 1);
 }
 
 static void schedule_respond(cwist_http_request *req, cwist_async *a, uint64_t delay_ms) {
     cwist_scheduler_t *s = cwist_app_get_scheduler(req->app);
+    cwist_async_retain(a);
     if (!s || !cwist_scheduler_schedule(s, respond_later_job, a, delay_ms)) {
+        cwist_async_release(a);
         cwist_async_abort(a, CWIST_HTTP_INTERNAL_ERROR);
+    } else {
+        atomic_fetch_add(&g_response_jobs, 1);
     }
 }
 
@@ -69,13 +81,36 @@ static void timeout_handler(cwist_http_request *req, cwist_http_response *res) {
     /* Never respond: the timeout must route a 504. */
 }
 
+static void response_before_timeout_handler(cwist_http_request *req, cwist_http_response *res) {
+    cwist_async *a = cwist_async_defer(req, res);
+    if (!a) {
+        res->status_code = CWIST_HTTP_INTERNAL_ERROR;
+        return;
+    }
+    cwist_async_set_timeout(a, 250);
+    schedule_respond(req, a, 25);
+}
+
+static void timeout_before_response_handler(cwist_http_request *req, cwist_http_response *res) {
+    cwist_async *a = cwist_async_defer(req, res);
+    if (!a) {
+        res->status_code = CWIST_HTTP_INTERNAL_ERROR;
+        return;
+    }
+    cwist_async_set_timeout(a, 25);
+    schedule_respond(req, a, 250);
+}
+
 static _Atomic int g_race_wins = 0;
+static _Atomic int g_race_done = 0;
 
 static void *race_thread(void *arg) {
     cwist_async *a = (cwist_async *)arg;
     if (cwist_async_respond(a, CWIST_HTTP_OK, "text/plain", "race-winner", 11)) {
         atomic_fetch_add(&g_race_wins, 1);
     }
+    cwist_async_release(a);
+    atomic_fetch_add(&g_race_done, 1);
     return NULL;
 }
 
@@ -86,8 +121,13 @@ static void race_handler(cwist_http_request *req, cwist_http_response *res) {
         return;
     }
     pthread_t t1, t2;
-    pthread_create(&t1, NULL, race_thread, a);
-    pthread_create(&t2, NULL, race_thread, a);
+    /* Acquire both producer references before either thread can complete. */
+    cwist_async_retain(a);
+    cwist_async_retain(a);
+    if (pthread_create(&t1, NULL, race_thread, a) != 0 ||
+        pthread_create(&t2, NULL, race_thread, a) != 0) {
+        _exit(1);
+    }
     pthread_detach(t1);
     pthread_detach(t2);
 }
@@ -114,6 +154,13 @@ static void respond_big_job(void *arg) {
 }
 
 static void bigdefer_handler(cwist_http_request *req, cwist_http_response *res) {
+    /* Force backpressure at the sender, not with a tiny client receive
+     * window: draining queued TCP bytes must not outlast keep-alive. */
+    int sndbuf = 4096;
+    if (setsockopt(req->client_fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf)) < 0) {
+        res->status_code = CWIST_HTTP_INTERNAL_ERROR;
+        return;
+    }
     cwist_async *a = cwist_async_defer(req, res);
     if (!a) {
         res->status_code = CWIST_HTTP_INTERNAL_ERROR;
@@ -211,6 +258,49 @@ static bool has_code(const char *buf, const char *code) {
     if (!(cond)) { fprintf(stderr, "FAIL: %s\n", msg); failures++; } \
 } while (0)
 
+/* Synchronous completion destroys req/res before the losing calls run. */
+static int test_retained_completion(void) {
+    int failures = 0;
+    int sockets[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0) return 1;
+    cwist_http_request *req = cwist_http_request_create();
+    cwist_http_response *res = cwist_http_response_create();
+    if (!req || !res) {
+        cwist_http_request_destroy(req);
+        cwist_http_response_destroy(res);
+        close(sockets[0]);
+        close(sockets[1]);
+        return 1;
+    }
+    req->client_fd = sockets[0];
+    req->keep_alive = false;
+    cwist_async *a = cwist_async_defer(req, res);
+    if (!a) {
+        cwist_http_request_destroy(req);
+        cwist_http_response_destroy(res);
+        close(sockets[0]);
+        close(sockets[1]);
+        return 1;
+    }
+    CHECK(cwist_async_retain(a) == a, "retain returns the live handle");
+    cwist_async_dispatch_ack(a);
+    CHECK(cwist_async_respond(a, CWIST_HTTP_OK, "text/plain", "ok", 2),
+          "first synchronous completion wins");
+    CHECK(!cwist_async_respond(a, CWIST_HTTP_OK, NULL, NULL, 0),
+          "late respond safely loses after completion");
+    CHECK(!cwist_async_abort(a, CWIST_HTTP_INTERNAL_ERROR),
+          "late abort safely loses after completion");
+    cwist_http_response *loser = cwist_http_response_create();
+    CHECK(loser != NULL, "allocate losing caller-owned response");
+    if (loser) {
+        CHECK(!cwist_async_respond_with(a, loser), "late respond_with safely loses");
+        cwist_http_response_destroy(loser);
+    }
+    cwist_async_release(a);
+    close(sockets[1]);
+    return failures;
+}
+
 int main(void) {
     printf("Testing deferred responses (async handlers)...\n");
 
@@ -230,6 +320,8 @@ int main(void) {
         cwist_app_get(app, "/defer200", defer200_handler);
         cwist_app_get(app, "/slow250", slow250_handler);
         cwist_app_get(app, "/timeout", timeout_handler);
+        cwist_app_get(app, "/response-before-timeout", response_before_timeout_handler);
+        cwist_app_get(app, "/timeout-before-response", timeout_before_response_handler);
         cwist_app_get(app, "/race", race_handler);
         cwist_app_get(app, "/hello", hello_handler);
         cwist_app_get(app, "/bigdefer", bigdefer_handler);
@@ -239,8 +331,15 @@ int main(void) {
         g_cwist_drain_timeout_sec = 1;
         int rc = cwist_app_listen(app, TEST_PORT);
         int wins = atomic_load(&g_race_wins);
+        int done = atomic_load(&g_race_done);
+        int jobs = atomic_load(&g_response_jobs);
+        int responses_done = atomic_load(&g_response_done);
+        int responses_won = atomic_load(&g_response_wins);
         cwist_app_destroy(app);
-        _exit(rc == 0 && wins <= 1 ? 0 : 1);
+        /* Every producer must have finished, and exactly the response queued
+         * after its timeout must have lost the completion race. */
+        _exit(rc == 0 && wins == 1 && done == 2 && jobs == responses_done &&
+              responses_won == jobs - 1 ? 0 : 1);
     }
 
     usleep(400000);
@@ -308,6 +407,27 @@ int main(void) {
         }
     }
 
+    /* Check both timeout/response orderings, including each late callback. */
+    {
+        const char *paths[] = { "/response-before-timeout", "/timeout-before-response" };
+        const char *codes[] = { "200", "504" };
+        for (size_t i = 0; i < 2; i++) {
+            struct client_conn c = { .fd = connect_to_server(), .pending_len = 0 };
+            CHECK(c.fd >= 0, "connect for response/timeout competition");
+            if (c.fd < 0) continue;
+            char request[256];
+            snprintf(request, sizeof(request), "GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", paths[i]);
+            send_all(c.fd, request);
+            int n = read_one_response(&c, buf, sizeof(buf));
+            CHECK(n > 0 && has_code(buf, codes[i]), "expected response/timeout winner");
+            usleep(350000);
+            send_all(c.fd, "GET /hello HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+            n = read_one_response(&c, buf, sizeof(buf));
+            CHECK(n > 0 && strstr(buf, "second-ok"), "late callback leaves connection reusable");
+            close(c.fd);
+        }
+    }
+
     /* 5. One-shot race: two threads respond; exactly one response arrives. */
     {
         struct client_conn c = { .fd = connect_to_server(), .pending_len = 0 };
@@ -351,8 +471,6 @@ int main(void) {
         int fd = connect_to_server();
         CHECK(fd >= 0, "connect for slow-client park");
         if (fd >= 0) {
-            int rcvbuf = 4096;
-            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
             send_all(fd, "GET /bigdefer HTTP/1.1\r\nHost: localhost\r\n\r\n");
             /* Do not read: the server's send buffer fills and the deferred
              * completion must park instead of blocking a worker/reactor. */
@@ -412,6 +530,7 @@ int main(void) {
         failures++;
     }
 
+    failures += test_retained_completion();
     if (failures == 0) {
         printf("All async defer tests passed.\n");
         return 0;
