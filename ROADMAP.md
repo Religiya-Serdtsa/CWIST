@@ -227,12 +227,11 @@ Completed:
 * `grpc-status` / `grpc-message` are emitted in a dedicated HTTP/2 trailer HEADERS frame (END_STREAM) for both unary and streaming responses.
 * `grpc-timeout` is parsed (`cwist_grpc_parse_timeout()`), enforced on streaming calls (DEADLINE_EXCEEDED trailers plus handler cancellation), and client RST_STREAM propagates to handlers via `cwist_grpc_stream_cancelled()` / a `-1` recv.
 * Request metadata is normalized: header names are lowercased at the HTTP/2 layer, lookups are case-insensitive (`cwist_grpc_metadata_get()`), and `*-bin` values are base64-decoded (`cwist_grpc_metadata_get_binary()`).
-* Compression negotiation: `grpc-encoding: gzip` request messages are inflated (zlib), `grpc-accept-encoding: gzip, identity` is advertised, and unsupported encodings are rejected with `UNIMPLEMENTED`.
-* `test_grpc` covers the buffered path (unary/streaming dispatch, metadata, gzip, recv replay, timeout parsing); `test_grpc_stream` covers the wire path over h2c (split DATA delivery, trailer frames, deadline, RST cancellation, gzip, unsupported-encoding rejection).
+* Compression negotiation: `grpc-encoding: gzip` request messages are inflated (zlib), `grpc-accept-encoding: gzip, identity` is advertised, response messages are compressed with gzip when client advertises `grpc-accept-encoding: gzip` (with `grpc-encoding: gzip` header and frame compressed flag set), and unsupported encodings are rejected with `UNIMPLEMENTED`.
+* `test_grpc` covers the buffered path (unary/streaming dispatch, metadata, gzip request decompression & response compression, recv replay, timeout parsing); `test_grpc_stream` covers the wire path over h2c (split DATA delivery, trailer frames, deadline, RST cancellation, gzip request/response compression, unsupported-encoding rejection).
 
 Known limits:
 
-* Server-side response compression is not implemented (requests only).
 * The proto generator covers scalar, enum, nested message, and repeated packed-numeric proto3 fields plus service paths; `oneof`, `map`, fixed-width types, and descriptor-set input remain (v3.4).
 * The builtin health `Watch` route stays on the buffered dispatch path.
 * No gRPC client, retry policy, or load-balancing policy exists yet.
@@ -245,7 +244,7 @@ Theme: gRPC client side and codegen completeness. v3.3 (re-tagged to include the
 
 * **`cwist proto` completion**: `oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`), and `protoc --descriptor_set_out` input bindings. CLI-only work (`tools/cli/cwist`), no library ABI impact.
 * **gRPC client**: h2/h2c client with unary/streaming calls, retry policy, and client-side load balancing.
-* **gRPC server leftovers**: server-side response compression, and moving health `Watch` onto the streaming dispatch path.
+* **gRPC server leftovers**: moving health `Watch` onto the streaming dispatch path.
 * **Distribution**: publish the Homebrew formula and vcpkg port beyond the current drafts (P4 #30).
 
 ---

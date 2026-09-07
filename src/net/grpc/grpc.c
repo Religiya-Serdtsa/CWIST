@@ -47,6 +47,29 @@ typedef struct grpc_qnode {
 
 typedef struct cwist_grpc_session cwist_grpc_session;
 
+struct cwist_grpc_session {
+    pthread_mutex_t mu;    /* inbound queue, eof, cancelled */
+    pthread_cond_t cond;
+    pthread_mutex_t wmu;   /* outbound writes and h2s lifetime */
+    cwist_h2_stream *h2s;  /* NULL once the transport detaches */
+    void *conn_ctx;        /* cwist_grpc_h2_conn_ctx */
+    cwist_grpc_decoder decoder;
+    int encoding;          /* 0 identity, 1 gzip */
+    int resp_encoding;     /* 0 identity, 1 gzip */
+    grpc_qnode *qhead;
+    grpc_qnode *qtail;
+    int eof;
+    int cancelled;
+    int trailers_sent;
+    int decode_failed;
+    cwist_grpc_stream stream; /* public stream object (embeds req) */
+    uint8_t *recv_buf;        /* backing store for the last recv message */
+    cwist_grpc_stream_handler_func handler;
+    void *user_ctx;
+    atomic_int refs;          /* transport side + handler thread */
+    struct cwist_grpc_session *next;
+};
+
 static void grpc_session_send_trailers(cwist_grpc_session *session,
                                        cwist_grpc_status_t status,
                                        const char *message);
@@ -116,6 +139,50 @@ static int grpc_request_encoding(cwist_http_request *req) {
     if (!enc || strcmp(enc, "identity") == 0) return 0;
     if (strcmp(enc, "gzip") == 0) return 1;
     return -1;
+}
+
+static int grpc_client_accepts_gzip(cwist_http_request *req) {
+    const char *ae = grpc_header_get(req, "grpc-accept-encoding");
+    if (!ae) return 0;
+    while (*ae) {
+        while (*ae == ' ' || *ae == '\t' || *ae == ',') ae++;
+        if (!*ae) break;
+        const char *start = ae;
+        while (*ae && *ae != ',' && *ae != ' ' && *ae != '\t') ae++;
+        size_t len = (size_t)(ae - start);
+        if (len == 4 && strncasecmp(start, "gzip", 4) == 0) return 1;
+    }
+    return 0;
+}
+
+static int grpc_gzip_deflate(const uint8_t *in, size_t in_len,
+                             uint8_t **out, size_t *out_len) {
+    z_stream zs;
+    memset(&zs, 0, sizeof(zs));
+    if (deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                     16 + MAX_WBITS, 8, Z_DEFAULT_STRATEGY) != Z_OK)
+        return -1;
+    size_t cap = deflateBound(&zs, (uLong)in_len) + 32;
+    if (cap < 64) cap = 64;
+    uint8_t *buf = (uint8_t *)cwist_alloc(cap);
+    if (!buf) {
+        deflateEnd(&zs);
+        return -1;
+    }
+    zs.next_in = (Bytef *)in;
+    zs.avail_in = (uInt)in_len;
+    zs.next_out = buf;
+    zs.avail_out = (uInt)cap;
+    int zrc = deflate(&zs, Z_FINISH);
+    if (zrc != Z_STREAM_END) {
+        deflateEnd(&zs);
+        cwist_free(buf);
+        return -1;
+    }
+    *out_len = cap - zs.avail_out;
+    deflateEnd(&zs);
+    *out = buf;
+    return 0;
 }
 
 static int grpc_gzip_inflate(const uint8_t *in, size_t in_len,
@@ -264,6 +331,26 @@ static void grpc_dispatch_unary(cwist_http_request *req, cwist_http_response *re
 
     route->handler(req, res, &message, route->user_ctx);
     cwist_free(inflated);
+
+    if (grpc_client_accepts_gzip(req) && res->body && res->body->size >= 5) {
+        cwist_grpc_message resp_msg;
+        if (cwist_grpc_decode_message(res->body->data, res->body->size, &resp_msg) == 0 &&
+            !resp_msg.compressed && resp_msg.len > 0) {
+            uint8_t *cbuf = NULL;
+            size_t clen = 0;
+            if (grpc_gzip_deflate(resp_msg.data, resp_msg.len, &cbuf, &clen) == 0) {
+                uint8_t *new_frame = NULL;
+                size_t new_frame_len = 0;
+                if (cwist_grpc_encode_message(cbuf, clen, 1, &new_frame, &new_frame_len) == 0) {
+                    cwist_sstring_assign_len(res->body, (char *)new_frame, new_frame_len);
+                    cwist_free(new_frame);
+                    cwist_http_header_remove(&res->headers, "grpc-encoding");
+                    cwist_http_header_add(&res->headers, "grpc-encoding", "gzip");
+                }
+                cwist_free(cbuf);
+            }
+        }
+    }
 }
 
 static int grpc_validate_request(cwist_http_request *req, cwist_http_response *res) {
@@ -360,6 +447,9 @@ static void grpc_dispatch_stream(cwist_http_request *req, cwist_http_response *r
     res->status_code = CWIST_HTTP_OK;
     cwist_http_header_add(&res->headers, "content-type", "application/grpc");
     cwist_http_header_add(&res->headers, "grpc-accept-encoding", "gzip, identity");
+    if (grpc_client_accepts_gzip(req)) {
+        cwist_http_header_add(&res->headers, "grpc-encoding", "gzip");
+    }
     if (res->body) cwist_sstring_assign(res->body, "");
 
     cwist_grpc_stream stream = {
@@ -539,12 +629,39 @@ int cwist_grpc_stream_send(cwist_grpc_stream *stream,
                            const void *payload,
                            size_t payload_len) {
     if (!stream) return -1;
+    int use_gzip = 0;
+    if (stream->session) {
+        use_gzip = (((cwist_grpc_session *)stream->session)->resp_encoding == 1);
+    } else if (stream->req) {
+        use_gzip = grpc_client_accepts_gzip(stream->req);
+    }
+
     uint8_t *frame = NULL;
     size_t frame_len = 0;
-    if (cwist_grpc_encode_message(payload, payload_len, 0, &frame, &frame_len) != 0) {
-        stream->status = CWIST_GRPC_INTERNAL;
-        stream->status_message = "failed to encode gRPC stream message";
-        return -1;
+    if (use_gzip && payload_len > 0) {
+        uint8_t *cbuf = NULL;
+        size_t clen = 0;
+        if (grpc_gzip_deflate(payload, payload_len, &cbuf, &clen) == 0) {
+            int enc_rc = cwist_grpc_encode_message(cbuf, clen, 1, &frame, &frame_len);
+            cwist_free(cbuf);
+            if (enc_rc != 0) {
+                stream->status = CWIST_GRPC_INTERNAL;
+                stream->status_message = "failed to encode gRPC stream message";
+                return -1;
+            }
+        } else {
+            if (cwist_grpc_encode_message(payload, payload_len, 0, &frame, &frame_len) != 0) {
+                stream->status = CWIST_GRPC_INTERNAL;
+                stream->status_message = "failed to encode gRPC stream message";
+                return -1;
+            }
+        }
+    } else {
+        if (cwist_grpc_encode_message(payload, payload_len, 0, &frame, &frame_len) != 0) {
+            stream->status = CWIST_GRPC_INTERNAL;
+            stream->status_message = "failed to encode gRPC stream message";
+            return -1;
+        }
     }
     if (stream->session) {
         /* Transport-backed stream: emit a DATA frame immediately. */
@@ -853,28 +970,6 @@ int cwist_grpc_routes_clone(cwist_app *dst, const cwist_app *src) {
 /* Incremental HTTP/2 streaming session engine                         */
 /* ------------------------------------------------------------------ */
 
-struct cwist_grpc_session {
-    pthread_mutex_t mu;    /* inbound queue, eof, cancelled */
-    pthread_cond_t cond;
-    pthread_mutex_t wmu;   /* outbound writes and h2s lifetime */
-    cwist_h2_stream *h2s;  /* NULL once the transport detaches */
-    void *conn_ctx;        /* cwist_grpc_h2_conn_ctx */
-    cwist_grpc_decoder decoder;
-    int encoding;          /* 0 identity, 1 gzip */
-    grpc_qnode *qhead;
-    grpc_qnode *qtail;
-    int eof;
-    int cancelled;
-    int trailers_sent;
-    int decode_failed;
-    cwist_grpc_stream stream; /* public stream object (embeds req) */
-    uint8_t *recv_buf;        /* backing store for the last recv message */
-    cwist_grpc_stream_handler_func handler;
-    void *user_ctx;
-    atomic_int refs;          /* transport side + handler thread */
-    struct cwist_grpc_session *next;
-};
-
 typedef struct cwist_grpc_h2_conn_ctx {
     cwist_app *app;
     pthread_mutex_t mu;             /* sessions list + refs */
@@ -1169,14 +1264,18 @@ static void *grpc_h2_on_headers(void *conn_ctx, cwist_http_request *req,
     }
     session->handler = route->stream_handler;
     session->user_ctx = route->user_ctx;
+    session->resp_encoding = grpc_client_accepts_gzip(req) ? 1 : 0;
 
     /* Initial response headers go out immediately so the client can start
      * receiving before the first message. */
-    static const cwist_http2_header resp_headers[] = {
-        { "content-type", "application/grpc" },
-        { "grpc-accept-encoding", "gzip, identity" },
-    };
-    if (cwist_http2_stream_send_headers(stream, 200, resp_headers, 2, 0) != 0) {
+    cwist_http2_header resp_headers[3];
+    size_t resp_hdr_count = 0;
+    resp_headers[resp_hdr_count++] = (cwist_http2_header){ "content-type", "application/grpc" };
+    resp_headers[resp_hdr_count++] = (cwist_http2_header){ "grpc-accept-encoding", "gzip, identity" };
+    if (session->resp_encoding == 1) {
+        resp_headers[resp_hdr_count++] = (cwist_http2_header){ "grpc-encoding", "gzip" };
+    }
+    if (cwist_http2_stream_send_headers(stream, 200, resp_headers, resp_hdr_count, 0) != 0) {
         pthread_mutex_destroy(&session->mu);
         pthread_cond_destroy(&session->cond);
         pthread_mutex_destroy(&session->wmu);
