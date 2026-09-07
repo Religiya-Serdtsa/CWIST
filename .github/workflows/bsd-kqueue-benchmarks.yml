@@ -15,6 +15,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  benchmark-report-tests:
+    name: benchmark report rendering tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test benchmark report generation
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+
   bsd-kqueue:
     name: kqueue tests (macOS)
     if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
@@ -513,7 +523,7 @@ jobs:
             raw_logs/
 
   publish-benchmark-report:
-    needs: [bsd-kqueue, benchmark, web-server-benchmark]
+    needs: [benchmark-report-tests, bsd-kqueue, benchmark, web-server-benchmark]
     if: github.event_name == 'push' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     timeout-minutes: 5
