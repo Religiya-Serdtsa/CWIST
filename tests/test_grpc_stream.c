@@ -489,6 +489,62 @@ static void test_gzip(cwist_app *app, live_state *st) {
     assert(atomic_load(&st->messages_seen) == 1);
 }
 
+/* --- 6. grpc-accept-encoding: gzip triggers compressed response frames --- */
+static void test_response_gzip(cwist_app *app, live_state *st) {
+    printf("  server response gzip compression...\n");
+    server_ctx ctx;
+    pthread_t tid;
+    int cfd = start_server(app, &ctx, &tid);
+
+    const char *extra[][2] = { { "grpc-accept-encoding", "gzip, identity" } };
+    uint8_t block[4096];
+    size_t blen = build_request_block(block, "/cwist.test.Wire/Live", extra, 1);
+    fd_send_frame(cfd, 0x01, 0x04, 1, block, (uint32_t)blen);
+
+    test_frame f;
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* response HEADERS */
+    assert(frame_payload_contains(&f, "grpc-encoding"));
+    assert(frame_payload_contains(&f, "gzip"));
+
+    const char *p1 = "\x0a\x0funcompressed-in";
+    uint8_t frame1[64];
+    size_t frame1_len;
+    make_pb_frame(frame1, &frame1_len, NULL, 0, (const uint8_t *)p1, strlen(p1));
+    fd_send_frame(cfd, 0x00, 0x01, 1, frame1, (uint32_t)frame1_len);
+
+    /* Response DATA frame must have compressed flag = 1 */
+    assert(fd_read_stream_frame(cfd, &f, 0x00, 1, 5000) == 0);
+    assert(f.len >= 5);
+    assert(f.payload[0] == 1); /* compressed flag */
+    uint32_t clen = ((uint32_t)f.payload[1] << 24) |
+                    ((uint32_t)f.payload[2] << 16) |
+                    ((uint32_t)f.payload[3] << 8) |
+                    f.payload[4];
+    assert((uint32_t)(clen + 5) <= f.len);
+
+    /* Inflate response payload and check matches p1 */
+    z_stream zs;
+    memset(&zs, 0, sizeof(zs));
+    assert(inflateInit2(&zs, 16 + MAX_WBITS) == Z_OK);
+    uint8_t inflated[256];
+    zs.next_in = (Bytef *)(f.payload + 5);
+    zs.avail_in = (uInt)clen;
+    zs.next_out = inflated;
+    zs.avail_out = sizeof(inflated);
+    assert(inflate(&zs, Z_FINISH) == Z_STREAM_END);
+    size_t inflated_len = sizeof(inflated) - zs.avail_out;
+    inflateEnd(&zs);
+
+    assert(inflated_len == strlen(p1) && memcmp(inflated, p1, inflated_len) == 0);
+
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* trailers */
+    assert(frame_payload_contains(&f, "grpc-status"));
+    assert(frame_payload_contains(&f, "0"));
+
+    stop_server(cfd, &ctx, tid);
+    assert(atomic_load(&st->messages_seen) == 1);
+}
+
 static void test_unsupported_encoding(cwist_app *app) {
     printf("  unsupported grpc-encoding rejection...\n");
     server_ctx ctx;
@@ -552,6 +608,8 @@ int main(void) {
     assert(cwist_app_grpc_stream(app, "cwist.test.Wire", "Live", wire_live, &gzip_st) == 0);
     gzip_st.check_metadata = 0;
     test_gzip(app, &gzip_st);
+    atomic_store(&gzip_st.messages_seen, 0);
+    test_response_gzip(app, &gzip_st);
     test_unsupported_encoding(app);
 
     cwist_app_destroy(app);
