@@ -19,11 +19,11 @@ reaches 0.41ms average at ~155k req/s).
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 247409 req/s | Latency 0.89ms (P90 1.93ms, P99 6.13ms) | RSS 17132KiB | Csw 0
-- **CWIST (C1M reactor)**: 245679 req/s | Latency 1.06ms (P90 2.18ms, P99 6.84ms) | RSS 10508KiB | Csw 0
-- **Axum**: 237557 req/s | Latency 1.67ms (P90 3.00ms, P99 4.77ms) | RSS 15892KiB | Csw 0
-- **Gin (Go)**: 186108 req/s | Latency 3.78ms (P90 10.28ms, P99 23.24ms) | RSS 29916KiB | Csw 0
-- **Spring Boot**: 122889 req/s | Latency 3.21ms (P90 4.62ms, P99 6.79ms) | RSS 1310472KiB | Csw 0
+- **CWIST (classic pool)**: 153764 req/s | Latency 1.36ms (P90 2.93ms, P99 6.37ms) | RSS 17296KiB | Csw 0
+- **CWIST (C1M reactor)**: 151788 req/s | Latency 1.58ms (P90 3.26ms, P99 8.39ms) | RSS 10616KiB | Csw 0
+- **Axum**: 154344 req/s | Latency 2.56ms (P90 4.49ms, P99 6.88ms) | RSS 16300KiB | Csw 0
+- **Gin (Go)**: 118058 req/s | Latency 4.21ms (P90 9.82ms, P99 20.70ms) | RSS 29728KiB | Csw 0
+- **Spring Boot**: 73673 req/s | Latency 5.41ms (P90 7.27ms, P99 11.44ms) | RSS 1340816KiB | Csw 0
 
 **Spring runtime environment**
 
@@ -65,7 +65,7 @@ wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
 
 <!-- TUNED_BENCHMARK:START -->
-**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 270,271 req/s at 0.24ms average latency (P50 0.18ms, P90 0.40ms, P99 1.53ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
+**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 152,261 req/s at 0.40ms average latency (P50 0.35ms, P90 0.67ms, P99 1.73ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
 <!-- TUNED_BENCHMARK:END -->
 
 ---
