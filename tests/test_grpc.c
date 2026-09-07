@@ -152,6 +152,58 @@ static void gzip_compress(const uint8_t *in, size_t in_len,
     deflateEnd(&zs);
 }
 
+static void test_gzip_inflate(const uint8_t *in, size_t in_len,
+                              uint8_t **out, size_t *out_len) {
+    z_stream zs;
+    memset(&zs, 0, sizeof(zs));
+    assert(inflateInit2(&zs, 16 + MAX_WBITS) == Z_OK);
+    size_t cap = in_len * 4 + 1024;
+    uint8_t *buf = (uint8_t *)cwist_alloc(cap);
+    assert(buf != NULL);
+    zs.next_in = (Bytef *)in;
+    zs.avail_in = (uInt)in_len;
+    zs.next_out = buf;
+    zs.avail_out = (uInt)cap;
+    assert(inflate(&zs, Z_FINISH) == Z_STREAM_END);
+    *out_len = cap - zs.avail_out;
+    *out = buf;
+    inflateEnd(&zs);
+}
+
+static void decode_compressed_response(cwist_http_response *res, const char *expected) {
+    assert(res != NULL);
+    assert(res->status_code == CWIST_HTTP_OK);
+    assert(strcmp(cwist_http_header_get(res->headers, "content-type"), "application/grpc") == 0);
+    assert(strcmp(cwist_http_header_get(res->headers, "grpc-status"), "0") == 0);
+    assert(strcmp(cwist_http_header_get(res->headers, "grpc-encoding"), "gzip") == 0);
+
+    cwist_grpc_message msg;
+    assert(cwist_grpc_decode_message(res->body->data, res->body->size, &msg) == 0);
+    assert(msg.compressed == 1);
+
+    uint8_t *plain = NULL;
+    size_t plain_len = 0;
+    test_gzip_inflate(msg.data, msg.len, &plain, &plain_len);
+
+    cwist_pb_reader reader;
+    cwist_pb_reader_init(&reader, plain, plain_len);
+    cwist_pb_field field;
+    int saw_text = 0;
+    int saw_code = 0;
+    while (cwist_pb_read_field(&reader, &field) > 0) {
+        if (field.number == 1 && field.wire_type == CWIST_PB_LEN) {
+            assert(field.len == strlen(expected));
+            assert(memcmp(field.bytes, expected, field.len) == 0);
+            saw_text = 1;
+        } else if (field.number == 2 && field.wire_type == CWIST_PB_VARINT) {
+            assert(field.varint == 7);
+            saw_code = 1;
+        }
+    }
+    assert(saw_text && saw_code);
+    cwist_free(plain);
+}
+
 static void decode_response(cwist_http_response *res, const char *expected) {
     assert(res != NULL);
     assert(res->status_code == CWIST_HTTP_OK);
@@ -391,6 +443,24 @@ int main(void) {
         cwist_free(zframe);
         cwist_free(zipped);
         cwist_pb_writer_free(&zip_pb);
+    }
+
+    /* Client sending grpc-accept-encoding: gzip receives a compressed response. */
+    {
+        static const cwist_test_client_kv accept_gzip[] = {
+            { "grpc-accept-encoding", "gzip, identity" },
+        };
+        opts.body = (const char *)frame;
+        opts.body_len = frame_len;
+        opts.headers = accept_gzip;
+        opts.header_count = 1;
+        res = cwist_test_client_request_ex(client, CWIST_HTTP_POST,
+                                           "/cwist.test.Echo/Say", &opts);
+        assert(res != NULL);
+        decode_compressed_response(res, "reply:ping");
+        cwist_http_response_destroy(res);
+        opts.headers = NULL;
+        opts.header_count = 0;
     }
 
     /* Unsupported grpc-encoding is rejected with UNIMPLEMENTED. */
