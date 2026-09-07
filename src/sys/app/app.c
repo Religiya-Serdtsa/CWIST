@@ -3370,7 +3370,7 @@ static void *h3_server_thread_func(void *arg) {
  * @brief Initialize runtime services and enter the HTTP or HTTPS server loop.
  * @param app Application instance to run.
  * @param port TCP port to bind.
- * @return 0 on success, or -1 when initialization or bind fails.
+ * @return 0 on success, or -1 when initialization, bind, or worker shutdown fails.
  */
 int cwist_app_listen(cwist_app *app, int port) {
     // Ignore SIGPIPE
@@ -3397,9 +3397,6 @@ int cwist_app_listen(cwist_app *app, int port) {
         fprintf(stderr, "Assertion failed: Cannot use both ephemeral HTTP/3 and TLS HTTP/3 simultaneously on the same port.\n");
         abort();
     }
-
-    // Initialize Memory Manager (structure only; thread is started per-process after fork)
-    cwist_mem_init(app);
 
     /* Create the shared TCP listen socket before forking workers.
      * With SO_REUSEPORT each worker process gets its own accept queue and the
@@ -3488,6 +3485,11 @@ int cwist_app_listen(cwist_app *app, int port) {
         }
     }
 
+    /* The static cache owns a libttak cleanup thread as well as the watcher.
+     * Initialize it only after all worker forks so no child inherits mutexes
+     * or a pthread handle whose owning thread exists only in the parent. */
+    cwist_mem_init(app);
+
     // Per-process threads start here.  Each worker gets its own watcher and
     // HTTP/3 thread, so fork-after-thread deadlock is avoided.
     if (app->mem_manager) {
@@ -3560,6 +3562,7 @@ int cwist_app_listen(cwist_app *app, int port) {
         sleep(g_cwist_drain_timeout_sec);
     }
 
+    int worker_result = 0;
     /* Parent process reaps worker children so they do not become zombies. */
     if (!is_worker_child && workers > 1) {
         /* SIGTERM is delivered to the supervisor only.  Ask every worker to
@@ -3570,13 +3573,24 @@ int cwist_app_listen(cwist_app *app, int port) {
         }
         for (size_t i = 0; i < worker_count; i++) {
             int status;
-            wait(&status);
+            pid_t reaped;
+            do {
+                reaped = waitpid(worker_pids[i], &status, 0);
+            } while (reaped < 0 && errno == EINTR);
+            if (reaped < 0) {
+                perror("waitpid worker");
+                worker_result = -1;
+            } else if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+                fprintf(stderr, "Worker %d exited abnormally (status=%d)\n",
+                        (int)worker_pids[i], status);
+                worker_result = -1;
+            }
         }
     }
 
     printf("[CWIST] Shutdown complete.\n");
 
-    return 0;
+    return worker_result;
 }
 
 static char cwist_swagger_json_path[512] = "openapi.json";

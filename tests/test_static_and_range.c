@@ -17,6 +17,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <errno.h>
 
 #define TEST_PORT 19998
 #define TEST_HOST "127.0.0.1"
@@ -137,8 +138,13 @@ int main(void) {
     }
 
     if (pid == 0) {
-        /* Child: run server */
-        setenv("CWIST_C1M_MODE", "false", 1);
+        /* Exercise static-cache creation and teardown across a worker fork,
+         * regardless of the runner's CPU count or inherited environment. */
+        if (setenv("CWIST_WORKERS", "2", 1) != 0 ||
+            setenv("CWIST_C1M_MODE", "false", 1) != 0) {
+            perror("setenv");
+            _exit(1);
+        }
         cwist_app *app = cwist_app_create();
         if (!app) {
             fprintf(stderr, "Failed to create app\n");
@@ -246,18 +252,41 @@ int main(void) {
     }
 
     /* Cleanup */
-    kill(pid, SIGTERM);
-    int status;
+    if (kill(pid, SIGTERM) < 0 && errno != ESRCH) {
+        perror("kill SIGTERM");
+        failures++;
+    }
+    int status = 0;
     int waited = 0;
+    pid_t reaped = 0;
     while (waited < 50) {
-        pid_t r = waitpid(pid, &status, WNOHANG);
-        if (r == pid) break;
+        reaped = waitpid(pid, &status, WNOHANG);
+        if (reaped == pid) break;
+        if (reaped < 0) {
+            if (errno == EINTR) continue;
+            perror("waitpid");
+            failures++;
+            break;
+        }
         usleep(100000);
         waited++;
     }
     if (waited >= 50) {
-        kill(pid, SIGKILL);
-        waitpid(pid, &status, 0);
+        fprintf(stderr, "FAIL: Server did not exit in time, sending SIGKILL\n");
+        failures++;
+        if (kill(pid, SIGKILL) < 0 && errno != ESRCH) {
+            perror("kill SIGKILL");
+        }
+        do {
+            reaped = waitpid(pid, &status, 0);
+        } while (reaped < 0 && errno == EINTR);
+        if (reaped < 0) {
+            perror("waitpid after SIGKILL");
+        }
+    }
+    if (reaped == pid && (!WIFEXITED(status) || WEXITSTATUS(status) != 0)) {
+        fprintf(stderr, "FAIL: Server exited abnormally (status=%d)\n", status);
+        failures++;
     }
 
     unlink(index_path);

@@ -53,22 +53,41 @@ typedef struct cwist_async cwist_async;
  * Call from inside a route handler and return immediately afterwards; the
  * handler must not touch @p req or @p res after this call.  Ownership of
  * both objects transfers to the returned handle.
+ * The framework owns the handle until completion; a single producer needs
+ * no explicit release. Before publishing it to competing producers (including
+ * a producer that can lose to a timeout), retain a reference for each producer
+ * while the handle is still live, then release each after its final attempt.
  * @return Handle to complete later, or NULL on allocation failure (the
  * framework falls back to answering whatever the handler wrote).
  */
 cwist_async *cwist_async_defer(cwist_http_request *req, cwist_http_response *res);
 
 /**
+ * @brief Retain a live handle for a producer that may outlive completion.
+ * Must be called while the caller already holds a reference, or before the
+ * dispatch handoff can complete. It cannot resurrect an expired handle.
+ * Returns @p a (NULL is accepted). Each retain requires one release.
+ */
+cwist_async *cwist_async_retain(cwist_async *a);
+
+/**
+ * @brief Release a reference acquired with cwist_async_retain().
+ * Does not complete or abort the exchange. NULL is accepted.
+ */
+void cwist_async_release(cwist_async *a);
+
+/**
  * @brief Answer with a 504 Gateway Timeout if the exchange is still pending
  * after @p ms milliseconds.  The timeout routes through the same completion
- * path as a normal response.  Default is no timeout (0).
+ * path as a normal response. The timer holds its own handle reference until
+ * its callback runs, even if another producer wins. Default is no timeout (0).
  */
 void cwist_async_set_timeout(cwist_async *a, uint64_t ms);
 
 /**
  * @brief Complete the exchange with a simple body response.
  * Thread-safe and one-shot: the first of respond/respond_with/abort wins,
- * later calls return false.  @p body is copied.
+ * later calls on a retained, live handle return false. @p body is copied.
  */
 bool cwist_async_respond(cwist_async *a, cwist_http_status_t status, const char *content_type, const void *body, size_t len);
 
