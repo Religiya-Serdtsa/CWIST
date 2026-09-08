@@ -2328,7 +2328,24 @@ static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd
  * Drains the socket without blocking and serves a bounded request batch.
  * Remaining buffered work is posted so other ready connections can run.
  */
-#define CWIST_HTTP_REQUESTS_PER_TURN 16
+#define CWIST_HTTP_REQUESTS_PER_TURN_DEFAULT 16
+#define CWIST_HTTP_REQUESTS_PER_TURN_MAX 1024
+
+/* Requests served per reactor callback before yielding to other connections.
+ * CWIST_HTTP_BATCH overrides the default; values are clamped to [1, 1024]. */
+static unsigned int app_http_requests_per_turn(void) {
+    static _Atomic int cached = -1;
+    int v = atomic_load_explicit(&cached, memory_order_relaxed);
+    if (v < 0) {
+        const char *env = getenv("CWIST_HTTP_BATCH");
+        long parsed = env ? strtol(env, NULL, 10) : 0;
+        if (parsed < 1) parsed = CWIST_HTTP_REQUESTS_PER_TURN_DEFAULT;
+        if (parsed > CWIST_HTTP_REQUESTS_PER_TURN_MAX) parsed = CWIST_HTTP_REQUESTS_PER_TURN_MAX;
+        v = (int)parsed;
+        atomic_store_explicit(&cached, v, memory_order_relaxed);
+    }
+    return (unsigned int)v;
+}
 
 cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_async_conn_t *conn) {
     cwist_app *app = (cwist_app *)conn->user_ctx;
@@ -2383,7 +2400,7 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
     uint32_t priority_weight = ((mixed_seed * 16777619U) >> 8) % 100;
 
     /* One pipeline must not monopolize this reactor's other connections. */
-    for (unsigned int handled = 0; handled < CWIST_HTTP_REQUESTS_PER_TURN; ++handled) {
+    for (unsigned int handled = 0; handled < app_http_requests_per_turn(); ++handled) {
         cwist_http_request *req = NULL;
         cwist_http_parse_error_t perr = CWIST_HTTP_PARSE_OK;
         cwist_recv_status_t st = cwist_http_receive_request_nb(conn, &req, &perr);
