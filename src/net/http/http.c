@@ -1694,9 +1694,7 @@ static int cwist_http_sendmsg_all(int fd, struct iovec *iov, int iovcnt, int fla
             if (errno == EINTR) continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 struct pollfd pfd = { .fd = fd, .events = POLLOUT };
-                int timeout_ms = (flags & MSG_DONTWAIT) ? 0 : 50;
-                if (timeout_ms == 0) return -1;
-                int ret = poll(&pfd, 1, timeout_ms);
+                int ret = poll(&pfd, 1, CWIST_HTTP_TIMEOUT_MS);
                 if (ret <= 0) return -1;
                 if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) return -1;
                 continue;
