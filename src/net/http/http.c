@@ -186,6 +186,13 @@ static _Atomic uint32_t *g_worker_loads = NULL;
 
 static _Atomic long g_http_inflight = 0;
 static _Atomic bool g_http_pool_stopping = false;
+static _Atomic long g_http_continuation_shed = 0;
+
+/* Continuations dropped because the reactor post queue was full; each one
+ * closed its connection. Exported for metrics/observability. */
+long cwist_http_continuation_shed_count(void) {
+    return atomic_load_explicit(&g_http_continuation_shed, memory_order_relaxed);
+}
 #define CWIST_HTTP_INFLIGHT_PER_THREAD 32
 #define CWIST_HTTP_INFLIGHT_FD_RESERVE 4096
 
@@ -623,6 +630,11 @@ bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_
             .ctx = continuation,
         };
         if (!cwist_reactor_post(reactor, &continuation->post)) {
+            long n = atomic_fetch_add_explicit(&g_http_continuation_shed, 1,
+                                               memory_order_relaxed) + 1;
+            if (getenv("CWIST_ASYNC_DEBUG") && (n <= 5 || n % 10000 == 0))
+                fprintf(stderr, "[async] continuation shed fd=%d total=%ld\n",
+                        client_fd, n);
             cwist_free(continuation);
             cwist_http_async_close(client_fd, conn);
             return false;
