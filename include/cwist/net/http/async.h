@@ -59,9 +59,24 @@ typedef struct cwist_async cwist_async;
 cwist_async *cwist_async_defer(cwist_http_request *req, cwist_http_response *res);
 
 /**
+ * @brief Retain a live handle for a producer that may outlive completion.
+ * Must be called while the caller already holds a reference, or before the
+ * dispatch handoff can complete. It cannot resurrect an expired handle.
+ * Returns @p a (NULL is accepted). Each retain requires one release.
+ */
+cwist_async *cwist_async_retain(cwist_async *a);
+
+/**
+ * @brief Release a reference acquired with cwist_async_retain().
+ * Does not complete or abort the exchange. NULL is accepted.
+ */
+void cwist_async_release(cwist_async *a);
+
+/**
  * @brief Answer with a 504 Gateway Timeout if the exchange is still pending
  * after @p ms milliseconds.  The timeout routes through the same completion
- * path as a normal response.  Default is no timeout (0).
+ * path as a normal response. The timer holds its own handle reference until
+ * its callback runs, even if another producer wins. Default is no timeout (0).
  */
 void cwist_async_set_timeout(cwist_async *a, uint64_t ms);
 
