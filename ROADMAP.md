@@ -249,6 +249,13 @@ Theme: gRPC client side and codegen completeness. v3.3 shipped the wire-level st
 
 ---
 
+## Release Line & Codenames
+
+* The first 100% production-compatible stable release is planned as **v4.0**. Until then, minor releases may adjust public APIs (see the versioning note in the README).
+* Starting with the stable line (v4.0 onward), each release receives a codename in the form **adjective + color** (e.g. "Steady Amber"). Codenames are assigned at release time and recorded here.
+
+---
+
 ## Priority Queue (Suggested)
 
 ### P0 — Framework Gap (Must Have) ✅ COMPLETE
