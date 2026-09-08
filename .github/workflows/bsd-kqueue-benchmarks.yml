@@ -293,7 +293,7 @@ jobs:
             BEFORE_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$BEFORE_CSW" ] && BEFORE_CSW=0
 
-            wrk -t12 -c400 -d10s -s scripts/ci/tail_latency.lua --latency http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
+            wrk -t12 -c400 -d10s -s "$GITHUB_WORKSPACE/scripts/ci/tail_latency.lua" --latency http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
 
             AFTER_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
             [ -z "$AFTER_CSW" ] && AFTER_CSW=0
@@ -324,7 +324,7 @@ jobs:
             sleep 1
           done
           wrk -t4 -c100 -d10s http://127.0.0.1:9091/ > /dev/null 2>&1 || true
-          wrk -t4 -c100 -d10s -s scripts/ci/tail_latency.lua --latency http://127.0.0.1:9091/ > /tmp/cwist_tuned.txt 2>&1 || true
+          wrk -t4 -c100 -d10s -s "$GITHUB_WORKSPACE/scripts/ci/tail_latency.lua" --latency http://127.0.0.1:9091/ > /tmp/cwist_tuned.txt 2>&1 || true
           kill -9 $TUNED_PID || true
           cat /tmp/cwist_tuned.txt
           export TUNED_PROFILE="wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)"
