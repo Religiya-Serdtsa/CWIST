@@ -2325,9 +2325,11 @@ static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd
 
 /**
  * @brief Event-driven HTTP/1.1 handler for the C1M reactor path.
- * Drains the socket without blocking, serves every complete request in the
- * stash, then tells the pool whether to rearm, close, or detach the fd.
+ * Drains the socket without blocking and serves a bounded request batch.
+ * Remaining buffered work is posted so other ready connections can run.
  */
+#define CWIST_HTTP_REQUESTS_PER_TURN 16
+
 cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_async_conn_t *conn) {
     cwist_app *app = (cwist_app *)conn->user_ctx;
     static _Atomic long dbg_fill_fail, dbg_fatal, dbg_serve_close;
@@ -2380,11 +2382,15 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
     /* Jeungseung Gaebang Scaling for priority weighting. */
     uint32_t priority_weight = ((mixed_seed * 16777619U) >> 8) % 100;
 
-    for (;;) {
+    /* One pipeline must not monopolize this reactor's other connections. */
+    for (unsigned int handled = 0; handled < CWIST_HTTP_REQUESTS_PER_TURN; ++handled) {
         cwist_http_request *req = NULL;
         cwist_http_parse_error_t perr = CWIST_HTTP_PARSE_OK;
         cwist_recv_status_t st = cwist_http_receive_request_nb(conn, &req, &perr);
-        if (st == CWIST_RECV_NEED_MORE) return CWIST_ASYNC_REARM;
+        if (st == CWIST_RECV_NEED_MORE) {
+            /* EOF with no complete frame must close, not wait or repost. */
+            return conn->peer_eof ? CWIST_ASYNC_CLOSE : CWIST_ASYNC_REARM;
+        }
         if (st == CWIST_RECV_FATAL) {
             app_maybe_send_parse_error(client_fd, perr);
             if (dbg) {
@@ -2411,6 +2417,13 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
             return CWIST_ASYNC_CLOSE;
         }
     }
+    if (conn->len > 0) {
+        /* Buffered work cannot wait for another read event. The continuation
+         * owns fd/conn on success; rearm closes both on failure. */
+        cwist_http_async_rearm(client_fd, conn->reactor, conn);
+        return CWIST_ASYNC_DEFER;
+    }
+    return conn->peer_eof ? CWIST_ASYNC_CLOSE : CWIST_ASYNC_REARM;
 }
 
 void cwist_app_http_handler(int client_fd, void *ctx) {

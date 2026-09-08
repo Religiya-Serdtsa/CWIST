@@ -41,7 +41,7 @@ jobs:
           PERF_STACK_FLAGS: -O3 -march=native -mtune=native -pipe -flto -fomit-frame-pointer -funroll-loops -fstrict-aliasing -ffunction-sections -fdata-sections -fvisibility=hidden -DNDEBUG
           PKG_CONFIG_PATH: /opt/homebrew/opt/curl/lib/pkgconfig
         run: |
-          make test_seq test_http_chunked test_mux test_test_client
+          make test_seq test_http_chunked test_mux test_test_client test_http_pipeline test_http_fairness
           make -pn | grep -E '^IO_SRC[[:space:]]*=[[:space:]]*src/sys/io/kqueue\.c$'
 
   benchmark:

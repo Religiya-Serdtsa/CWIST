@@ -422,6 +422,8 @@ TEST_TARGETS = test_sstring \
                test_redis \
                test_scheduler \
                test_async_defer \
+               test_http_fairness \
+               test_http_pipeline \
                test_test_client \
                test_multiport \
                test_grpc \
@@ -809,6 +811,17 @@ cli:
 test_scheduler: $(LIB_NAME) tests/test_scheduler.c
 	$(CC) $(CFLAGS) -o test_scheduler tests/test_scheduler.c $(LIB_NAME) $(LIBS)
 	./test_scheduler
+
+test_http_pipeline: $(LIB_NAME) tests/test_http_pipeline.c
+	$(CC) $(CFLAGS) -o $@ tests/test_http_pipeline.c $(LIB_NAME) $(LIBS)
+	./$@
+
+test_http_fairness: $(LIB_NAME) tests/test_http_fairness.c
+	$(CC) $(CFLAGS) -o $@ tests/test_http_fairness.c $(LIB_NAME) $(LIBS)
+	./$@
+	CWIST_TEST_HALF_CLOSE=1 ./$@
+	CWIST_TEST_HALF_CLOSE=1 CWIST_TEST_TRUNCATED=1 ./$@
+	CWIST_TEST_DESTROY_PENDING=1 ./$@
 
 test_async_defer: $(LIB_NAME) tests/test_async_defer.c
 	$(CC) $(CFLAGS) -o test_async_defer tests/test_async_defer.c $(LIB_NAME) $(LIBS)
