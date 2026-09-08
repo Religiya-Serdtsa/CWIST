@@ -134,6 +134,21 @@ long get_optimal_thread_count(void) {
         }
     }
 
+    const char *c1m = getenv("CWIST_C1M_MODE");
+    bool is_c1m = !c1m || (c1m[0] != '0' && strcmp(c1m, "false") != 0);
+
+    if (is_c1m) {
+        /* In event-driven C1M mode, each reactor thread multiplexes I/O asynchronously.
+         * When multiple worker processes are forked (workers > 1), each worker process
+         * needs only cores / workers reactor threads so total reactor threads equals CPU cores.
+         * In single process mode (workers == 1), allocate cores reactor threads. */
+        if (workers > 1) {
+            long count = cores / workers;
+            return count > 0 ? count : 1;
+        }
+        return cores > 0 ? cores : 1;
+    }
+
     if (workers == 1) {
         /* Keep-alive handlers park on their connection, so the pool must
          * cover many more concurrent connections than there are cores.
@@ -518,9 +533,10 @@ static void http_async_event_cb(int fd, void *ctx) {
         return;
     }
 
-    /* CWIST_ASYNC_REARM: shrink the stash once it has fully drained so idle
-     * keep-alive connections do not pin a 16 KiB buffer each. */
-    if (conn->len == 0 && conn->rbuf) {
+    /* CWIST_ASYNC_REARM: keep stash buffer allocated across keep-alive requests
+     * to eliminate 16 KiB heap allocation/free churn per request. Only shrink
+     * if the buffer grew excessively large. */
+    if (conn->len == 0 && conn->cap > 65536) {
         cwist_free(conn->rbuf);
         conn->rbuf = NULL;
         conn->cap = 0;
@@ -562,7 +578,7 @@ bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_
         return true;
     }
     /* Same stash shrink as the REARM path in http_async_event_cb. */
-    if (conn->rbuf) {
+    if (conn->len == 0 && conn->cap > 65536) {
         cwist_free(conn->rbuf);
         conn->rbuf = NULL;
         conn->cap = 0;
@@ -590,9 +606,11 @@ bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, 
         return false;
     }
 
+#if !defined(__linux__)
     /* The one-shot path must never park the reactor on a blocking recv. */
     int fl = fcntl(client_fd, F_GETFL, 0);
     if (fl >= 0) fcntl(client_fd, F_SETFL, fl | O_NONBLOCK);
+#endif
 
     cwist_http_async_conn_t *conn = cwist_alloc(sizeof(*conn));
     if (!conn) {
@@ -2057,6 +2075,92 @@ void cwist_http_async_send_response(int client_fd, cwist_http_response *res,
     }
 }
 
+cwist_async_send_status_t cwist_http_send_response_async(int client_fd, cwist_http_response *res,
+                                                        cwist_http_async_conn_t *conn,
+                                                        bool keep_alive, bool head_only) {
+    if (client_fd < 0 || !res || !conn) return CWIST_ASYNC_SEND_CLOSE;
+
+    if (!head_only && res->use_file_stream) {
+        cwist_error_t err = cwist_http_send_response(client_fd, res);
+        return (keep_alive && err.error.err_i16 == 0) ? CWIST_ASYNC_SEND_KEEPALIVE : CWIST_ASYNC_SEND_CLOSE;
+    }
+
+    char header_buf[CWIST_HTTP_MAX_HEADER_SIZE];
+    size_t header_len = serialize_headers(res, header_buf, sizeof(header_buf));
+
+    const void *body_ptr = NULL;
+    size_t body_len = 0;
+    if (!head_only) {
+        if (res->is_ptr_body) {
+            body_ptr = res->ptr_body;
+            body_len = res->ptr_body_len;
+        } else if (res->body && res->body->data) {
+            body_ptr = res->body->data;
+            body_len = res->body->size;
+        }
+    }
+
+    struct iovec iov[2];
+    int iov_cnt = 1;
+    iov[0].iov_base = header_buf;
+    iov[0].iov_len = header_len;
+    if (body_len > 0 && body_ptr) {
+        iov[1].iov_base = (void *)body_ptr;
+        iov[1].iov_len = body_len;
+        iov_cnt = 2;
+    }
+
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+#if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+#endif
+
+    size_t sent = 0;
+    cwist_write_status_t st = cwist_http_sendmsg_speculative(client_fd, iov, iov_cnt, flags, &sent);
+
+    if (st == CWIST_WRITE_PENDING) {
+        size_t total = header_len + body_len;
+        size_t left = total - sent;
+        http_parked_write_t w = {
+            .reactor = conn->reactor,
+            .conn = conn,
+            .buf = cwist_alloc(left),
+            .off = 0,
+            .len = left,
+            .deadline_sec = http_parked_write_deadline(),
+            .keep_alive = keep_alive,
+        };
+        if (w.buf) {
+            size_t hd_off = sent < header_len ? sent : header_len;
+            size_t hd_left = header_len - hd_off;
+            memcpy(w.buf, header_buf + hd_off, hd_left);
+            if (left > hd_left) {
+                size_t body_off = sent > header_len ? sent - header_len : 0;
+                memcpy(w.buf + hd_left, (const char *)body_ptr + body_off, left - hd_left);
+            }
+            if (cwist_reactor_add_out(conn->reactor, client_fd, http_parked_write_cb, &w, sizeof(w))) {
+                cwist_http_response_release_ptr_body(res);
+                cwist_http_response_release_file_stream(res);
+                return CWIST_ASYNC_SEND_DEFERRED;
+            }
+            cwist_free(w.buf);
+        }
+        cwist_http_response_release_ptr_body(res);
+        cwist_http_response_release_file_stream(res);
+        return CWIST_ASYNC_SEND_CLOSE;
+    }
+
+    cwist_http_response_release_ptr_body(res);
+    cwist_http_response_release_file_stream(res);
+    if (st == CWIST_WRITE_DONE) {
+        return keep_alive ? CWIST_ASYNC_SEND_KEEPALIVE : CWIST_ASYNC_SEND_CLOSE;
+    }
+    return CWIST_ASYNC_SEND_CLOSE;
+}
+
 const char *cwist_http_status_reason(int status) {
     switch (status) {
         case 100: return "Continue";
@@ -3121,6 +3225,11 @@ int cwist_make_socket_ipv4(struct sockaddr_in *sockv4, const char *address, uint
 
 #ifdef SO_REUSEPORT
   setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+#endif
+
+#if defined(__linux__) && defined(TCP_DEFER_ACCEPT)
+  int defer = 1;
+  setsockopt(server_fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &defer, sizeof(defer));
 #endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__)

@@ -39,7 +39,7 @@ typedef struct {
  * @param state Rolling 160-bit digest state.
  * @param buffer Input block to compress.
  */
-static void SHA1Transform(uint32_t state[5], const uint8_t buffer[64]) {
+static void SHA1Transform(uint32_t state[5], const uint8_t *buffer) {
     uint32_t a, b, c, d, e;
     typedef union {
         uint8_t c[64];

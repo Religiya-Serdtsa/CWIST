@@ -155,8 +155,13 @@ def render() -> None:
     def get_lat_part(prefix):
         p90 = ws_latest.get(f"{prefix}_p90_ms")
         p99 = ws_latest.get(f"{prefix}_p99_ms")
+        p99_999 = ws_latest.get(f"{prefix}_p99_999_ms")
         if p90 is not None and p99 is not None:
-            return f" (P90 {p90:.2f}ms, P99 {p99:.2f}ms)"
+            tail = f" (P90 {p90:.2f}ms, P99 {p99:.2f}ms"
+            if p99_999 is not None:
+                tail += f", P99.999 {p99_999:.2f}ms"
+            tail += ")"
+            return tail
         return ""
 
     cwist_lat_part = get_lat_part("cwist")
