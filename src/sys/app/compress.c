@@ -364,7 +364,6 @@ static const cwist_compress_backend cwist_backend_zstd = {
 const cwist_compress_backend *cwist_compress_backend_zstd(void) {
     return &cwist_backend_zstd;
 }
-
 /* --- Middleware helpers --- */
 
 static int str_contains_ci(const char *haystack, const char *needle) {

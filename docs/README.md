@@ -44,7 +44,6 @@ Self-contained demos under [`example/`](../example/):
 | [json-builder](../example/json-builder), [html](../example/html), [template](../example/template) | Rendering helpers |
 | [micro](../example/micro), [mem](../example/mem), [siphash](../example/siphash), [sstring](../example/sstring) | Core utilities |
 | [cde-json-viewer](../example/cde-json-viewer) | JSON viewer app |
-| [webtransport](../example/webtransport) | Experimental WebTransport |
 
 ## 5. Benchmarks and methodology
 

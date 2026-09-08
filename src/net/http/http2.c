@@ -542,54 +542,6 @@ static bool h2_conn_consume_ping_budget(h2_conn *hc) {
     return true;
 }
 
-static bool h2_conn_consume_rst_budget(h2_conn *hc) {
-    uint64_t now = h2_now_ms();
-    uint64_t elapsed = (now > hc->rst_last_refill_ms) ? (now - hc->rst_last_refill_ms) : 0;
-    if (elapsed >= 1000) {
-        hc->rst_budget = h2_max_rst_burst();
-        hc->rst_last_refill_ms = now;
-    } else if (elapsed > 0) {
-        uint32_t add = (uint32_t)((elapsed * h2_max_rst_rate()) / 1000);
-        if (add > 0) {
-            hc->rst_budget += add;
-            if (hc->rst_budget > h2_max_rst_burst()) {
-                hc->rst_budget = h2_max_rst_burst();
-            }
-            hc->rst_last_refill_ms = now;
-        }
-    }
-
-    if (hc->rst_budget == 0) {
-        return false;
-    }
-    hc->rst_budget--;
-    return true;
-}
-
-static bool h2_conn_consume_ping_budget(h2_conn *hc) {
-    uint64_t now = h2_now_ms();
-    uint64_t elapsed = (now > hc->ping_last_refill_ms) ? (now - hc->ping_last_refill_ms) : 0;
-    if (elapsed >= 1000) {
-        hc->ping_budget = CWIST_HTTP2_DEFAULT_PING_BURST;
-        hc->ping_last_refill_ms = now;
-    } else if (elapsed > 0) {
-        uint32_t add = (uint32_t)((elapsed * CWIST_HTTP2_DEFAULT_PING_RATE) / 1000);
-        if (add > 0) {
-            hc->ping_budget += add;
-            if (hc->ping_budget > CWIST_HTTP2_DEFAULT_PING_BURST) {
-                hc->ping_budget = CWIST_HTTP2_DEFAULT_PING_BURST;
-            }
-            hc->ping_last_refill_ms = now;
-        }
-    }
-
-    if (hc->ping_budget == 0) {
-        return false;
-    }
-    hc->ping_budget--;
-    return true;
-}
-
 static h2_stream *h2_stream_find(h2_conn *hc, uint32_t stream_id) {
     h2_stream *s = hc->streams;
     while (s) {

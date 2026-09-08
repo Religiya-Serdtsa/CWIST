@@ -22,15 +22,17 @@
 [P1: Production]     ████████████████████ 100% (Multiport hardening complete)
 [P2: DevEx]          ████████████████████ 100% (30 English hands-on tutorials, CLI, hot reload, and test client complete)
 [P3: Deep Protocols] ███████████████░░░░░  75% (HTTP/3 extension specs and io_uring backend done)
-[P4: Ecosystem]      ████████████░░░░░░░░  60% (gRPC framing, health, reflection, and proto codegen done)
+[P4: Ecosystem]      ███████████████░░░░░  75% (gRPC wire streaming, trailers, deadlines, gzip, and proto codegen done)
 ```
 
 ### 1) Transport Layer
 
 * **Native protocols ready**: HTTP/1.1 through HTTP/3 (QUIC via `lsquic`), WebSocket, SSE, and a bounded GraphQL query layer are implemented in-tree (WebTransport server/client evaluation is isolated to `dev`). Low-level socket controls (ECN, 0-RTT, connection migration) are complete.
 * **HTTP/3 browser hardening**: Response header emission now normalizes field names to lowercase and rejects CR/LF-bearing values, covering login/logout cookie and redirect paths in strict browsers such as Firefox.
-* **Async I/O optimization (`io_uring`)**: `io_uring_backend.c` and test code have been added; currently prototyping to reduce context-switching overhead in high-volume UDP send/receive loops (`🔄`).
-* **Multiport HTTP/3 fan-out**: The `cwist_multiport_t` facade that isolates multiple ports is being refactored. Future work will split independent UDP contexts per port (`⏳`).
+* **HTTPS hot-path optimization**: HTTP/1.1 connections now remain alive across requests, TLS writes stream headers and bodies separately without an intermediate response blob, and prefork workers share session-ticket keys for cross-worker resumption.
+* **Request-memory optimization**: Parsed request strings and static response headers use arena-backed or borrowed storage with copy-on-write detachment, while received bodies can transfer ownership without a second copy.
+* **Async I/O optimization (`io_uring`)**: io_uring serves as the readiness/wait layer inside `reactor.c` (epoll_wait replacement); its ring setup, teardown, and free-stack slot infrastructure were absorbed from the retired completion-based backend.
+* **Multiport HTTP/3 fan-out**: The `cwist_multiport_t` facade now creates per-port UDP contexts and copies global HTTP/3 settings unless a port is detached into a sub-app.
 
 ### 2) Application Layer
 
@@ -38,6 +40,8 @@
 * **Observability**: Prometheus `/metrics` and a probe-registry health-check system are operational.
 * **Per-port sub-applications**: Lifecycle and exception handling for `cwist_multiport_get_app(&app, port)` are hardened; detached ports are separately tunable sub-applications.
 * **gRPC services**: Applications can register unary and streaming handlers, incrementally decode arbitrarily split gRPC frames, attach transport output sinks, expose standard health/reflection services, and generate C models/method paths with `cwist proto`.
+* **Packaging**: `libcwist.a` is a CWIST-only static archive; bundled dependency archives and public headers install side-by-side with `PREFIX`/`DESTDIR` staging support. `cwist.pc` pkg-config metadata, a versioned dist tarball (`dist/cwist-3.2.tar.gz`), and Homebrew (`packaging/homebrew/cwist.rb`) / vcpkg (`packaging/vcpkg/`) packaging drafts are available.
+* **Deferred async handlers**: `cwist_async_defer()` hands a request/response pair to any thread (scheduler job, NATS callback, custom worker) for later completion via `cwist_async_respond()` / `respond_with()` / `abort()`, with optional 504 timeout and per-mode completion routing (reactor-posted in C1M, inline in thread-pool mode).
 
 ### 3) Security & Data Layer
 
@@ -55,7 +59,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 
 - Core HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, middleware, validation, metrics, health checks, static-file caching, and graceful shutdown are fully implemented in-tree.
 - **Developer Ecosystem & Tutorials**: 30 comprehensive hands-on tutorial modules with C source (`main.c`), `CMakeLists.txt`, and English documentation guides (`README.md`) are available under `tutorials/`.
-- **CI Automated Web Server Benchmark**: Inline CI job dynamically generates and measures CWIST, Axum, and Spring Boot web servers using `wrk`, rendering real-time RPS, Latency, Peak RSS, and Context Switch metrics.
+- **CI Automated Web Server Benchmark**: Inline CI job dynamically generates and measures CWIST, Axum, and Spring Boot web servers using `wrk`, rendering real-time RPS, Latency, Peak RSS, and Context Switch metrics. A `the-benchmarker/web-frameworks` contract app lives in `benchmarks/web-frameworks/`, pinned to the `v3.3` tag with the uriparser lib path wired in.
 - **P0 (must-have) is 100% complete**: the framework’s core architecture and protocol stack are locked.
 - **Resolved**: HTTP/3 header-set objects for streams still open at engine destroy are now tracked per `cwist_http3_context` and swept on the engine/context teardown path; the `leak:cwist_h3_hsi_create` entry was removed from `tests/lsan.supp`.
 - **Resolved**: Deferred async completions on the reactor path now park unsent bytes in an owned buffer and resume via one-shot POLLOUT (`cwist_reactor_add_out`), so slow clients no longer occupy a worker/reactor thread for the send budget; a deadline (keep-alive timeout, refreshed on progress) bounds parked writers.
@@ -68,22 +72,22 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| HTTP/1.1 Server (epoll, threading, forking) | ✅ | Zero-copy sendfile, keep-alive |
+| HTTP/1.1 Server (epoll, threading, forking) | ✅ | Zero-copy sendfile, keep-alive, and supervisor-to-worker shutdown propagation |
 | HTTP/2 Server | ✅ | h2 with ALPN |
 | HTTP/3 Server (QUIC) | ✅ | lsquic + BoringSSL, QPACK, 0-RTT, migration, push, resilience timeout knobs, lowercase/CRLF-safe response headers |
 | HTTP/1.1 + HTTP/2 Client | ✅ | libcurl based, sync & async APIs |
 | HTTP/3 Client | ✅ | lsquic based, async stream callbacks, auto-retry with exponential backoff, conn timeout knobs |
 | WebSocket Server | ✅ | Upgrade, frame parsing, ping/pong |
-| TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH support |
+| TLS 1.3 / HTTPS | ✅ | BoringSSL, ECH, persistent HTTP/1.1 requests, split header/body writes, and shared prefork session-ticket keys |
 | Alt-Svc Header Injection | ✅ | HTTP/3 upgrade advertisement from HTTP/1.1/2 |
-| **io_uring Backend** | ✅ | `io_uring_backend.c`, focused smoke tests, demolition tests, SQE/CQE synchronization, and fixed-buffer fallback |
+| **io_uring Backend** | ✅ | io_uring readiness multiplexer in `src/sys/io/reactor.c` (one-shot POLL_ADD wait layer, epoll fallback); request I/O hot path stays synchronous |
 | **kqueue Backend** | ✅ | `src/sys/io/kqueue.c`, BSD/macOS I/O multiplexing event loop, integration tests in GitHub Actions CI gate |
 | HTTP/2 Server Push | ✅ | `cwist_http2_push_resource` with PUSH_PROMISE frame, HPACK encoding, server-initiated even stream IDs |
 | **WebTransport** | ⏳ / 🔮 | Excluded from `main`; experimental WebTransport server/native C client proposal (LSQUIC PR #629) is evaluated exclusively on `dev` |
 | HTTP/3 Datagram Extension | ✅ | `send_datagram`, callbacks, `es_datagrams` enabled |
 | ECN (Explicit Congestion Notification) | ✅ | UDP socket with `IP_RECVTOS` / `IPV6_RECVTCLASS` |
 | Connection Migration | ✅ | `es_allow_migration` enabled |
-| 0-RTT Early Data | ✅ | Client: `cwist_http3_client_enable_0rtt`; Server: opt-in via `cwist_http3_set_early_data` (default OFF), shared session-ticket keys for resumption, and a default-ON replay guard restricting early-data requests to idempotent methods |
+| 0-RTT Early Data | ✅ | Server: opt-in via `cwist_http3_set_early_data` (default OFF), shared session-ticket keys for resumption, and a default-ON replay guard restricting early-data requests to idempotent methods |
 | **Multiport TCP Facade** | ✅ | Counted `cwist_multiport_t` descriptor, shared accept loop, duplicate/default-port validation, and per-port smoke tests |
 | **Multiport HTTP/3 Fan-out** | ✅ | One UDP socket/context per bound port, with global settings copied unless the port is detached into a sub-app |
 
@@ -160,6 +164,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 | **CLI Scaffolding** | ✅ | `cwist new project`, `.cwpro` manifests, OpenAPI generation, and include-aware incremental watcher |
 | **Hot Reload (Dev Mode)** | ✅ | `cwist watcher` uses inotify/kqueue with snapshot/poll fallback, debounces changes, exports include-graph scope, preserves prior process on build failure, and performs zero-downtime SO_REUSEPORT overlap process hot-swapping |
 | **Configuration Management** | ✅ | `.env` file + environment variable loader via `cwist_config` |
+| **Static Library Packaging** | ✅ | CWIST-only archive plus separately installed bundled libraries/headers, deterministic static-link order, `PREFIX`/`DESTDIR` staging, `cwist.pc` pkg-config file, versioned dist tarball, and Homebrew/vcpkg packaging drafts |
 | **Testing Utilities** | ✅ | In-process test client (`cwist_test_client`), cookie jar, multipart helper, and BDD-style fluent assertions (`CWIST_ASSERT_STATUS`, `CWIST_ASSERT_HEADER`, `CWIST_ASSERT_BODY_CONTAINS`) |
 | **Interactive API Documentation** | ✅ | Embedded Swagger UI interactive documentation page (`cwist_app_enable_swagger`) serving `/docs` and `/openapi.json` |
 | **Benchmark Suite** | ✅ | GitHub Actions Linux/macOS measurements publish CPU, throughput, RSS, memory-recovery drift, and context-switch SVG trends; `benchmarks/web-frameworks/` contract app pinned to `v3.2` for the-benchmarker harness |
@@ -268,20 +273,23 @@ Theme: gRPC client side and codegen completeness. v3.3 shipped the wire-level st
 15. ~~**CLI Tooling** (project scaffold, route generator, watcher)~~ ✅
 16. ~~**Configuration** loader (`.env`, `.toml`)~~ ✅
 17. ~~**Test Harness** with HTTP mock client~~ ✅
+18. ~~**Deferred Async Handlers** (`cwist_async_defer` cross-thread completion)~~ ✅
 
 ### P3 — Advanced Protocols
-18. **Native C WebTransport client stabilization** (experimental `dev` implementation available)
-19. ~~**HTTP/2 Server Push**~~ ✅
-20. ~~**io_uring** UDP packet loop for HTTP/3~~ ✅
-21. ~~**kqueue** backend for macOS/BSD~~ ✅
-22. ~~**Multiport HTTP/3 parity**: per-port UDP contexts and global setting propagation to non-detached ports~~ ✅
+19. **Native C WebTransport client stabilization** (experimental `dev` implementation available)
+20. ~~**HTTP/2 Server Push**~~ ✅
+21. ~~**io_uring** UDP packet loop for HTTP/3~~ ✅
+22. ~~**kqueue** backend for macOS/BSD~~ ✅
+23. ~~**Multiport HTTP/3 parity**: per-port UDP contexts and global setting propagation to non-detached ports~~ ✅
 
 ### P4 — Ecosystem
-23. ~~**gRPC unary and buffered streaming server support**~~ ✅
-24. ~~**GraphQL** bounded Query executor~~ ✅
-25. ~~**OpenAPI** generator~~ ✅
-26. ~~**Background Jobs / Scheduler**~~ ✅
-27. ~~**Incremental gRPC framing, reflection, health checks, and `.proto` codegen**~~ ✅
+24. ~~**gRPC unary and buffered streaming server support**~~ ✅
+25. ~~**GraphQL** bounded Query executor~~ ✅
+26. ~~**OpenAPI** generator~~ ✅
+27. ~~**Background Jobs / Scheduler**~~ ✅
+28. ~~**Incremental gRPC framing, reflection, health checks, and `.proto` codegen**~~ ✅
+29. ~~**gRPC wire streaming**: DATA-frame wiring, trailers, deadlines, gzip negotiation~~ ✅
+30. **Distribution**: publish Homebrew formula and vcpkg port beyond the current drafts
 
 ---
 

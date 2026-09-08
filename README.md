@@ -19,18 +19,17 @@ reaches 0.41ms average at ~155k req/s).
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 110464 req/s | Latency 2.01ms (P90 4.05ms, P99 7.37ms, P99.999 0.00ms) | RSS 16636KiB | Csw 0
-- **CWIST (C1M reactor)**: 115796 req/s | Latency 2.62ms (P90 6.57ms, P99 14.03ms, P99.999 0.00ms) | RSS 9696KiB | Csw 0
-- **Axum**: 110351 req/s | Latency 3.51ms (P90 5.91ms, P99 8.80ms, P99.999 0.00ms) | RSS 15828KiB | Csw 0
-- **Gin (Go)**: 77653 req/s | Latency 6.87ms (P90 16.66ms, P99 35.88ms, P99.999 0.00ms) | RSS 28476KiB | Csw 0
-- **Spring Boot**: 42187 req/s | Latency 9.45ms (P90 11.87ms, P99 18.58ms, P99.999 0.00ms) | RSS 1308184KiB | Csw 0
+- **CWIST (classic pool)**: 108484 req/s | Latency 2.10ms (P90 4.54ms, P99 8.99ms, P99.999 0.00ms) | RSS 17548KiB | Csw 0
+- **CWIST (C1M reactor)**: 118418 req/s | Latency 2.40ms (P90 5.72ms, P99 12.19ms, P99.999 0.00ms) | RSS 9860KiB | Csw 0
+- **Axum**: 108460 req/s | Latency 3.62ms (P90 6.07ms, P99 8.94ms, P99.999 0.00ms) | RSS 16212KiB | Csw 0
+- **Gin (Go)**: 76405 req/s | Latency 6.94ms (P90 16.60ms, P99 36.78ms, P99.999 0.00ms) | RSS 30600KiB | Csw 0
+- **Spring Boot**: 42851 req/s | Latency 9.30ms (P90 12.15ms, P99 19.55ms, P99.999 0.00ms) | RSS 1300716KiB | Csw 0
 
 **Spring runtime environment**
 
 - **JDK:** `openjdk version "25.0.4.1" 2026-08-18 LTS`
-- **Spring Boot:** 3.2.3 (Spring WebFlux + Reactor Netty on native epoll)
-- **Garbage collector:** G1GC
-- **AOT:** JDK 25 Leyden AOT (JEP 483 + JEP 514 single-step AOT)
+- **Spring Boot:** 3.2.3
+- **Stack:** Spring WebFlux + Reactor Netty on native epoll (G1GC, JDK 25 Leyden AOT, virtual threads disabled)
 - **Virtual threads:** disabled
 
 **JVM options**
@@ -53,13 +52,12 @@ Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup disc
 -Dreactor.netty.ioWorkerCount=4
 -Xlog:gc*:file=/tmp/spring_gc.log:time,uptime,level,tags
 -XX:+AOTClassLinking
--XX:AOTCache=/tmp/spring_bench/app.aot
+-XX:AOTCache=/tmp/spring_bench/app.aot (JEP 483 + JEP 514 single-step AOT)
 ```
 
 **Warmup/profile**
 
-- **Warmup:** 10s (discarded from the results)
-- **Measurement:** `wrk -t12 -c400 -d10s`
+wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 
 ![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)
 <!-- WEBSERVER_BENCHMARKS:END -->
@@ -67,31 +65,8 @@ Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup disc
 _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
 
 <!-- TUNED_BENCHMARK:START -->
-**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 108,898 req/s at 0.58ms average latency (P50 0.42ms, P90 1.19ms, P99 2.59ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
+**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 112,315 req/s at 0.58ms average latency (P50 0.40ms, P90 1.20ms, P99 2.68ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
 <!-- TUNED_BENCHMARK:END -->
-
----
-
-## Table of Contents
-
-- [Install](#install)
-- [Hello world](#hello-world)
-- [What CWIST includes](#what-cwist-includes)
-- [Why C, when Axum and Gin exist?](#why-c-when-axum-and-gin-exist)
-- [Platform support](#platform-support)
-- [Execution & I/O models](#execution--io-models-c1m-reactor-and-classic-pool)
-- [Development hot reload](#development-hot-reload)
-- [Managing a project with the cwist CLI](#managing-a-project-with-the-cwist-cli)
-- [Linking](#linking)
-- [Configuration](#configuration)
-- [Nuke DB](#nuke-db)
-- [PQC TLS layer](#pqc-tls-layer)
-- [WebTransport](#webtransport)
-- [RDBMS auto-mount](#rdbms-auto-mount)
-- [Dependencies](#dependencies)
-- [Stability & conformance](#stability--conformance)
-- [Documentation](#documentation)
-- [Examples](#examples)
 
 ---
 
@@ -133,54 +108,6 @@ gcc -o server main.c -lcwist -lssl -lcrypto -lz -lzstd -lbrotlienc -lbrotlicommo
 
 A larger example with a database, post-quantum TLS, metrics, and RDBMS
 auto-detection:
-
-## I/O model: io_uring at the wait layer only
-
-On Linux, CWIST uses io_uring (raw syscalls, no liburing dependency) strictly
-as a **readiness multiplexer** — a replacement for `epoll_wait` in
-`src/sys/io/reactor.c`. The reactor arms one-shot `IORING_OP_POLL_ADD`
-requests; when a completion arrives, the woken worker performs ordinary
-blocking `recv`/`send` inline and runs the request to completion on the spot.
-If io_uring setup fails, the reactor falls back to epoll (kqueue on
-macOS/BSD) with identical behavior.
-
-**Why the request hot path is not completion-based.** A full completion
-model (submitting `recv`/`send` as SQEs and reacting to CQEs) pushes every
-request through the ring multiple times and ties progress to loop ticks —
-that is the design point where async runtimes land at 2–3ms average latency
-(Axum/Tokio territory). CWIST's 0.0x ms latency comes from the opposite
-choice: the worker that wakes up for an event owns the request synchronously
-until it is finished, so no SQE ever sits between a packet and its handler.
-Keeping io_uring at the wait layer — and out of the hot path — is a
-deliberate design strength, not an unfinished integration:
-
-- **No queues.** A request passes through no queue between the readiness
-  notification and its handler; the woken worker completes it inline. That
-  absence — not any single optimization — is where the 0.0x ms latency
-  comes from. A completion model routes each request through a ring 3–4
-  times and binds it to loop ticks, which is exactly the 2–3ms regime.
-- **Structural backpressure.** Callbacks block, so unfinished work cannot
-  accumulate in the kernel or in userland. One in-flight cap per worker
-  thread (`32` in `src/net/http/http.c`) is the entire flow-control story;
-  past the cap the server sheds load with a fixed 503 instead of inflating
-  tail latency.
-- **Cache locality.** A request's whole lifetime runs on one thread's
-  contiguous stack and reuses L1/L2 lines. A completion model splits the
-  handler into fragments and lifts per-stage state onto the heap.
-- **No state machines.** Handlers are straight-line code; a stack trace is
-  the request's execution history.
-- **Deterministic tail.** With no queue waiting anywhere, p99/p999
-  converge on the mean.
-
-The trade-off is explicit: per-connection concurrency is bounded by the
-worker count (cores×8), and horizontal headroom comes from multi-process
-scaling (fork + SO_REUSEPORT) rather than from per-core async fan-out. The
-retired completion-based backend (`io_uring_backend.c`) was removed; its
-ring setup/teardown and free-stack slot infrastructure were absorbed into
-the reactor.
-
-**Operational gate.** Average request latency crossing **1ms** is treated as
-a regression and a build/benchmark failure, regardless of throughput gains.
 
 ```c
 #include <cwist/app.h>
@@ -502,37 +429,6 @@ chat, long-polling — or when you genuinely target C1M. Giving up C1M for
 the classic path costs you nothing until your workload is dominated by
 hundreds of thousands of idle open sockets.
 
-The classic thread-per-connection path (`CWIST_C1M_MODE=0`) is no longer
-capped at `cores*8` held connections either: every accepted connection gets
-its own on-demand detached thread with a 256 KiB stack, so held connections
-scale with the task budget instead of parking a fixed worker pool. Measured
-on the same machine, same client:
-
-| Scale | Result | Wall time |
-|-------|--------|-----------|
-| C10K | 10,000 / 10,000 responded (100%) | ~0.6 s |
-| C100K | 100,000 / 100,000 responded (100%) | ~9 s |
-
-C100K classic needs task-count headroom (one thread per held connection:
-`pids.max` / `TasksMax` above 100K — desktop app scopes often cap this near
-76K — and `kernel.threads-max` is fine by default) and roughly 26 GB of
-virtual commit budget for 100K x 256 KiB stacks (raise
-`vm.overcommit_ratio` when RAMxratio + swap is tight). C1M is out of reach
-for this model — a million threads exceeds `threads-max` — which is exactly
-what the reactor path is for.
-
-**Which mode should you pick?** Most HTTP workloads are request bursts,
-not held connections: APIs behind a reverse proxy, web pages, webhooks.
-There the classic path is the right default — a dedicated thread per active
-connection gives the kernel scheduler direct per-connection fairness with
-no reactor round trip, which is where cwist's sub-millisecond latency comes
-from (369k req/s, P50 ~0.7 ms at `wrk -t12 -c400` on the benchmark
-machine). Flip C1M mode on when you must *hold* very large numbers of
-simultaneously open, mostly idle connections — SSE fan-out, websocket-scale
-chat, long-polling — or when you genuinely target C1M. Giving up C1M for
-the classic path costs you nothing until your workload is dominated by
-hundreds of thousands of idle open sockets.
-
 Benchmark environment:
 
 - CPU: AMD Ryzen 5 5600X (6 cores / 12 threads)
@@ -689,9 +585,8 @@ Runnable demos under [example/](example/): a [minimal server](example/simple-ser
 [step-by-step HTTP](example/http), [SQLite](example/db) and
 [encrypted-column DB](example/db-crypt), [JWT auth](example/jwt), a
 [WebSocket Othello game](example/othello-web), the [rps-showcase](example/rps-showcase)
-throughput demo, rendering helpers ([json-builder](example/json-builder),
-[html](example/html), [template](example/template)), and the experimental
-[WebTransport](example/webtransport) app. See the
+throughput demo, and rendering helpers ([json-builder](example/json-builder),
+[html](example/html), [template](example/template)). See the
 [examples table](docs/README.md#4-runnable-examples) for the full list.
 
 A production deployment built on CWIST: [fly.board](https://github.com/gg582/fly.board).

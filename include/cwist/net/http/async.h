@@ -53,10 +53,6 @@ typedef struct cwist_async cwist_async;
  * Call from inside a route handler and return immediately afterwards; the
  * handler must not touch @p req or @p res after this call.  Ownership of
  * both objects transfers to the returned handle.
- * The framework owns the handle until completion; a single producer needs
- * no explicit release. Before publishing it to competing producers (including
- * a producer that can lose to a timeout), retain a reference for each producer
- * while the handle is still live, then release each after its final attempt.
  * @return Handle to complete later, or NULL on allocation failure (the
  * framework falls back to answering whatever the handler wrote).
  */
@@ -87,7 +83,7 @@ void cwist_async_set_timeout(cwist_async *a, uint64_t ms);
 /**
  * @brief Complete the exchange with a simple body response.
  * Thread-safe and one-shot: the first of respond/respond_with/abort wins,
- * later calls on a retained, live handle return false. @p body is copied.
+ * later calls return false.  @p body is copied.
  */
 bool cwist_async_respond(cwist_async *a, cwist_http_status_t status, const char *content_type, const void *body, size_t len);
 
