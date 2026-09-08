@@ -139,14 +139,18 @@ long get_optimal_thread_count(void) {
 
     if (is_c1m) {
         /* In event-driven C1M mode, each reactor thread multiplexes I/O asynchronously.
-         * When multiple worker processes are forked (workers > 1), each worker process
-         * needs only cores / workers reactor threads so total reactor threads equals CPU cores.
-         * In single process mode (workers == 1), allocate cores reactor threads. */
+         * Keep at least 4 threads per worker so synchronous handoffs (e.g. h2c)
+         * or heavy requests do not stall the worker's event loop. */
         if (workers > 1) {
-            long count = cores / workers;
-            return count > 0 ? count : 1;
+            long count = (cores * 4) / workers;
+            if (count < 4) count = 4;
+            if (count > 32) count = 32;
+            return count;
         }
-        return cores > 0 ? cores : 1;
+        long count = cores * 4;
+        if (count < 4) count = 4;
+        if (count > 64) count = 64;
+        return count;
     }
 
     if (workers == 1) {
@@ -522,6 +526,9 @@ static void http_async_event_cb(int fd, void *ctx) {
     if (action == CWIST_ASYNC_DETACH) {
         /* The handler owns fd now (h2c preface, protocol upgrade).  Free the
          * shell but never touch the fd. */
+        if (g_worker_loads && conn->worker_id < (uint32_t)g_http_thread_count) {
+            atomic_fetch_sub_explicit(&g_worker_loads[conn->worker_id], 1, memory_order_relaxed);
+        }
         cwist_free(conn->rbuf);
         cwist_free(conn);
         atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
@@ -606,11 +613,9 @@ bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, 
         return false;
     }
 
-#if !defined(__linux__)
     /* The one-shot path must never park the reactor on a blocking recv. */
     int fl = fcntl(client_fd, F_GETFL, 0);
     if (fl >= 0) fcntl(client_fd, F_SETFL, fl | O_NONBLOCK);
-#endif
 
     cwist_http_async_conn_t *conn = cwist_alloc(sizeof(*conn));
     if (!conn) {
@@ -3223,13 +3228,8 @@ int cwist_make_socket_ipv4(struct sockaddr_in *sockv4, const char *address, uint
     return CWIST_HTTP_SETSOCKOPT_FAILED;  
   }
 
-#ifdef SO_REUSEPORT
+#if defined(SO_REUSEPORT)
   setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
-#endif
-
-#if defined(__linux__) && defined(TCP_DEFER_ACCEPT)
-  int defer = 1;
-  setsockopt(server_fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &defer, sizeof(defer));
 #endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
