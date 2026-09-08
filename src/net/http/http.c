@@ -185,6 +185,7 @@ static http_thread_worker_t *g_workers = NULL;
 static _Atomic uint32_t *g_worker_loads = NULL;
 
 static _Atomic long g_http_inflight = 0;
+static _Atomic bool g_http_pool_stopping = false;
 #define CWIST_HTTP_INFLIGHT_PER_THREAD 32
 #define CWIST_HTTP_INFLIGHT_FD_RESERVE 4096
 
@@ -323,6 +324,7 @@ static bool http_spawn_worker(void) {
 }
 
 int cwist_http_pool_init(void) {
+    atomic_store(&g_http_pool_stopping, false);
     const char *c1m = getenv("CWIST_C1M_MODE");
     bool use_c1m = true;
     if (c1m) {
@@ -422,6 +424,8 @@ bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), 
 }
 
 void cwist_http_pool_destroy(void) {
+    /* Queued continuations must release, not repost into a dying reactor. */
+    atomic_store(&g_http_pool_stopping, true);
     atomic_store_explicit(&g_dyn_pool.running, false, memory_order_release);
     pthread_mutex_lock(&g_dyn_pool.lock);
     pthread_cond_broadcast(&g_dyn_pool.cond);
@@ -568,8 +572,34 @@ static void http_async_event_cb(int fd, void *ctx) {
     }
 }
 
+typedef struct {
+    cwist_reactor_post_t post;
+    http_async_ctx_t next;
+} http_async_continuation_t;
+
+static void http_async_continue(void *ctx) {
+    http_async_continuation_t *continuation = ctx;
+    http_async_ctx_t next = continuation->next;
+    cwist_free(continuation);
+    if (!atomic_load(&g_cwist_running) || atomic_load(&g_http_pool_stopping)) {
+        cwist_http_async_close(next.client_fd, next.conn);
+        return;
+    }
+    http_async_event_cb(next.client_fd, &next);
+}
+
 bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_async_conn_t *conn) {
     if (client_fd < 0 || !reactor || !conn) return false;
+    /* A deferred response may finish in reactor_destroy's final drain. Never
+     * enqueue new work into that final snapshot or the connection is orphaned. */
+    if (atomic_load(&g_http_pool_stopping)) {
+        cwist_http_async_close(client_fd, conn);
+        return false;
+    }
+    if (conn->peer_eof && conn->len == 0) {
+        cwist_http_async_close(client_fd, conn);
+        return false;
+    }
     conn->last_active_sec = cwist_fast_monotonic_sec();
     http_async_ctx_t next = {
         .client_fd = client_fd,
@@ -580,8 +610,23 @@ bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_
     };
     if (conn->len > 0) {
         /* Pipelined bytes already sit in the stash: waiting for POLLIN would
-         * hang, so dispatch the pending data as if a read event had fired. */
-        http_async_event_cb(client_fd, &next);
+         * hang. Post instead of recursing inline, so ready connections can
+         * run between bounded HTTP request batches. */
+        http_async_continuation_t *continuation = cwist_alloc(sizeof(*continuation));
+        if (!continuation) {
+            cwist_http_async_close(client_fd, conn);
+            return false;
+        }
+        continuation->next = next;
+        continuation->post = (cwist_reactor_post_t) {
+            .cb = http_async_continue,
+            .ctx = continuation,
+        };
+        if (!cwist_reactor_post(reactor, &continuation->post)) {
+            cwist_free(continuation);
+            cwist_http_async_close(client_fd, conn);
+            return false;
+        }
         return true;
     }
     /* Same stash shrink as the REARM path in http_async_event_cb. */
@@ -2854,9 +2899,10 @@ static bool http_async_stash_grow(cwist_http_async_conn_t *conn, size_t need) {
  * if bytes remain after a short recv the one-shot re-arm fires again
  * immediately.  This skips the guaranteed-EAGAIN second recv that otherwise
  * costs one wasted syscall per request on non-pipelined keep-alive traffic.
- * @return 0 on success (EAGAIN or data), -1 on orderly close or fatal error.
+ * @return 0 on data, EAGAIN, or EOF (recorded in peer_eof); -1 on fatal error.
  */
 int cwist_http_async_conn_fill(cwist_http_async_conn_t *conn) {
+    if (conn->peer_eof) return 0;
     for (;;) {
         if (conn->len + 1 >= conn->cap && !http_async_stash_grow(conn, conn->len + 4096)) {
             return -1;
@@ -2870,7 +2916,11 @@ int cwist_http_async_conn_fill(cwist_http_async_conn_t *conn) {
             if ((size_t)n < avail) return 0; /* short read: drained for now */
             continue;
         }
-        if (n == 0) return -1;
+        if (n == 0) {
+            /* A half-close does not discard already buffered requests. */
+            conn->peer_eof = true;
+            return 0;
+        }
         if (errno == EINTR) continue;
         if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
         return -1;
@@ -2939,10 +2989,12 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
         return CWIST_RECV_NEED_MORE;
     }
 
-    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, conn->len, header_end, err_out);
+    /* Framing below assembles this request's body. Passing the whole stash
+     * here copies later pipelined messages into body-less requests too. */
+    size_t header_len = (size_t)(header_end + 4 - conn->rbuf);
+    cwist_http_request *req = cwist_http_parse_request_with_header_end(conn->rbuf, header_len, header_end, err_out);
     if (!req) return CWIST_RECV_FATAL;
 
-    size_t header_len = (size_t)(header_end + 4 - conn->rbuf);
     size_t body_received = conn->len - header_len;
     size_t consumed = header_len;
 
