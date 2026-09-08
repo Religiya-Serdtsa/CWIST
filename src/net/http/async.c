@@ -53,6 +53,29 @@ struct cwist_async {
     cwist_reactor_post_t post;
 };
 
+#define CWIST_ASYNC_RETIRE_RING_SIZE 1024
+static _Atomic(cwist_async *) g_async_retire_ring[CWIST_ASYNC_RETIRE_RING_SIZE];
+static _Atomic uint64_t g_async_retire_idx = 0;
+
+static void cwist_async_retire(cwist_async *a) {
+    if (!a) return;
+    uint64_t idx = atomic_fetch_add_explicit(&g_async_retire_idx, 1, memory_order_relaxed);
+    cwist_async *old = atomic_exchange_explicit(&g_async_retire_ring[idx % CWIST_ASYNC_RETIRE_RING_SIZE], a, memory_order_acq_rel);
+    if (old) {
+        cwist_free(old);
+    }
+}
+
+__attribute__((destructor))
+static void cwist_async_retire_drain(void) {
+    for (size_t i = 0; i < CWIST_ASYNC_RETIRE_RING_SIZE; ++i) {
+        cwist_async *old = atomic_exchange_explicit(&g_async_retire_ring[i], NULL, memory_order_relaxed);
+        if (old) {
+            cwist_free(old);
+        }
+    }
+}
+
 static void cwist_async_reactor_complete(void *ctx);
 
 static const char *cwist_async_reason(cwist_http_status_t status) {
@@ -142,7 +165,7 @@ static void cwist_async_complete(cwist_async *a) {
         cwist_h2_async_queue_enqueue(a->h2_queue, a->h2_stream_id, a->req,
                                      a->final_res, a->res, a->final_res_owned);
         cwist_h2_async_queue_release(a->h2_queue);
-        cwist_free(a);
+        cwist_async_retire(a);
         return;
     }
 
@@ -184,7 +207,7 @@ static void cwist_async_complete(cwist_async *a) {
     if (a->final_res_owned) cwist_http_response_destroy(res);
     cwist_http_response_destroy(a->res);
     cwist_http_request_destroy(a->req);
-    cwist_free(a);
+    cwist_async_retire(a);
 }
 
 static void cwist_async_reactor_complete(void *ctx) {
