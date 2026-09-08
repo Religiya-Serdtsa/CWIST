@@ -36,7 +36,7 @@ NEW_INTERSECTION=""
 for attempt in $(seq 1 "$ATTEMPTS"); do
     OUT="$WORKDIR/run$attempt"
     "$H2SPEC" -h 127.0.0.1 -p "$PORT" -o "$TIMEOUT" >"$OUT" 2>&1 || true
-    grep -a "×" "$OUT" | sed 's/^ *× [0-9]*: //' | sort -u > "$OUT.fails" || true
+    grep -a "×" "$OUT" | sed 's/.*\r//' | sed 's/^ *× [0-9]*: //' | sort -u > "$OUT.fails" || true
     NEW_THIS="$(comm -13 "$BASELINE" "$OUT.fails")"
     if [ "$attempt" -eq 1 ]; then
         NEW_INTERSECTION="$NEW_THIS"
