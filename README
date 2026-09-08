@@ -16,18 +16,18 @@ to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
 <!-- BENCHMARKS:START -->
-Latest automated benchmark: **Darwin** — 12.57 M leases/s, 106.69% CPU, 710976 KiB RSS.
+Latest automated benchmark: **Darwin** — 13.75 M leases/s, 101.85% CPU, 744144 KiB RSS.
 
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 110464 req/s | Latency 2.01ms (P90 4.05ms, P99 7.37ms, P99.999 0.00ms) | RSS 16636KiB | Csw 0
-- **CWIST (C1M reactor)**: 115796 req/s | Latency 2.62ms (P90 6.57ms, P99 14.03ms, P99.999 0.00ms) | RSS 9696KiB | Csw 0
-- **Axum**: 110351 req/s | Latency 3.51ms (P90 5.91ms, P99 8.80ms, P99.999 0.00ms) | RSS 15828KiB | Csw 0
-- **Gin (Go)**: 77653 req/s | Latency 6.87ms (P90 16.66ms, P99 35.88ms, P99.999 0.00ms) | RSS 28476KiB | Csw 0
-- **Spring Boot**: 42187 req/s | Latency 9.45ms (P90 11.87ms, P99 18.58ms, P99.999 0.00ms) | RSS 1308184KiB | Csw 0
+- **CWIST (classic pool)**: 108484 req/s | Latency 2.10ms (P90 4.54ms, P99 8.99ms, P99.999 0.00ms) | RSS 17548KiB | Csw 0
+- **CWIST (C1M reactor)**: 118418 req/s | Latency 2.40ms (P90 5.72ms, P99 12.19ms, P99.999 0.00ms) | RSS 9860KiB | Csw 0
+- **Axum**: 108460 req/s | Latency 3.62ms (P90 6.07ms, P99 8.94ms, P99.999 0.00ms) | RSS 16212KiB | Csw 0
+- **Gin (Go)**: 76405 req/s | Latency 6.94ms (P90 16.60ms, P99 36.78ms, P99.999 0.00ms) | RSS 30600KiB | Csw 0
+- **Spring Boot**: 42851 req/s | Latency 9.30ms (P90 12.15ms, P99 19.55ms, P99.999 0.00ms) | RSS 1300716KiB | Csw 0
 
 **Spring runtime environment**
 
