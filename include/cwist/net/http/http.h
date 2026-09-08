@@ -367,7 +367,7 @@ typedef enum {
     CWIST_ASYNC_CLOSE = 0,  /* Close fd and release the connection. */
     CWIST_ASYNC_REARM,      /* Keep the connection; wait for more reads. */
     CWIST_ASYNC_DETACH,     /* Handler took ownership of fd (h2c, upgrades). */
-    CWIST_ASYNC_DEFER       /* Response deferred (cwist_async); leave fd and conn untouched. */
+    CWIST_ASYNC_DEFER       /* Completion/continuation owns fd and conn; leave untouched. */
 } cwist_async_action_t;
 
 typedef cwist_async_action_t (*cwist_async_handler_t)(int fd, struct cwist_http_async_conn *conn);
@@ -384,11 +384,13 @@ typedef struct cwist_http_async_conn {
     uint32_t worker_id;                   /* Assigned worker thread index for load tracking. */
     cwist_reactor_t *reactor;             /* Owning reactor (deferred-response completion target). */
     cwist_async_handler_t handler;        /* Connection handler, reused for re-arm after a defer. */
+    bool peer_eof;                       /* Read side closed; drain complete buffered requests. */
 } cwist_http_async_conn_t;
 
 /* Re-arm a connection after a deferred response completed on the reactor
  * thread (keep-alive), reusing the same one-shot event slot model as
- * http_async_event_cb.  On failure the fd is closed and conn released.
+ * http_async_event_cb. Buffered bytes resume through a posted continuation,
+ * not recursively inline. On failure the fd is closed and conn released.
  * cwist_http_async_close closes the fd and releases the connection shell. */
 bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_async_conn_t *conn);
 void cwist_http_async_close(int client_fd, cwist_http_async_conn_t *conn);
@@ -421,6 +423,8 @@ typedef enum {
 } cwist_recv_status_t;
 
 bool cwist_http_pool_submit_async(int client_fd, cwist_async_handler_t handler, void *ctx);
+/* Returns 0 on data/EAGAIN/EOF, -1 on fatal error. EOF sets peer_eof;
+ * drain complete buffered requests, then close instead of waiting for input. */
 int cwist_http_async_conn_fill(cwist_http_async_conn_t *conn);
 cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn, cwist_http_request **out, cwist_http_parse_error_t *err_out);
 
