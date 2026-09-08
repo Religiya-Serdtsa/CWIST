@@ -376,7 +376,7 @@ cwist_error_t cwist_sstring_change_size(cwist_sstring *str, size_t new_size, boo
  * @param data Source string, or NULL to clear the value.
  * @return ERR_SSTRING_OKAY on success, or an error payload describing the failure.
  */
-cwist_error_t cwist_sstring_assign(cwist_sstring *str, char *data) {
+cwist_error_t cwist_sstring_assign(cwist_sstring *str, const char *data) {
     if (!str) {
       cwist_error_t err = make_error(CWIST_ERR_INT8);
       err.error.err_i8 = ERR_SSTRING_NULL_STRING;

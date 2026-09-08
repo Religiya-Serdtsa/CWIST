@@ -86,7 +86,7 @@ cwist_error_t cwist_sstring_change_size(cwist_sstring *str, size_t size, bool bl
 /**
  * @brief Assign a C string.
  */
-cwist_error_t cwist_sstring_assign(cwist_sstring *str, char *data);
+cwist_error_t cwist_sstring_assign(cwist_sstring *str, const char *data);
 
 /**
  * @brief Append a C string.

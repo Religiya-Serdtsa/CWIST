@@ -405,6 +405,16 @@ void cwist_http_async_send_response(int client_fd, cwist_http_response *res,
                                     bool keep_alive, bool head_only);
 
 typedef enum {
+    CWIST_ASYNC_SEND_KEEPALIVE = 0,
+    CWIST_ASYNC_SEND_CLOSE,
+    CWIST_ASYNC_SEND_DEFERRED
+} cwist_async_send_status_t;
+
+cwist_async_send_status_t cwist_http_send_response_async(int client_fd, cwist_http_response *res,
+                                                        cwist_http_async_conn_t *conn,
+                                                        bool keep_alive, bool head_only);
+
+typedef enum {
     CWIST_RECV_OK = 0,
     CWIST_RECV_NEED_MORE,   /* Partial request; rearm and wait. */
     CWIST_RECV_FATAL        /* Protocol error / overflow; close. */

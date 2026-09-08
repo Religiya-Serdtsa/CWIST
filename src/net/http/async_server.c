@@ -30,7 +30,7 @@ static void async_accept_cb(int fd, void *ctx) {
     cwist_app *app = *(cwist_app **)ctx;
     int client_fd;
 #if defined(__linux__)
-    while ((client_fd = accept4(fd, NULL, NULL, SOCK_CLOEXEC)) >= 0) {
+    while ((client_fd = accept4(fd, NULL, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK)) >= 0) {
 #else
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);

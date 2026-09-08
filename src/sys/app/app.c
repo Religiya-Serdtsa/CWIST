@@ -1,5 +1,9 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
+#include <sched.h>
 #include <cwist/sys/app/app.h>
 #include <cwist/sys/app/config.h>
 #include <cwist/sys/app/logger.h>
@@ -2264,6 +2268,16 @@ static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd
     }
 
     if (!upgraded) {
+        if (req->async_conn) {
+            cwist_async_send_status_t as_st = cwist_http_send_response_async(
+                client_fd, res, req->async_conn, keep_alive, req->method == CWIST_HTTP_HEAD);
+            cwist_http_response_destroy(res);
+            cwist_http_request_destroy(req);
+            if (as_st == CWIST_ASYNC_SEND_DEFERRED) return APP_SERVE_DEFERRED;
+            if (as_st == CWIST_ASYNC_SEND_KEEPALIVE) return APP_SERVE_KEEPALIVE;
+            return APP_SERVE_CLOSE;
+        }
+
         /* RFC 9110 §9.3.2: HEAD replies carry the GET headers (Content-Length
          * included) but no body bytes, for every route. */
         cwist_error_t send_err = (req->method == CWIST_HTTP_HEAD)
@@ -3463,10 +3477,12 @@ int cwist_app_listen(cwist_app *app, int port) {
     bool is_worker_child = false;
     pid_t worker_pids[workers > 1 ? workers - 1 : 1];
     size_t worker_count = 0;
+    int child_idx = 0;
     for (int i = 1; i < workers; i++) {
         pid_t pid = fork();
         if (pid == 0) {
             is_worker_child = true;
+            child_idx = i;
             break;
         } else if (pid < 0) {
             perror("fork worker failed");
@@ -3475,6 +3491,16 @@ int cwist_app_listen(cwist_app *app, int port) {
             worker_pids[worker_count++] = pid;
         }
     }
+
+#if defined(__linux__) && defined(_GNU_SOURCE)
+    /* Pin worker processes to CPU cores to prevent scheduler migration jitter */
+    long core_count = get_cpu_cores();
+    if (core_count < 1) core_count = 1;
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET((size_t)(is_worker_child ? child_idx : 0) % (size_t)core_count, &cpuset);
+    sched_setaffinity(0, sizeof(cpuset), &cpuset);
+#endif
 
     if (is_worker_child) {
         close(server_fd);
