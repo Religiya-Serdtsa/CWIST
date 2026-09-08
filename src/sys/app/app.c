@@ -3494,12 +3494,14 @@ int cwist_app_listen(cwist_app *app, int port) {
 
 #if defined(__linux__) && defined(_GNU_SOURCE)
     /* Pin worker processes to CPU cores to prevent scheduler migration jitter */
-    long core_count = get_cpu_cores();
-    if (core_count < 1) core_count = 1;
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET((size_t)(is_worker_child ? child_idx : 0) % (size_t)core_count, &cpuset);
-    sched_setaffinity(0, sizeof(cpuset), &cpuset);
+    if (workers > 1) {
+        long core_count = get_cpu_cores();
+        if (core_count < 1) core_count = 1;
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET((size_t)(is_worker_child ? child_idx : 0) % (size_t)core_count, &cpuset);
+        sched_setaffinity(0, sizeof(cpuset), &cpuset);
+    }
 #endif
 
     if (is_worker_child) {
