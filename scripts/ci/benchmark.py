@@ -180,14 +180,26 @@ def render() -> None:
     )
     ws_env = ws_latest.get("spring_env", {}) or {}
     if ws_env:
-        ws_stack = ws_env.get('stack')
-        ws_stack_part = f" ({ws_stack})" if ws_stack else ""
-        ws_vt = ws_env.get('virtual_threads')
-        ws_vt_part = f", virtual threads **{'on' if ws_vt else 'off'}**" if ws_vt else ""
         ws_summary += (
-            f"\nSpring runtime env: **{ws_env.get('java_version','n/a')}**, Spring Boot **{ws_env.get('spring_boot_version','n/a')}**{ws_stack_part}"
-            f"{ws_vt_part}, "
-            f"JVM opts `{ws_env.get('jvm_opts','n/a')}`, warmup/profile: {ws_latest.get('wrk_profile','n/a')}\n"
+            "\n**Spring runtime environment**\n\n"
+            f"- **JDK:** `{ws_env.get('java_version','n/a')}`\n"
+            f"- **Spring Boot:** {ws_env.get('spring_boot_version','n/a')}\n"
+        )
+        if ws_env.get('stack'):
+            ws_summary += f"- **Stack:** {ws_env['stack']}\n"
+        ws_vt = ws_env.get('virtual_threads')
+        if ws_vt is not None:
+            ws_summary += f"- **Virtual threads:** {'enabled' if ws_vt else 'disabled'}\n"
+        # Break before options, not within quoted values or historical AOT notes.
+        # This is display formatting only; retain the recorded option spelling.
+        jvm_opts = re.sub(
+            r'''("(?:\\.|[^"\\])*"|'[^']*')|\s+(?=-)''',
+            lambda match: match.group(1) if match.group(1) is not None else "\n",
+            ws_env.get('jvm_opts', 'n/a').strip(),
+        )
+        ws_summary += (
+            f"\n**JVM options**\n\n```text\n{jvm_opts}\n```\n"
+            f"\n**Warmup/profile**\n\n{ws_latest.get('wrk_profile','n/a')}\n"
         )
     ws_summary += f"\n![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)"
     if README.exists(): replace(README, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)

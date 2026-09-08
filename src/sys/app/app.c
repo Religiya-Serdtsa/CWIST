@@ -3384,7 +3384,7 @@ static void *h3_server_thread_func(void *arg) {
  * @brief Initialize runtime services and enter the HTTP or HTTPS server loop.
  * @param app Application instance to run.
  * @param port TCP port to bind.
- * @return 0 on success, or -1 when initialization or bind fails.
+ * @return 0 on success, or -1 when initialization, bind, or worker shutdown fails.
  */
 int cwist_app_listen(cwist_app *app, int port) {
     // Ignore SIGPIPE
