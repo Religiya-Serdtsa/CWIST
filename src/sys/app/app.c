@@ -2203,6 +2203,40 @@ static void app_maybe_send_parse_error(int client_fd, cwist_http_parse_error_t p
     }
 }
 
+/* Async variant: the error goes through the coalescing stash so it cannot
+ * overtake responses buffered earlier in the same batch turn. */
+static void app_maybe_send_parse_error_async(cwist_http_async_conn_t *conn, cwist_http_parse_error_t perr) {
+    int status = app_parse_error_status(perr);
+    if (status > 0) {
+        (void)cwist_http_coalesce_error_response(conn, status);
+    }
+}
+
+/* Flush the coalescing stash at a batch-turn exit.  A parked remainder owns
+ * fd/conn from here (it re-arms or closes after draining), so the caller
+ * must leave both untouched. */
+static cwist_async_action_t app_async_flush_exit(int client_fd, cwist_http_async_conn_t *conn,
+                                                 cwist_async_action_t action, bool keep_alive) {
+    static _Atomic long dbg_parked;
+    static _Atomic int dbg_cached = -1;
+    int d = atomic_load_explicit(&dbg_cached, memory_order_relaxed);
+    if (d < 0) {
+        d = getenv("CWIST_ASYNC_DEBUG") != NULL;
+        atomic_store_explicit(&dbg_cached, d, memory_order_relaxed);
+    }
+    cwist_coalesce_flush_status_t fs = cwist_http_coalesce_flush(client_fd, conn, keep_alive);
+    if (fs == CWIST_COALESCE_FLUSH_PARKED) {
+        if (d) {
+            long n = atomic_fetch_add(&dbg_parked, 1) + 1;
+            if (n <= 5 || n % 10000 == 0)
+                fprintf(stderr, "[async] flush-parked fd=%d total=%ld\n", client_fd, n);
+        }
+        return CWIST_ASYNC_DEFER;
+    }
+    if (fs == CWIST_COALESCE_FLUSH_ERROR) return CWIST_ASYNC_CLOSE;
+    return action;
+}
+
 /**
  * @brief Route and respond to one fully parsed HTTP/1.1 request.
  * Shared by the blocking keep-alive loop and the event-driven async path.
@@ -2219,8 +2253,25 @@ static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd
         size_t cached_len = 0;
         const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
         if (cached_blob && cached_len > 0) {
-            send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
             bool keep_alive = req->keep_alive;
+            if (req->async_conn) {
+                cwist_http_async_conn_t *aconn = req->async_conn;
+                if (cached_len > CWIST_HTTP_COALESCE_MAX ||
+                    aconn->olen + cached_len > CWIST_HTTP_COALESCE_MAX) {
+                    if (cwist_http_coalesce_flush_blocking(client_fd, aconn) != 0) {
+                        cwist_http_request_destroy(req);
+                        return APP_SERVE_CLOSE;
+                    }
+                }
+                if (cached_len > CWIST_HTTP_COALESCE_MAX) {
+                    send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
+                } else if (cwist_http_coalesce_append(aconn, cached_blob, cached_len) != 0) {
+                    cwist_http_request_destroy(req);
+                    return APP_SERVE_CLOSE;
+                }
+            } else {
+                send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
+            }
             cwist_http_request_destroy(req);
             return keep_alive ? APP_SERVE_KEEPALIVE : APP_SERVE_CLOSE;
         }
@@ -2269,7 +2320,7 @@ static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd
 
     if (!upgraded) {
         if (req->async_conn) {
-            cwist_async_send_status_t as_st = cwist_http_send_response_async(
+            cwist_async_send_status_t as_st = cwist_http_send_response_coalesced(
                 client_fd, res, req->async_conn, keep_alive, req->method == CWIST_HTTP_HEAD);
             cwist_http_response_destroy(res);
             cwist_http_request_destroy(req);
@@ -2426,16 +2477,18 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
         cwist_recv_status_t st = cwist_http_receive_request_nb(conn, &req, &perr);
         if (st == CWIST_RECV_NEED_MORE) {
             /* EOF with no complete frame must close, not wait or repost. */
-            return conn->peer_eof ? CWIST_ASYNC_CLOSE : CWIST_ASYNC_REARM;
+            return app_async_flush_exit(client_fd, conn,
+                                        conn->peer_eof ? CWIST_ASYNC_CLOSE : CWIST_ASYNC_REARM,
+                                        !conn->peer_eof);
         }
         if (st == CWIST_RECV_FATAL) {
-            app_maybe_send_parse_error(client_fd, perr);
+            app_maybe_send_parse_error_async(conn, perr);
             if (dbg) {
                 long n = atomic_fetch_add(&dbg_fatal, 1) + 1;
                 if (n <= 5 || n % 10000 == 0)
                     fprintf(stderr, "[async] recv-fatal fd=%d total=%ld len=%zu\n", client_fd, n, conn->len);
             }
-            return CWIST_ASYNC_CLOSE;
+            return app_async_flush_exit(client_fd, conn, CWIST_ASYNC_CLOSE, false);
         }
         req->client_fd = client_fd;
         req->app = app;
@@ -2443,15 +2496,21 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
         req->async_conn = conn;
         app_serve_result_t sr = app_serve_parsed_request(app, client_fd, req, priority_weight);
         /* Deferred: stop draining so pipelined bytes stay in the stash and
-         * responses remain ordered; the completion path re-arms or closes. */
-        if (sr == APP_SERVE_DEFERRED) return CWIST_ASYNC_DEFER;
+         * responses remain ordered; the completion path re-arms or closes.
+         * The completion writes out-of-band, so buffered responses from
+         * this turn must drain first to preserve response order. */
+        if (sr == APP_SERVE_DEFERRED) {
+            if (conn->olen > 0 && cwist_http_coalesce_flush_blocking(client_fd, conn) != 0)
+                return CWIST_ASYNC_CLOSE;
+            return CWIST_ASYNC_DEFER;
+        }
         if (sr == APP_SERVE_CLOSE) {
             if (dbg) {
                 long n = atomic_fetch_add(&dbg_serve_close, 1) + 1;
                 if (n <= 5 || n % 10000 == 0)
                     fprintf(stderr, "[async] serve-close fd=%d total=%ld\n", client_fd, n);
             }
-            return CWIST_ASYNC_CLOSE;
+            return app_async_flush_exit(client_fd, conn, CWIST_ASYNC_CLOSE, false);
         }
         /* Cooperative yield: buffered pipelined bytes cannot wait for a read
          * event, but serving the whole turn inline serializes every other
@@ -2461,11 +2520,17 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
     }
     if (conn->len > 0) {
         /* Buffered work cannot wait for another read event. The continuation
-         * owns fd/conn on success; rearm closes both on failure. */
+         * owns fd/conn on success; rearm closes both on failure.  A parked
+         * flush owns them instead and re-arms after draining. */
+        cwist_coalesce_flush_status_t fs = cwist_http_coalesce_flush(client_fd, conn, true);
+        if (fs == CWIST_COALESCE_FLUSH_ERROR) return CWIST_ASYNC_CLOSE;
+        if (fs == CWIST_COALESCE_FLUSH_PARKED) return CWIST_ASYNC_DEFER;
         cwist_http_async_rearm(client_fd, conn->reactor, conn);
         return CWIST_ASYNC_DEFER;
     }
-    return conn->peer_eof ? CWIST_ASYNC_CLOSE : CWIST_ASYNC_REARM;
+    return app_async_flush_exit(client_fd, conn,
+                                conn->peer_eof ? CWIST_ASYNC_CLOSE : CWIST_ASYNC_REARM,
+                                !conn->peer_eof);
 }
 
 void cwist_app_http_handler(int client_fd, void *ctx) {

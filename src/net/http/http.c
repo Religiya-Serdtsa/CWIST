@@ -507,6 +507,7 @@ static void http_async_conn_release(cwist_http_async_conn_t *conn) {
         atomic_fetch_sub_explicit(&g_worker_loads[conn->worker_id], 1, memory_order_relaxed);
     }
     cwist_free(conn->rbuf);
+    cwist_free(conn->obuf);
     cwist_free(conn);
     atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
 }
@@ -541,6 +542,7 @@ static void http_async_event_cb(int fd, void *ctx) {
             atomic_fetch_sub_explicit(&g_worker_loads[conn->worker_id], 1, memory_order_relaxed);
         }
         cwist_free(conn->rbuf);
+        cwist_free(conn->obuf);
         cwist_free(conn);
         atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
         return;
@@ -2223,6 +2225,216 @@ cwist_async_send_status_t cwist_http_send_response_async(int client_fd, cwist_ht
     return CWIST_ASYNC_SEND_CLOSE;
 }
 
+/* --- Response write coalescing (cleartext C1M async batch path) ------------
+ * Responses served within one reactor batch turn append to conn->obuf and
+ * flush with a single speculative write when the turn exits.  A partial
+ * flush deep-copies the remainder into the parked-write mechanism (the
+ * batch loop must stop there; the parked drain re-arms the connection and
+ * its continuation resumes the pipeline).  Cap pressure, oversized bodies,
+ * file streams, deferred completions, and 100 Continue drain the stash
+ * through the bounded poll wait of cwist_http_sendmsg_all instead, keeping
+ * byte order without unbounded buffering. */
+
+int cwist_http_coalesce_append(cwist_http_async_conn_t *conn, const void *data, size_t len) {
+    if (len == 0) return 0;
+    if (conn->olen + len > CWIST_HTTP_COALESCE_MAX) return -1;
+    if (conn->olen + len > conn->ocap) {
+        size_t ncap = conn->ocap ? conn->ocap : 16384;
+        while (ncap < conn->olen + len) ncap *= 2;
+        if (ncap > CWIST_HTTP_COALESCE_MAX) ncap = CWIST_HTTP_COALESCE_MAX;
+        char *nb = cwist_alloc(ncap);
+        if (!nb) return -1;
+        memcpy(nb, conn->obuf, conn->olen);
+        cwist_free(conn->obuf);
+        conn->obuf = nb;
+        conn->ocap = ncap;
+    }
+    memcpy(conn->obuf + conn->olen, data, len);
+    conn->olen += len;
+    return 0;
+}
+
+cwist_coalesce_flush_status_t cwist_http_coalesce_flush(int client_fd, cwist_http_async_conn_t *conn, bool keep_alive) {
+    if (!conn || conn->olen == 0) return CWIST_COALESCE_FLUSH_DONE;
+
+    struct iovec iov = { .iov_base = conn->obuf, .iov_len = conn->olen };
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+#if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+#endif
+
+    size_t sent = 0;
+    cwist_write_status_t st = cwist_http_sendmsg_speculative(client_fd, &iov, 1, flags, &sent);
+    if (st == CWIST_WRITE_DONE) {
+        conn->olen = 0;
+        return CWIST_COALESCE_FLUSH_DONE;
+    }
+    if (st == CWIST_WRITE_PENDING) {
+        size_t left = conn->olen - sent;
+        http_parked_write_t w = {
+            .reactor = conn->reactor,
+            .conn = conn,
+            .buf = cwist_alloc(left),
+            .off = 0,
+            .len = left,
+            .deadline_sec = http_parked_write_deadline(),
+            .keep_alive = keep_alive,
+        };
+        if (w.buf) {
+            memcpy(w.buf, conn->obuf + sent, left);
+            if (cwist_reactor_add_out(conn->reactor, client_fd, http_parked_write_cb, &w, sizeof(w))) {
+                conn->olen = 0;
+                return CWIST_COALESCE_FLUSH_PARKED;
+            }
+            cwist_free(w.buf);
+        }
+    }
+    conn->olen = 0;
+    return CWIST_COALESCE_FLUSH_ERROR;
+}
+
+int cwist_http_coalesce_flush_blocking(int client_fd, cwist_http_async_conn_t *conn) {
+    if (!conn || conn->olen == 0) return 0;
+    struct iovec iov = { .iov_base = conn->obuf, .iov_len = conn->olen };
+    int flags = 0;
+#if defined(MSG_NOSIGNAL)
+    flags |= MSG_NOSIGNAL;
+#endif
+#if defined(MSG_DONTWAIT)
+    flags |= MSG_DONTWAIT;
+#endif
+    int rc = cwist_http_sendmsg_all(client_fd, &iov, 1, flags);
+    conn->olen = 0;
+    return rc;
+}
+
+int cwist_http_coalesce_error_response(cwist_http_async_conn_t *conn, int status) {
+    const char *reason = cwist_http_status_reason(status);
+    if (!reason) reason = "Error";
+
+    char buf[512];
+    int n = snprintf(buf, sizeof(buf),
+                     "HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n%s",
+                     status, reason, strlen(reason), reason);
+    if (n <= 0) return -1;
+    size_t len = (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf) - 1;
+    return cwist_http_coalesce_append(conn, buf, len);
+}
+
+cwist_async_send_status_t cwist_http_send_response_coalesced(int client_fd, cwist_http_response *res,
+                                                             cwist_http_async_conn_t *conn,
+                                                             bool keep_alive, bool head_only) {
+    if (client_fd < 0 || !res || !conn) return CWIST_ASYNC_SEND_CLOSE;
+
+    /* File streams keep the bounded-blocking send path; drain the stash
+     * first so their bytes cannot overtake buffered responses. */
+    if (!head_only && res->use_file_stream) {
+        if (cwist_http_coalesce_flush_blocking(client_fd, conn) != 0) return CWIST_ASYNC_SEND_CLOSE;
+        cwist_error_t err = cwist_http_send_response(client_fd, res);
+        return (keep_alive && err.error.err_i16 == 0) ? CWIST_ASYNC_SEND_KEEPALIVE : CWIST_ASYNC_SEND_CLOSE;
+    }
+
+    char header_buf[CWIST_HTTP_MAX_HEADER_SIZE];
+    size_t header_len = serialize_headers(res, header_buf, sizeof(header_buf));
+
+    const void *body_ptr = NULL;
+    size_t body_len = 0;
+    if (!head_only) {
+        if (res->is_ptr_body) {
+            body_ptr = res->ptr_body;
+            body_len = res->ptr_body_len;
+        } else if (res->body && res->body->data) {
+            body_ptr = res->body->data;
+            body_len = res->body->size;
+        }
+    }
+
+    size_t total = header_len + body_len;
+    if (total > CWIST_HTTP_COALESCE_MAX || conn->olen + total > CWIST_HTTP_COALESCE_MAX) {
+        if (cwist_http_coalesce_flush_blocking(client_fd, conn) != 0) {
+            cwist_http_response_release_ptr_body(res);
+            cwist_http_response_release_file_stream(res);
+            return CWIST_ASYNC_SEND_CLOSE;
+        }
+    }
+
+    /* Oversized single response: keep the legacy speculative send with a
+     * parked remainder rather than bouncing through the capped stash. */
+    if (total > CWIST_HTTP_COALESCE_MAX) {
+        struct iovec iov[2];
+        int iov_cnt = 1;
+        iov[0].iov_base = header_buf;
+        iov[0].iov_len = header_len;
+        if (body_len > 0 && body_ptr) {
+            iov[1].iov_base = (void *)body_ptr;
+            iov[1].iov_len = body_len;
+            iov_cnt = 2;
+        }
+
+        int flags = 0;
+#if defined(MSG_NOSIGNAL)
+        flags |= MSG_NOSIGNAL;
+#endif
+#if defined(MSG_DONTWAIT)
+        flags |= MSG_DONTWAIT;
+#endif
+
+        size_t sent = 0;
+        cwist_write_status_t st = cwist_http_sendmsg_speculative(client_fd, iov, iov_cnt, flags, &sent);
+        if (st == CWIST_WRITE_PENDING) {
+            size_t left = total - sent;
+            http_parked_write_t w = {
+                .reactor = conn->reactor,
+                .conn = conn,
+                .buf = cwist_alloc(left),
+                .off = 0,
+                .len = left,
+                .deadline_sec = http_parked_write_deadline(),
+                .keep_alive = keep_alive,
+            };
+            if (w.buf) {
+                size_t hd_off = sent < header_len ? sent : header_len;
+                size_t hd_left = header_len - hd_off;
+                memcpy(w.buf, header_buf + hd_off, hd_left);
+                if (left > hd_left) {
+                    size_t body_off = sent > header_len ? sent - header_len : 0;
+                    memcpy(w.buf + hd_left, (const char *)body_ptr + body_off, left - hd_left);
+                }
+                if (cwist_reactor_add_out(conn->reactor, client_fd, http_parked_write_cb, &w, sizeof(w))) {
+                    cwist_http_response_release_ptr_body(res);
+                    cwist_http_response_release_file_stream(res);
+                    return CWIST_ASYNC_SEND_DEFERRED;
+                }
+                cwist_free(w.buf);
+            }
+            cwist_http_response_release_ptr_body(res);
+            cwist_http_response_release_file_stream(res);
+            return CWIST_ASYNC_SEND_CLOSE;
+        }
+
+        cwist_http_response_release_ptr_body(res);
+        cwist_http_response_release_file_stream(res);
+        if (st == CWIST_WRITE_DONE) {
+            return keep_alive ? CWIST_ASYNC_SEND_KEEPALIVE : CWIST_ASYNC_SEND_CLOSE;
+        }
+        return CWIST_ASYNC_SEND_CLOSE;
+    }
+
+    if (cwist_http_coalesce_append(conn, header_buf, header_len) != 0 ||
+        (body_len > 0 && body_ptr && cwist_http_coalesce_append(conn, body_ptr, body_len) != 0)) {
+        cwist_http_response_release_ptr_body(res);
+        cwist_http_response_release_file_stream(res);
+        return CWIST_ASYNC_SEND_CLOSE;
+    }
+
+    cwist_http_response_release_ptr_body(res);
+    cwist_http_response_release_file_stream(res);
+    return keep_alive ? CWIST_ASYNC_SEND_KEEPALIVE : CWIST_ASYNC_SEND_CLOSE;
+}
+
 const char *cwist_http_status_reason(int status) {
     switch (status) {
         case 100: return "Continue";
@@ -3016,6 +3228,9 @@ cwist_recv_status_t cwist_http_receive_request_nb(cwist_http_async_conn_t *conn,
     const bool expect = req->expect_100_seen;
     if (expect && !conn->expect_continue_sent &&
         ((size_t)req->content_length > body_received || (te && req->content_length == 0))) {
+        /* Buffered coalesced responses must drain first: the client holds
+         * the body until this interim reply arrives. */
+        cwist_http_coalesce_flush_blocking(conn->fd, conn);
         http_send_100_continue(conn->fd);
         conn->expect_continue_sent = true;
     }
