@@ -255,11 +255,29 @@ static void *http_dynamic_worker_thread(void *arg) {
 
         pthread_mutex_lock(&g_dyn_pool.lock);
         while (atomic_load_explicit(&g_dyn_pool.running, memory_order_acquire) && !g_dyn_pool.head) {
+            /* Scale-down idle timeout: CWIST_POOL_IDLE_TIMEOUT_MS overrides
+             * the 2s default; 0 parks surplus threads forever (use with
+             * CWIST_POOL_PREWARM to eliminate spawn churn entirely). */
+            static _Atomic long idle_timeout_ms = -1;
+            long ms = atomic_load_explicit(&idle_timeout_ms, memory_order_relaxed);
+            if (ms < 0) {
+                const char *env = getenv("CWIST_POOL_IDLE_TIMEOUT_MS");
+                ms = env ? atol(env) : 2000;
+                if (ms < 0) ms = 2000;
+                atomic_store_explicit(&idle_timeout_ms, ms, memory_order_relaxed);
+            }
             atomic_fetch_add_explicit(&g_dyn_pool.idle_workers, 1, memory_order_relaxed);
-            struct timespec ts;
-            clock_gettime(CLOCK_REALTIME, &ts);
-            ts.tv_sec += 2; /* 2 second idle timeout */
-            int rc = pthread_cond_timedwait(&g_dyn_pool.cond, &g_dyn_pool.lock, &ts);
+            int rc;
+            if (ms == 0) {
+                rc = pthread_cond_wait(&g_dyn_pool.cond, &g_dyn_pool.lock);
+            } else {
+                struct timespec ts;
+                clock_gettime(CLOCK_REALTIME, &ts);
+                ts.tv_sec += ms / 1000;
+                ts.tv_nsec += (ms % 1000) * 1000000L;
+                if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
+                rc = pthread_cond_timedwait(&g_dyn_pool.cond, &g_dyn_pool.lock, &ts);
+            }
             atomic_fetch_sub_explicit(&g_dyn_pool.idle_workers, 1, memory_order_relaxed);
             if (rc == ETIMEDOUT && !g_dyn_pool.head) {
                 /* Scale down if idle and above base worker threshold */
@@ -373,8 +391,19 @@ int cwist_http_pool_init(void) {
         pthread_mutex_init(&g_dyn_pool.lock, NULL);
         pthread_cond_init(&g_dyn_pool.cond, NULL);
 
-        /* Pre-warm core worker threads */
-        for (int i = 0; i < g_http_thread_count; i++) {
+        /* Pre-warm worker threads. CWIST_POOL_PREWARM extends the spawn count
+         * beyond the base pool when the expected concurrency is known, so the
+         * acceptor does not serialize pthread_create + stack mmap during a
+         * connection ramp. */
+        long prewarm = g_http_thread_count;
+        const char *pw = getenv("CWIST_POOL_PREWARM");
+        if (pw) {
+            long parsed = atol(pw);
+            if (parsed > prewarm) prewarm = parsed;
+        }
+        long max_w = atomic_load_explicit(&g_dyn_pool.max_workers, memory_order_relaxed);
+        if (prewarm > max_w) prewarm = max_w;
+        for (long i = 0; i < prewarm; i++) {
             if (!http_spawn_worker()) {
                 return -1;
             }
