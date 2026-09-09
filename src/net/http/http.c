@@ -2273,7 +2273,7 @@ int cwist_http_coalesce_append(cwist_http_async_conn_t *conn, const void *data, 
         if (ncap > CWIST_HTTP_COALESCE_MAX) ncap = CWIST_HTTP_COALESCE_MAX;
         char *nb = cwist_alloc(ncap);
         if (!nb) return -1;
-        memcpy(nb, conn->obuf, conn->olen);
+        if (conn->olen > 0) memcpy(nb, conn->obuf, conn->olen);
         cwist_free(conn->obuf);
         conn->obuf = nb;
         conn->ocap = ncap;
