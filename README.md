@@ -603,12 +603,14 @@ submodule's license file):
 
 | Component | License |
 |-----------|---------|
-| BoringSSL | OpenSSL/ISC-style |
-| lsquic, nghttp3, ngtcp2, cJSON, multipart-parser-c | MIT |
-| libttak | BSD-style |
+| BoringSSL | Apache-2.0 |
+| lsquic | MIT (some Chromium-derived parts BSD-3-Clause) |
+| nghttp3, ngtcp2, cJSON, multipart-parser-c | MIT |
+| libttak | BSD-3-Clause |
 | SQLite | Public Domain |
 | cnats | Apache-2.0 |
-| uriparser | BSD-3-Clause |
+| uriparser | BSD-3-Clause (library only; its test suite is LGPL-2.1-or-later and is not linked) |
+| Monocypher | BSD-2-Clause OR CC0-1.0 (dual) |
 
 Static linking propagates each component's license obligations to linked
 binaries; review [NOTICE.md](NOTICE.md) when distributing.
