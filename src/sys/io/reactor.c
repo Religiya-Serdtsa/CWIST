@@ -267,9 +267,15 @@ cwist_reactor_t *cwist_reactor_create(void) {
 
 #ifdef __linux__
     r->impl.use_epoll = false;
+    /* CWIST_REACTOR_BACKEND=epoll forces the epoll path for A/B measurement;
+     * any other value (or unset) keeps io_uring as the default. */
+    {
+        const char *backend = getenv("CWIST_REACTOR_BACKEND");
+        if (backend && strcmp(backend, "epoll") == 0) r->impl.use_epoll = true;
+    }
     struct io_uring_params p;
     memset(&p, 0, sizeof(p));
-    int fd = sys_io_uring_setup(4096, &p);
+    int fd = r->impl.use_epoll ? -1 : sys_io_uring_setup(4096, &p);
     if (fd >= 0) {
         r->impl.ring_fd = fd;
         r->impl.sq_ring_sz = sq_ring_size(&p);
