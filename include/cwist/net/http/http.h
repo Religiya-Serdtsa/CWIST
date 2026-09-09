@@ -378,6 +378,9 @@ typedef struct cwist_http_async_conn {
     char *rbuf;                           /* Lazy recv stash; freed while empty. */
     size_t cap;
     size_t len;
+    char *obuf;                           /* Coalesced output stash (C1M async batch); reused across turns. */
+    size_t ocap;
+    size_t olen;
     bool virgin;                          /* No bytes seen yet (h2c preface sniff). */
     bool expect_continue_sent;            /* 100 Continue already emitted for the pending request. */
     uint32_t last_active_sec;             /* Monotonic timestamp of last activity (for idle reaping). */
@@ -418,6 +421,31 @@ typedef enum {
 cwist_async_send_status_t cwist_http_send_response_async(int client_fd, cwist_http_response *res,
                                                         cwist_http_async_conn_t *conn,
                                                         bool keep_alive, bool head_only);
+
+/* Response write coalescing on the cleartext C1M async batch path: responses
+ * served within one reactor turn accumulate in conn->obuf (capped at
+ * CWIST_HTTP_COALESCE_MAX bytes) and flush with a single speculative write
+ * at the yield/rearm point; a partial flush hands the remainder to the
+ * parked-write mechanism.  cwist_http_coalesce_flush_blocking drains the
+ * stash through the bounded poll wait and is reserved for ordering-critical
+ * points (deferred completions, file streams, 100 Continue, cap overflow).
+ * cwist_http_send_response_coalesced mirrors cwist_http_send_response_async
+ * but appends to the stash instead of writing to the fd. */
+#define CWIST_HTTP_COALESCE_MAX (256 * 1024)
+
+typedef enum {
+    CWIST_COALESCE_FLUSH_DONE = 0,  /* Stash fully written (or empty). */
+    CWIST_COALESCE_FLUSH_PARKED,    /* Remainder parked on POLLOUT; slot owns fd/conn. */
+    CWIST_COALESCE_FLUSH_ERROR      /* Fatal; caller closes. */
+} cwist_coalesce_flush_status_t;
+
+int cwist_http_coalesce_append(cwist_http_async_conn_t *conn, const void *data, size_t len);
+cwist_coalesce_flush_status_t cwist_http_coalesce_flush(int client_fd, cwist_http_async_conn_t *conn, bool keep_alive);
+int cwist_http_coalesce_flush_blocking(int client_fd, cwist_http_async_conn_t *conn);
+int cwist_http_coalesce_error_response(cwist_http_async_conn_t *conn, int status);
+cwist_async_send_status_t cwist_http_send_response_coalesced(int client_fd, cwist_http_response *res,
+                                                             cwist_http_async_conn_t *conn,
+                                                             bool keep_alive, bool head_only);
 
 typedef enum {
     CWIST_RECV_OK = 0,
