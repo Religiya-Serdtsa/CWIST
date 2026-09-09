@@ -2347,6 +2347,25 @@ static unsigned int app_http_requests_per_turn(void) {
     return (unsigned int)v;
 }
 
+/* Yield granularity inside one batch: after this many served requests, if
+ * pipelined bytes remain buffered the loop exits early and the continuation
+ * path (cwist_http_async_rearm, http.c) reposts the connection so other
+ * ready connections run first.  Defaults to the full batch (legacy behavior);
+ * CWIST_HTTP_YIELD_BATCH overrides, clamped to [1, 1024]. */
+static unsigned int app_http_yield_batch(void) {
+    static _Atomic int cached = -1;
+    int v = atomic_load_explicit(&cached, memory_order_relaxed);
+    if (v < 0) {
+        const char *env = getenv("CWIST_HTTP_YIELD_BATCH");
+        long parsed = env ? strtol(env, NULL, 10) : 0;
+        if (parsed < 1) parsed = app_http_requests_per_turn();
+        if (parsed > CWIST_HTTP_REQUESTS_PER_TURN_MAX) parsed = CWIST_HTTP_REQUESTS_PER_TURN_MAX;
+        v = (int)parsed;
+        atomic_store_explicit(&cached, v, memory_order_relaxed);
+    }
+    return (unsigned int)v;
+}
+
 cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_async_conn_t *conn) {
     cwist_app *app = (cwist_app *)conn->user_ctx;
     static _Atomic long dbg_fill_fail, dbg_fatal, dbg_serve_close;
@@ -2400,6 +2419,7 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
     uint32_t priority_weight = ((mixed_seed * 16777619U) >> 8) % 100;
 
     /* One pipeline must not monopolize this reactor's other connections. */
+    const unsigned int yield_batch = app_http_yield_batch();
     for (unsigned int handled = 0; handled < app_http_requests_per_turn(); ++handled) {
         cwist_http_request *req = NULL;
         cwist_http_parse_error_t perr = CWIST_HTTP_PARSE_OK;
@@ -2433,6 +2453,11 @@ cwist_async_action_t cwist_app_http_handler_async(int client_fd, cwist_http_asyn
             }
             return CWIST_ASYNC_CLOSE;
         }
+        /* Cooperative yield: buffered pipelined bytes cannot wait for a read
+         * event, but serving the whole turn inline serializes every other
+         * connection on this reactor.  Exit to the continuation path below,
+         * which reposts this connection so it resumes after the ready CQEs. */
+        if ((handled + 1) % yield_batch == 0 && conn->len > 0) break;
     }
     if (conn->len > 0) {
         /* Buffered work cannot wait for another read event. The continuation
