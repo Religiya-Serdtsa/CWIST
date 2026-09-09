@@ -55,6 +55,9 @@ static inline int sys_io_uring_enter_timeout(int ring_fd, unsigned to_submit, un
     return (int)syscall(__NR_io_uring_enter, ring_fd, to_submit, min_complete,
                         flags | IORING_ENTER_EXT_ARG, &arg, sizeof(arg));
 }
+static inline int sys_io_uring_register(int ring_fd, unsigned opcode, const void *arg, unsigned nr) {
+    return (int)syscall(__NR_io_uring_register, ring_fd, opcode, arg, nr);
+}
 
 /* Ring setup helpers absorbed from the retired io_uring_backend.c. */
 static void *mmap_ring(int fd, size_t sz, off_t off) {
@@ -93,6 +96,10 @@ typedef struct {
     // epoll fallback
     int epoll_fd;
     bool use_epoll;
+    /* True when wake_fd is registered via IORING_REGISTER_EVENTFD: writes
+     * then post CQEs directly, so the wake fd consumes no one-shot poll
+     * slot and needs no re-arm. */
+    bool wake_registered;
 } reactor_impl_t;
 
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -214,7 +221,11 @@ bool cwist_reactor_post(cwist_reactor_t *r, cwist_reactor_post_t *node) {
         node->next = head;
     } while (!atomic_compare_exchange_weak_explicit(&r->post_head, &head, node,
                                                     memory_order_release, memory_order_relaxed));
-    if (r->wake_wr >= 0) {
+    /* Wake only on the first post of a pending batch: if the stack was
+     * non-empty a wake CQE is already in flight (or the run thread is
+     * mid-drain and will re-check at the loop top), so extra writes would
+     * only flood the ring with redundant eventfd CQEs. */
+    if (head == NULL && r->wake_wr >= 0) {
         uint64_t one = 1;
         ssize_t ign = write(r->wake_wr, &one, sizeof(one));
         (void)ign; /* EAGAIN means the run thread is already awake. */
@@ -301,6 +312,20 @@ cwist_reactor_t *cwist_reactor_create(void) {
             r->impl.cq_entries      = p.cq_entries;
             r->impl.active = true;
 
+            /* Register the wake eventfd with the ring itself: writes post
+             * CQEs directly (user_data == 0), so the wake fd consumes no
+             * one-shot poll slot and needs no re-arm per firing.  On any
+             * failure fall back to the polled wake fd below. */
+            r->wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+            if (r->wake_fd >= 0 &&
+                sys_io_uring_register(fd, IORING_REGISTER_EVENTFD, &r->wake_fd, 1) == 0) {
+                r->wake_wr = r->wake_fd;
+                r->impl.wake_registered = true;
+            } else if (r->wake_fd >= 0) {
+                close(r->wake_fd);
+                r->wake_fd = -1;
+            }
+
             /* Identity SQE mapping is fixed for the ring's lifetime; fill it
              * once here instead of rewriting sq_array on every submission. */
             for (uint32_t i = 0; i < p.sq_entries; i++) r->impl.sq_array[i] = i;
@@ -331,13 +356,15 @@ cwist_reactor_t *cwist_reactor_create(void) {
         return NULL;
     }
 #endif
-    r->wake_fd = -1;
-    r->wake_wr = -1;
     atomic_init(&r->post_head, NULL);
 #ifdef __linux__
-    r->wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-    r->wake_wr = r->wake_fd;
+    if (!r->impl.wake_registered) {
+        r->wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+        r->wake_wr = r->wake_fd;
+    }
 #else
+    r->wake_fd = -1;
+    r->wake_wr = -1;
     {
         int pfds[2];
         if (pipe(pfds) == 0) {
@@ -350,7 +377,12 @@ cwist_reactor_t *cwist_reactor_create(void) {
         }
     }
 #endif
-    if (r->wake_fd >= 0 &&
+#ifdef __linux__
+    bool wake_polled = !r->impl.wake_registered;
+#else
+    bool wake_polled = true;
+#endif
+    if (wake_polled && r->wake_fd >= 0 &&
         !cwist_reactor_add(r, r->wake_fd, reactor_wake_cb, &r, sizeof(r))) {
         /* Wake best-effort: the run loop still drains the stack each round. */
         close(r->wake_fd);
@@ -697,6 +729,11 @@ void cwist_reactor_run(cwist_reactor_t *reactor) {
                         ev_ctx->cb(ev_ctx->fd, ev_ctx->ctx);
                     }
                     free_reactor_ctx(reactor, ev_ctx);
+                } else if (reactor->impl.wake_registered) {
+                    /* Registered eventfd CQE (user_data == 0): drain the
+                     * counter; the posts themselves run at the loop top. */
+                    uint64_t buf[8];
+                    while (read(reactor->wake_fd, buf, sizeof(buf)) > 0) {}
                 }
                 head++;
             }
