@@ -174,7 +174,7 @@ static bdr_entry_t *bdr_find_or_insert(cwist_bdr_t *bdr, uint64_t req_h) {
             cwist_free(entry);
             return race;
         }
-        entry->next = head;
+        atomic_store_explicit(&entry->next, head, memory_order_relaxed);
     } while (!atomic_compare_exchange_weak_explicit(&bdr->buckets[idx], &head, entry,
                                                     memory_order_release, memory_order_acquire));
     return entry;
