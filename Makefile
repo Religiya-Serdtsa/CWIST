@@ -591,6 +591,26 @@ install: $(LIB_NAME) $(PC_FILE)
 	@echo "Installing pkg-config file to $(PCDIR)..."
 	install -d $(INSTALL_PCDIR)
 	install -m 644 $(PC_FILE) $(INSTALL_PCDIR)/
+	@echo "Installing license documentation to $(PREFIX)/share/doc/cwist..."
+	install -d $(DESTDIR)$(PREFIX)/share/doc/cwist/licenses
+	install -m 644 LICENSE NOTICE.md $(DESTDIR)$(PREFIX)/share/doc/cwist/
+	@set -e; for spec in \
+		"$(BORINGSSL_DIR)/LICENSE:boringssl:LICENSE" \
+		"$(LSQUIC_DIR)/LICENSE:lsquic:LICENSE" \
+		"$(LSQUIC_DIR)/LICENSE.chrome:lsquic:LICENSE.chrome" \
+		"lib/nghttp3/COPYING:nghttp3:COPYING" \
+		"lib/ngtcp2/COPYING:ngtcp2:COPYING" \
+		"$(LIBTTAK_DIR)/LICENSE:libttak:LICENSE" \
+		"$(CJSON_DIR)/LICENSE:cjson:LICENSE" \
+		"lib/cnats/LICENSE:cnats:LICENSE" \
+		"$(URIPARSER_DIR)/COPYING.BSD-3-Clause:uriparser:COPYING.BSD-3-Clause" \
+		"lib/monocypher/LICENCE.md:monocypher:LICENCE.md"; do \
+		src="$${spec%%:*}"; rest="$${spec#*:}"; comp="$${rest%%:*}"; \
+		if [ -f "$$src" ]; then \
+			install -d $(DESTDIR)$(PREFIX)/share/doc/cwist/licenses/$$comp; \
+			install -m 644 "$$src" $(DESTDIR)$(PREFIX)/share/doc/cwist/licenses/$$comp/; \
+		fi; \
+	done
 	@echo "Installing cwist CLI to $(BINDIR)..."
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 tools/cli/cwist $(DESTDIR)$(BINDIR)/cwist
@@ -607,6 +627,7 @@ uninstall:
 	rm -rf $(DESTDIR)$(INCLUDEDIR)/cwist
 	rm -f $(INSTALL_PCDIR)/$(PC_FILE)
 	rm -f $(DESTDIR)$(BINDIR)/cwist
+	rm -rf $(DESTDIR)$(PREFIX)/share/doc/cwist
 	@echo "Uninstallation complete."
 
 # Source release tarball with all vendored submodule sources, so the
