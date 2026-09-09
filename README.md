@@ -471,7 +471,10 @@ TLS 1.3, loopback, same kernel/sysctl tuning):
 - After the fix: completes in ~7 min, 756,610 / 1,000,000 requests (75.7%),
   zero phantom connections. The remaining ~24% are slow handshakes reclaimed
   by h2load's `-T 30` timeout while queued behind the single shepherd
-  thread; multi-shepherd scaling is the next performance candidate.
+  thread. The shepherd has since been sharded across
+  `CWIST_HTTPS_HS_MAX_SHARDS` threads (hashed by fd, default derived from the
+  request worker count); tuning `CWIST_HTTPS_HS_SHARDS` against connect-burst
+  workloads is the next performance candidate.
 - Regression check: `h2load -c 1000 -n 10000` passes at 100%
   (~1,780 req/s), and `make test_https` passes.
 

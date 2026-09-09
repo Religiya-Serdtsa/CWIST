@@ -457,6 +457,13 @@ int https_hs_shepherd_start(void) {
     long want = get_optimal_thread_count();
     if (want < 2) want = 2;
     if (want > CWIST_HTTPS_HS_MAX_SHARDS) want = CWIST_HTTPS_HS_MAX_SHARDS;
+    /* CWIST_HTTPS_HS_SHARDS overrides the computed count for connect-burst
+     * tuning; values outside [1, CWIST_HTTPS_HS_MAX_SHARDS] are ignored. */
+    const char *env = getenv("CWIST_HTTPS_HS_SHARDS");
+    if (env) {
+        long parsed = atol(env);
+        if (parsed >= 1 && parsed <= CWIST_HTTPS_HS_MAX_SHARDS) want = parsed;
+    }
 
     long started = 0;
     for (long i = 0; i < want; i++) {
