@@ -593,3 +593,21 @@ throughput demo, and rendering helpers ([json-builder](example/json-builder),
 [examples table](docs/README.md#4-runnable-examples) for the full list.
 
 A production deployment built on CWIST: [fly.board](https://github.com/gg582/fly.board).
+
+## Third-Party Licenses
+
+CWIST vendors its dependencies under `lib/`; each retains its own license
+(full summary in [NOTICE.md](NOTICE.md), authoritative text in each
+submodule's license file):
+
+| Component | License |
+|-----------|---------|
+| BoringSSL | OpenSSL/ISC-style |
+| lsquic, nghttp3, ngtcp2, cJSON, multipart-parser-c | MIT |
+| libttak | BSD-style |
+| SQLite | Public Domain |
+| cnats | Apache-2.0 |
+| uriparser | BSD-3-Clause |
+
+Static linking propagates each component's license obligations to linked
+binaries; review [NOTICE.md](NOTICE.md) when distributing.
