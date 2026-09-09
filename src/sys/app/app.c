@@ -2251,7 +2251,9 @@ static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd
     // --- Big Dumb Reply (Read) ---
     if (app->bdr_ctx && req->method == CWIST_HTTP_GET) {
         size_t cached_len = 0;
-        const void *cached_blob = cwist_bdr_get(app->bdr_ctx, "GET", req->path->data, &cached_len);
+        bdr_blob_t *bdr_pin = NULL;
+        const void *cached_blob = cwist_bdr_get_pinned(app->bdr_ctx, "GET", req->path->data,
+                                                       &cached_len, &bdr_pin);
         if (cached_blob && cached_len > 0) {
             bool keep_alive = req->keep_alive;
             if (req->async_conn) {
@@ -2259,6 +2261,7 @@ static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd
                 if (cached_len > CWIST_HTTP_COALESCE_MAX ||
                     aconn->olen + cached_len > CWIST_HTTP_COALESCE_MAX) {
                     if (cwist_http_coalesce_flush_blocking(client_fd, aconn) != 0) {
+                        cwist_bdr_unpin(bdr_pin);
                         cwist_http_request_destroy(req);
                         return APP_SERVE_CLOSE;
                     }
@@ -2266,15 +2269,18 @@ static app_serve_result_t app_serve_parsed_request(cwist_app *app, int client_fd
                 if (cached_len > CWIST_HTTP_COALESCE_MAX) {
                     send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
                 } else if (cwist_http_coalesce_append(aconn, cached_blob, cached_len) != 0) {
+                    cwist_bdr_unpin(bdr_pin);
                     cwist_http_request_destroy(req);
                     return APP_SERVE_CLOSE;
                 }
             } else {
                 send(client_fd, cached_blob, cached_len, MSG_NOSIGNAL);
             }
+            cwist_bdr_unpin(bdr_pin);
             cwist_http_request_destroy(req);
             return keep_alive ? APP_SERVE_KEEPALIVE : APP_SERVE_CLOSE;
         }
+        if (bdr_pin) cwist_bdr_unpin(bdr_pin);
     }
     // -----------------------------
 
