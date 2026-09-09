@@ -62,7 +62,7 @@ typedef struct bdr_entry_t {
     cwist_bdr_revalidate_fn revalidate; ///< Optional hit-time refresh hook
     void *revalidate_arg;               ///< Opaque argument for the hook
 
-    struct bdr_entry_t *next;         ///< Immutable after publication
+    _Atomic(struct bdr_entry_t *) next; ///< Immutable after publication
     struct bdr_entry_t *retire_next;  ///< Janitor retired-entry list link
 } bdr_entry_t;
 
@@ -73,7 +73,7 @@ typedef struct bdr_entry_t {
  */
 typedef struct cwist_bdr_t {
     pthread_mutex_t lock;      ///< Serializes janitor and disk-mode operations.
-    bdr_entry_t **buckets;     ///< Hash buckets
+    _Atomic(bdr_entry_t *) *buckets; ///< Hash buckets
     size_t bucket_count;       ///< Number of buckets
 
     /// Learning configuration parameters.
