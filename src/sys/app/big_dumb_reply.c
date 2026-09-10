@@ -248,6 +248,11 @@ static bool bdr_trim_oldest(cwist_bdr_t *bdr, time_t now) {
 }
 
 static void bdr_check_ram(cwist_bdr_t *bdr) {
+#ifdef __EMSCRIPTEN__
+    /* No SQLite disk fallback in the WASM core; the in-RAM cache stands alone. */
+    (void)bdr;
+    return;
+#else
     if (atomic_load_explicit(&bdr->is_disk_mode, memory_order_relaxed)) return;
 
     if (cwist_is_ram_critical(CWIST_MIB(64))) {
@@ -288,6 +293,7 @@ static void bdr_check_ram(cwist_bdr_t *bdr) {
              atomic_store_explicit(&bdr->is_disk_mode, true, memory_order_release);
         }
     }
+#endif
 }
 
 static void bdr_janitor_tick(cwist_bdr_t *bdr) {
@@ -354,10 +360,12 @@ void cwist_bdr_destroy(cwist_bdr_t *bdr) {
         bdr->retired_entries = next;
     }
     cwist_free(bdr->buckets);
+#ifndef __EMSCRIPTEN__
     if (bdr->disk_db) {
         sqlite3_close(bdr->disk_db);
         remove("cwist_bdr_fallback.db");
     }
+#endif
     pthread_mutex_unlock(&bdr->lock);
     pthread_mutex_destroy(&bdr->lock);
     cwist_free(bdr);

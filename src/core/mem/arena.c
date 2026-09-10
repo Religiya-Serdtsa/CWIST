@@ -15,6 +15,53 @@
 
 #include <cwist/core/mem/arena.h>
 
+#ifdef __EMSCRIPTEN__
+/* WASM hosts are single-threaded and lack libttak's epoch/GC machinery;
+ * the arena degenerates to a plain malloc-backed bump buffer. */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+
+struct cwist_arena {
+    uint8_t *base;
+    size_t capacity;
+    size_t used;
+};
+
+cwist_arena_t *cwist_arena_create(size_t generation_bytes) {
+    cwist_arena_t *arena = (cwist_arena_t *)calloc(1, sizeof(cwist_arena_t));
+    if (!arena) return NULL;
+    arena->capacity = generation_bytes ? generation_bytes
+                                       : CWIST_ARENA_DEFAULT_GENERATION_BYTES;
+    arena->base = (uint8_t *)malloc(arena->capacity);
+    if (!arena->base) {
+        free(arena);
+        return NULL;
+    }
+    return arena;
+}
+
+void *cwist_arena_alloc(cwist_arena_t *arena, size_t size) {
+    if (!arena || !size || !arena->base) return NULL;
+    size = (size + 15u) & ~15u;
+    if (size > arena->capacity - arena->used) return NULL;
+    void *ptr = arena->base + arena->used;
+    arena->used += size;
+    return ptr;
+}
+
+bool cwist_arena_owns(const cwist_arena_t *arena, const void *ptr) {
+    if (!arena || !ptr || !arena->base) return false;
+    const uint8_t *p = (const uint8_t *)ptr;
+    return p >= arena->base && p < arena->base + arena->capacity;
+}
+
+void cwist_arena_destroy(cwist_arena_t *arena) {
+    if (!arena) return;
+    free(arena->base);
+    free(arena);
+}
+#else
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -209,3 +256,4 @@ void cwist_arena_destroy(cwist_arena_t *arena) {
         ttak_mem_free(buffer);
     }
 }
+#endif /* __EMSCRIPTEN__ */

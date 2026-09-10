@@ -1,4 +1,74 @@
 #include <cwist/core/mem/alloc.h>
+#ifdef __EMSCRIPTEN__
+/* WASM hosts are single-threaded and lack libttak's mmap/pthread machinery;
+ * allocations go straight to libc.  The owner-guard bridge is native-only. */
+#include <cjson/cJSON.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+void *cwist_malloc(size_t size) {
+    return calloc(1, size ? size : 1);
+}
+
+void *cwist_alloc(size_t size) {
+    return cwist_malloc(size);
+}
+
+void *cwist_alloc_array(size_t count, size_t elem_size) {
+    if (count == 0 || elem_size == 0) return cwist_malloc(1);
+    if (elem_size > SIZE_MAX / count) return NULL;
+    return cwist_malloc(count * elem_size);
+}
+
+void *cwist_realloc(void *ptr, size_t new_size) {
+    if (!ptr) return cwist_malloc(new_size);
+    return realloc(ptr, new_size ? new_size : 1);
+}
+
+char *cwist_strdup(const char *src) {
+    if (!src) return NULL;
+    size_t len = strlen(src);
+    char *dst = (char *)cwist_malloc(len + 1);
+    if (!dst) return NULL;
+    memcpy(dst, src, len + 1);
+    return dst;
+}
+
+char *cwist_strndup(const char *src, size_t n) {
+    if (!src) return NULL;
+    size_t len = 0;
+    while (len < n && src[len]) len++;
+    char *dst = (char *)cwist_malloc(len + 1);
+    if (!dst) return NULL;
+    memcpy(dst, src, len);
+    dst[len] = '\0';
+    return dst;
+}
+
+void cwist_free(void *ptr) {
+    free(ptr);
+}
+
+static void *cwist_cjson_malloc(size_t size) {
+    return cwist_malloc(size);
+}
+
+static void cwist_cjson_free(void *ptr) {
+    cwist_free(ptr);
+}
+
+__attribute__((constructor))
+static void cwist_install_cjson_hooks(void) {
+    cJSON_Hooks hooks = {
+        .malloc_fn = cwist_cjson_malloc,
+        .free_fn = cwist_cjson_free
+    };
+    cJSON_InitHooks(&hooks);
+}
+#else
 #include <ttak/mem/mem.h>
 #include <ttak/timing/timing.h>
 #include <ttak/sync/sync.h>
@@ -375,3 +445,4 @@ __attribute__((destructor))
 static void cwist_owner_cleanup(void) {
     cwist_destroy_owner();
 }
+#endif /* __EMSCRIPTEN__ */
