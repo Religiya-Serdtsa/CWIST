@@ -156,6 +156,29 @@ char *h2_huffman_decode(const unsigned char *src, size_t src_len, size_t *out_le
  */
 char *h2_decode_string(const unsigned char *buf, size_t len, size_t *pos);
 
+/**
+ * @brief HPACK static table entry (RFC 7541 Appendix A).
+ */
+typedef struct cwist_http2_static_header {
+    const char *name;
+    const char *value;
+} cwist_http2_static_header;
+
+/**
+ * @brief Resolve an HPACK static table index (1-based); NULL when out of range.
+ */
+const cwist_http2_static_header *h2_static_header(uint32_t index);
+
+/**
+ * @brief Encode an HPACK integer; returns bytes written, 0 when dst is too small.
+ */
+size_t h2_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t value, uint8_t prefix_bits);
+
+/**
+ * @brief Encode an HPACK string (literal, non-huffman); 0 when dst is too small.
+ */
+size_t h2_encode_string(unsigned char *dst, size_t dst_cap, const char *str);
+
 #ifdef __cplusplus
 }
 #endif

@@ -191,6 +191,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/https_upgrade_hook.c \
        src/net/http/tls_chain.c \
        src/net/grpc/grpc.c \
+       src/net/grpc/grpc_client.c \
        src/net/grpc/protobuf.c \
        src/https/pqc_layer.c \
        src/net/http/mux.c \
@@ -429,6 +430,7 @@ TEST_TARGETS = test_sstring \
                test_multiport \
                test_grpc \
                test_grpc_stream \
+               test_grpc_client \
                test_proto_gen
 
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples
@@ -865,6 +867,10 @@ test_grpc: $(LIB_NAME) tests/test_grpc.c
 test_grpc_stream: $(LIB_NAME) tests/test_grpc_stream.c
 	$(CC) $(CFLAGS) -o test_grpc_stream tests/test_grpc_stream.c $(LIB_NAME) $(LIBS)
 	./test_grpc_stream
+
+test_grpc_client: $(LIB_NAME) tests/test_grpc_client.c
+	$(CC) $(CFLAGS) -o test_grpc_client tests/test_grpc_client.c $(LIB_NAME) $(LIBS)
+	./test_grpc_client
 
 test_proto_gen: $(LIB_NAME) tests/test_proto_gen.c tests/test_proto_gen_sample.proto
 	./tools/cli/cwist proto tests/test_proto_gen_sample.proto --output tests/test_proto_gen_sample.cwist.pb.h
