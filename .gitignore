@@ -76,3 +76,7 @@ test_https
 benchmarks/web-frameworks/cwist_bench
 dist/
 cwist.pc
+.wasm-build/
+libcwist_wasm.a
+wasm_smoke.js
+wasm_smoke.wasm

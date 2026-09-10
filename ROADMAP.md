@@ -249,8 +249,8 @@ Theme: gRPC client side, codegen completeness, and the first WASM client-side su
 * **gRPC server leftovers**: ~~moving health `Watch` onto the streaming dispatch path~~ (done).
 * **Distribution**: ~~publish the Homebrew formula~~ (done: `brew tap c4punks/cwist`, `brew install c4punks/cwist/cwist`, verified end-to-end on Linuxbrew). vcpkg stays an in-tree draft under `packaging/vcpkg/`; upstream submission postponed.
 * **WASM client-side support**: bring CWIST handlers into the browser WASM ecosystem.
-  * In-memory HTTP dispatcher: run `cwist_app` routing and handlers directly on request/response memory buffers, with no sockets — so the same C handlers run inside a Service Worker or a JS fetch-interception layer. (Promotion of the existing in-process test-client path into a public API.)
-  * `libcwist_wasm.a` target: an Emscripten build that excludes the native transport (sockets, TLS, QUIC) and ships only core utilities — query map, URI parser, cJSON wrapper, memory pools/queues.
+  * ~~In-memory HTTP dispatcher~~ ✅ (`cwist_app_dispatch_memory()`): run `cwist_app` routing and handlers directly on request/response memory buffers, with no sockets — so the same C handlers run inside a Service Worker or a JS fetch-interception layer.
+  * ~~`libcwist_wasm.a` target~~ ✅ (`make wasm`): an Emscripten build that excludes the native transport (sockets, TLS, QUIC) and ships the socket-independent core — app dispatch, mux/middleware, HTTP/1 parser/serializer, query map, cJSON, memory utilities.
   * `cwist_db` in-memory/blob abstraction: official API over `sqlite3_deserialize`-style memory buffers (as Nuke DB already uses internally) plus a light key-value/table lookup layer, so WASM apps don't need to parse custom binary blobs.
   * TypedArray zero-copy serialization helpers: optional Emscripten-side macros/headers that map C struct arrays directly onto `HEAP` TypedArrays (or `SharedArrayBuffer`) instead of round-tripping through `snprintf` JSON.
 

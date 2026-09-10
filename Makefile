@@ -251,6 +251,67 @@ SRCS = src/core/sstring/sstring.c \
        src/sys/health/healthz.c \
        $(IO_SRC)
 
+# --- WASM (Emscripten) static library -------------------------------------
+# Socket-independent core only: app dispatch, mux/middleware, HTTP/1
+# parser/serializer, sstring/arena/mem, query, JSON, template, validation.
+# Excluded: all of src/sys/io, sockets/accept, TLS/BoringSSL, QUIC/HTTP/3,
+# gRPC (needs HTTP/2), WebSocket transport, threads/scheduler, compression,
+# database/sync clients.  Build with e.g.
+#   make wasm EMCC=/workspace/emsdk/upstream/emscripten/emcc
+EMCC ?= emcc
+EMAR ?= emar
+WASM_BUILD_DIR = .wasm-build
+WASM_SRCS = src/core/sstring/sstring.c \
+       src/core/seq/seq.c \
+       src/core/seq/seq_auth.c \
+       src/sys/err/error.c \
+       src/net/http/http.c \
+       src/net/http/mux.c \
+       src/net/http/query.c \
+       src/net/http/cookie.c \
+       src/net/http/session.c \
+       src/sys/app/app.c \
+       src/sys/app/middleware.c \
+       src/sys/app/config.c \
+       src/sys/app/logger.c \
+       src/sys/app/shutdown.c \
+       src/sys/app/big_dumb_reply.c \
+       src/sys/app/test_client.c \
+       src/core/siphash/siphash.c \
+       src/core/utils/json_builder.c \
+       src/core/utils/json_heal.c \
+       src/core/utils/zod.c \
+       src/core/template/template.c \
+       src/core/html/builder.c \
+       src/core/html/css_composer.c \
+       src/core/validation/bind.c \
+       src/core/mem/alloc.c \
+       src/core/mem/arena.c \
+       lib/cjson/cJSON.c
+WASM_OBJS = $(WASM_SRCS:%.c=$(WASM_BUILD_DIR)/%.o)
+# Host pkg-config -I paths (curl/nghttp2/...) must NOT leak into the
+# emscripten sysroot, so the WASM build uses its own minimal include set.
+WASM_INCLUDE_PATHS = -I./include -I./lib -I./lib/cjson -I./lib/boringssl/include -I./lib/libttak/include -I./lib/sqlite3
+WASM_CFLAGS = -std=c17 -O2 -Wall $(WASM_INCLUDE_PATHS) $(COMMON_DEFINES)
+
+$(WASM_BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(EMCC) $(WASM_CFLAGS) -c -o $@ $<
+
+libcwist_wasm.a: $(WASM_OBJS)
+	$(EMAR) rcs $@ $(WASM_OBJS)
+
+wasm: libcwist_wasm.a
+
+# Manual smoke test (requires Emscripten + node; intentionally not part of
+# `make test` since CI has no Emscripten toolchain).
+wasm-smoke: libcwist_wasm.a
+	$(EMCC) $(WASM_CFLAGS) -o wasm_smoke.js tests/wasm_smoke.c libcwist_wasm.a
+	node wasm_smoke.js
+
+clean-wasm:
+	rm -rf $(WASM_BUILD_DIR) libcwist_wasm.a wasm_smoke.js wasm_smoke.wasm
+
 # Object Files and Target
 OBJS = $(SRCS:.c=.o)
 LIB_NAME = libcwist.a
@@ -434,7 +495,7 @@ TEST_TARGETS = test_sstring \
                test_dispatch_memory \
                test_proto_gen
 
-.PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples
+.PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples wasm wasm-smoke clean-wasm
 
 # Run with e.g. `make fuzz_seq FUZZ_RUNS=100000`.  The target intentionally
 # uses a dedicated clang/libFuzzer toolchain and is not part of `make test`.
