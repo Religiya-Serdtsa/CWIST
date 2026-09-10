@@ -181,11 +181,118 @@ cwist_error_t cwist_db_open(cwist_db **db, const char *path) {
 }
 
 /**
+ * @brief Open a CWIST database from an in-memory SQLite image.
+ *
+ * The image is copied into SQLite-owned memory (SQLITE_DESERIALIZE_FREEONCLOSE),
+ * so the caller keeps ownership of @p buf.  Same connection defaults as
+ * cwist_db_open(): FULLMUTEX, no extra pragmas.
+ *
+ * @param db Receives the handle (NULL on failure).
+ * @param buf Serialized SQLite database image.
+ * @param len Image length in bytes.
+ * @param readonly Non-zero opens the image read-only; zero allows growth.
+ * @return Tagged CWIST error describing success or failure.
+ */
+cwist_error_t cwist_db_open_memory(cwist_db **db, const void *buf, size_t len,
+                                   int readonly) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!db || !buf || len == 0) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    *db = (cwist_db *)cwist_alloc(sizeof(cwist_db));
+    if (!*db) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    int rc = sqlite3_open_v2(":memory:", &(*db)->conn,
+                             SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
+                             NULL);
+    if (rc) {
+        cwist_error_t sql_err = make_sqlite_error(rc, (char *)sqlite3_errmsg((*db)->conn));
+        sqlite3_close((*db)->conn);
+        cwist_free(*db);
+        *db = NULL;
+        return sql_err;
+    }
+
+    /* Copy into SQLite-owned memory: FREEONCLOSE releases it on
+     * sqlite3_close() — including the deserialize failure path. */
+    unsigned char *image = (unsigned char *)sqlite3_malloc64((sqlite3_uint64)len);
+    if (!image) {
+        sqlite3_close((*db)->conn);
+        cwist_free(*db);
+        *db = NULL;
+        err.error.err_i16 = -1;
+        return err;
+    }
+    memcpy(image, buf, len);
+
+    unsigned flags = SQLITE_DESERIALIZE_FREEONCLOSE |
+                     (readonly ? SQLITE_DESERIALIZE_READONLY
+                               : SQLITE_DESERIALIZE_RESIZEABLE);
+    rc = sqlite3_deserialize((*db)->conn, "main", image, (sqlite3_int64)len,
+                             (sqlite3_int64)len, flags);
+    if (rc != SQLITE_OK) {
+        cwist_error_t sql_err = make_sqlite_error(rc, (char *)sqlite3_errmsg((*db)->conn));
+        sqlite3_close((*db)->conn);
+        cwist_free(*db);
+        *db = NULL;
+        return sql_err;
+    }
+
+    err.error.err_i16 = 0;
+    return err;
+}
+
+/**
+ * @brief Serialize a CWIST database into a freshly allocated image buffer.
+ * @param db Open database wrapper.
+ * @param out Receives the image (free with cwist_free()).
+ * @param out_len Receives the image length in bytes.
+ * @return Tagged CWIST error describing success or failure.
+ */
+cwist_error_t cwist_db_serialize(cwist_db *db, void **out, size_t *out_len) {
+    cwist_error_t err = make_error(CWIST_ERR_INT16);
+    if (!db || !db->conn || !out || !out_len) {
+        err.error.err_i16 = -1;
+        return err;
+    }
+    *out = NULL;
+    *out_len = 0;
+
+    sqlite3_int64 size = 0;
+    unsigned char *image = sqlite3_serialize(db->conn, "main", &size, 0);
+    if (!image || size <= 0) {
+        if (image) sqlite3_free(image);
+        err.error.err_i16 = -1;
+        return err;
+    }
+
+    /* Copy into cwist-managed memory so callers free uniformly with
+     * cwist_free() instead of mixing in sqlite3_free(). */
+    void *copy = cwist_alloc((size_t)size);
+    if (!copy) {
+        sqlite3_free(image);
+        err.error.err_i16 = -1;
+        return err;
+    }
+    memcpy(copy, image, (size_t)size);
+    sqlite3_free(image);
+
+    *out = copy;
+    *out_len = (size_t)size;
+    err.error.err_i16 = 0;
+    return err;
+}
+
+/**
  * @brief Close a CWIST database wrapper and its underlying SQLite connection.
  * @param db Database wrapper to close.
  */
-void cwist_db_close(cwist_db *db) {
-    if (db) {
+void cwist_db_close(cwist_db *db) {    if (db) {
         if (db->conn) {
             sqlite3_close(db->conn);
         }

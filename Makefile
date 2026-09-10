@@ -482,6 +482,7 @@ TEST_TARGETS = test_sstring \
                test_csrf \
                test_waf \
                test_db_pool \
+               test_db_memory \
                test_redis \
                test_scheduler \
                test_async_defer \
@@ -873,6 +874,10 @@ test_waf: $(LIB_NAME) tests/test_waf.c
 test_db_pool: $(LIB_NAME) tests/test_db_pool.c
 	$(CC) $(CFLAGS) -o test_db_pool tests/test_db_pool.c $(LIB_NAME) $(LIBS)
 	./test_db_pool
+
+test_db_memory: $(LIB_NAME) tests/test_db_memory.c
+	$(CC) $(CFLAGS) -o test_db_memory tests/test_db_memory.c $(LIB_NAME) $(LIBS)
+	./test_db_memory
 
 test_redis: $(LIB_NAME) tests/test_redis.c
 	$(CC) $(CFLAGS) -o test_redis tests/test_redis.c $(LIB_NAME) $(LIBS)

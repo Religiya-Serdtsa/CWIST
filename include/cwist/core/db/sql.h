@@ -32,6 +32,25 @@ typedef struct cwist_db {
 cwist_error_t cwist_db_open(cwist_db **db, const char *path);
 
 /**
+ * Open a database from an in-memory SQLite image (blob), e.g. one fetched by
+ * a WASM/edge host instead of a filesystem path.  The image is copied with
+ * sqlite3_malloc64(), so the caller keeps ownership of @p buf.
+ * @param db       Receives the handle (NULL on failure).
+ * @param buf      Serialized SQLite database image.
+ * @param len      Image length in bytes.
+ * @param readonly Non-zero opens the image read-only (writes fail with
+ *                 SQLITE_READONLY); zero allows the in-memory db to grow.
+ */
+cwist_error_t cwist_db_open_memory(cwist_db **db, const void *buf, size_t len,
+                                   int readonly);
+
+/**
+ * Serialize the database image into a freshly allocated buffer, suitable for
+ * persisting back to a blob or handing to cwist_db_open_memory().
+ * Caller frees @p out with cwist_free().
+ */
+cwist_error_t cwist_db_serialize(cwist_db *db, void **out, size_t *out_len);
+/**
  * Close database connection.
  */
 void cwist_db_close(cwist_db *db);
