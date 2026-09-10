@@ -8,8 +8,8 @@
 class Cwist < Formula
   desc "C17 web framework and application server (HTTP/1.1, HTTP/2, HTTP/3, WebSocket, PQC TLS)"
   homepage "https://github.com/c4punks/CWIST"
-  url "https://github.com/c4punks/CWIST/releases/download/v3.2/cwist-3.2.tar.gz"
-  sha256 "478b8f4bda6addf9e43de3de11b43d73e0439e3f5b9e205089a26a729d27aa6f"
+  url "https://github.com/c4punks/CWIST/releases/download/v3.3/cwist-3.3.tar.gz"
+  sha256 "e448d877122f012dc11d43a25d97f0559ffca6db1b10a1a2fbabefada6ae4724"
   # The framework itself is MIT; the vendored components it statically links
   # are Apache-2.0 (BoringSSL, cnats), MIT (lsquic, nghttp3, ngtcp2, cJSON,
   # multipart-parser-c), BSD-3-Clause (libttak, uriparser, lsquic's Chromium
@@ -26,8 +26,8 @@ class Cwist < Formula
   uses_from_macos "curl"
 
   def install
-    system "make", "-j#{ENV.make_jobs}"
-    system "make", "install", "PREFIX=#{prefix}"
+    system "make", "-j#{ENV.make_jobs}", "VERSION=3.3"
+    system "make", "install", "PREFIX=#{prefix}", "VERSION=3.3"
   end
 
   test do
