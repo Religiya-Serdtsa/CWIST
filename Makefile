@@ -258,6 +258,10 @@ SRCS = src/core/sstring/sstring.c \
 # gRPC (needs HTTP/2), WebSocket transport, threads/scheduler, compression,
 # database/sync clients.  Build with e.g.
 #   make wasm EMCC=/workspace/emsdk/upstream/emscripten/emcc
+# The wasm section sits above `all` in this file; without an explicit default
+# goal, bare `make` would try to build the wasm archive with emcc.
+.DEFAULT_GOAL := all
+
 EMCC ?= emcc
 EMAR ?= emar
 WASM_BUILD_DIR = .wasm-build
