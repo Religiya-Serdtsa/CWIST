@@ -173,7 +173,7 @@ memory management to the user. CWIST ships the whole stack:
 | **Performance** | Zero-copy I/O, generational arenas, EBR GC, lock-free queues, Big Dumb Reply cache |
 | **Async handlers** | Deferred responses (`cwist_async_defer` / `cwist_async_respond`): offload blocking work to a job thread and complete the request later without stalling the reactor |
 | **Observability** | Structured access logs, metrics endpoint, healthz, rate limiting |
-| **gRPC / Protobuf** | Unary and streaming routes, incremental framing, health/reflection services, and `cwist proto` model/encoder/decoder generation (scalars, repeated, nested messages, enums) |
+| **gRPC / Protobuf** | Unary and streaming routes, incremental framing, health/reflection services, Trailers-Only error responses, and `cwist proto` model/encoder/decoder generation (scalars, repeated, nested messages, enums). Channel client: dns/ipv4/ipv6 resolution, `pick_first`/`round_robin` load balancing, and gRFC A6 retries (backoff, pushback, throttling, transparent retries) |
 | **Rendering** | HTML builder, CSS composer, template engine, JSON builder / heal |
 
 ## Why C, when Axum and Gin exist?
