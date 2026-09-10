@@ -2860,6 +2860,40 @@ cwist_http_request *cwist_http_parse_request(const char *raw_request) {
     return cwist_http_parse_request_with_header_end(raw_request, raw_len, header_end, NULL);
 }
 
+cwist_http_request *cwist_http_parse_request_len(const char *buf, size_t len) {
+    if (!buf || len == 0) return NULL;
+    const char *header_end = cwist_simd_find_crlfcrlf(buf, len);
+    if (!header_end) return NULL;
+    return cwist_http_parse_request_with_header_end(buf, len, header_end, NULL);
+}
+
+int cwist_http_response_serialize(cwist_http_response *res, char **out, size_t *out_len) {
+    if (!res || !out || !out_len) return -1;
+    if (res->use_file_stream) return -1; /* streaming bodies need a socket */
+
+    char header_buf[CWIST_HTTP_MAX_HEADER_SIZE];
+    size_t header_len = serialize_headers(res, header_buf, sizeof(header_buf));
+
+    const void *body = NULL;
+    size_t body_len = 0;
+    if (res->is_ptr_body) {
+        body = res->ptr_body;
+        body_len = res->ptr_body_len;
+    } else if (res->body && res->body->data) {
+        body = res->body->data;
+        body_len = res->body->size;
+    }
+
+    char *buf = (char *)cwist_alloc(header_len + body_len + 1);
+    if (!buf) return -1;
+    memcpy(buf, header_buf, header_len);
+    if (body_len) memcpy(buf + header_len, body, body_len);
+    buf[header_len + body_len] = '\0';
+    *out = buf;
+    *out_len = header_len + body_len;
+    return 0;
+}
+
 
 
 /**

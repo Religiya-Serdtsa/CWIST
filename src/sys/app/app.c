@@ -2011,6 +2011,30 @@ void cwist_app_dispatch(cwist_app *app, cwist_http_request *req, cwist_http_resp
     internal_route_handler(app, req, res);
 }
 
+int cwist_app_dispatch_memory(cwist_app *app, const char *req_buf, size_t req_len,
+                              char **res_buf, size_t *res_len) {
+    if (!app || !req_buf || !res_buf || !res_len) return -1;
+    *res_buf = NULL;
+    *res_len = 0;
+
+    cwist_http_request *req = cwist_http_parse_request_len(req_buf, req_len);
+    if (!req) return -1;
+
+    cwist_http_response *res = cwist_http_response_create();
+    if (!res) {
+        cwist_http_request_destroy(req);
+        return -1;
+    }
+    cwist_app_dispatch(app, req, res);
+    cwist_http_request_destroy(req);
+
+    /* One-shot buffer exchange: Connection: close semantics. */
+    res->keep_alive = false;
+    int rc = cwist_http_response_serialize(res, res_buf, res_len);
+    cwist_http_response_destroy(res);
+    return rc;
+}
+
 // Internal Router Logic
 static void internal_route_handler(cwist_app *app, cwist_http_request *req, cwist_http_response *res) {
     if (!req || !app || !app->router) return;

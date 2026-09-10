@@ -485,4 +485,19 @@ cwist_app *cwist_multiport_get_app(cwist_app **app_ref, unsigned short port);
  */
 void cwist_app_dispatch(cwist_app *app, cwist_http_request *req, cwist_http_response *res);
 
+/**
+ * @brief Run the full router/middleware/handler pipeline on a raw HTTP/1.x
+ * request held in a memory buffer, with no socket or event loop involved.
+ *
+ * The response is serialized (status line + headers + body) into a freshly
+ * allocated buffer; the caller frees @p res_buf with cwist_free().  The
+ * exchange uses Connection: close semantics.  This is the in-memory entry
+ * point for embedded transports (e.g. WASM / Service Worker hosts).
+ *
+ * @return 0 on success; -1 when the request is malformed or the response
+ * cannot be serialized (e.g. a file-streaming body).
+ */
+int cwist_app_dispatch_memory(cwist_app *app, const char *req_buf, size_t req_len,
+                              char **res_buf, size_t *res_len);
+
 #endif
