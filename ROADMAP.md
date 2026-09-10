@@ -262,6 +262,17 @@ Theme: gRPC client side, codegen completeness, and the first WASM client-side su
 * The first 100% production-compatible stable release is planned as **v4.0**. Until then, minor releases may adjust public APIs (see the versioning note in the README).
 * Starting with the stable line (v4.0 onward), each release receives a codename in the form **adjective + color** (e.g. "Steady Amber"). Codenames are assigned at release time and recorded here.
 
+### Versioning rules (as practiced)
+
+The tag history (`v0.1` → `v3.3`) settles into this convention from v3 onward, and it is the rule going forward:
+
+* **Tags**: `v<major>.<minor>` for feature releases (`v3`, `v3.1`, `v3.2`, `v3.3`). Urgent fixes to a released tag get a patch level, `v<major>.<minor>.<patch>` (`v2.5.1`, `v2.4.1`) — patches are for hotfixes only, never for features.
+* **Major** (`v2` → `v3`): a generational milestone — a broad capability jump (e.g. v3 = first reliable release, HTTP/2 stabilization). Majors are rare.
+* **Minor** (`v3.2` → `v3.3`): one coherent feature theme (v3.2: HTTP/3 standards compliance + security hardening; v3.3: gRPC streaming + deferred async handlers). A minor is cut when its theme is complete, not on a calendar.
+* **Release title**: `CWIST vX.Y` followed by an em-dash summary of the headline theme ("CWIST v3.3 — gRPC streaming, deferred async handlers, and stability hardening"). Pre-v3 releases used freeform subtitles ("Firefox Compatibility"); the em-dash form is the standard now.
+* **Release body**: "Highlights since vX.(Y−1)" or "Major changes compared to vX.(Y−1)", grouped into numbered/sectioned items with commit references where useful.
+* The 0.x line was pre-1.0 experimentation; the 1.x–2.x lines were feature accretion with themed minors. None of that constrains the 3.x rules above.
+
 ---
 
 ## Priority Queue (Suggested)
