@@ -10,6 +10,22 @@ cwist_error_t cwist_db_open(cwist_db **db, const char *path);
 ```
 Opens a connection to a SQLite database file.
 
+### `cwist_db_open_memory`
+```c
+cwist_error_t cwist_db_open_memory(cwist_db **db, const void *buf, size_t len, int readonly);
+```
+Opens a database from an in-memory SQLite image (e.g. a blob fetched by a WASM
+or edge host) via `sqlite3_deserialize`. The image is copied, so the caller
+keeps ownership of `buf`. `readonly != 0` rejects writes with `SQLITE_READONLY`.
+
+### `cwist_db_serialize`
+```c
+cwist_error_t cwist_db_serialize(cwist_db *db, void **out, size_t *out_len);
+```
+Serializes the database into a freshly allocated image buffer (free with
+`cwist_free()`), suitable for persisting back to a blob or for handing to
+`cwist_db_open_memory()`.
+
 ### `cwist_db_exec`
 ```c
 cwist_error_t cwist_db_exec(cwist_db *db, const char *sql);
