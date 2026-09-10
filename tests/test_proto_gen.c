@@ -230,6 +230,7 @@ static void test_gadget_oneof_arms(void) {
     assert(dst.payload.inner->delta == -5);
 
     /* decoding a different arm must release the previous one */
+    cwist_pb_writer_free(&w);
     cwist_pb_writer_init(&w);
     assert(cwist_pb_write_string_field(&w, 9, "switched") == 0);
     cwist_pb_reader_init(&r, w.data, w.len);
