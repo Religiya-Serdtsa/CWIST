@@ -26,7 +26,7 @@ Longer walkthroughs that combine several subsystems:
 * [API module index](API.md) — per-module documentation under `docs/api/`.
 * [Flat quick reference](api-quickref.md) — one-file listing of public calls.
 * [REFERENCE.md](REFERENCE.md) — architecture and behavioral reference.
-* [Doxygen HTML](https://religiya-serdtsa.github.io/CWIST/) — generated from
+* [Doxygen HTML](https://c4punks.github.io/CWIST/) — generated from
   annotated public headers (`include/cwist/`).
 
 ## 4. Runnable examples

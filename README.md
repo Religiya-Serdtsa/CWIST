@@ -76,7 +76,7 @@ CWIST vendors its dependencies (BoringSSL, lsquic, libttak, SQLite3), so a plain
 build works on a fresh Linux, macOS, or BSD machine:
 
 ```sh
-git clone https://github.com/religiya-serdtsa/cwist.git
+git clone https://github.com/c4punks/CWIST.git
 cd cwist
 make
 sudo make install        # optional, installs to /usr/local (override with PREFIX=/opt/cwist)
@@ -579,7 +579,7 @@ version, in suggested reading order:
   [NATS integration](docs/tutorials/nats-integration.md), [WebTransport server](docs/tutorials/webtransport-server.md).
 - **[API reference](docs/API.md)** — per-module docs under `docs/api/`, plus the
   [flat quick reference](docs/api-quickref.md) and generated
-  [Doxygen HTML](https://religiya-serdtsa.github.io/CWIST/).
+  [Doxygen HTML](https://c4punks.github.io/CWIST/).
 - **[ROADMAP.md](ROADMAP.md)** — feature status and milestone planning.
 
 ## Examples

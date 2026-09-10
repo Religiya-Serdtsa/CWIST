@@ -1,6 +1,6 @@
 # HTTP/1.1 pipeline fairness and framing
 
-Related: [issue #25](https://github.com/Religiya-Serdtsa/CWIST/issues/25).
+Related: [issue #25](https://github.com/c4punks/CWIST/issues/25).
 
 ## Scope
 

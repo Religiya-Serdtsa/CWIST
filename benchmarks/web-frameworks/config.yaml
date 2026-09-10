@@ -8,7 +8,7 @@ language:
       command: /opt/web/cwist_bench
 
 framework:
-  github: Religiya-Serdtsa/CWIST
+  github: c4punks/CWIST
   version: 3.3
 
   build_deps:
@@ -22,7 +22,7 @@ framework:
     - libnghttp2-dev
 
   download:
-    - git clone --depth 1 --branch v3.3 --recurse-submodules --shallow-submodules https://github.com/Religiya-Serdtsa/CWIST.git cwist
+    - git clone --depth 1 --branch v3.3 --recurse-submodules --shallow-submodules https://github.com/c4punks/CWIST.git cwist
 
   build:
     - cd cwist && make -j$(nproc)

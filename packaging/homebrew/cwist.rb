@@ -1,5 +1,5 @@
-# Homebrew formula for CWIST. Maintained here and mirrored into a tap
-# repository (e.g. Religiya-Serdtsa/homebrew-cwist) as Formula/cwist.rb.
+# Homebrew formula for CWIST. Maintained here and mirrored into the tap
+# repository c4punks/homebrew-cwist as Formula/cwist.rb.
 #
 # Before publishing a release:
 #   1. make dist
@@ -7,9 +7,9 @@
 #   3. update `url` and `sha256` below
 class Cwist < Formula
   desc "C17 web framework and application server (HTTP/1.1, HTTP/2, HTTP/3, WebSocket, PQC TLS)"
-  homepage "https://github.com/Religiya-Serdtsa/CWIST"
-  url "https://github.com/Religiya-Serdtsa/CWIST/releases/download/v3.2/cwist-3.2.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000" # fill with `shasum -a 256 dist/cwist-3.2.tar.gz`
+  homepage "https://github.com/c4punks/CWIST"
+  url "https://github.com/c4punks/CWIST/releases/download/v3.2/cwist-3.2.tar.gz"
+  sha256 "478b8f4bda6addf9e43de3de11b43d73e0439e3f5b9e205089a26a729d27aa6f"
   # The framework itself is MIT; the vendored components it statically links
   # are Apache-2.0 (BoringSSL, cnats), MIT (lsquic, nghttp3, ngtcp2, cJSON,
   # multipart-parser-c), BSD-3-Clause (libttak, uriparser, lsquic's Chromium
