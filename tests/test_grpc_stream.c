@@ -573,6 +573,77 @@ static void test_unsupported_encoding(cwist_app *app) {
     stop_server(cfd, &ctx, tid);
 }
 
+/* Decode the status field of a HealthCheckResponse payload. */
+static int decode_health_status(const uint8_t *msg, uint32_t msg_len) {
+    cwist_pb_reader r;
+    cwist_pb_reader_init(&r, msg, msg_len);
+    cwist_pb_field field;
+    while (cwist_pb_read_field(&r, &field) > 0)
+        if (field.number == 1 && field.wire_type == CWIST_PB_VARINT)
+            return (int)field.varint;
+    return -1;
+}
+
+/* --- 7. grpc.health.v1.Health/Watch streams status changes live --- */
+static void test_health_watch(cwist_app *app) {
+    printf("  health Watch streaming...\n");
+    server_ctx ctx;
+    pthread_t tid;
+    int cfd = start_server(app, &ctx, &tid);
+
+    uint8_t block[4096];
+    size_t blen = build_request_block(block, "/grpc.health.v1.Health/Watch", NULL, 0);
+    fd_send_frame(cfd, 0x01, 0x04, 1, block, (uint32_t)blen);
+
+    test_frame f;
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* response HEADERS */
+    assert(frame_payload_contains(&f, "application/grpc"));
+    assert(!frame_payload_contains(&f, "grpc-status"));
+
+    /* HealthCheckRequest { service = "cwist.test.Wire" }, then half-close. */
+    cwist_pb_writer pb;
+    cwist_pb_writer_init(&pb);
+    assert(cwist_pb_write_string_field(&pb, 1, "cwist.test.Wire") == 0);
+    uint8_t frame1[256];
+    size_t frame1_len;
+    make_pb_frame(frame1, &frame1_len, NULL, 0, pb.data, pb.len);
+    cwist_pb_writer_free(&pb);
+    fd_send_frame(cfd, 0x00, 0x01, 1, frame1, (uint32_t)frame1_len);
+
+    /* The current status must arrive immediately: SERVING. */
+    assert(fd_read_stream_frame(cfd, &f, 0x00, 1, 5000) == 0);
+    const uint8_t *msg;
+    uint32_t msg_len;
+    decode_echo_payload(&f, &msg, &msg_len);
+    assert(decode_health_status(msg, msg_len) == 1);
+
+    /* The watcher registered itself. */
+    int i;
+    for (i = 0; i < 200 && cwist_app_grpc_health_watchers(app) != 1; i++) {
+        struct timespec ts = { 0, 10000000 };
+        nanosleep(&ts, NULL);
+    }
+    assert(cwist_app_grpc_health_watchers(app) == 1);
+
+    /* A status change is pushed with no further client message. */
+    assert(cwist_app_grpc_health_set_status(app, "cwist.test.Wire", 0) == 0);
+    assert(fd_read_stream_frame(cfd, &f, 0x00, 1, 5000) == 0);
+    decode_echo_payload(&f, &msg, &msg_len);
+    assert(decode_health_status(msg, msg_len) == 2); /* NOT_SERVING */
+
+    /* RST_STREAM cancels the watch; the watcher must be reaped. */
+    uint8_t rst[4] = { 0, 0, 0, 0x08 }; /* CANCEL */
+    fd_send_frame(cfd, 0x03, 0, 1, rst, 4);
+    for (i = 0; i < 200 && cwist_app_grpc_health_watchers(app) != 0; i++) {
+        struct timespec ts = { 0, 10000000 };
+        nanosleep(&ts, NULL);
+    }
+    assert(cwist_app_grpc_health_watchers(app) == 0);
+
+    assert(cwist_app_grpc_health_set_status(app, "cwist.test.Wire", 1) == 0);
+    stop_server(cfd, &ctx, tid);
+}
+
 int main(void) {
     printf("Testing gRPC HTTP/2 streaming...\n");
 
@@ -596,10 +667,13 @@ int main(void) {
     assert(cwist_app_grpc_unary(app, "cwist.test.Wire", "Say", wire_unary, NULL) == 0);
     assert(cwist_app_grpc_stream(app, "cwist.test.Wire", "Live", wire_live, &live_st) == 0);
     assert(cwist_app_grpc_stream(app, "cwist.test.Wire", "Block", wire_block, &deadline_st) == 0);
+    assert(cwist_app_grpc_health(app) == 0);
+    assert(cwist_app_grpc_health_set_status(app, "cwist.test.Wire", 1) == 0);
 
     test_unary_trailers(app);
     test_streaming_incremental(app, &live_st);
     test_deadline(app, &deadline_st);
+    test_health_watch(app);
 
     /* Cancellation uses the Block handler; swap in the cancel flag state. */
     assert(cwist_app_grpc_stream(app, "cwist.test.Wire", "Block", wire_block, &cancel_st) == 0);
