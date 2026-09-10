@@ -431,6 +431,7 @@ TEST_TARGETS = test_sstring \
                test_grpc \
                test_grpc_stream \
                test_grpc_client \
+               test_dispatch_memory \
                test_proto_gen
 
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples
@@ -871,6 +872,10 @@ test_grpc_stream: $(LIB_NAME) tests/test_grpc_stream.c
 test_grpc_client: $(LIB_NAME) tests/test_grpc_client.c
 	$(CC) $(CFLAGS) -o test_grpc_client tests/test_grpc_client.c $(LIB_NAME) $(LIBS)
 	./test_grpc_client
+
+test_dispatch_memory: $(LIB_NAME) tests/test_dispatch_memory.c
+	$(CC) $(CFLAGS) -o test_dispatch_memory tests/test_dispatch_memory.c $(LIB_NAME) $(LIBS)
+	./test_dispatch_memory
 
 test_proto_gen: $(LIB_NAME) tests/test_proto_gen.c tests/test_proto_gen_sample.proto
 	./tools/cli/cwist proto tests/test_proto_gen_sample.proto --output tests/test_proto_gen_sample.cwist.pb.h

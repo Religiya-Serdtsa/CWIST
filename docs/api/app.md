@@ -69,6 +69,23 @@ void user_handler(cwist_http_request *req, cwist_http_response *res) {
 cwist_app_get(app, "/users/:id", user_handler);
 ```
 
+### `cwist_app_dispatch_memory`
+Runs the full router/middleware/handler pipeline on a raw HTTP/1.x request held
+in a memory buffer — no socket, thread, or event loop involved. The response is
+serialized (status line + headers + body) into a freshly allocated buffer the
+caller frees with `cwist_free()`. One-shot `Connection: close` semantics; this
+is the in-memory entry point for embedded transports such as WASM hosts.
+
+```c
+char *res_buf;
+size_t res_len;
+const char *req = "GET /users/7 HTTP/1.1\r\nHost: x\r\n\r\n";
+if (cwist_app_dispatch_memory(app, req, strlen(req), &res_buf, &res_len) == 0) {
+    fwrite(res_buf, 1, res_len, stdout);
+    cwist_free(res_buf);
+}
+```
+
 
 ### `cwist_app_ws`
 Registers a WebSocket handler.

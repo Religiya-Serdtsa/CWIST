@@ -230,6 +230,18 @@ typedef struct cwist_http_response {
 cwist_http_request *cwist_http_request_create(void);
 void cwist_http_request_destroy(cwist_http_request *req);
 cwist_http_request *cwist_http_parse_request(const char *raw_request); 
+/**
+ * @brief Parse an HTTP/1.x request held in a memory buffer (length-based;
+ * the buffer may contain a binary body and need not be NUL-terminated).
+ */
+cwist_http_request *cwist_http_parse_request_len(const char *buf, size_t len);
+/**
+ * @brief Serialize a response into a freshly allocated HTTP/1.x buffer
+ * (status line + headers + body).  Caller frees @p out with cwist_free().
+ * File-streaming bodies cannot be serialized; the call fails for them.
+ * @return 0 on success, -1 on failure.
+ */
+int cwist_http_response_serialize(cwist_http_response *res, char **out, size_t *out_len);
 cwist_http_request *cwist_http_receive_request(int client_fd, char *read_buf, size_t buf_size, size_t *buf_len, cwist_http_parse_error_t *err_out);
 /**
  * @brief Send a minimal HTTP/1.x error response (Connection: close) on a
