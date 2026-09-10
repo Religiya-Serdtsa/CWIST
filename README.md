@@ -6,6 +6,14 @@
 <p align="center"><strong>C Web development Is Still Trustworthy</strong></p>
 
 <p align="center">
+Pronunciation: [kʰú.i̯.sɯ̂t̚] (or [kʰu˧˥i̯.sɯ˥˩t̚])<br>
+(Yes, this strictly adheres to the Korean pitch accent from my hometown: peak the pitch
+sharply on the rounded [u], glide into a relaxed [i], and drop rapidly through the [s]
+until cut off cleanly by the unreleased [t̚]. Or, you know, just say "twist" with a
+sharp "K".)
+</p>
+
+<p align="center">
 CWIST is a C17 web framework and application server with built-in HTTP/1.1, HTTP/2,
 HTTP/3 (QUIC), WebSocket, and WebTransport support, hybrid post-quantum TLS
 (X25519MLKEM768), an embedded SQLite ORM, and a synchronous io_uring/epoll/kqueue
