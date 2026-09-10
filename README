@@ -162,7 +162,7 @@ Rendering       HTML builder, CSS composer, template engine,
  QUICK START
 ==================================================================
 
-  git clone https://github.com/religiya-serdtsa/cwist.git
+  git clone https://github.com/c4punks/CWIST.git
   cd cwist
   make
 
@@ -347,6 +347,6 @@ See BENCHMARK.txt for the full transcript and reproducible workflow.
  DOCUMENTATION
 ==================================================================
 
-* API Reference  : https://religiya-serdtsa.github.io/CWIST/
+* API Reference  : https://c4punks.github.io/CWIST/
 * docs/          -- tutorials and Doxygen sources
 * example/       -- runnable demos including rps-showcase and othello-web

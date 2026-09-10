@@ -12,7 +12,7 @@
 	branch = master
 [submodule "lib/libttak"]
 	path = lib/libttak
-	url = https://github.com/religiya-serdtsa/libttak
+	url = https://github.com/c4punks/libttak
 	branch = main
 [submodule "lib/uriparser"]
 	path = lib/uriparser

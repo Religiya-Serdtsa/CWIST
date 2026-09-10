@@ -7,7 +7,7 @@
 #   3. update REF/SHA512 below (`vcpkg hash cwist-<version>.tar.gz`)
 
 vcpkg_download_distfile(ARCHIVE
-    URLS "https://github.com/Religiya-Serdtsa/CWIST/releases/download/v${VERSION}/cwist-${VERSION}.tar.gz"
+    URLS "https://github.com/c4punks/CWIST/releases/download/v${VERSION}/cwist-${VERSION}.tar.gz"
     FILENAME "cwist-${VERSION}.tar.gz"
     SHA512 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 # fill on release
 )

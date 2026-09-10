@@ -19,4 +19,4 @@ function signature.
 ## See also
 
 *   [docs/README.md](README.md) — documentation map (tutorials, guides, references).
-*   [Doxygen HTML](https://religiya-serdtsa.github.io/CWIST/) — generated from annotated headers.
+*   [Doxygen HTML](https://c4punks.github.io/CWIST/) — generated from annotated headers.
