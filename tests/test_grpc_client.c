@@ -232,7 +232,7 @@ static void test_error_status(uint16_t port) {
     cwist_grpc_message msg;
     int rc;
     while ((rc = cwist_grpc_call_recv(call, &msg)) == 1)
-        ; /* error responses carry an empty message frame before trailers */
+        ; /* error responses are Trailers-Only: no message, status in trailers */
     assert(rc == 0);
     const char *status_message = NULL;
     cwist_grpc_status_t status = cwist_grpc_call_finish(call, &status_message);

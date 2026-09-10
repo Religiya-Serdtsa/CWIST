@@ -71,6 +71,7 @@ struct cwist_grpc_session {
     int eof;
     int cancelled;
     int trailers_sent;
+    int headers_sent;      /* response HEADERS are delayed until first DATA/trailers (gRFC A6) */
     int decode_failed;
     cwist_grpc_stream stream; /* public stream object (embeds req) */
     uint8_t *recv_buf;        /* backing store for the last recv message */
@@ -736,6 +737,19 @@ void cwist_grpc_stream_close(cwist_grpc_stream *stream,
     }
 }
 
+void cwist_grpc_stream_set_retry_pushback(cwist_grpc_stream *stream, int32_t ms) {
+    if (!stream) return;
+    stream->retry_pushback_ms = ms;
+    stream->retry_pushback_set = 1;
+    if (!stream->session && stream->res) {
+        /* Buffered path: the HTTP/2 layer moves this header into the
+         * trailers (Trailers-Only on error). */
+        char buf[20];
+        snprintf(buf, sizeof(buf), "%d", (int)ms);
+        cwist_http_header_add(&stream->res->headers, "grpc-retry-pushback-ms", buf);
+    }
+}
+
 /* Caller must hold reg->mu.  Empty/NULL service names the whole server. */
 static int grpc_health_status_locked(const cwist_grpc_health_registry *reg, const char *service) {
     for (const cwist_grpc_health_state *it = reg->states; it; it = it->next)
@@ -1173,27 +1187,71 @@ static void grpc_session_fail(cwist_grpc_session *session,
     grpc_session_send_trailers(session, status, message);
 }
 
+/* Send the delayed Response-Headers if they have not gone out yet.
+ * Caller holds session->wmu. */
+static int grpc_session_send_headers_locked(cwist_grpc_session *session) {
+    if (session->headers_sent) return 0;
+    if (!session->h2s) return -1;
+    cwist_http2_header hdrs[3];
+    size_t count = 0;
+    hdrs[count++] = (cwist_http2_header){ "content-type", "application/grpc" };
+    hdrs[count++] = (cwist_http2_header){ "grpc-accept-encoding", "gzip, identity" };
+    if (session->resp_encoding == 1)
+        hdrs[count++] = (cwist_http2_header){ "grpc-encoding", "gzip" };
+    if (cwist_http2_stream_send_headers(session->h2s, 200, hdrs, count, 0) != 0)
+        return -1;
+    session->headers_sent = 1;
+    return 0;
+}
+
 static void grpc_session_send_trailers(cwist_grpc_session *session,
                                        cwist_grpc_status_t status,
                                        const char *message) {
     char status_buf[16];
     snprintf(status_buf, sizeof(status_buf), "%d", (int)status);
-    cwist_http2_header pairs[2];
-    size_t count = 0;
-    pairs[count].name = "grpc-status";
-    pairs[count].value = status_buf;
-    count++;
-    if (message) {
-        pairs[count].name = "grpc-message";
-        pairs[count].value = message;
-        count++;
-    }
+    char pushback_buf[20];
+    if (session->stream.retry_pushback_set)
+        snprintf(pushback_buf, sizeof(pushback_buf), "%d",
+                 (int)session->stream.retry_pushback_ms);
     pthread_mutex_lock(&session->wmu);
     if (session->h2s && !session->trailers_sent) {
-        if (cwist_http2_stream_send_trailers(session->h2s, pairs, count) == 0)
+        if (!session->headers_sent && status != CWIST_GRPC_OK) {
+            /* Trailers-Only (PROTOCOL-HTTP2, gRFC A6): the whole response is
+             * one HEADERS frame with END_STREAM.  Response-Headers never went
+             * out, so the RPC stays retryable for conforming clients. */
+            cwist_http2_header hdrs[6];
+            size_t count = 0;
+            hdrs[count++] = (cwist_http2_header){ "content-type", "application/grpc" };
+            hdrs[count++] = (cwist_http2_header){ "grpc-accept-encoding", "gzip, identity" };
+            hdrs[count++] = (cwist_http2_header){ "grpc-status", status_buf };
+            if (message)
+                hdrs[count++] = (cwist_http2_header){ "grpc-message", message };
+            if (session->stream.retry_pushback_set)
+                hdrs[count++] = (cwist_http2_header){ "grpc-retry-pushback-ms", pushback_buf };
+            if (cwist_http2_stream_send_headers(session->h2s, 200, hdrs, count, 1) == 0)
+                session->headers_sent = 1;
             session->trailers_sent = 1;
-        else
+        } else if (grpc_session_send_headers_locked(session) == 0) {
+            cwist_http2_header pairs[3];
+            size_t count = 0;
+            pairs[count].name = "grpc-status";
+            pairs[count].value = status_buf;
+            count++;
+            if (message) {
+                pairs[count].name = "grpc-message";
+                pairs[count].value = message;
+                count++;
+            }
+            if (session->stream.retry_pushback_set) {
+                pairs[count].name = "grpc-retry-pushback-ms";
+                pairs[count].value = pushback_buf;
+                count++;
+            }
+            (void)cwist_http2_stream_send_trailers(session->h2s, pairs, count);
+            session->trailers_sent = 1;
+        } else {
             session->trailers_sent = 1; /* transport broken; do not retry */
+        }
     }
     pthread_mutex_unlock(&session->wmu);
 }
@@ -1204,7 +1262,8 @@ static int grpc_session_write_frame(void *ctx, const uint8_t *frame,
     cwist_grpc_session *session = ctx;
     pthread_mutex_lock(&session->wmu);
     int rc = -1;
-    if (session->h2s && !session->trailers_sent)
+    if (session->h2s && !session->trailers_sent &&
+        grpc_session_send_headers_locked(session) == 0)
         rc = cwist_http2_stream_send_data(session->h2s, frame, frame_len);
     pthread_mutex_unlock(&session->wmu);
     return rc;
@@ -1375,23 +1434,9 @@ static void *grpc_h2_on_headers(void *conn_ctx, cwist_http_request *req,
     session->user_ctx = route->user_ctx;
     session->resp_encoding = grpc_client_accepts_gzip(req) ? 1 : 0;
 
-    /* Initial response headers go out immediately so the client can start
-     * receiving before the first message. */
-    cwist_http2_header resp_headers[3];
-    size_t resp_hdr_count = 0;
-    resp_headers[resp_hdr_count++] = (cwist_http2_header){ "content-type", "application/grpc" };
-    resp_headers[resp_hdr_count++] = (cwist_http2_header){ "grpc-accept-encoding", "gzip, identity" };
-    if (session->resp_encoding == 1) {
-        resp_headers[resp_hdr_count++] = (cwist_http2_header){ "grpc-encoding", "gzip" };
-    }
-    if (cwist_http2_stream_send_headers(stream, 200, resp_headers, resp_hdr_count, 0) != 0) {
-        pthread_mutex_destroy(&session->mu);
-        pthread_cond_destroy(&session->cond);
-        pthread_mutex_destroy(&session->wmu);
-        cwist_grpc_decoder_destroy(&session->decoder);
-        cwist_free(session);
-        return NULL;
-    }
+    /* Response-Headers are deliberately not sent yet (gRFC A6): they go out
+     * with the first DATA frame, or the call ends in Trailers-Only form so
+     * conforming clients may retry the RPC. */
 
     pthread_mutex_lock(&ctx->mu);
     ctx->refs++;

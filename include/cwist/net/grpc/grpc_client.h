@@ -24,6 +24,9 @@ typedef struct cwist_grpc_client_options {
     int use_tls;                  /* 0 = h2c cleartext, 1 = TLS (ALPN "h2") */
     int verify_peer;              /* TLS only: verify server certificate (default 1) */
     uint64_t connect_timeout_ms;  /* 0 = 10000 */
+    const char *tls_server_name;  /* TLS only: SNI hostname; defaults to the
+                                   * connect host (channels set this to the
+                                   * original dns name, not the resolved IP) */
 } cwist_grpc_client_options;
 
 /**
@@ -48,6 +51,50 @@ cwist_grpc_call *cwist_grpc_call_start(cwist_grpc_client *client,
                                        const char *method,
                                        const void *request, size_t request_len,
                                        uint64_t timeout_ms);
+
+/**
+ * cwist_grpc_call_start() variant that attaches the standard
+ * "grpc-previous-rpc-attempts" header (gRFC A6) when @p previous_attempts
+ * is non-zero.  Used by the channel retry engine; plain callers want
+ * cwist_grpc_call_start().
+ */
+cwist_grpc_call *cwist_grpc_call_start_ex(cwist_grpc_client *client,
+                                          const char *method,
+                                          const void *request, size_t request_len,
+                                          uint64_t timeout_ms,
+                                          uint32_t previous_attempts);
+
+/**
+ * Pump until the call's response headers arrive or the stream ends.
+ * Returns 0 when Response-Headers were received (the call is committed,
+ * gRFC A6), 1 when the stream ended first (status available via
+ * cwist_grpc_call_finish), -1 on bad arguments.  Queued messages stay
+ * buffered for cwist_grpc_call_recv().
+ */
+int cwist_grpc_call_await_headers(cwist_grpc_call *call);
+
+/** Non-zero once Response-Headers arrived: the RPC is committed (gRFC A6). */
+int cwist_grpc_call_committed(const cwist_grpc_call *call);
+
+/**
+ * Non-zero when the RPC provably never reached server application logic
+ * (RST_STREAM REFUSED_STREAM, or GOAWAY with a last-stream-id below this
+ * stream): gRFC A6 transparent-retry case 3.
+ */
+int cwist_grpc_call_refused(const cwist_grpc_call *call);
+
+/**
+ * gRFC A6 server pushback.  Returns 1 and fills @p out_ms when the server
+ * sent "grpc-retry-pushback-ms"; a negative value asks the client not to
+ * retry.  Returns 0 when the trailer was absent.
+ */
+int cwist_grpc_call_retry_pushback_ms(const cwist_grpc_call *call, int32_t *out_ms);
+
+/** Non-zero when the connection can no longer start calls (dead or GOAWAY). */
+int cwist_grpc_client_dead(cwist_grpc_client *client);
+
+/** Last known grpc-status without pumping (CWIST_GRPC_OK until trailers). */
+cwist_grpc_status_t cwist_grpc_call_status(const cwist_grpc_call *call);
 
 /**
  * Receive the next response message.  Returns 1 and fills @p out when a

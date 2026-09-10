@@ -60,6 +60,10 @@ typedef struct cwist_grpc_stream {
     int cancelled;
     uint64_t deadline_ms; /* monotonic deadline from grpc-timeout; 0 = none */
     size_t recv_pos;      /* buffered-path recv cursor */
+    /* gRFC A6 server pushback: emitted as grpc-retry-pushback-ms in the
+     * trailers when retry_pushback_set is non-zero. */
+    int retry_pushback_set;
+    int32_t retry_pushback_ms;
 } cwist_grpc_stream;
 
 /** Incremental gRPC frame decoder for arbitrarily split HTTP/2 DATA payloads. */
@@ -116,6 +120,15 @@ int cwist_grpc_stream_send(cwist_grpc_stream *stream,
 void cwist_grpc_stream_close(cwist_grpc_stream *stream,
                              cwist_grpc_status_t status,
                              const char *message);
+
+/**
+ * gRFC A6 server pushback: attach "grpc-retry-pushback-ms" to the response
+ * trailers.  A non-negative @p ms asks the client to wait that long before
+ * retrying; a negative value asks it not to retry at all.  For unary
+ * handlers the same effect is available by adding a
+ * "grpc-retry-pushback-ms" header to the response.
+ */
+void cwist_grpc_stream_set_retry_pushback(cwist_grpc_stream *stream, int32_t ms);
 
 /** Attach a transport writer; subsequent sends are emitted immediately. */
 void cwist_grpc_stream_set_writer(cwist_grpc_stream *stream,

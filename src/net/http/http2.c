@@ -1948,7 +1948,8 @@ static size_t h2_encode_response_headers(cwist_http_response *res,
         /* gRPC status travels in the trailer HEADERS frame, not here. */
         if (grpc_mode &&
             (strcasecmp(curr->key->data, "grpc-status") == 0 ||
-             strcasecmp(curr->key->data, "grpc-message") == 0)) {
+             strcasecmp(curr->key->data, "grpc-message") == 0 ||
+             strcasecmp(curr->key->data, "grpc-retry-pushback-ms") == 0)) {
             curr = curr->next;
             continue;
         }
@@ -2598,18 +2599,24 @@ static bool h2_response_is_grpc(cwist_http_response *res) {
     return ct && strncmp(ct, "application/grpc", 16) == 0;
 }
 
-/* Emit the gRPC trailer block (grpc-status/grpc-message, last write wins)
- * as a dedicated HEADERS frame with END_STREAM. */
+static const char *h2_grpc_header_value(cwist_http_response *res, const char *name) {
+    for (cwist_http_header_node *h = res->headers; h; h = h->next) {
+        if (h->key && h->key->data && h->value && h->value->data &&
+            strcasecmp(h->key->data, name) == 0)
+            return h->value->data;
+    }
+    return NULL;
+}
+
+/* Emit the gRPC trailer block (grpc-status/grpc-message, last write wins,
+ * plus optional grpc-retry-pushback-ms) as a dedicated HEADERS frame with
+ * END_STREAM. */
 static int h2_send_grpc_trailers(h2_conn *hc, uint32_t stream_id,
                                  cwist_http_response *res, uint32_t max_frame) {
-    const char *status = NULL;
-    const char *message = NULL;
-    for (cwist_http_header_node *h = res->headers; h; h = h->next) {
-        if (!h->key || !h->key->data || !h->value || !h->value->data) continue;
-        if (strcasecmp(h->key->data, "grpc-status") == 0) status = h->value->data;
-        else if (strcasecmp(h->key->data, "grpc-message") == 0) message = h->value->data;
-    }
-    cwist_http2_header pairs[2];
+    const char *status = h2_grpc_header_value(res, "grpc-status");
+    const char *message = h2_grpc_header_value(res, "grpc-message");
+    const char *pushback = h2_grpc_header_value(res, "grpc-retry-pushback-ms");
+    cwist_http2_header pairs[3];
     size_t count = 0;
     pairs[count].name = "grpc-status";
     pairs[count].value = status ? status : "0";
@@ -2619,11 +2626,63 @@ static int h2_send_grpc_trailers(h2_conn *hc, uint32_t stream_id,
         pairs[count].value = message;
         count++;
     }
+    if (pushback) {
+        pairs[count].name = "grpc-retry-pushback-ms";
+        pairs[count].value = pushback;
+        count++;
+    }
     unsigned char block[1024];
     size_t block_len = h2_encode_header_pairs(block, sizeof(block), pairs, count);
     if (block_len == 0) return -1;
     return h2_send_header_block(hc, hc->conn, stream_id, block, block_len,
                                 max_frame, CWIST_HTTP2_FLAG_END_STREAM);
+}
+
+/* gRPC error responses go out Trailers-Only (PROTOCOL-HTTP2, gRFC A6): one
+ * HEADERS frame carrying :status 200, content-type, grpc-accept-encoding and
+ * the grpc-status/message/pushback fields with END_STREAM, no DATA.  Keeping
+ * Response-Headers unsent is what lets conforming clients retry the RPC. */
+static int h2_send_grpc_trailers_only(h2_conn *hc, uint32_t stream_id,
+                                      cwist_http_response *res, uint32_t max_frame) {
+    size_t base_len = 0;
+    unsigned char *block = h2_encode_response_block(res, &base_len, true);
+    if (!block) return -1;
+    const char *status = h2_grpc_header_value(res, "grpc-status");
+    const char *message = h2_grpc_header_value(res, "grpc-message");
+    const char *pushback = h2_grpc_header_value(res, "grpc-retry-pushback-ms");
+    cwist_http2_header pairs[3];
+    size_t count = 0;
+    pairs[count].name = "grpc-status";
+    pairs[count].value = status ? status : "13";
+    count++;
+    if (message) {
+        pairs[count].name = "grpc-message";
+        pairs[count].value = message;
+        count++;
+    }
+    if (pushback) {
+        pairs[count].name = "grpc-retry-pushback-ms";
+        pairs[count].value = pushback;
+        count++;
+    }
+    unsigned char tail[1024];
+    size_t tail_len = h2_encode_header_pairs(tail, sizeof(tail), pairs, count);
+    if (tail_len == 0) {
+        cwist_free(block);
+        return -1;
+    }
+    unsigned char *nb = (unsigned char *)cwist_realloc(block, base_len + tail_len);
+    if (!nb) {
+        cwist_free(block);
+        return -1;
+    }
+    block = nb;
+    memcpy(block + base_len, tail, tail_len);
+    int rc = h2_send_header_block(hc, hc->conn, stream_id, block,
+                                  base_len + tail_len, max_frame,
+                                  CWIST_HTTP2_FLAG_END_STREAM);
+    cwist_free(block);
+    return rc;
 }
 
 static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_response *res) {
@@ -2632,6 +2691,17 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
     /* gRPC responses carry grpc-status in a trailer HEADERS frame, so the
      * main header block and the DATA frames never set END_STREAM. */
     bool grpc_mode = h2_response_is_grpc(res);
+
+    /* Error responses go out Trailers-Only (PROTOCOL-HTTP2, gRFC A6): one
+     * HEADERS frame with END_STREAM, so the call stays retryable. */
+    if (grpc_mode) {
+        const char *gs = h2_grpc_header_value(res, "grpc-status");
+        if (gs && strcmp(gs, "0") != 0) {
+            uint32_t tf = hc->peer_max_frame_size;
+            if (tf == 0) tf = CWIST_HTTP2_MAX_FRAME_SIZE;
+            return h2_send_grpc_trailers_only(hc, stream_id, res, tf);
+        }
+    }
 
     size_t block_len = 0;
     unsigned char *block = h2_encode_response_block(res, &block_len, grpc_mode);

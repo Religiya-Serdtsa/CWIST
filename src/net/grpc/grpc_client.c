@@ -76,6 +76,13 @@ struct cwist_grpc_call {
     int trailers;           /* trailer HEADERS seen */
     int stream_ended;       /* END_STREAM or RST_STREAM seen */
     int failed;
+    /* gRFC A6 retry state: committed once Response-Headers arrive. */
+    int headers_received;   /* non-trailers response HEADERS seen (committed) */
+    int trailers_only;      /* ended with a Trailers-Only response */
+    int refused_stream;     /* RST_STREAM(REFUSED_STREAM) before headers */
+    int goaway_refused;     /* GOAWAY last_stream_id < our stream id */
+    int pushback_seen;      /* grpc-retry-pushback-ms trailer arrived */
+    int32_t pushback_ms;    /* negative or unparseable = do not retry */
 };
 
 struct cwist_grpc_client {
@@ -523,7 +530,8 @@ cwist_grpc_client *cwist_grpc_client_connect(const char *host, uint16_t port,
     if (fl < 0 || fcntl(c->fd, F_SETFL, fl | O_NONBLOCK) != 0) goto fail;
 
     if (options && options->use_tls) {
-        if (grpc_client_tls_setup(c, host, options->verify_peer, deadline) != 0)
+        const char *sni = options->tls_server_name ? options->tls_server_name : host;
+        if (grpc_client_tls_setup(c, sni, options->verify_peer, deadline) != 0)
             goto fail;
     }
 
@@ -617,6 +625,15 @@ static void grpc_client_on_header(void *ctx, const char *name, const char *value
         cwist_free(hc->call->status_message);
         hc->call->status_message = cwist_alloc(strlen(value) + 1);
         if (hc->call->status_message) strcpy(hc->call->status_message, value);
+    } else if (strcmp(name, "grpc-retry-pushback-ms") == 0) {
+        /* gRFC A6 pushback: ASCII signed 32-bit; negative or unparseable
+         * means the server asks the client not to retry at all. */
+        char *end = NULL;
+        long v = strtol(value, &end, 10);
+        if (end == value || *end != '\0' || v < INT32_MIN || v > INT32_MAX)
+            v = -1;
+        hc->call->pushback_ms = (int32_t)v;
+        hc->call->pushback_seen = 1;
     }
 }
 
@@ -694,6 +711,14 @@ static int grpc_client_pump(cwist_grpc_call *call) {
         case H2_FRAME_GOAWAY:
             c->goaway = 1;
             if (!call->trailers) {
+                /* gRFC A6 case 3: streams above the GOAWAY last-stream-id
+                 * were never seen by server application logic. */
+                if (f.len >= 4 && !call->headers_received) {
+                    uint32_t last = (((uint32_t)f.payload[0] & 0x7f) << 24) |
+                                    ((uint32_t)f.payload[1] << 16) |
+                                    ((uint32_t)f.payload[2] << 8) | f.payload[3];
+                    if (last < call->stream_id) call->goaway_refused = 1;
+                }
                 call->failed = 1;
                 call->stream_ended = 1;
                 call->status = CWIST_GRPC_UNAVAILABLE;
@@ -706,6 +731,14 @@ static int grpc_client_pump(cwist_grpc_call *call) {
             if (f.stream_id == call->stream_id) {
                 call->stream_ended = 1;
                 if (!call->trailers) {
+                    /* REFUSED_STREAM (0x7) before Response-Headers: the RPC
+                     * never reached server application logic (gRFC A6 case 3). */
+                    if (f.len == 4 && !call->headers_received) {
+                        uint32_t code = ((uint32_t)f.payload[0] << 24) |
+                                        ((uint32_t)f.payload[1] << 16) |
+                                        ((uint32_t)f.payload[2] << 8) | f.payload[3];
+                        if (code == 0x7) call->refused_stream = 1;
+                    }
                     call->failed = 1;
                     call->status = CWIST_GRPC_UNAVAILABLE;
                 }
@@ -743,11 +776,17 @@ static int grpc_client_pump(cwist_grpc_call *call) {
             }
             if (end_stream) {
                 /* Trailer HEADERS close the stream; a missing grpc-status
-                 * is a protocol error surfaced as UNKNOWN (gRPC spec). */
+                 * is a protocol error surfaced as UNKNOWN (gRPC spec).
+                 * When no Response-Headers preceded them this is a
+                 * Trailers-Only response, which stays retryable (gRFC A6). */
+                if (!call->headers_received) call->trailers_only = 1;
                 call->trailers = 1;
                 call->stream_ended = 1;
                 if (!call->status_seen) call->status = CWIST_GRPC_UNKNOWN;
                 rc = 1;
+            } else {
+                /* Response-Headers commit the RPC (gRFC A6). */
+                call->headers_received = 1;
             }
             break;
         }
@@ -855,6 +894,13 @@ static int grpc_client_send_request(cwist_grpc_call *call, const uint8_t *frame,
 cwist_grpc_call *cwist_grpc_call_start(cwist_grpc_client *c, const char *method,
                                        const void *request, size_t request_len,
                                        uint64_t timeout_ms) {
+    return cwist_grpc_call_start_ex(c, method, request, request_len, timeout_ms, 0);
+}
+
+cwist_grpc_call *cwist_grpc_call_start_ex(cwist_grpc_client *c, const char *method,
+                                          const void *request, size_t request_len,
+                                          uint64_t timeout_ms,
+                                          uint32_t previous_attempts) {
     if (!c || !method || (request_len && !request) || c->dead || c->goaway)
         return NULL;
 
@@ -905,6 +951,15 @@ cwist_grpc_call *cwist_grpc_call_start(cwist_grpc_client *c, const char *method,
         if (n == 0) goto fail;
         pos += n;
     }
+    if (previous_attempts) {
+        /* gRFC A6: absent on the first RPC, 1 on the second, ... */
+        char attempts_hdr[16];
+        snprintf(attempts_hdr, sizeof(attempts_hdr), "%u", (unsigned)previous_attempts);
+        n = grpc_client_enc_literal(block + pos, sizeof(block) - pos, 0,
+                                    "grpc-previous-rpc-attempts", attempts_hdr);
+        if (n == 0) goto fail;
+        pos += n;
+    }
     if (grpc_client_write_frame(c, H2_FRAME_HEADERS, H2_FLAG_END_HEADERS,
                                 call->stream_id, block, (uint32_t)pos,
                                 call->deadline_ms) != 0)
@@ -946,6 +1001,39 @@ int cwist_grpc_call_recv(cwist_grpc_call *call, cwist_grpc_message *out) {
     out->len = node->len;
     cwist_free(node);
     return 1;
+}
+
+int cwist_grpc_call_await_headers(cwist_grpc_call *call) {
+    if (!call) return -1;
+    while (!call->headers_received && !call->stream_ended) {
+        if (grpc_client_pump(call) != 0 && !call->headers_received &&
+            !call->stream_ended)
+            return -1;
+    }
+    return call->headers_received ? 0 : 1;
+}
+
+int cwist_grpc_call_committed(const cwist_grpc_call *call) {
+    return call && call->headers_received;
+}
+
+int cwist_grpc_call_refused(const cwist_grpc_call *call) {
+    if (!call || call->headers_received || call->trailers) return 0;
+    return call->refused_stream || call->goaway_refused;
+}
+
+int cwist_grpc_call_retry_pushback_ms(const cwist_grpc_call *call, int32_t *out_ms) {
+    if (!call || !call->pushback_seen) return 0;
+    if (out_ms) *out_ms = call->pushback_ms;
+    return 1;
+}
+
+int cwist_grpc_client_dead(cwist_grpc_client *c) {
+    return !c || c->dead || c->goaway;
+}
+
+cwist_grpc_status_t cwist_grpc_call_status(const cwist_grpc_call *call) {
+    return call ? call->status : CWIST_GRPC_INTERNAL;
 }
 
 cwist_grpc_status_t cwist_grpc_call_finish(cwist_grpc_call *call, const char **message) {
