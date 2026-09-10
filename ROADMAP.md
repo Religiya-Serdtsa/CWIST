@@ -22,7 +22,7 @@
 [P1: Production]     ████████████████████ 100% (Multiport hardening complete)
 [P2: DevEx]          ████████████████████ 100% (30 English hands-on tutorials, CLI, hot reload, and test client complete)
 [P3: Deep Protocols] ███████████████░░░░░  75% (HTTP/3 extension specs and io_uring backend done)
-[P4: Ecosystem]      ███████████████░░░░░  75% (gRPC wire streaming, trailers, deadlines, gzip, and proto codegen done)
+[P4: Ecosystem]      ████████████████░░░░  80% (gRPC client retry policy and load balancing done)
 ```
 
 ### 1) Transport Layer
@@ -39,7 +39,7 @@
 * **High-performance router & middleware**: Deterministic resource management with parameterized routes (`/user/:id`), compression (Gzip via zlib), CORS, and rate limiting (libttak token bucket) are integrated.
 * **Observability**: Prometheus `/metrics` and a probe-registry health-check system are operational.
 * **Per-port sub-applications**: Lifecycle and exception handling for `cwist_multiport_get_app(&app, port)` are hardened; detached ports are separately tunable sub-applications.
-* **gRPC services**: Applications can register unary and streaming handlers, incrementally decode arbitrarily split gRPC frames, attach transport output sinks, expose standard health/reflection services, and generate C models/method paths with `cwist proto`.
+* **gRPC services**: Applications can register unary and streaming handlers, incrementally decode arbitrarily split gRPC frames, attach transport output sinks, expose standard health/reflection services, and generate C models/method paths with `cwist proto`. Clients use `cwist_grpc_channel`: dns/ipv4/ipv6 target resolution, `pick_first`/`round_robin` load balancing over per-address subchannels, and the gRFC A6 retry engine (exponential backoff, retryable codes, server pushback, throttling, transparent retries); error responses go out Trailers-Only so conforming clients can retry.
 * **Packaging**: `libcwist.a` is a CWIST-only static archive; bundled dependency archives and public headers install side-by-side with `PREFIX`/`DESTDIR` staging support. `cwist.pc` pkg-config metadata, a versioned dist tarball (`dist/cwist-3.2.tar.gz`), and Homebrew (`packaging/homebrew/cwist.rb`) / vcpkg (`packaging/vcpkg/`) packaging drafts are available.
 * **Deferred async handlers**: `cwist_async_defer()` hands a request/response pair to any thread (scheduler job, NATS callback, custom worker) for later completion via `cwist_async_respond()` / `respond_with()` / `abort()`, with optional 504 timeout and per-mode completion routing (reactor-posted in C1M, inline in thread-pool mode).
 
@@ -66,6 +66,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 - **Resolved**: gRPC handler-thread sends now wait for WINDOW_UPDATE credit via a condvar rendezvous signalled by the dispatcher (`h2_fc_wait_credit`), instead of failing a zero-credit send with UNAVAILABLE; RST/teardown/stall-timeout still fail fast.
 - **Resolved (v3.4 perf wave)**: C1M reactor tail latency — request batches now yield cooperatively (`CWIST_HTTP_YIELD_BATCH`), batch responses coalesce into one writev per turn (256 KiB stash), reactor wake eventfds are registered with the ring (`IORING_REGISTER_EVENTFD`), and post bursts coalesce to a single wake. P99.999 CI measurement fixed end-to-end (lua output format + `$GITHUB_WORKSPACE` script path).
 - **Resolved (v3.4 perf wave)**: BDR cache learn/read paths are lock-free (CAS-published entries, atomic blob swaps, EBR reclamation) and entries support hit-time revalidation hooks with zero-copy pointer swaps (`cwist_bdr_put_revalidatable`); classic pool gained `CWIST_POOL_PREWARM` / `CWIST_POOL_IDLE_TIMEOUT_MS` tunables; the HTTPS handshake shepherd shard count is tunable via `CWIST_HTTPS_HS_SHARDS`.
+- **Resolved (v3.4 gRPC client wave)**: gRPC client retry policy and client-side load balancing are done — `cwist_grpc_channel` resolves dns/ipv4/ipv6 targets into per-address subchannels with connection backoff (doc/connection-backoff.md), balances calls with `pick_first`/`round_robin` (doc/load-balancing.md), and runs the gRFC A6 retry engine (jittered exponential backoff, retryable codes, server pushback, token-bucket throttling, transparent retries, commit-on-headers) configured via C structs or JSON service config. Error responses are Trailers-Only on both unary and streaming server paths so retries can actually happen; `test_grpc_channel` covers the matrix against loopback backends plus a raw GOAWAY fake.
 - We are now in the **P2–P4 tooling and ecosystem phase**. Completed multiport, scheduler, test-client, `io_uring`, deferred async handlers, end-to-end streaming gRPC (DATA-frame wiring, trailers, deadlines, gzip), and Protobuf wire-format work remain covered by focused regression tests.
 
 ---
@@ -179,7 +180,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **gRPC over HTTP/2** | ✅ | Unary/stream registration, split-frame incremental decoder and output sink, standard health (streaming Watch)/reflection service registration, gRPC metadata, h2c/TLS client with unary and server-streaming calls, and test-client coverage |
+| **gRPC over HTTP/2** | ✅ | Unary/stream registration, split-frame incremental decoder and output sink, standard health (streaming Watch)/reflection service registration, gRPC metadata, h2c/TLS client with unary and server-streaming calls, channel client with dns/ipv4/ipv6 resolution, `pick_first`/`round_robin` LB, and gRFC A6 retries, and test-client coverage |
 | **Protobuf Runtime Helpers** | ✅ | Wire-format reader/writer for varint, bool, bytes/string, signed integer casting, and ZigZag helpers |
 | **GraphQL** | ✅ | Full query/mutation engine, field arguments, variables, aliases, nested selection sets, error envelope, and HTTP adapter |
 | **OpenAPI / Swagger Generation** | ✅ | OpenAPI 3.1 JSON generated from Doxygen `@openapi.*` annotations on route declarations |
@@ -201,7 +202,7 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 ### Ecosystem
 
 * Finish `cwist proto` for v3.4: ~~descriptor-set input~~ (`oneof`, `map`, fixed-width types, `double`, and `protoc --descriptor_set_out` input all done alongside scalar/enum/nested/repeated-packed).
-* ~~Add gRPC client-side support: h2/h2c client, retry policy, and load balancing.~~ (h2c/TLS client with unary + server-streaming calls, deadlines, and cancellation shipped; retry policy and load balancing remain)
+* ~~Add gRPC client-side support: h2/h2c client, retry policy, and load balancing.~~ (h2c/TLS client with unary + server-streaming calls, deadlines, and cancellation; channel with `pick_first`/`round_robin` LB over per-address subchannels; gRFC A6 retry policy with backoff, pushback, throttling, and transparent retries — all shipped)
 * Add gRPC server-side response compression.
 * Extend the GraphQL subset with schema validation, mutations, nested selections, and subscriptions.
 * Stabilize the experimental native C WebTransport client after LSQUIC PR #629 merges upstream.
@@ -236,7 +237,22 @@ Known limits:
 
 * The proto generator covers scalar, enum, repeated packed-numeric, `oneof`, `map`, and fixed-width/`double` proto3 fields plus service paths, with descriptor-set input (nested types flatten on that path); text input still lacks nested message definitions.
 * The builtin health `Watch` route streams status changes over the HTTP/2 transport path and falls back to a single snapshot on the buffered dispatch path.
-* Retry policy and client-side load balancing remain; the h2c/TLS gRPC client (`cwist_grpc_client_*`) covers unary and server-streaming calls with grpc-timeout deadlines and RST_STREAM cancellation.
+* Client-side hedging (`hedgingPolicy`) is not implemented — gRPC C-core does not implement it either (gRFC A6). The channel resolver supports `dns` (default), `ipv4`, and `ipv6` targets; `unix`/`unix-abstract`/`vsock` transports, `grpclb`/xDS policies, and `perAttemptRecvTimeout` remain unimplemented.
+
+### gRPC Client Channel (v3.4)
+
+Completed:
+
+* `cwist_grpc_channel_connect(target, options)` resolves `dns:[//authority/]host[:port]` (default scheme, default port 443, every resolved address used), `ipv4:`/`ipv6:` literal lists, and bare `host[:port]` targets (doc/naming.md); unsupported schemes fail cleanly.
+* One lazily-connected subchannel per backend address; failed dials back off per doc/connection-backoff.md (1s initial, ×1.6, 120s cap, ±0.2 jitter, reset when the SETTINGS handshake completes).
+* `pick_first` (default) sticks to the connected address and fails over in resolver order; `round_robin` dials every address up front and rotates READY subchannels per call (doc/load-balancing.md). `cwist_grpc_channel_get_state()` aggregates subchannel states per the spec rules.
+* gRFC A6 retry engine between the channel and the LB pick: `maxAttempts` (client-capped at 5), `initialBackoff`/`maxBackoff`/`backoffMultiplier` with ±0.2 jitter, `retryableStatusCodes` bitmask, overall call deadline shared by all attempts, per-attempt remaining `grpc-timeout`, and the `grpc-previous-rpc-attempts` header on every retry.
+* Commit semantics: Response-Headers commit the RPC (no further retries); Trailers-Only failures stay retryable. Transparent retries cover RPCs that never left the client (until the deadline) and RPCs refused before server application logic (RST_STREAM REFUSED_STREAM or GOAWAY with a lower last-stream-id, one immediate retry) — neither counts against `maxAttempts` nor the throttle.
+* Server pushback: `grpc-retry-pushback-ms` ≥ 0 delays the retry exactly that long (backoff restarts at `initialBackoff` afterwards); negative or unparseable values stop retries.
+* `retryThrottling` token bucket per channel: retries need `token_count > maxTokens/2`; failed attempts with retryable codes (or do-not-retry pushback) cost one token, successful calls refund `tokenRatio`.
+* `cwist_grpc_channel_apply_service_config_json()` parses the doc/service_config.md subset — `loadBalancingConfig`/`loadBalancingPolicy`, `methodConfig` (name matching, `retryPolicy`, `waitForReady`, `timeout`), and `retryThrottling` — with gRFC A6 validation rules.
+* Error responses are Trailers-Only end-to-end (gRFC A6 / PROTOCOL-HTTP2): unary error replies are a single HEADERS frame with END_STREAM, and the streaming server delays Response-Headers until the first message, so conforming clients can retry failed calls. Servers can emit `grpc-retry-pushback-ms` via a response header (unary) or `cwist_grpc_stream_set_retry_pushback()` (streaming).
+* `test_grpc_channel` covers LB stickiness/failover/rotation, retryable/non-retryable codes, `maxAttempts` exhaustion, pushback both ways, throttling, deadlines spanning attempts, JSON service config validation, GOAWAY transparent retries against a raw-socket fake, and resolver schemes; `test_grpc_stream` verifies the Trailers-Only wire forms.
 
 ---
 
@@ -245,7 +261,7 @@ Known limits:
 Theme: gRPC client side, codegen completeness, and the first WASM client-side support wave. v3.3 shipped the wire-level streaming server (DATA-frame wiring, trailers, deadlines, gzip) plus the first proto codegen extension (enums, nested message fields, repeated packed numerics); v3.4 finishes the story instead of moving the already-pushed v3.3 tag.
 
 * **`cwist proto` completion**: ~~`oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`), and `protoc --descriptor_set_out` input bindings~~ (all done). CLI-only work (`tools/cli/cwist`), no library ABI impact.
-* **gRPC client**: ~~h2/h2c client with unary/streaming calls~~ (done: `cwist_grpc_client_*` with deadlines and cancellation); retry policy and client-side load balancing remain.
+* **gRPC client**: ~~h2/h2c client with unary/streaming calls, retry policy, and client-side load balancing~~ (all done: `cwist_grpc_client_*` with deadlines and cancellation, plus `cwist_grpc_channel_*` with resolver, `pick_first`/`round_robin` LB, and the gRFC A6 retry engine).
 * **gRPC server leftovers**: ~~moving health `Watch` onto the streaming dispatch path~~ (done).
 * **Distribution**: ~~publish the Homebrew formula~~ (done: `brew tap c4punks/cwist`, `brew install c4punks/cwist/cwist`, verified end-to-end on Linuxbrew). vcpkg stays an in-tree draft under `packaging/vcpkg/`; upstream submission postponed.
 * **WASM client-side support**: bring CWIST handlers into the browser WASM ecosystem.
