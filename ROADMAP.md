@@ -252,7 +252,7 @@ Theme: gRPC client side, codegen completeness, and the first WASM client-side su
   * ~~In-memory HTTP dispatcher~~ ✅ (`cwist_app_dispatch_memory()`): run `cwist_app` routing and handlers directly on request/response memory buffers, with no sockets — so the same C handlers run inside a Service Worker or a JS fetch-interception layer.
   * ~~`libcwist_wasm.a` target~~ ✅ (`make wasm`): an Emscripten build that excludes the native transport (sockets, TLS, QUIC) and ships the socket-independent core — app dispatch, mux/middleware, HTTP/1 parser/serializer, query map, cJSON, memory utilities.
   * ~~`cwist_db` in-memory/blob abstraction~~ ✅ (`cwist_db_open_memory()` / `cwist_db_serialize()`): official API over `sqlite3_deserialize`-style memory buffers, so WASM apps don't need to parse custom binary blobs.
-  * TypedArray zero-copy serialization helpers: optional Emscripten-side macros/headers that map C struct arrays directly onto `HEAP` TypedArrays (or `SharedArrayBuffer`) instead of round-tripping through `snprintf` JSON.
+  * ~~TypedArray zero-copy serialization helpers~~ ✅ (`<cwist/wasm/typedarray.h>`): Emscripten-side macros/headers that map C struct arrays directly onto `HEAP` TypedArrays instead of round-tripping through `snprintf` JSON.
 
 ---
 
