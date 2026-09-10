@@ -180,24 +180,11 @@ def _gen_scalar_encode(field: str, typ: str, value: str) -> str:
     return f"if ({writer}(w, {field}, {value}) != 0) return -1;"
 
 
-def generate_proto(source: Path, output: Path) -> None:
-    """Generate a small, dependency-free C model/encoder/decoder from a proto file.
-
-    Covers scalar fields (varints plus fixed32/fixed64/sfixed32/sfixed64 and
-    float/double), repeated fields (packed varints, packed fixed-width, and
-    length-delimited), message-typed fields, oneof blocks (tagged union with a
-    `_case` discriminator enum), map fields (repeated entry structs), enums
-    (proto3 open semantics: unknown values are preserved), proto2-style
-    optional/required labels (treated as plain singular fields), and service
-    method paths. Nested message *definitions* and `protoc
-    --descriptor_set_out` input are not supported; unsupported field types
-    stay visible as comments instead of silently producing incorrect wire
-    encoders.
-    """
-    text = _strip_proto_comments(source.read_text(encoding="utf-8"))
+def _model_from_proto_text(text: str) -> tuple:
+    """Parse proto source text into (package, enums, messages, services)."""
+    text = _strip_proto_comments(text)
     package = re.search(r"\bpackage\s+([A-Za-z_][\w.]*)\s*;", text)
     package_name = package.group(1) if package else "proto"
-    prefix = re.sub(r"\W+", "_", package_name)
 
     enums: list[tuple[str, list[tuple[str, int]]]] = []
     for name, body in _proto_blocks(text, "enum"):
@@ -212,11 +199,6 @@ def generate_proto(source: Path, output: Path) -> None:
         return ("scalar" if typ in PROTO_SCALAR else
                 "enum" if typ in enum_names else
                 "message" if typ in message_names else "unsupported")
-
-    def wire_of(f: dict) -> str:
-        if f["kind"] == "enum":
-            return "varint"
-        return PROTO_WIRE.get(f["type"], "varint")
 
     def parse_field(typ: str, field: str, number: str, repeated: bool, oneof: str | None = None) -> dict:
         typ = typ.split(".")[-1]
@@ -255,6 +237,248 @@ def generate_proto(source: Path, output: Path) -> None:
             located.append((match.start(), parse_field(typ, field, number, label == "repeated")))
         fields = [f for _, f in sorted(located, key=lambda item: item[0])]
         messages.append((name, fields))
+
+    services: list[tuple[str, str]] = []
+    for match in re.finditer(r"\bservice\s+(\w+)\s*\{(.*?)\}", text, re.S):
+        service, body = match.groups()
+        for method in re.findall(r"rpc\s+(\w+)\s*\(", body):
+            services.append((service, method))
+    return package_name, enums, messages, services
+
+
+# --- FileDescriptorSet (protoc --descriptor_set_out) front-end -------------
+# Field numbers per google/protobuf/descriptor.proto; decoded by hand, no deps.
+
+def _pb_varint(data: bytes, pos: int) -> tuple[int, int]:
+    value = 0
+    shift = 0
+    while pos < len(data) and shift <= 63:
+        byte = data[pos]
+        pos += 1
+        value |= (byte & 0x7F) << shift
+        if not (byte & 0x80):
+            return value, pos
+        shift += 7
+    fail("malformed varint in descriptor set")
+
+
+def _pb_fields(data: bytes) -> list[tuple[int, int, object]]:
+    """Decode a protobuf blob into (field_number, wire_type, value) triples."""
+    fields = []
+    pos = 0
+    while pos < len(data):
+        key, pos = _pb_varint(data, pos)
+        num, wire = key >> 3, key & 7
+        if wire == 0:
+            val, pos = _pb_varint(data, pos)
+        elif wire == 1:
+            val = data[pos:pos + 8]
+            pos += 8
+        elif wire == 2:
+            ln, pos = _pb_varint(data, pos)
+            val = data[pos:pos + ln]
+            pos += ln
+        elif wire == 5:
+            val = data[pos:pos + 4]
+            pos += 4
+        else:
+            fail(f"unsupported wire type {wire} in descriptor set")
+        fields.append((num, wire, val))
+    return fields
+
+
+def _pb_str(fields: list, num: int, default: str = "") -> str:
+    for n, w, v in fields:
+        if n == num and w == 2:
+            return v.decode("utf-8", errors="replace")
+    return default
+
+
+def _pb_int(fields: list, num: int, default: int = 0) -> int:
+    for n, w, v in fields:
+        if n == num and w == 0:
+            # int32-ish values: negative numbers arrive sign-extended to 64 bits
+            return v - (1 << 64) if v >= (1 << 63) else v
+    return default
+
+
+def _pb_has(fields: list, num: int) -> bool:
+    return any(n == num for n, _, _ in fields)
+
+
+def _pb_msgs(fields: list, num: int) -> list[list]:
+    return [_pb_fields(v) for n, w, v in fields if n == num and w == 2]
+
+
+_PB_TYPE_NAMES = {
+    1: "double", 2: "float", 3: "int64", 4: "uint64", 5: "int32",
+    6: "fixed64", 7: "fixed32", 8: "bool", 9: "string",
+    13: "uint32", 15: "sfixed32", 16: "sfixed64", 17: "sint32", 18: "sint64",
+}
+_PB_LABEL_REPEATED = 3
+
+
+def _model_from_descriptor(data: bytes) -> tuple:
+    """Decode a FileDescriptorSet into (package, enums, messages, services).
+
+    Nested message/enum definitions are flattened to Parent_Child names and
+    fully-qualified type_name references (".pkg.Outer.Inner") are mapped onto
+    them.  proto3 synthetic oneofs behind `optional` fields are folded back
+    into plain singular fields.  Map entry structs feed map fields directly.
+    """
+    files = _pb_msgs(_pb_fields(data), 1)  # FileDescriptorSet.file
+    if not files:
+        fail("descriptor set contains no file")
+    fdesc = files[0]
+    package_name = _pb_str(fdesc, 2) or "proto"
+
+    enums: list[tuple[str, list[tuple[str, int]]]] = []
+    messages: list[tuple[str, list[dict]]] = []
+    type_map: dict[str, str] = {}     # ".pkg.Outer.Inner" -> "Outer_Inner"
+    map_entries: dict[str, list] = {} # entry full name -> entry field list
+
+    def full_name(chain: list[str]) -> str:
+        return "." + package_name + "." + ".".join(chain) if package_name != "proto" \
+            else "." + ".".join(chain)
+
+    def flatten(msg: list, chain: list[str]) -> None:
+        name = _pb_str(msg, 1)
+        local = "_".join(chain + [name])
+        type_map[full_name(chain + [name])] = local
+
+        is_map_entry = False
+        for opt in _pb_msgs(msg, 7):  # DescriptorProto.options
+            if _pb_int(opt, 7):       # MessageOptions.map_entry
+                is_map_entry = True
+        raw_fields = _pb_msgs(msg, 2)  # DescriptorProto.field
+        if is_map_entry:
+            map_entries[full_name(chain + [name])] = raw_fields
+            return
+
+        oneof_names = [_pb_str(o, 1) for o in _pb_msgs(msg, 8)]  # oneof_decl
+        fields: list[dict] = []
+        for fd in raw_fields:  # FieldDescriptorProto
+            fields.append({"name": _pb_str(fd, 1), "number": _pb_int(fd, 3),
+                           "label": _pb_int(fd, 4), "pb_type": _pb_int(fd, 5),
+                           "type_name": _pb_str(fd, 6),
+                           "oneof": (oneof_names[_pb_int(fd, 9)]
+                                     if _pb_has(fd, 9) and not _pb_int(fd, 17)
+                                     and _pb_int(fd, 9) < len(oneof_names) else None),
+                           "raw": fd})
+        messages.append((local, fields))
+
+        for sub in _pb_msgs(msg, 3):  # nested_type
+            flatten(sub, chain + [name])
+        for enum in _pb_msgs(msg, 4):  # enum_type nested in a message
+            flatten_enum(enum, chain + [name])
+
+    def flatten_enum(enum: list, chain: list[str]) -> None:
+        name = _pb_str(enum, 1)
+        local = "_".join(chain + [name])
+        type_map[full_name(chain + [name])] = local
+        values = [(_pb_str(v, 1), _pb_int(v, 2)) for v in _pb_msgs(enum, 2)]
+        enums.append((local, values))
+
+    for enum in _pb_msgs(fdesc, 5):  # FileDescriptorProto.enum_type
+        flatten_enum(enum, [])
+    for msg in _pb_msgs(fdesc, 4):   # FileDescriptorProto.message_type
+        flatten(msg, [])
+
+    enum_names = {name for name, _ in enums}
+    message_names = {name for name, _ in messages}
+
+    def classify(typ: str) -> str:
+        return ("scalar" if typ in PROTO_SCALAR else
+                "enum" if typ in enum_names else
+                "message" if typ in message_names else "unsupported")
+
+    def field_proto_type(fd: dict) -> str:
+        if fd["pb_type"] in (11, 14):  # MESSAGE / ENUM: resolve type_name
+            local = type_map.get(fd["type_name"])
+            if local:
+                return local
+            return fd["type_name"].split(".")[-1]
+        return _PB_TYPE_NAMES.get(fd["pb_type"], f"unknown_type_{fd['pb_type']}")
+
+    def entry_field_type(entry_fd: list) -> str:
+        pb_type = _pb_int(entry_fd, 5)
+        if pb_type in (11, 14):
+            type_name = _pb_str(entry_fd, 6)
+            return type_map.get(type_name) or type_name.split(".")[-1]
+        return _PB_TYPE_NAMES.get(pb_type, f"unknown_type_{pb_type}")
+
+    final_messages: list[tuple[str, list[dict]]] = []
+    for name, raw_fields in messages:
+        fields = []
+        for fd in raw_fields:
+            repeated = fd["label"] == _PB_LABEL_REPEATED
+            entry = map_entries.get(fd["type_name"]) if fd["pb_type"] == 11 else None
+            if repeated and entry is not None and len(entry) >= 2:
+                # map<K,V>: key/value come from the entry's fields 1 and 2
+                ktyp = entry_field_type(entry[0])
+                vtyp = entry_field_type(entry[1])
+                key_kind, val_kind = classify(ktyp), classify(vtyp)
+                entry_name = "".join(part.capitalize() for part in fd["name"].split("_")) + "Entry"
+                fields.append({"type": f"map<{ktyp},{vtyp}>", "name": fd["name"],
+                               "number": fd["number"], "repeated": False, "oneof": None,
+                               "entry": entry_name, "key_type": ktyp, "val_type": vtyp,
+                               "key_kind": key_kind, "val_kind": val_kind,
+                               "kind": ("map" if key_kind == "scalar" and
+                                        ktyp not in ("float", "double", "fixed32", "fixed64",
+                                                     "sfixed32", "sfixed64")
+                                        and val_kind != "unsupported" else "unsupported")})
+                continue
+            typ = field_proto_type(fd)
+            fields.append({"type": typ, "name": fd["name"], "number": fd["number"],
+                           "repeated": repeated, "kind": classify(typ),
+                           "oneof": fd["oneof"]})
+        final_messages.append((name, fields))
+
+    services: list[tuple[str, str]] = []
+    for svc in _pb_msgs(fdesc, 6):  # FileDescriptorProto.service
+        for mtd in _pb_msgs(svc, 2):  # ServiceDescriptorProto.method
+            services.append((_pb_str(svc, 1), _pb_str(mtd, 1)))
+    return package_name, enums, final_messages, services
+
+
+def generate_proto(source: Path, output: Path, descriptor: bool | None = None) -> None:
+    """Generate a small, dependency-free C model/encoder/decoder from a proto file.
+
+    Input is either proto source text or a binary FileDescriptorSet produced
+    by `protoc --descriptor_set_out` (auto-detected, or forced with
+    --descriptor-set).  Covers scalar fields (varints plus
+    fixed32/fixed64/sfixed32/sfixed64 and float/double), repeated fields
+    (packed varints, packed fixed-width, and length-delimited), message-typed
+    fields, oneof blocks (tagged union with a `_case` discriminator enum), map
+    fields (repeated entry structs), enums (proto3 open semantics: unknown
+    values are preserved), proto2-style optional/required labels (treated as
+    plain singular fields), and service method paths.  Descriptor input also
+    flattens nested type definitions; text input does not.  Unsupported field
+    types stay visible as comments instead of silently producing incorrect
+    wire encoders.
+    """
+    raw = source.read_bytes()
+    if descriptor is None:
+        # Auto-detect: descriptor sets are binary; proto sources are UTF-8 text
+        # whose first meaningful token is a keyword.
+        descriptor = source.suffix in (".pb", ".fds", ".bin")
+        if not descriptor:
+            try:
+                head = raw[:4096].decode("utf-8")
+                descriptor = not re.search(r"\b(syntax|package|message|enum|service)\b", head)
+            except UnicodeDecodeError:
+                descriptor = True
+    if descriptor:
+        package_name, enums, messages, services = _model_from_descriptor(raw)
+    else:
+        package_name, enums, messages, services = _model_from_proto_text(
+            raw.decode("utf-8"))
+    prefix = re.sub(r"\W+", "_", package_name)
+
+    def wire_of(f: dict) -> str:
+        if f["kind"] == "enum":
+            return "varint"
+        return PROTO_WIRE.get(f["type"], "varint")
 
     def oneof_groups(fields: list[dict]) -> list[tuple[str, list[dict]]]:
         order: list[str] = []
@@ -773,10 +997,8 @@ def generate_proto(source: Path, output: Path) -> None:
             lines.append(f"    {cname}__clear_{oname}(m);")
         lines.extend(["    memset(m, 0, sizeof(*m));", "}", ""])
 
-    for match in re.finditer(r"\bservice\s+(\w+)\s*\{(.*?)\}", text, re.S):
-        service, body = match.groups()
-        for request, method, response in re.findall(r"rpc\s+(\w+)\s*\(\s*(?:stream\s+)?([\w.]+)\s*\)\s+returns\s*\(\s*(?:stream\s+)?([\w.]+)\s*\)", body):
-            lines.append(f'#define {prefix}_{service}_{request}_PATH "/{package_name}.{service}/{request}"')
+    for service, method in services:
+        lines.append(f'#define {prefix}_{service}_{method}_PATH "/{package_name}.{service}/{method}"')
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"wrote {output}")
@@ -1077,9 +1299,11 @@ def main() -> None:
     api.add_argument("--project")
     api.add_argument("--title")
     api.add_argument("--version")
-    proto = sub.add_parser("proto", help="generate C protobuf models and gRPC method paths from proto3")
+    proto = sub.add_parser("proto", help="generate C protobuf models and gRPC method paths from proto3 source or a protoc descriptor set")
     proto.add_argument("source", type=Path)
     proto.add_argument("--output", type=Path)
+    proto.add_argument("--descriptor-set", action="store_true",
+                       help="treat input as a binary FileDescriptorSet (protoc --descriptor_set_out); auto-detected otherwise")
     describe = sub.add_parser("describe", help="print a .cwpro manifest")
     describe.add_argument("--project")
     watch = sub.add_parser("watcher", help="watch, incrementally rebuild, and hot-restart the development process")
@@ -1092,7 +1316,8 @@ def main() -> None:
     if args.command == "new": write_new_project(args.name, args.directory)
     elif args.command == "proto":
         output = args.output or args.source.with_suffix(".cwist.pb.h")
-        generate_proto(args.source, output)
+        generate_proto(args.source, output,
+                       True if args.descriptor_set else None)
     elif args.command == "describe": print(json.dumps(json.loads(project_file(args.project).read_text()), indent=2))
     elif args.command == "watcher":
         if args.interval <= 0: fail("--interval must be positive")

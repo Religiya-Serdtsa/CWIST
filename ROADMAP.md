@@ -200,7 +200,7 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 
 ### Ecosystem
 
-* Finish `cwist proto` for v3.4: descriptor-set input (`oneof`, `map`, fixed-width types, and `double` now done alongside scalar/enum/nested/repeated-packed).
+* Finish `cwist proto` for v3.4: ~~descriptor-set input~~ (`oneof`, `map`, fixed-width types, `double`, and `protoc --descriptor_set_out` input all done alongside scalar/enum/nested/repeated-packed).
 * ~~Add gRPC client-side support: h2/h2c client, retry policy, and load balancing.~~ (h2c/TLS client with unary + server-streaming calls, deadlines, and cancellation shipped; retry policy and load balancing remain)
 * Add gRPC server-side response compression.
 * Extend the GraphQL subset with schema validation, mutations, nested selections, and subscriptions.
@@ -218,7 +218,7 @@ Completed:
 * `cwist_grpc_stream_send()` and `cwist_grpc_stream_close()` build ordered multi-message gRPC responses with final status metadata.
 * `cwist_grpc_decoder_feed()` recovers gRPC envelopes split across arbitrary DATA payload boundaries; `cwist_grpc_stream_set_writer()` permits immediate transport-frame output.
 * `cwist_app_grpc_health()` and `cwist_app_grpc_health_set_status()` register and control `grpc.health.v1.Health`; `cwist_app_grpc_reflection()` registers the v1alpha reflection stream.
-* `cwist proto input.proto` generates scalar proto3 C models, encoder helpers, and gRPC method-path constants.
+* `cwist proto input.proto` (or a `protoc --descriptor_set_out` binary, auto-detected or via `--descriptor-set`) generates scalar proto3 C models, encoder helpers, and gRPC method-path constants.
 * `cwist_grpc_set_response()` and `cwist_grpc_set_error()` produce `application/grpc` responses and explicit `grpc-status` / `grpc-message` metadata.
 * `cwist_pb_writer` supports varint keys, uint64/int64/bool fields, bytes fields, string fields, and dynamic buffer growth.
 * `cwist_pb_reader` iterates Protobuf fields and exposes wire type, field number, varint value, and length-delimited payload slices.
@@ -234,7 +234,7 @@ Completed:
 
 Known limits:
 
-* The proto generator covers scalar, enum, nested message, repeated packed-numeric, `oneof`, `map`, and fixed-width/`double` proto3 fields plus service paths; descriptor-set input remains (v3.4).
+* The proto generator covers scalar, enum, repeated packed-numeric, `oneof`, `map`, and fixed-width/`double` proto3 fields plus service paths, with descriptor-set input (nested types flatten on that path); text input still lacks nested message definitions.
 * The builtin health `Watch` route streams status changes over the HTTP/2 transport path and falls back to a single snapshot on the buffered dispatch path.
 * Retry policy and client-side load balancing remain; the h2c/TLS gRPC client (`cwist_grpc_client_*`) covers unary and server-streaming calls with grpc-timeout deadlines and RST_STREAM cancellation.
 
@@ -244,7 +244,7 @@ Known limits:
 
 Theme: gRPC client side, codegen completeness, and the first WASM client-side support wave. v3.3 shipped the wire-level streaming server (DATA-frame wiring, trailers, deadlines, gzip) plus the first proto codegen extension (enums, nested message fields, repeated packed numerics); v3.4 finishes the story instead of moving the already-pushed v3.3 tag.
 
-* **`cwist proto` completion**: ~~`oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`)~~ (done); `protoc --descriptor_set_out` input bindings remain. CLI-only work (`tools/cli/cwist`), no library ABI impact.
+* **`cwist proto` completion**: ~~`oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`), and `protoc --descriptor_set_out` input bindings~~ (all done). CLI-only work (`tools/cli/cwist`), no library ABI impact.
 * **gRPC client**: ~~h2/h2c client with unary/streaming calls~~ (done: `cwist_grpc_client_*` with deadlines and cancellation); retry policy and client-side load balancing remain.
 * **gRPC server leftovers**: ~~moving health `Watch` onto the streaming dispatch path~~ (done).
 * **Distribution**: ~~publish the Homebrew formula~~ (done: `brew tap c4punks/cwist`, `brew install c4punks/cwist/cwist`, verified end-to-end on Linuxbrew). vcpkg stays an in-tree draft under `packaging/vcpkg/`; upstream submission postponed.

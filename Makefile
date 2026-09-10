@@ -498,7 +498,8 @@ TEST_TARGETS = test_sstring \
                test_grpc_stream \
                test_grpc_client \
                test_dispatch_memory \
-               test_proto_gen
+               test_proto_gen \
+               test_proto_desc
 
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples wasm wasm-smoke clean-wasm
 
@@ -951,3 +952,14 @@ test_proto_gen: $(LIB_NAME) tests/test_proto_gen.c tests/test_proto_gen_sample.p
 	./tools/cli/cwist proto tests/test_proto_gen_sample.proto --output tests/test_proto_gen_sample.cwist.pb.h
 	$(CC) $(CFLAGS) -Itests -o test_proto_gen tests/test_proto_gen.c $(LIB_NAME) $(LIBS)
 	./test_proto_gen
+
+# Descriptor-set input: hand-encode a FileDescriptorSet (no protoc needed in
+# CI), generate from it, and prove byte-identical output against the text path
+# plus a full encode/decode round trip of the generated code.
+test_proto_desc: $(LIB_NAME) tests/test_proto_gen.c tests/make_sample_descriptor.py
+	python3 tests/make_sample_descriptor.py tests/test_proto_gen_sample.pb
+	./tools/cli/cwist proto tests/test_proto_gen_sample.pb --output tests/test_proto_gen_desc_sample.cwist.pb.h
+	./tools/cli/cwist proto tests/test_proto_gen_sample.proto --output tests/test_proto_gen_sample.cwist.pb.h
+	diff tests/test_proto_gen_sample.cwist.pb.h tests/test_proto_gen_desc_sample.cwist.pb.h
+	$(CC) $(CFLAGS) -Itests -DPROTO_GEN_SAMPLE_HEADER='"test_proto_gen_desc_sample.cwist.pb.h"' -o test_proto_desc tests/test_proto_gen.c $(LIB_NAME) $(LIBS)
+	./test_proto_desc

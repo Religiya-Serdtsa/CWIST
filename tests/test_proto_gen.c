@@ -3,7 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "test_proto_gen_sample.cwist.pb.h"
+#ifndef PROTO_GEN_SAMPLE_HEADER
+#define PROTO_GEN_SAMPLE_HEADER "test_proto_gen_sample.cwist.pb.h"
+#endif
+#include PROTO_GEN_SAMPLE_HEADER
 
 static proto_gen_sample_Outer build_sample(void) {
     static int64_t ids[] = {1, -2, 300};
