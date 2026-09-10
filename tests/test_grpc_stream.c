@@ -341,12 +341,6 @@ static void test_streaming_incremental(cwist_app *app, live_state *st) {
     fd_send_frame(cfd, 0x01, 0x04, 1, block, (uint32_t)blen);
 
     test_frame f;
-    /* Initial response HEADERS arrive immediately (before any message). */
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0);
-    assert(!(f.flags & 0x01));
-    assert(frame_payload_contains(&f, "application/grpc"));
-    assert(!frame_payload_contains(&f, "grpc-status"));
-
     /* Message 1, split across two DATA frames, no END_STREAM yet. */
     const char *p1 = "\x0a\x03one";
     uint8_t frame1[64];
@@ -354,6 +348,13 @@ static void test_streaming_incremental(cwist_app *app, live_state *st) {
     make_pb_frame(frame1, &frame1_len, NULL, 0, (const uint8_t *)p1, strlen(p1));
     fd_send_frame(cfd, 0x00, 0, 1, frame1, 3);               /* split mid-header */
     fd_send_frame(cfd, 0x00, 0, 1, frame1 + 3, (uint32_t)(frame1_len - 3));
+
+    /* Response-Headers are delayed until the first response message
+     * (gRFC A6); they precede the echo DATA. */
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0);
+    assert(!(f.flags & 0x01));
+    assert(frame_payload_contains(&f, "application/grpc"));
+    assert(!frame_payload_contains(&f, "grpc-status"));
 
     /* The echo must come back before the client half-closes: proof the
      * handler saw the message as it arrived, not from a buffered body. */
@@ -398,10 +399,9 @@ static void test_deadline(cwist_app *app, live_state *st) {
     fd_send_frame(cfd, 0x01, 0x04, 1, block, (uint32_t)blen);
 
     test_frame f;
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* initial HEADERS */
-
-    /* No messages sent; the deadline must fire on its own. */
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* trailers */
+    /* No messages are sent; the deadline fires on its own with a
+     * Trailers-Only HEADERS frame (END_STREAM, grpc-status 4). */
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0);
     assert(f.flags & 0x01);
     assert(frame_payload_contains(&f, "grpc-status"));
     assert(frame_payload_contains(&f, "4")); /* DEADLINE_EXCEEDED */
@@ -421,9 +421,7 @@ static void test_cancellation(cwist_app *app, live_state *st) {
     size_t blen = build_request_block(block, "/cwist.test.Wire/Block", NULL, 0);
     fd_send_frame(cfd, 0x01, 0x04, 1, block, (uint32_t)blen);
 
-    test_frame f;
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* initial HEADERS */
-
+    /* The server stays silent until the handler speaks; cancel immediately. */
     uint8_t rst[4] = { 0, 0, 0, 0x08 }; /* CANCEL */
     fd_send_frame(cfd, 0x03, 0, 1, rst, 4); /* RST_STREAM */
 
@@ -449,10 +447,6 @@ static void test_gzip(cwist_app *app, live_state *st) {
     size_t blen = build_request_block(block, "/cwist.test.Wire/Live", extra, 1);
     fd_send_frame(cfd, 0x01, 0x04, 1, block, (uint32_t)blen);
 
-    test_frame f;
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0);
-    assert(frame_payload_contains(&f, "grpc-accept-encoding"));
-
     const char *p1 = "\x0a\x07zipped!";
     uint8_t zipped[256];
     z_stream zs;
@@ -473,6 +467,11 @@ static void test_gzip(cwist_app *app, live_state *st) {
     make_pb_frame(zframe, &zframe_len, NULL, 1, zipped, zipped_len);
     fd_send_frame(cfd, 0x00, 0, 1, zframe, 4);
     fd_send_frame(cfd, 0x00, 0x01, 1, zframe + 4, (uint32_t)(zframe_len - 4));
+
+    test_frame f;
+    /* Delayed response HEADERS (gRFC A6) precede the echo. */
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0);
+    assert(frame_payload_contains(&f, "grpc-accept-encoding"));
 
     /* The echo comes back decompressed. */
     assert(fd_read_stream_frame(cfd, &f, 0x00, 1, 5000) == 0);
@@ -501,16 +500,17 @@ static void test_response_gzip(cwist_app *app, live_state *st) {
     size_t blen = build_request_block(block, "/cwist.test.Wire/Live", extra, 1);
     fd_send_frame(cfd, 0x01, 0x04, 1, block, (uint32_t)blen);
 
-    test_frame f;
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* response HEADERS */
-    assert(frame_payload_contains(&f, "grpc-encoding"));
-    assert(frame_payload_contains(&f, "gzip"));
-
     const char *p1 = "\x0a\x0funcompressed-in";
     uint8_t frame1[64];
     size_t frame1_len;
     make_pb_frame(frame1, &frame1_len, NULL, 0, (const uint8_t *)p1, strlen(p1));
     fd_send_frame(cfd, 0x00, 0x01, 1, frame1, (uint32_t)frame1_len);
+
+    test_frame f;
+    /* Delayed response HEADERS (gRFC A6) precede the compressed DATA. */
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0);
+    assert(frame_payload_contains(&f, "grpc-encoding"));
+    assert(frame_payload_contains(&f, "gzip"));
 
     /* Response DATA frame must have compressed flag = 1 */
     assert(fd_read_stream_frame(cfd, &f, 0x00, 1, 5000) == 0);
@@ -563,9 +563,9 @@ static void test_unsupported_encoding(cwist_app *app) {
     fd_send_frame(cfd, 0x00, 0x01, 1, frame1, (uint32_t)frame1_len);
 
     test_frame f;
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* response HEADERS */
-    assert(!frame_payload_contains(&f, "grpc-status"));
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* trailers */
+    /* UNIMPLEMENTED travels as a Trailers-Only response (gRFC A6): one
+     * HEADERS frame with END_STREAM instead of headers-then-trailers. */
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0);
     assert(f.flags & 0x01);
     assert(frame_payload_contains(&f, "grpc-status"));
     assert(frame_payload_contains(&f, "12")); /* UNIMPLEMENTED */
@@ -595,11 +595,6 @@ static void test_health_watch(cwist_app *app) {
     size_t blen = build_request_block(block, "/grpc.health.v1.Health/Watch", NULL, 0);
     fd_send_frame(cfd, 0x01, 0x04, 1, block, (uint32_t)blen);
 
-    test_frame f;
-    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0); /* response HEADERS */
-    assert(frame_payload_contains(&f, "application/grpc"));
-    assert(!frame_payload_contains(&f, "grpc-status"));
-
     /* HealthCheckRequest { service = "cwist.test.Wire" }, then half-close. */
     cwist_pb_writer pb;
     cwist_pb_writer_init(&pb);
@@ -609,6 +604,12 @@ static void test_health_watch(cwist_app *app) {
     make_pb_frame(frame1, &frame1_len, NULL, 0, pb.data, pb.len);
     cwist_pb_writer_free(&pb);
     fd_send_frame(cfd, 0x00, 0x01, 1, frame1, (uint32_t)frame1_len);
+
+    test_frame f;
+    /* Delayed response HEADERS (gRFC A6) precede the first status. */
+    assert(fd_read_stream_frame(cfd, &f, 0x01, 1, 5000) == 0);
+    assert(frame_payload_contains(&f, "application/grpc"));
+    assert(!frame_payload_contains(&f, "grpc-status"));
 
     /* The current status must arrive immediately: SERVING. */
     assert(fd_read_stream_frame(cfd, &f, 0x00, 1, 5000) == 0);

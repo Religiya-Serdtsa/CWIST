@@ -191,6 +191,7 @@ SRCS = src/core/sstring/sstring.c \
        src/net/http/tls_chain.c \
        src/net/grpc/grpc.c \
        src/net/grpc/grpc_client.c \
+       src/net/grpc/grpc_channel.c \
        src/net/grpc/protobuf.c \
        src/https/pqc_layer.c \
        src/net/http/mux.c \
@@ -496,6 +497,7 @@ TEST_TARGETS = test_sstring \
                test_grpc \
                test_grpc_stream \
                test_grpc_client \
+               test_grpc_channel \
                test_dispatch_memory \
                test_proto_gen \
                test_proto_desc
@@ -942,6 +944,10 @@ test_grpc_stream: $(LIB_NAME) tests/test_grpc_stream.c
 test_grpc_client: $(LIB_NAME) tests/test_grpc_client.c
 	$(CC) $(CFLAGS) -o test_grpc_client tests/test_grpc_client.c $(LIB_NAME) $(LIBS)
 	./test_grpc_client
+
+test_grpc_channel: $(LIB_NAME) tests/test_grpc_channel.c
+	$(CC) $(CFLAGS) -o test_grpc_channel tests/test_grpc_channel.c $(LIB_NAME) $(LIBS)
+	./test_grpc_channel
 
 test_dispatch_memory: $(LIB_NAME) tests/test_dispatch_memory.c
 	$(CC) $(CFLAGS) -o test_dispatch_memory tests/test_dispatch_memory.c $(LIB_NAME) $(LIBS)
