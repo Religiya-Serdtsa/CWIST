@@ -167,6 +167,8 @@ int cwist_grpc_decoder_feed(cwist_grpc_decoder *decoder, const void *data, size_
 int cwist_app_grpc_health(struct cwist_app *app);
 int cwist_app_grpc_health_set_status(struct cwist_app *app, const char *service,
                                      int serving);
+/** Number of active streaming Watch calls; -1 when health is not registered. */
+int cwist_app_grpc_health_watchers(struct cwist_app *app);
 
 /** Register the grpc.reflection.v1alpha.ServerReflection service. */
 int cwist_app_grpc_reflection(struct cwist_app *app);

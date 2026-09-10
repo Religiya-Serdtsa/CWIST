@@ -235,7 +235,7 @@ Completed:
 Known limits:
 
 * The proto generator covers scalar, enum, nested message, repeated packed-numeric, `oneof`, `map`, and fixed-width/`double` proto3 fields plus service paths; descriptor-set input remains (v3.4).
-* The builtin health `Watch` route stays on the buffered dispatch path.
+* The builtin health `Watch` route streams status changes over the HTTP/2 transport path and falls back to a single snapshot on the buffered dispatch path.
 * No gRPC client, retry policy, or load-balancing policy exists yet.
 
 ---

@@ -374,6 +374,38 @@ int main(void) {
     cwist_http_response_destroy(res);
     cwist_free(empty_frame);
 
+    /* Buffered Watch dispatch: single snapshot response with the current
+     * status, properly closed with grpc-status 0. */
+    {
+        cwist_pb_writer watch_req;
+        cwist_pb_writer_init(&watch_req);
+        assert(cwist_pb_write_string_field(&watch_req, 1, "cwist.test.Echo") == 0);
+        uint8_t *wframe = NULL;
+        size_t wframe_len = 0;
+        assert(cwist_grpc_encode_message(watch_req.data, watch_req.len, 0,
+                                         &wframe, &wframe_len) == 0);
+        opts.body = (const char *)wframe;
+        opts.body_len = wframe_len;
+        opts.content_type = "application/grpc";
+        res = cwist_test_client_request_ex(client, CWIST_HTTP_POST,
+                                           "/grpc.health.v1.Health/Watch", &opts);
+        assert(res != NULL);
+        assert(strcmp(cwist_http_header_get(res->headers, "grpc-status"), "0") == 0);
+        size_t woff = 0;
+        cwist_grpc_message wmsg;
+        assert(cwist_grpc_decode_next_message(res->body->data, res->body->size,
+                                              &woff, &wmsg) == 0);
+        cwist_pb_reader wr;
+        cwist_pb_reader_init(&wr, wmsg.data, wmsg.len);
+        cwist_pb_field wf;
+        assert(cwist_pb_read_field(&wr, &wf) > 0);
+        assert(wf.number == 1 && wf.varint == 1); /* SERVING */
+        assert(woff == res->body->size); /* exactly one snapshot message */
+        cwist_http_response_destroy(res);
+        cwist_free(wframe);
+        cwist_pb_writer_free(&watch_req);
+    }
+
     opts.content_type = "application/grpc";
     static const unsigned char malformed[] = { 0, 0, 0, 0, 5, 'b', 'a', 'd' };
     opts.body = (const char *)malformed;

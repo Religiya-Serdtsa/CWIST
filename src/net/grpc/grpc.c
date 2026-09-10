@@ -33,6 +33,16 @@ typedef struct cwist_grpc_health_state {
     struct cwist_grpc_health_state *next;
 } cwist_grpc_health_state;
 
+/* Shared health registry: status list plus the notification machinery that
+ * long-lived Watch streams wait on. */
+typedef struct cwist_grpc_health_registry {
+    pthread_mutex_t mu;
+    pthread_cond_t cond;          /* signalled when generation advances */
+    cwist_grpc_health_state *states;
+    uint64_t generation;          /* bumped on every status change */
+    atomic_int watchers;          /* active streaming Watch calls */
+} cwist_grpc_health_registry;
+
 static int grpc_register_route(cwist_app *app, const char *service, const char *method,
                                int streaming, cwist_grpc_unary_handler_func unary_handler,
                                cwist_grpc_stream_handler_func stream_handler, void *user_ctx);
@@ -726,34 +736,44 @@ void cwist_grpc_stream_close(cwist_grpc_stream *stream,
     }
 }
 
-static int grpc_health_status(const cwist_grpc_health_state *state, const char *service) {
-    for (const cwist_grpc_health_state *it = state; it; it = it->next)
+/* Caller must hold reg->mu.  Empty/NULL service names the whole server. */
+static int grpc_health_status_locked(const cwist_grpc_health_registry *reg, const char *service) {
+    for (const cwist_grpc_health_state *it = reg->states; it; it = it->next)
         if (it->service && strcmp(it->service, service ? service : "") == 0)
             return it->serving ? 1 : 2;
     return service && *service ? 3 : 1; /* SERVICE_UNKNOWN, or overall SERVING */
 }
 
-static void grpc_health_reply(cwist_http_response *res, cwist_grpc_health_state *state,
-                              const cwist_grpc_message *message) {
-    const char *service = "";
-    char *owned = NULL;
+/* Extract the HealthCheckRequest service field as an owned string. */
+static char *grpc_health_service_copy(const cwist_grpc_message *message) {
     cwist_pb_reader reader;
     cwist_pb_reader_init(&reader, message->data, message->len);
     cwist_pb_field field;
     while (cwist_pb_read_field(&reader, &field) > 0)
         if (field.number == 1 && field.wire_type == CWIST_PB_LEN) {
-            owned = cwist_alloc(field.len + 1);
-            if (!owned) { cwist_grpc_set_error(res, CWIST_GRPC_RESOURCE_EXHAUSTED, "health allocation failed"); return; }
-            memcpy(owned, field.bytes, field.len); owned[field.len] = '\0'; service = owned; break;
+            char *owned = cwist_alloc(field.len + 1);
+            if (!owned) return NULL;
+            memcpy(owned, field.bytes, field.len);
+            owned[field.len] = '\0';
+            return owned;
         }
+    return NULL;
+}
+
+static void grpc_health_reply(cwist_http_response *res, cwist_grpc_health_registry *reg,
+                              const cwist_grpc_message *message) {
+    char *service = grpc_health_service_copy(message);
+    pthread_mutex_lock(&reg->mu);
+    int status = grpc_health_status_locked(reg, service);
+    pthread_mutex_unlock(&reg->mu);
     cwist_pb_writer writer;
     cwist_pb_writer_init(&writer);
-    if (cwist_pb_write_uint64_field(&writer, 1, (uint64_t)grpc_health_status(state, service)) != 0)
+    if (cwist_pb_write_uint64_field(&writer, 1, (uint64_t)status) != 0)
         cwist_grpc_set_error(res, CWIST_GRPC_INTERNAL, "health encoding failed");
     else
         cwist_grpc_set_response(res, CWIST_GRPC_OK, NULL, writer.data, writer.len);
     cwist_pb_writer_free(&writer);
-    cwist_free(owned);
+    cwist_free(service);
 }
 
 static void grpc_health_check(cwist_http_request *req, cwist_http_response *res,
@@ -762,23 +782,85 @@ static void grpc_health_check(cwist_http_request *req, cwist_http_response *res,
     grpc_health_reply(res, ctx, message);
 }
 
+static int grpc_health_send_status(cwist_grpc_stream *stream,
+                                   cwist_grpc_health_registry *reg,
+                                   const char *service) {
+    pthread_mutex_lock(&reg->mu);
+    int status = grpc_health_status_locked(reg, service);
+    pthread_mutex_unlock(&reg->mu);
+    cwist_pb_writer writer;
+    cwist_pb_writer_init(&writer);
+    int rc = cwist_pb_write_uint64_field(&writer, 1, (uint64_t)status);
+    if (rc == 0) rc = cwist_grpc_stream_send(stream, writer.data, writer.len);
+    cwist_pb_writer_free(&writer);
+    if (rc != 0 && stream->status == CWIST_GRPC_OK) {
+        stream->status = CWIST_GRPC_INTERNAL;
+        stream->status_message = "health encoding failed";
+    }
+    return rc;
+}
+
 static void grpc_health_watch(cwist_grpc_stream *stream, void *ctx) {
-    cwist_grpc_message empty = { 0, NULL, 0 };
-    const cwist_grpc_message *message = stream->message_count ? &stream->messages[0] : &empty;
-    cwist_http_response *res = stream->res;
-    grpc_health_reply(res, ctx, message);
+    cwist_grpc_health_registry *reg = ctx;
+    char *service = NULL;
+    if (stream->session) {
+        /* Transport path: the HealthCheckRequest arrives as the first
+         * (and only) message; the client then half-closes. */
+        cwist_grpc_message msg;
+        int rc = cwist_grpc_stream_recv(stream, &msg);
+        if (rc < 0) return; /* cancelled before the request arrived */
+        if (rc > 0) service = grpc_health_service_copy(&msg);
+    } else {
+        cwist_grpc_message empty = { 0, NULL, 0 };
+        const cwist_grpc_message *message = stream->message_count ? &stream->messages[0] : &empty;
+        service = grpc_health_service_copy(message);
+    }
+
+    /* Send the current status immediately, as the protocol requires. */
+    if (grpc_health_send_status(stream, reg, service) != 0) goto out;
+    if (!stream->session) goto out; /* buffered dispatch: single snapshot */
+
+    atomic_fetch_add(&reg->watchers, 1);
+    for (;;) {
+        int changed = 0;
+        pthread_mutex_lock(&reg->mu);
+        uint64_t gen = reg->generation;
+        while (reg->generation == gen &&
+               !cwist_grpc_stream_cancelled(stream) &&
+               cwist_grpc_stream_deadline_remaining_ms(stream) > 0) {
+            /* Poll cancellation/deadline on a short tick; status changes
+             * wake us immediately through the registry condvar. */
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            ts.tv_nsec += 100000000L;
+            if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
+            pthread_cond_timedwait(&reg->cond, &reg->mu, &ts);
+        }
+        changed = reg->generation != gen;
+        pthread_mutex_unlock(&reg->mu);
+        if (!changed) break; /* cancelled or deadline expired */
+        if (grpc_health_send_status(stream, reg, service) != 0) break;
+    }
+    atomic_fetch_sub(&reg->watchers, 1);
+out:
+    cwist_free(service);
 }
 
 int cwist_app_grpc_health(cwist_app *app) {
     if (!app) return -1;
-    cwist_grpc_health_state *state = cwist_alloc(sizeof(*state));
-    if (!state) return -1;
-    memset(state, 0, sizeof(*state));
+    cwist_grpc_health_registry *reg = cwist_alloc(sizeof(*reg));
+    if (!reg) return -1;
+    memset(reg, 0, sizeof(*reg));
+    pthread_mutex_init(&reg->mu, NULL);
+    pthread_cond_init(&reg->cond, NULL);
+    atomic_store(&reg->watchers, 0);
     if (grpc_register_route(app, "grpc.health.v1.Health", "Check", 0,
-                            grpc_health_check, NULL, state) != 0 ||
+                            grpc_health_check, NULL, reg) != 0 ||
         grpc_register_route(app, "grpc.health.v1.Health", "Watch", 1,
-                            NULL, grpc_health_watch, state) != 0) {
-        cwist_free(state);
+                            NULL, grpc_health_watch, reg) != 0) {
+        pthread_mutex_destroy(&reg->mu);
+        pthread_cond_destroy(&reg->cond);
+        cwist_free(reg);
         return -1;
     }
     cwist_grpc_route *route = grpc_find_route(app, "/grpc.health.v1.Health/Check");
@@ -791,15 +873,35 @@ int cwist_app_grpc_health(cwist_app *app) {
 int cwist_app_grpc_health_set_status(cwist_app *app, const char *service, int serving) {
     cwist_grpc_route *route = grpc_find_route(app, "/grpc.health.v1.Health/Check");
     if (!route || !route->user_ctx || !service) return -1;
-    cwist_grpc_health_state *state = route->user_ctx;
-    for (cwist_grpc_health_state *it = state; it; it = it->next)
-        if (it->service && strcmp(it->service, service) == 0) { it->serving = !!serving; return 0; }
+    cwist_grpc_health_registry *reg = route->user_ctx;
+    pthread_mutex_lock(&reg->mu);
+    for (cwist_grpc_health_state *it = reg->states; it; it = it->next)
+        if (it->service && strcmp(it->service, service) == 0) {
+            it->serving = !!serving;
+            reg->generation++;
+            pthread_cond_broadcast(&reg->cond);
+            pthread_mutex_unlock(&reg->mu);
+            return 0;
+        }
     cwist_grpc_health_state *item = cwist_alloc(sizeof(*item));
-    if (!item) return -1;
+    if (!item) { pthread_mutex_unlock(&reg->mu); return -1; }
     item->service = cwist_alloc(strlen(service) + 1);
-    if (!item->service) { cwist_free(item); return -1; }
-    strcpy(item->service, service); item->serving = !!serving; item->next = state->next; state->next = item;
+    if (!item->service) { pthread_mutex_unlock(&reg->mu); cwist_free(item); return -1; }
+    strcpy(item->service, service);
+    item->serving = !!serving;
+    item->next = reg->states;
+    reg->states = item;
+    reg->generation++;
+    pthread_cond_broadcast(&reg->cond);
+    pthread_mutex_unlock(&reg->mu);
     return 0;
+}
+
+int cwist_app_grpc_health_watchers(cwist_app *app) {
+    cwist_grpc_route *route = grpc_find_route(app, "/grpc.health.v1.Health/Watch");
+    if (!route || !route->user_ctx) return -1;
+    cwist_grpc_health_registry *reg = route->user_ctx;
+    return atomic_load(&reg->watchers);
 }
 
 static int grpc_reflection_append_service(cwist_pb_writer *response, const char *service) {
@@ -909,13 +1011,17 @@ void cwist_grpc_routes_destroy(cwist_app *app) {
     while (route) {
         cwist_grpc_route *next = route->next;
         if (route->builtin == 1 && route->user_ctx) {
-            cwist_grpc_health_state *state = route->user_ctx;
+            cwist_grpc_health_registry *reg = route->user_ctx;
+            cwist_grpc_health_state *state = reg->states;
             while (state) {
                 cwist_grpc_health_state *state_next = state->next;
                 cwist_free(state->service);
                 cwist_free(state);
                 state = state_next;
             }
+            pthread_mutex_destroy(&reg->mu);
+            pthread_cond_destroy(&reg->cond);
+            cwist_free(reg);
         }
         cwist_free(route->path);
         cwist_free(route);
@@ -930,8 +1036,8 @@ int cwist_grpc_routes_clone(cwist_app *dst, const cwist_app *src) {
     while (route) {
         if (route->builtin == 1) {
             if (cwist_app_grpc_health(dst) != 0) return -1;
-            const cwist_grpc_health_state *state = route->user_ctx;
-            for (const cwist_grpc_health_state *it = state; it; it = it->next)
+            const cwist_grpc_health_registry *reg = route->user_ctx;
+            for (const cwist_grpc_health_state *it = reg->states; it; it = it->next)
                 if (it->service && cwist_app_grpc_health_set_status(dst, it->service, it->serving) != 0)
                     return -1;
             route = route->next;
@@ -1224,7 +1330,10 @@ static void *grpc_h2_on_headers(void *conn_ctx, cwist_http_request *req,
     if (!ctx || !ctx->app || !req || !req->path || !req->path->data) return NULL;
 
     cwist_grpc_route *route = grpc_find_route(ctx->app, req->path->data);
-    if (!route || !route->stream_handler || route->builtin) return NULL;
+    /* Unary-only builtins (health Check) and reflection stay on the buffered
+     * dispatch path; the health Watch builtin streams live. */
+    if (!route || !route->stream_handler ||
+        (route->builtin && route->builtin != 2)) return NULL;
 
     const char *ct = grpc_header_get(req, "content-type");
     if (!grpc_content_type_is_grpc(ct)) return NULL;
