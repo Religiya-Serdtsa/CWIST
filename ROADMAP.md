@@ -247,7 +247,7 @@ Theme: gRPC client side and codegen completeness. v3.3 shipped the wire-level st
 * **`cwist proto` completion**: ~~`oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`)~~ (done); `protoc --descriptor_set_out` input bindings remain. CLI-only work (`tools/cli/cwist`), no library ABI impact.
 * **gRPC client**: ~~h2/h2c client with unary/streaming calls~~ (done: `cwist_grpc_client_*` with deadlines and cancellation); retry policy and client-side load balancing remain.
 * **gRPC server leftovers**: ~~moving health `Watch` onto the streaming dispatch path~~ (done).
-* **Distribution**: publish the Homebrew formula and vcpkg port beyond the current drafts (P4 #30).
+* **Distribution**: ~~publish the Homebrew formula~~ (done: `brew tap c4punks/cwist`, `brew install c4punks/cwist/cwist`, verified end-to-end on Linuxbrew). vcpkg stays an in-tree draft under `packaging/vcpkg/`; upstream submission postponed.
 
 ---
 
@@ -298,7 +298,7 @@ Theme: gRPC client side and codegen completeness. v3.3 shipped the wire-level st
 27. ~~**Background Jobs / Scheduler**~~ ✅
 28. ~~**Incremental gRPC framing, reflection, health checks, and `.proto` codegen**~~ ✅
 29. ~~**gRPC wire streaming**: DATA-frame wiring, trailers, deadlines, gzip negotiation~~ ✅
-30. **Distribution**: publish Homebrew formula and vcpkg port beyond the current drafts
+30. ~~**Distribution**~~ ✅ (Homebrew tap published at `c4punks/homebrew-cwist`; vcpkg kept as in-tree draft, upstream submission postponed)
 
 ---
 
