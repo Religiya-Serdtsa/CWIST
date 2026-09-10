@@ -25,6 +25,25 @@ message Outer {
   repeated Color shades = 9;
 }
 
+message Gadget {
+  fixed32 f32 = 1;
+  fixed64 f64 = 2;
+  sfixed32 sf32 = 3;
+  sfixed64 sf64 = 4;
+  double ratio = 5;
+  float score = 6;
+  repeated fixed64 ids64 = 7;
+  repeated double weights = 8;
+  oneof payload {
+    string text = 9;
+    sint32 code = 10;
+    Inner inner = 11;
+  }
+  map<string, int64> counts = 12;
+  map<uint32, string> labels = 13;
+  optional int32 maybe = 14;
+}
+
 service Greeter {
   rpc SayHello (Outer) returns (Outer);
 }
