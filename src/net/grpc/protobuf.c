@@ -80,6 +80,42 @@ int cwist_pb_write_bool_field(cwist_pb_writer *w, uint32_t field_number, int val
     return cwist_pb_write_uint64_field(w, field_number, value ? 1 : 0);
 }
 
+int cwist_pb_write_raw32(cwist_pb_writer *w, uint32_t value) {
+    if (!w) return -1;
+    if (cwist_pb_writer_reserve(w, 4) != 0) return -1;
+    w->data[w->len++] = (uint8_t)value;
+    w->data[w->len++] = (uint8_t)(value >> 8);
+    w->data[w->len++] = (uint8_t)(value >> 16);
+    w->data[w->len++] = (uint8_t)(value >> 24);
+    return 0;
+}
+
+int cwist_pb_write_raw64(cwist_pb_writer *w, uint64_t value) {
+    if (!w) return -1;
+    if (cwist_pb_writer_reserve(w, 8) != 0) return -1;
+    for (unsigned i = 0; i < 8; i++)
+        w->data[w->len++] = (uint8_t)(value >> (i * 8));
+    return 0;
+}
+
+int cwist_pb_write_fixed32_field(cwist_pb_writer *w, uint32_t field_number, uint32_t value) {
+    if (cwist_pb_write_key(w, field_number, CWIST_PB_32BIT) != 0) return -1;
+    return cwist_pb_write_raw32(w, value);
+}
+
+int cwist_pb_write_fixed64_field(cwist_pb_writer *w, uint32_t field_number, uint64_t value) {
+    if (cwist_pb_write_key(w, field_number, CWIST_PB_64BIT) != 0) return -1;
+    return cwist_pb_write_raw64(w, value);
+}
+
+int cwist_pb_write_float_field(cwist_pb_writer *w, uint32_t field_number, float value) {
+    return cwist_pb_write_fixed32_field(w, field_number, cwist_pb_float_bits(value));
+}
+
+int cwist_pb_write_double_field(cwist_pb_writer *w, uint32_t field_number, double value) {
+    return cwist_pb_write_fixed64_field(w, field_number, cwist_pb_double_bits(value));
+}
+
 int cwist_pb_write_bytes_field(cwist_pb_writer *w, uint32_t field_number, const void *data, size_t len) {
     if (!w || (len > 0 && !data)) return -1;
     if (cwist_pb_write_key(w, field_number, CWIST_PB_LEN) != 0) return -1;

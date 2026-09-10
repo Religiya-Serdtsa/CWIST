@@ -127,11 +127,29 @@ PROTO_SCALAR = {
     "sint32": ("int64_t", "cwist_pb_write_int64_field", True),
     "sint64": ("int64_t", "cwist_pb_write_int64_field", True),
     "string": ("const char *", "cwist_pb_write_string_field", False),
+    "fixed32": ("uint32_t", "cwist_pb_write_fixed32_field", False),
+    "fixed64": ("uint64_t", "cwist_pb_write_fixed64_field", False),
+    "sfixed32": ("int32_t", "cwist_pb_write_fixed32_field", False),
+    "sfixed64": ("int64_t", "cwist_pb_write_fixed64_field", False),
+    "float": ("float", "cwist_pb_write_float_field", False),
+    "double": ("double", "cwist_pb_write_double_field", False),
 }
 
+PROTO_WIRE = {
+    # proto scalar type -> wire shape (anything absent is a varint)
+    "string": "len",
+    "fixed32": "32", "sfixed32": "32", "float": "32",
+    "fixed64": "64", "sfixed64": "64", "double": "64",
+}
 
-def _proto_blocks(text: str, keyword: str) -> list[tuple[str, str]]:
-    """Yield (name, body) for each `keyword Name { ... }` with balanced braces."""
+PROTO_FIELD_RE = re.compile(
+    r"\b(?:(repeated|optional|required)\s+)?([\w.]+)\s+(\w+)\s*=\s*(\d+)\s*(?:\[[^\]]*\])?\s*;")
+PROTO_MAP_RE = re.compile(
+    r"\bmap\s*<\s*([\w.]+)\s*,\s*([\w.]+)\s*>\s*(\w+)\s*=\s*(\d+)\s*(?:\[[^\]]*\])?\s*;")
+
+
+def _proto_block_spans(text: str, keyword: str) -> list[tuple[str, str, int, int]]:
+    """Yield (name, body, start, end) for each `keyword Name { ... }` with balanced braces."""
     blocks = []
     for match in re.finditer(rf"\b{keyword}\s+(\w+)\s*\{{", text):
         depth, pos = 1, match.end()
@@ -141,8 +159,13 @@ def _proto_blocks(text: str, keyword: str) -> list[tuple[str, str]]:
             pos += 1
         if depth:
             fail(f"unbalanced braces in {keyword} {match.group(1)}")
-        blocks.append((match.group(1), text[match.end():pos - 1]))
+        blocks.append((match.group(1), text[match.end():pos - 1], match.start(), pos))
     return blocks
+
+
+def _proto_blocks(text: str, keyword: str) -> list[tuple[str, str]]:
+    """Yield (name, body) for each `keyword Name { ... }` with balanced braces."""
+    return [(name, body) for name, body, _, _ in _proto_block_spans(text, keyword)]
 
 
 def _strip_proto_comments(text: str) -> str:
@@ -158,14 +181,18 @@ def _gen_scalar_encode(field: str, typ: str, value: str) -> str:
 
 
 def generate_proto(source: Path, output: Path) -> None:
-    """Generate a small, dependency-free C model/encoder/decoder from a proto3 file.
+    """Generate a small, dependency-free C model/encoder/decoder from a proto file.
 
-    Covers scalar fields, repeated fields (packed varints and length-delimited),
-    message-typed fields, enums (proto3 open semantics: unknown values are
-    preserved), and service method paths. Nested message *definitions*,
-    oneof/map/fixed-width types, and `protoc --descriptor_set_out` input are
-    not supported; unsupported field types stay visible as comments instead of
-    silently producing incorrect wire encoders.
+    Covers scalar fields (varints plus fixed32/fixed64/sfixed32/sfixed64 and
+    float/double), repeated fields (packed varints, packed fixed-width, and
+    length-delimited), message-typed fields, oneof blocks (tagged union with a
+    `_case` discriminator enum), map fields (repeated entry structs), enums
+    (proto3 open semantics: unknown values are preserved), proto2-style
+    optional/required labels (treated as plain singular fields), and service
+    method paths. Nested message *definitions* and `protoc
+    --descriptor_set_out` input are not supported; unsupported field types
+    stay visible as comments instead of silently producing incorrect wire
+    encoders.
     """
     text = _strip_proto_comments(source.read_text(encoding="utf-8"))
     package = re.search(r"\bpackage\s+([A-Za-z_][\w.]*)\s*;", text)
@@ -180,18 +207,65 @@ def generate_proto(source: Path, output: Path) -> None:
 
     raw_messages = _proto_blocks(text, "message")
     message_names = {name for name, _ in raw_messages}
+
+    def classify(typ: str) -> str:
+        return ("scalar" if typ in PROTO_SCALAR else
+                "enum" if typ in enum_names else
+                "message" if typ in message_names else "unsupported")
+
+    def wire_of(f: dict) -> str:
+        if f["kind"] == "enum":
+            return "varint"
+        return PROTO_WIRE.get(f["type"], "varint")
+
+    def parse_field(typ: str, field: str, number: str, repeated: bool, oneof: str | None = None) -> dict:
+        typ = typ.split(".")[-1]
+        return {"type": typ, "name": field, "number": int(number),
+                "repeated": repeated, "kind": classify(typ), "oneof": oneof}
+
     messages: list[tuple[str, list[dict]]] = []
     for name, body in raw_messages:
-        fields = []
-        for rep, typ, field, number in re.findall(
-                r"\b(repeated\s+)?([\w.]+)\s+(\w+)\s*=\s*(\d+)\s*(?:\[[^\]]*\])?\s*;", body):
-            typ = typ.split(".")[-1]
-            kind = ("scalar" if typ in PROTO_SCALAR else
-                    "enum" if typ in enum_names else
-                    "message" if typ in message_names else "unsupported")
-            fields.append({"type": typ, "name": field, "number": int(number),
-                           "repeated": bool(rep.strip()), "kind": kind})
+        located: list[tuple[int, dict]] = []
+        spans: list[tuple[int, int]] = []
+        for oname, obody, ostart, oend in _proto_block_spans(body, "oneof"):
+            spans.append((ostart, oend))
+            for label, typ, field, number in PROTO_FIELD_RE.findall(obody):
+                located.append((ostart, parse_field(typ, field, number, label == "repeated", oneof=oname)))
+        for start, end in sorted(spans, reverse=True):
+            body = body[:start] + " " * (end - start) + body[end:]
+        map_spans = []
+        for match in PROTO_MAP_RE.finditer(body):
+            ktyp, vtyp, field, number = match.groups()
+            ktyp, vtyp = ktyp.split(".")[-1], vtyp.split(".")[-1]
+            key_kind, val_kind = classify(ktyp), classify(vtyp)
+            entry = "".join(part.capitalize() for part in field.split("_")) + "Entry"
+            f = {"type": f"map<{ktyp},{vtyp}>", "name": field, "number": int(number),
+                 "repeated": False, "oneof": None, "entry": entry,
+                 "key_type": ktyp, "val_type": vtyp, "key_kind": key_kind, "val_kind": val_kind,
+                 # map keys may only be integral scalars, bool, or string
+                 "kind": ("map" if key_kind == "scalar" and
+                          ktyp not in ("float", "double", "fixed32", "fixed64", "sfixed32", "sfixed64")
+                          and val_kind != "unsupported" else "unsupported")}
+            located.append((match.start(), f))
+            map_spans.append(match.span())
+        for start, end in sorted(map_spans, reverse=True):
+            body = body[:start] + " " * (end - start) + body[end:]
+        for match in PROTO_FIELD_RE.finditer(body):
+            label, typ, field, number = match.groups()
+            located.append((match.start(), parse_field(typ, field, number, label == "repeated")))
+        fields = [f for _, f in sorted(located, key=lambda item: item[0])]
         messages.append((name, fields))
+
+    def oneof_groups(fields: list[dict]) -> list[tuple[str, list[dict]]]:
+        order: list[str] = []
+        groups: dict[str, list[dict]] = {}
+        for f in fields:
+            if f["oneof"]:
+                if f["oneof"] not in groups:
+                    groups[f["oneof"]] = []
+                    order.append(f["oneof"])
+                groups[f["oneof"]].append(f)
+        return [(oname, groups[oname]) for oname in order]
 
     lines = ["/* Generated by cwist proto; do not edit. */", "#pragma once",
              "#include <cwist/net/grpc/protobuf.h>", "#include <stdint.h>", "#include <stddef.h>",
@@ -208,11 +282,61 @@ def generate_proto(source: Path, output: Path) -> None:
         lines.append(f"typedef struct {prefix}_{name} {prefix}_{name};")
     lines.append("")
 
+    def ctype_of(f: dict) -> str:
+        if f["kind"] == "scalar":
+            return PROTO_SCALAR[f["type"]][0]
+        return f"{prefix}_{f['type']}"
+
     for name, fields in messages:
         cname = f"{prefix}_{name}"
+        for oname, ofields in oneof_groups(fields):
+            lines.append(f"typedef enum {cname}_{oname}_case {{")
+            lines.append(f"    {cname}_{oname}_CASE_NONE = 0,")
+            for f in ofields:
+                lines.append(f"    {cname}_{oname}_CASE_{f['name']} = {f['number']},")
+            lines.extend([f"}} {cname}_{oname}_case;", ""])
+        for f in fields:
+            if f["kind"] != "map":
+                continue
+            key_ctype = PROTO_SCALAR[f["key_type"]][0]
+            val_ctype = ctype_of({"kind": f["val_kind"], "type": f["val_type"]})
+            lines.append(f"typedef struct {cname}_{f['entry']} {{")
+            lines.append(f"    {key_ctype}{'' if key_ctype.endswith('*') else ' '}key;")
+            if f["val_kind"] == "message":
+                lines.append(f"    {val_ctype} *value;")
+            else:
+                lines.append(f"    {val_ctype}{'' if val_ctype.endswith('*') else ' '}value;")
+            lines.extend([f"}} {cname}_{f['entry']};", ""])
+
+    for name, fields in messages:
+        cname = f"{prefix}_{name}"
+        groups = oneof_groups(fields)
         lines.append(f"struct {cname} {{")
+        emitted_oneofs: set[str] = set()
         for f in fields:
             typ, field = f["type"], f["name"]
+            if f["kind"] == "map":
+                lines.append(f"    {cname}_{f['entry']} *{field}; /* map */")
+                lines.append(f"    size_t {field}_count;")
+                continue
+            if f["oneof"]:
+                oname = f["oneof"]
+                if oname in emitted_oneofs:
+                    continue
+                emitted_oneofs.add(oname)
+                ofields = next(g for o, g in groups if o == oname)
+                lines.append(f"    {cname}_{oname}_case {oname}_case;")
+                lines.append("    union {")
+                for of in ofields:
+                    if of["kind"] == "unsupported":
+                        lines.append(f"        /* {of['name']}: unsupported proto field type {of['type']}; handle it manually. */")
+                    elif of["kind"] == "message":
+                        lines.append(f"        {prefix}_{of['type']} *{of['name']};")
+                    else:
+                        ctype = ctype_of(of)
+                        lines.append(f"        {ctype}{'' if ctype.endswith('*') else ' '}{of['name']};")
+                lines.append(f"    }} {oname};")
+                continue
             if f["kind"] == "scalar":
                 ctype = PROTO_SCALAR[typ][0]
             elif f["kind"] == "enum":
@@ -239,18 +363,104 @@ def generate_proto(source: Path, output: Path) -> None:
             return f"(uint64_t){expr}"
         return expr
 
-    def decode_scalar(f: dict, target: str, indent: str) -> list[str]:
-        expr = "field.varint"
+    def packed_write(f: dict, value: str) -> str:
+        """Return the per-element write call used inside a packed sub-writer."""
+        wire = wire_of(f)
+        if wire == "32":
+            bits = f"cwist_pb_float_bits({value})" if f["type"] == "float" else f"(uint32_t){value}"
+            return f"cwist_pb_write_raw32(&sub, {bits})"
+        if wire == "64":
+            bits = f"cwist_pb_double_bits({value})" if f["type"] == "double" else f"(uint64_t){value}"
+            return f"cwist_pb_write_raw64(&sub, {bits})"
+        return f"cwist_pb_write_varint(&sub, (uint64_t){cvalue(f, value)})"
+
+    def fixed_decode_expr(f: dict, src: str) -> str:
+        """Decode a fixed-width scalar from little-endian raw bytes at `src`."""
+        if f["type"] == "float":
+            return f"cwist_pb_load_float({src})"
+        if f["type"] == "double":
+            return f"cwist_pb_load_double({src})"
+        loader = "cwist_pb_load32_le" if wire_of(f) == "32" else "cwist_pb_load64_le"
+        return f"({ctype_of(f)}){loader}({src})"
+
+    def decode_scalar(f: dict, target: str, indent: str, var: str = "field") -> list[str]:
+        wire = wire_of(f)
+        if wire in ("32", "64"):
+            tag = "CWIST_PB_32BIT" if wire == "32" else "CWIST_PB_64BIT"
+            return [f"{indent}if ({var}.wire_type != {tag}) return -1;",
+                    f"{indent}{target} = {fixed_decode_expr(f, var + '.bytes')};"]
+        expr = f"{var}.varint"
         if f["kind"] == "scalar" and PROTO_SCALAR[f["type"]][2]:
-            expr = "cwist_pb_zigzag_decode(field.varint)"
+            expr = f"cwist_pb_zigzag_decode({expr})"
         cast = f"({PROTO_SCALAR[f['type']][0]})" if f["kind"] == "scalar" else f"({prefix}_{f['type']})"
-        return [f"{indent}{target} = {cast}{expr};"]
+        return [f"{indent}if ({var}.wire_type != CWIST_PB_VARINT) return -1;",
+                f"{indent}{target} = {cast}{expr};"]
+
+    def decode_string(target: str, indent: str, var: str = "field") -> list[str]:
+        return [f"{indent}if ({var}.wire_type != CWIST_PB_LEN) return -1;",
+                f"{indent}{{",
+                f"{indent}    char *copy = (char *)malloc({var}.len + 1);",
+                f"{indent}    if (!copy) return -1;",
+                f"{indent}    memcpy(copy, {var}.bytes, {var}.len); copy[{var}.len] = '\\0';",
+                f"{indent}    free((void *){target}); {target} = copy;",
+                f"{indent}}}"]
+
+    def decode_message(typ: str, target: str, indent: str, var: str = "field") -> list[str]:
+        return [f"{indent}if ({var}.wire_type != CWIST_PB_LEN) return -1;",
+                f"{indent}{{",
+                f"{indent}    {prefix}_{typ} *sub = ({prefix}_{typ} *)calloc(1, sizeof(*sub));",
+                f"{indent}    if (!sub) return -1;",
+                f"{indent}    cwist_pb_reader sr;",
+                f"{indent}    cwist_pb_reader_init(&sr, {var}.bytes, {var}.len);",
+                f"{indent}    if ({prefix}_{typ}_decode(&sr, sub) != 0) {{ free(sub); return -1; }}",
+                f"{indent}    if ({target}) {{ {prefix}_{typ}_free({target}); free({target}); }}",
+                f"{indent}    {target} = sub;",
+                f"{indent}}}"]
+
+    def encode_value(f: dict, number: int, expr: str, indent: str) -> list[str]:
+        """Encode one scalar/enum/message value expression as field `number`."""
+        if f["kind"] == "enum":
+            return [f"{indent}if (cwist_pb_write_uint64_field(w, {number}, (uint64_t){expr}) != 0) return -1;"]
+        if f["kind"] == "scalar":
+            if f["type"] == "string":
+                return [f"{indent}if ({expr}) {{ " + _gen_scalar_encode(str(number), f["type"], expr) + " }"]
+            return [f"{indent}" + _gen_scalar_encode(str(number), f["type"], expr)]
+        return [f"{indent}if ({expr}) {{",
+                f"{indent}    cwist_pb_writer sub;",
+                f"{indent}    cwist_pb_writer_init(&sub);",
+                f"{indent}    if ({prefix}_{f['type']}_encode(&sub, {expr}) != 0) {{ cwist_pb_writer_free(&sub); return -1; }}",
+                f"{indent}    int rc = cwist_pb_write_bytes_field(w, {number}, sub.data, sub.len);",
+                f"{indent}    cwist_pb_writer_free(&sub);",
+                f"{indent}    if (rc != 0) return -1;",
+                f"{indent}}}"]
+
+    def map_entry_clear(f: dict, expr: str, indent: str) -> list[str]:
+        out = []
+        if f["key_kind"] == "scalar" and f["key_type"] == "string":
+            out.append(f"{indent}free((void *){expr}.key);")
+        if f["val_kind"] == "scalar" and f["val_type"] == "string":
+            out.append(f"{indent}free((void *){expr}.value);")
+        elif f["val_kind"] == "message":
+            out.append(f"{indent}if ({expr}.value) {{ {prefix}_{f['val_type']}_free({expr}.value); free({expr}.value); }}")
+        return out
 
     for name, fields in messages:
         cname = f"{prefix}_{name}"
+        groups = oneof_groups(fields)
         # Append helpers keep repeated-field growth in one place per field.
         for f in fields:
-            if not f["repeated"] or f["kind"] == "unsupported":
+            if f["kind"] == "map":
+                field = f["name"]
+                lines.extend([
+                    f"static inline int {cname}__append_{field}({cname} *m, const {cname}_{f['entry']} *value) {{",
+                    f"    void *next = realloc(m->{field}, (m->{field}_count + 1) * sizeof(*m->{field}));",
+                    "    if (!next) return -1;",
+                    f"    m->{field} = ({cname}_{f['entry']} *)next;",
+                    f"    m->{field}[m->{field}_count++] = *value;",
+                    "    return 0;",
+                    "}", ""])
+                continue
+            if not f["repeated"] or f["kind"] == "unsupported" or f["oneof"]:
                 continue
             typ, field = f["type"], f["name"]
             if f["kind"] == "scalar":
@@ -276,12 +486,80 @@ def generate_proto(source: Path, output: Path) -> None:
                     "    return 0;",
                     "}", ""])
 
+        for oname, ofields in groups:
+            lines.append(f"static inline void {cname}__clear_{oname}({cname} *m) {{")
+            lines.append(f"    switch (m->{oname}_case) {{")
+            for of in ofields:
+                if of["kind"] == "scalar" and of["type"] == "string":
+                    lines.append(f"    case {cname}_{oname}_CASE_{of['name']}:")
+                    lines.append(f"        free((void *)m->{oname}.{of['name']});")
+                    lines.append("        break;")
+                elif of["kind"] == "message":
+                    lines.append(f"    case {cname}_{oname}_CASE_{of['name']}:")
+                    lines.append(f"        if (m->{oname}.{of['name']}) {{ {prefix}_{of['type']}_free(m->{oname}.{of['name']}); free(m->{oname}.{of['name']}); }}")
+                    lines.append("        break;")
+            lines.extend(["    default:", "        break;", "    }",
+                          f"    m->{oname}_case = {cname}_{oname}_CASE_NONE;",
+                          f"    memset(&m->{oname}, 0, sizeof(m->{oname}));",
+                          "}", ""])
+
         lines.extend([f"static inline int {cname}_encode(cwist_pb_writer *w, const {cname} *m) {{",
                       "    if (!w || !m) return -1;"])
+        emitted_oneofs = set()
         for f in fields:
             typ, field, number = f["type"], f["name"], f["number"]
             if f["kind"] == "unsupported":
                 lines.append(f"    /* {field}: unsupported proto field type {typ}; supply a custom encoder. */")
+            elif f["kind"] == "map":
+                key_f = {"kind": f["key_kind"], "type": f["key_type"]}
+                val_f = {"kind": f["val_kind"], "type": f["val_type"]}
+                lines.extend([
+                    f"    for (size_t i = 0; i < m->{field}_count; i++) {{",
+                    "        cwist_pb_writer sub;",
+                    "        cwist_pb_writer_init(&sub);",
+                    f"        const {cname}_{f['entry']} *e = &m->{field}[i];"])
+                # key/value encodes target the entry sub-writer; on failure free it
+                def sub_encode(vf: dict, vnum: int, expr: str) -> list[str]:
+                    def to_sub(stmt: str) -> str:
+                        return stmt.replace("(w, ", "(&sub, ", 1).replace(
+                            "return -1;", "{ cwist_pb_writer_free(&sub); return -1; }")
+                    if vf["kind"] == "scalar":
+                        stmt = to_sub(_gen_scalar_encode(str(vnum), vf["type"], expr))
+                        if vf["type"] == "string":
+                            return [f"        if ({expr}) {{ {stmt} }}"]
+                        return [f"        {stmt}"]
+                    if vf["kind"] == "enum":
+                        return [f"        if (cwist_pb_write_uint64_field(&sub, {vnum}, (uint64_t){expr}) != 0) {{ cwist_pb_writer_free(&sub); return -1; }}"]
+                    return [
+                        f"        if ({expr}) {{",
+                        "            cwist_pb_writer vw;",
+                        "            cwist_pb_writer_init(&vw);",
+                        f"            if ({prefix}_{vf['type']}_encode(&vw, {expr}) != 0) {{ cwist_pb_writer_free(&vw); cwist_pb_writer_free(&sub); return -1; }}",
+                        f"            int vrc = cwist_pb_write_bytes_field(&sub, {vnum}, vw.data, vw.len);",
+                        "            cwist_pb_writer_free(&vw);",
+                        "            if (vrc != 0) { cwist_pb_writer_free(&sub); return -1; }",
+                        "        }"]
+                lines.extend(sub_encode(key_f, 1, "e->key"))
+                lines.extend(sub_encode(val_f, 2, "e->value"))
+                lines.extend([
+                    f"        int rc = cwist_pb_write_bytes_field(w, {number}, sub.data, sub.len);",
+                    "        cwist_pb_writer_free(&sub);",
+                    "        if (rc != 0) return -1;",
+                    "    }"])
+            elif f["oneof"]:
+                oname = f["oneof"]
+                if oname in emitted_oneofs:
+                    continue
+                emitted_oneofs.add(oname)
+                ofields = next(g for o, g in groups if o == oname)
+                lines.append(f"    switch (m->{oname}_case) {{")
+                for of in ofields:
+                    if of["kind"] == "unsupported":
+                        continue
+                    lines.append(f"    case {cname}_{oname}_CASE_{of['name']}:")
+                    lines.extend(encode_value(of, of["number"], f"m->{oname}.{of['name']}", "        "))
+                    lines.append("        break;")
+                lines.extend(["    default:", "        break;", "    }"])
             elif f["kind"] == "scalar" and not f["repeated"]:
                 if typ == "string":
                     lines.append(f"    if (m->{field}) {{ " + _gen_scalar_encode(str(number), typ, f"m->{field}") + " }")
@@ -304,6 +582,17 @@ def generate_proto(source: Path, output: Path) -> None:
                     lines.extend([
                         f"    for (size_t i = 0; i < m->{field}_count; i++)",
                         f"        if (m->{field}[i]) {{ " + _gen_scalar_encode(str(number), typ, f"m->{field}[i]") + " }"])
+                elif wire_of(f) in ("32", "64"):  # packed fixed-width numerics
+                    lines.extend([
+                        f"    if (m->{field}_count > 0) {{",
+                        "        cwist_pb_writer sub;",
+                        "        cwist_pb_writer_init(&sub);",
+                        f"        for (size_t i = 0; i < m->{field}_count; i++)",
+                        f"            if ({packed_write(f, f'm->{field}[i]')} != 0) {{ cwist_pb_writer_free(&sub); return -1; }}",
+                        f"        int rc = cwist_pb_write_bytes_field(w, {number}, sub.data, sub.len);",
+                        "        cwist_pb_writer_free(&sub);",
+                        "        if (rc != 0) return -1;",
+                        "    }"])
                 else:  # packed varints (proto3 default for repeated numerics)
                     value = cvalue(f, f"m->{field}[i]")
                     lines.extend([
@@ -338,47 +627,92 @@ def generate_proto(source: Path, output: Path) -> None:
             if f["kind"] == "unsupported":
                 continue
             lines.append(f"        case {number}:")
-            if f["kind"] == "scalar" and not f["repeated"] and typ == "string":
+            if f["kind"] == "map":
+                key_f = {"kind": f["key_kind"], "type": f["key_type"]}
+                val_f = {"kind": f["val_kind"], "type": f["val_type"]}
                 lines.extend([
                     "            if (field.wire_type != CWIST_PB_LEN) return -1;",
                     "            {",
-                    "                char *copy = (char *)malloc(field.len + 1);",
-                    "                if (!copy) return -1;",
-                    "                memcpy(copy, field.bytes, field.len); copy[field.len] = '\\0';",
-                    f"                free((void *)m->{field}); m->{field} = copy;",
-                    "            }"])
-            elif not f["repeated"] and f["kind"] in ("scalar", "enum"):
-                lines.append("            if (field.wire_type != CWIST_PB_VARINT) return -1;")
-                lines.extend(decode_scalar(f, f"m->{field}", "            "))
-            elif f["kind"] == "message" and not f["repeated"]:
-                lines.extend([
-                    "            if (field.wire_type != CWIST_PB_LEN) return -1;",
-                    "            {",
-                    f"                {prefix}_{typ} *sub = ({prefix}_{typ} *)calloc(1, sizeof(*sub));",
-                    "                if (!sub) return -1;",
+                    f"                {cname}_{f['entry']} e;",
+                    "                memset(&e, 0, sizeof(e));",
                     "                cwist_pb_reader sr;",
                     "                cwist_pb_reader_init(&sr, field.bytes, field.len);",
-                    f"                if ({prefix}_{typ}_decode(&sr, sub) != 0) {{ free(sub); return -1; }}",
-                    f"                if (m->{field}) {{ {prefix}_{typ}_free(m->{field}); free(m->{field}); }}",
-                    f"                m->{field} = sub;",
-                    "            }"])
+                    "                cwist_pb_field kv;",
+                    "                while (cwist_pb_read_field(&sr, &kv) > 0) {",
+                    "                    if (kv.number == 1) {"])
+                if f["key_kind"] == "scalar" and f["key_type"] == "string":
+                    lines.extend(decode_string("e.key", "                        ", "kv"))
+                else:
+                    lines.extend(decode_scalar(key_f, "e.key", "                        ", "kv"))
+                lines.append("                    } else if (kv.number == 2) {")
+                if f["val_kind"] == "scalar" and f["val_type"] == "string":
+                    lines.extend(decode_string("e.value", "                        ", "kv"))
+                elif f["val_kind"] == "message":
+                    lines.extend(decode_message(f["val_type"], "e.value", "                        ", "kv"))
+                else:
+                    lines.extend(decode_scalar(val_f, "e.value", "                        ", "kv"))
+                lines.extend(["                    }",
+                              "                }"])
+                cleanup = map_entry_clear(f, "e", " " * 20)
+                if cleanup:
+                    lines.append(f"                if ({cname}__append_{field}(m, &e) != 0) {{")
+                    lines.extend(cleanup)
+                    lines.append("                    return -1;")
+                    lines.append("                }")
+                else:
+                    lines.append(f"                if ({cname}__append_{field}(m, &e) != 0) return -1;")
+                lines.append("            }")
+            elif f["oneof"]:
+                oname = f["oneof"]
+                lines.append(f"            {cname}__clear_{oname}(m);")
+                if f["kind"] == "scalar" and typ == "string":
+                    lines.extend(decode_string(f"m->{oname}.{field}", "            "))
+                elif f["kind"] == "message":
+                    lines.extend(decode_message(typ, f"m->{oname}.{field}", "            "))
+                else:
+                    lines.extend(decode_scalar(f, f"m->{oname}.{field}", "            "))
+                lines.append(f"            m->{oname}_case = {cname}_{oname}_CASE_{field};")
+            elif f["kind"] == "scalar" and not f["repeated"] and typ == "string":
+                lines.extend(decode_string(f"m->{field}", "            "))
+            elif not f["repeated"] and f["kind"] in ("scalar", "enum"):
+                lines.extend(decode_scalar(f, f"m->{field}", "            "))
+            elif f["kind"] == "message" and not f["repeated"]:
+                lines.extend(decode_message(typ, f"m->{field}", "            "))
             elif f["repeated"] and f["kind"] in ("scalar", "enum") and not (f["kind"] == "scalar" and typ == "string"):
-                lines.append("            if (field.wire_type == CWIST_PB_LEN) { /* packed */")
-                lines.append("                cwist_pb_reader sr;")
-                lines.append("                cwist_pb_reader_init(&sr, field.bytes, field.len);")
-                lines.append("                uint64_t v;")
-                lines.append("                while (sr.pos < sr.len) {")
-                lines.append("                    if (cwist_pb_read_varint(&sr, &v) != 0) return -1;")
-                expr = "cwist_pb_zigzag_decode(v)" if f["kind"] == "scalar" and PROTO_SCALAR[typ][2] else "v"
                 ctype = PROTO_SCALAR[typ][0] if f["kind"] == "scalar" else f"{prefix}_{typ}"
-                lines.append(f"                    {{ {ctype} item = ({ctype}){expr};")
-                lines.append(f"                      if ({cname}__append_{field}(m, item) != 0) return -1; }}")
-                lines.append("                }")
-                lines.append("            } else if (field.wire_type == CWIST_PB_VARINT) {")
-                expr = "cwist_pb_zigzag_decode(field.varint)" if f["kind"] == "scalar" and PROTO_SCALAR[typ][2] else "field.varint"
-                lines.append(f"                {{ {ctype} item = ({ctype}){expr};")
-                lines.append(f"                  if ({cname}__append_{field}(m, item) != 0) return -1; }}")
-                lines.append("            } else return -1;")
+                wire = wire_of(f)
+                if wire in ("32", "64"):
+                    width = "4" if wire == "32" else "8"
+                    tag = "CWIST_PB_32BIT" if wire == "32" else "CWIST_PB_64BIT"
+                    lines.append("            if (field.wire_type == CWIST_PB_LEN) { /* packed */")
+                    lines.append(f"                if (field.len % {width} != 0) return -1;")
+                    lines.append("                const uint8_t *p = field.bytes;")
+                    lines.append("                const uint8_t *end = field.bytes + field.len;")
+                    lines.append("                while (p < end) {")
+                    lines.append(f"                    {{ {ctype} item = {fixed_decode_expr(f, 'p')};")
+                    lines.append(f"                      if ({cname}__append_{field}(m, item) != 0) return -1; }}")
+                    lines.append(f"                    p += {width};")
+                    lines.append("                }")
+                    lines.append(f"            }} else if (field.wire_type == {tag}) {{")
+                    lines.append(f"                {{ {ctype} item = {fixed_decode_expr(f, 'field.bytes')};")
+                    lines.append(f"                  if ({cname}__append_{field}(m, item) != 0) return -1; }}")
+                    lines.append("            } else return -1;")
+                else:
+                    lines.append("            if (field.wire_type == CWIST_PB_LEN) { /* packed */")
+                    lines.append("                cwist_pb_reader sr;")
+                    lines.append("                cwist_pb_reader_init(&sr, field.bytes, field.len);")
+                    lines.append("                uint64_t v;")
+                    lines.append("                while (sr.pos < sr.len) {")
+                    lines.append("                    if (cwist_pb_read_varint(&sr, &v) != 0) return -1;")
+                    expr = "cwist_pb_zigzag_decode(v)" if f["kind"] == "scalar" and PROTO_SCALAR[typ][2] else "v"
+                    lines.append(f"                    {{ {ctype} item = ({ctype}){expr};")
+                    lines.append(f"                      if ({cname}__append_{field}(m, item) != 0) return -1; }}")
+                    lines.append("                }")
+                    lines.append("            } else if (field.wire_type == CWIST_PB_VARINT) {")
+                    expr = "cwist_pb_zigzag_decode(field.varint)" if f["kind"] == "scalar" and PROTO_SCALAR[typ][2] else "field.varint"
+                    lines.append(f"                {{ {ctype} item = ({ctype}){expr};")
+                    lines.append(f"                  if ({cname}__append_{field}(m, item) != 0) return -1; }}")
+                    lines.append("            } else return -1;")
             elif f["repeated"] and f["kind"] == "scalar" and typ == "string":
                 lines.extend([
                     "            if (field.wire_type != CWIST_PB_LEN) return -1;",
@@ -413,7 +747,16 @@ def generate_proto(source: Path, output: Path) -> None:
             typ, field = f["type"], f["name"]
             if f["kind"] == "unsupported":
                 continue
-            if f["repeated"]:
+            if f["kind"] == "map":
+                clear = map_entry_clear(f, f"m->{field}[i]", "        ")
+                if clear:
+                    lines.append(f"    for (size_t i = 0; i < m->{field}_count; i++) {{")
+                    lines.extend(clear)
+                    lines.append("    }")
+                lines.append(f"    free(m->{field});")
+            elif f["oneof"]:
+                pass  # released through the clear helpers below
+            elif f["repeated"]:
                 if f["kind"] == "scalar" and typ == "string":
                     lines.append(f"    for (size_t i = 0; i < m->{field}_count; i++) free((void *)m->{field}[i]);")
                     lines.append(f"    free(m->{field});")
@@ -426,6 +769,8 @@ def generate_proto(source: Path, output: Path) -> None:
                 lines.append(f"    free((void *)m->{field});")
             elif f["kind"] == "message":
                 lines.append(f"    if (m->{field}) {{ {prefix}_{typ}_free(m->{field}); free(m->{field}); }}")
+        for oname, _ in groups:
+            lines.append(f"    {cname}__clear_{oname}(m);")
         lines.extend(["    memset(m, 0, sizeof(*m));", "}", ""])
 
     for match in re.finditer(r"\bservice\s+(\w+)\s*\{(.*?)\}", text, re.S):

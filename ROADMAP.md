@@ -200,7 +200,7 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 
 ### Ecosystem
 
-* Finish `cwist proto` for v3.4: `oneof`, `map`, fixed-width types, and descriptor-set input (scalar/enum/nested/repeated-packed already done).
+* Finish `cwist proto` for v3.4: descriptor-set input (`oneof`, `map`, fixed-width types, and `double` now done alongside scalar/enum/nested/repeated-packed).
 * Add gRPC client-side support: h2/h2c client, retry policy, and load balancing.
 * Add gRPC server-side response compression.
 * Extend the GraphQL subset with schema validation, mutations, nested selections, and subscriptions.
@@ -234,7 +234,7 @@ Completed:
 
 Known limits:
 
-* The proto generator covers scalar, enum, nested message, and repeated packed-numeric proto3 fields plus service paths; `oneof`, `map`, fixed-width types, and descriptor-set input remain (v3.4).
+* The proto generator covers scalar, enum, nested message, repeated packed-numeric, `oneof`, `map`, and fixed-width/`double` proto3 fields plus service paths; descriptor-set input remains (v3.4).
 * The builtin health `Watch` route stays on the buffered dispatch path.
 * No gRPC client, retry policy, or load-balancing policy exists yet.
 

@@ -8,6 +8,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,8 +49,49 @@ int cwist_pb_write_key(cwist_pb_writer *w, uint32_t field_number, cwist_pb_wire_
 int cwist_pb_write_uint64_field(cwist_pb_writer *w, uint32_t field_number, uint64_t value);
 int cwist_pb_write_int64_field(cwist_pb_writer *w, uint32_t field_number, int64_t value);
 int cwist_pb_write_bool_field(cwist_pb_writer *w, uint32_t field_number, int value);
+int cwist_pb_write_raw32(cwist_pb_writer *w, uint32_t value);
+int cwist_pb_write_raw64(cwist_pb_writer *w, uint64_t value);
+int cwist_pb_write_fixed32_field(cwist_pb_writer *w, uint32_t field_number, uint32_t value);
+int cwist_pb_write_fixed64_field(cwist_pb_writer *w, uint32_t field_number, uint64_t value);
+int cwist_pb_write_float_field(cwist_pb_writer *w, uint32_t field_number, float value);
+int cwist_pb_write_double_field(cwist_pb_writer *w, uint32_t field_number, double value);
 int cwist_pb_write_bytes_field(cwist_pb_writer *w, uint32_t field_number, const void *data, size_t len);
 int cwist_pb_write_string_field(cwist_pb_writer *w, uint32_t field_number, const char *value);
+
+static inline uint32_t cwist_pb_load32_le(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static inline uint64_t cwist_pb_load64_le(const uint8_t *p) {
+    return (uint64_t)cwist_pb_load32_le(p) | ((uint64_t)cwist_pb_load32_le(p + 4) << 32);
+}
+
+static inline uint32_t cwist_pb_float_bits(float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static inline uint64_t cwist_pb_double_bits(double value) {
+    uint64_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static inline float cwist_pb_load_float(const uint8_t *p) {
+    uint32_t bits = cwist_pb_load32_le(p);
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+static inline double cwist_pb_load_double(const uint8_t *p) {
+    uint64_t bits = cwist_pb_load64_le(p);
+    double value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
 
 void cwist_pb_reader_init(cwist_pb_reader *r, const void *data, size_t len);
 int cwist_pb_read_varint(cwist_pb_reader *r, uint64_t *out);
