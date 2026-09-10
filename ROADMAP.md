@@ -179,7 +179,7 @@ Automated OS benchmark history is published in `docs/benchmark-trends.svg`. Late
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **gRPC over HTTP/2** | ✅ | Unary/stream registration, split-frame incremental decoder and output sink, standard health/reflection service registration, gRPC metadata, and test-client coverage |
+| **gRPC over HTTP/2** | ✅ | Unary/stream registration, split-frame incremental decoder and output sink, standard health (streaming Watch)/reflection service registration, gRPC metadata, h2c/TLS client with unary and server-streaming calls, and test-client coverage |
 | **Protobuf Runtime Helpers** | ✅ | Wire-format reader/writer for varint, bool, bytes/string, signed integer casting, and ZigZag helpers |
 | **GraphQL** | ✅ | Full query/mutation engine, field arguments, variables, aliases, nested selection sets, error envelope, and HTTP adapter |
 | **OpenAPI / Swagger Generation** | ✅ | OpenAPI 3.1 JSON generated from Doxygen `@openapi.*` annotations on route declarations |
@@ -201,7 +201,7 @@ The completed P1-P3 hardening work is now under regression coverage. Current pri
 ### Ecosystem
 
 * Finish `cwist proto` for v3.4: descriptor-set input (`oneof`, `map`, fixed-width types, and `double` now done alongside scalar/enum/nested/repeated-packed).
-* Add gRPC client-side support: h2/h2c client, retry policy, and load balancing.
+* ~~Add gRPC client-side support: h2/h2c client, retry policy, and load balancing.~~ (h2c/TLS client with unary + server-streaming calls, deadlines, and cancellation shipped; retry policy and load balancing remain)
 * Add gRPC server-side response compression.
 * Extend the GraphQL subset with schema validation, mutations, nested selections, and subscriptions.
 * Stabilize the experimental native C WebTransport client after LSQUIC PR #629 merges upstream.
@@ -236,7 +236,7 @@ Known limits:
 
 * The proto generator covers scalar, enum, nested message, repeated packed-numeric, `oneof`, `map`, and fixed-width/`double` proto3 fields plus service paths; descriptor-set input remains (v3.4).
 * The builtin health `Watch` route streams status changes over the HTTP/2 transport path and falls back to a single snapshot on the buffered dispatch path.
-* No gRPC client, retry policy, or load-balancing policy exists yet.
+* Retry policy and client-side load balancing remain; the h2c/TLS gRPC client (`cwist_grpc_client_*`) covers unary and server-streaming calls with grpc-timeout deadlines and RST_STREAM cancellation.
 
 ---
 
@@ -244,9 +244,9 @@ Known limits:
 
 Theme: gRPC client side and codegen completeness. v3.3 shipped the wire-level streaming server (DATA-frame wiring, trailers, deadlines, gzip) plus the first proto codegen extension (enums, nested message fields, repeated packed numerics); v3.4 finishes the story instead of moving the already-pushed v3.3 tag.
 
-* **`cwist proto` completion**: `oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`), and `protoc --descriptor_set_out` input bindings. CLI-only work (`tools/cli/cwist`), no library ABI impact.
-* **gRPC client**: h2/h2c client with unary/streaming calls, retry policy, and client-side load balancing.
-* **gRPC server leftovers**: moving health `Watch` onto the streaming dispatch path.
+* **`cwist proto` completion**: ~~`oneof`, `map`, fixed-width types (`fixed32/64`, `sfixed32/64`, `double`)~~ (done); `protoc --descriptor_set_out` input bindings remain. CLI-only work (`tools/cli/cwist`), no library ABI impact.
+* **gRPC client**: ~~h2/h2c client with unary/streaming calls~~ (done: `cwist_grpc_client_*` with deadlines and cancellation); retry policy and client-side load balancing remain.
+* **gRPC server leftovers**: ~~moving health `Watch` onto the streaming dispatch path~~ (done).
 * **Distribution**: publish the Homebrew formula and vcpkg port beyond the current drafts (P4 #30).
 
 ---

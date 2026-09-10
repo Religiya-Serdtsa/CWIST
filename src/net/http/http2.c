@@ -589,11 +589,6 @@ static void h2_stream_remove(h2_conn *hc, uint32_t stream_id) {
 
 /* --- Static Header Table --- */
 
-typedef struct {
-    const char *name;
-    const char *value;
-} cwist_http2_static_header;
-
 static const cwist_http2_static_header cwist_http2_static_table[] = {
     { NULL, NULL },
     { ":authority", "" },
@@ -1542,7 +1537,7 @@ char *h2_decode_string(const unsigned char *buf, size_t len, size_t *pos) {
     return out;
 }
 
-static const cwist_http2_static_header *h2_static_header(uint32_t index) {
+const cwist_http2_static_header *h2_static_header(uint32_t index) {
     size_t count = sizeof(cwist_http2_static_table) / sizeof(cwist_http2_static_table[0]);
     if (index == 0 || index >= count) return NULL;
     return &cwist_http2_static_table[index];
@@ -1821,7 +1816,7 @@ static int h2_decode_header_block(h2_conn *hc, cwist_http_request *req,
 
 /* --- HPACK Response Encoder --- */
 
-static size_t h2_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t value, uint8_t prefix_bits) {
+size_t h2_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t value, uint8_t prefix_bits) {
     uint8_t mask = (uint8_t)((1u << prefix_bits) - 1u);
     unsigned char first = dst[0] & ~mask;
     if (value < mask) {
@@ -1841,7 +1836,7 @@ static size_t h2_encode_integer(unsigned char *dst, size_t dst_cap, uint32_t val
     return i;
 }
 
-static size_t h2_encode_string(unsigned char *dst, size_t dst_cap, const char *str) {
+size_t h2_encode_string(unsigned char *dst, size_t dst_cap, const char *str) {
     size_t len = strlen(str);
     dst[0] = 0x00;
     size_t n = h2_encode_integer(dst, dst_cap, (uint32_t)len, 7);
