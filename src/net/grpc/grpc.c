@@ -424,7 +424,7 @@ static void grpc_dispatch_stream(cwist_http_request *req, cwist_http_response *r
     }
 
     /* Decompress any compressed-flag messages when grpc-encoding: gzip. */
-    uint8_t **owned = NULL;
+    uint8_t **owned CWIST_DEFER_FREE = NULL;
     int has_compressed = 0;
     for (size_t i = 0; i < count; i++)
         if (messages[i].compressed) { has_compressed = 1; break; }
@@ -439,7 +439,6 @@ static void grpc_dispatch_stream(cwist_http_request *req, cwist_http_response *r
         for (size_t i = 0; i < count; i++) {
             if (grpc_message_inflate(req, &messages[i], &owned[i]) != 0) {
                 for (size_t j = 0; j < count; j++) cwist_free(owned[j]);
-                cwist_free(owned);
                 cwist_free(messages);
                 cwist_grpc_set_error(res, CWIST_GRPC_UNIMPLEMENTED, "unsupported compressed gRPC message");
                 return;
@@ -479,7 +478,6 @@ static void grpc_dispatch_stream(cwist_http_request *req, cwist_http_response *r
     cwist_grpc_stream_close(&stream, stream.status, stream.status_message);
     if (owned) {
         for (size_t i = 0; i < count; i++) cwist_free(owned[i]);
-        cwist_free(owned);
     }
     cwist_free(messages);
 }
@@ -938,11 +936,10 @@ static void grpc_reflection_info(cwist_grpc_stream *stream, void *ctx) {
         const char *slash = strrchr(route->path + 1, '/');
         if (!slash) continue;
         size_t len = (size_t)(slash - route->path - 1);
-        char *service = cwist_alloc(len + 1);
+        char *service CWIST_DEFER_FREE = cwist_alloc(len + 1);
         if (!service) { stream->status = CWIST_GRPC_RESOURCE_EXHAUSTED; break; }
         memcpy(service, route->path + 1, len); service[len] = '\0';
         if (grpc_reflection_append_service(&response, service) != 0) stream->status = CWIST_GRPC_INTERNAL;
-        cwist_free(service);
         if (stream->status != CWIST_GRPC_OK) break;
     }
     if (stream->status == CWIST_GRPC_OK) cwist_grpc_stream_send(stream, response.data, response.len);
@@ -1069,7 +1066,7 @@ int cwist_grpc_routes_clone(cwist_app *dst, const cwist_app *src) {
         if (!method_sep || method_sep == path + 1 || method_sep[1] == '\0') return -1;
 
         size_t service_len = (size_t)(method_sep - (path + 1));
-        char *service = (char *)cwist_alloc(service_len + 1);
+        char *service CWIST_DEFER_FREE = (char *)cwist_alloc(service_len + 1);
         if (!service) return -1;
         memcpy(service, path + 1, service_len);
         service[service_len] = '\0';
@@ -1079,7 +1076,6 @@ int cwist_grpc_routes_clone(cwist_app *dst, const cwist_app *src) {
                                     route->stream_handler, route->user_ctx)
             : cwist_app_grpc_unary(dst, service, method_sep + 1,
                                    route->handler, route->user_ctx);
-        cwist_free(service);
         if (rc != 0) return -1;
         route = route->next;
     }

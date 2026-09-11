@@ -327,13 +327,12 @@ void cwist_mux_group_handle(cwist_mux_group *group, cwist_http_method_t method, 
     if (!group || !group->router || !path || !handler) return;
     size_t prefix_len = strlen(group->prefix);
     size_t path_len = strlen(path);
-    char *full_path = (char *)cwist_alloc(prefix_len + path_len + 1);
+    char *full_path CWIST_DEFER_FREE = (char *)cwist_alloc(prefix_len + path_len + 1);
     if (!full_path) return;
     memcpy(full_path, group->prefix, prefix_len);
     memcpy(full_path + prefix_len, path, path_len);
     full_path[prefix_len + path_len] = '\0';
     cwist_mux_handle(group->router, method, full_path, handler);
-    cwist_free(full_path);
 }
 
 /* --- Per-Route Middleware --- */
