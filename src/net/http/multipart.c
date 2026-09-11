@@ -191,7 +191,8 @@ cwist_multipart_result *cwist_multipart_parse(const char *body, size_t body_len,
 
     /* multipart-parser-c expects the leading dashes in the boundary. */
     size_t blen = strlen(boundary);
-    char *parser_boundary CWIST_DEFER_FREE = (char *)cwist_alloc(blen + 3);
+    cwist_scratch_t parser_boundary_s CWIST_SCRATCH_DEFER = {0};
+    char *parser_boundary = (char *)cwist_scratch_alloc(&parser_boundary_s, blen + 3);
     if (!parser_boundary) {
         cwist_free(result);
         return NULL;
