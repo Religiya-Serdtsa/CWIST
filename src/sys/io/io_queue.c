@@ -1,5 +1,6 @@
 #include <cwist/sys/io/cwist_io.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/mem/gc.h>
 #include <ttak/mem/epoch.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -295,6 +296,14 @@ void cwist_io_queue_run(cwist_io_queue *q) {
         cwist_job_func func = node->func;
         void *arg = node->arg;
         if (func) func(arg);
+
+        // Full-GC mode: catch whatever this job forgot to cwist_free()
+        // right away instead of letting it pile up for the lifetime of this
+        // (long-lived, pooled) worker thread. The existing reclaim cadence
+        // below actually frees it.
+        if (cwist_full_gc_enabled()) {
+            cwist_gc_scope_flush();
+        }
 
         // Node becomes the new sentinel and will be released when the next job is popped.
         node->func = NULL;

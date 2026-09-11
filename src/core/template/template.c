@@ -405,7 +405,7 @@ cwist_sstring* cwist_template_render_file(const char *file_path, const cJSON *co
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *template_str = cwist_alloc(len + 1);
+    char *template_str CWIST_DEFER_FREE = cwist_alloc(len + 1);
     if (!template_str) {
         fclose(f);
         return NULL;
@@ -415,8 +415,5 @@ cwist_sstring* cwist_template_render_file(const char *file_path, const cJSON *co
     template_str[read_len] = '\0';
     fclose(f);
 
-    cwist_sstring *result = cwist_template_render(template_str, context);
-    cwist_free(template_str);
-
-    return result;
+    return cwist_template_render(template_str, context);
 }

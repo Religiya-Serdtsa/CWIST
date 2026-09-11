@@ -2146,13 +2146,11 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
     if (res->use_file_stream && res->file_stream_fd >= 0) {
         /* Load file contents and sequence them.  Server push rarely streams
          * huge files, so a single read is acceptable here. */
-        unsigned char *file_buf = (unsigned char *)cwist_alloc(body_len);
+        unsigned char *file_buf CWIST_DEFER_FREE = (unsigned char *)cwist_alloc(body_len);
         if (!file_buf) return -1;
         ssize_t r = pread(res->file_stream_fd, file_buf, body_len, res->file_stream_offset);
-        if (r <= 0 || (size_t)r != body_len) { cwist_free(file_buf); return -1; }
-        int rc = h2_send_seq_data_frames(NULL, conn, stream_id, file_buf, body_len, max_frame_size, NULL);
-        cwist_free(file_buf);
-        return rc;
+        if (r <= 0 || (size_t)r != body_len) return -1;
+        return h2_send_seq_data_frames(NULL, conn, stream_id, file_buf, body_len, max_frame_size, NULL);
     }
 
     return h2_send_seq_data_frames(NULL, conn, stream_id, body_data, body_len, max_frame_size, NULL);
@@ -2329,19 +2327,18 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
             continue;
         }
 
-        unsigned char *chunk = (unsigned char *)cwist_alloc(chunk_len);
+        unsigned char *chunk CWIST_DEFER_FREE = (unsigned char *)cwist_alloc(chunk_len);
         if (!chunk) return -1;
         ssize_t r = pread(fd, chunk + CWIST_SEQ_HEADER_SIZE, plen, cur_offset);
-        if (r <= 0 || (size_t)r != plen) { cwist_free(chunk); return -1; }
+        if (r <= 0 || (size_t)r != plen) return -1;
         cwist_seq_chunk_build_header(chunk, i + 1, (uint16_t)total_chunks,
                                      (uint16_t)plen, chunk_payload);
         uint8_t flags = (i + 1 == total_chunks) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
         if (h2_write_frame(hc, CWIST_HTTP2_FRAME_DATA, flags, stream_id,
                            chunk, (uint32_t)chunk_len) != 0) {
-            cwist_free(chunk); return -1;
+            return -1;
         }
         if (s) s->send_xor ^= h2_xor_bytes(chunk, chunk_len);
-        cwist_free(chunk);
         h2_commit_send(hc, s, (uint32_t)chunk_len);
         cur_offset += (off_t)plen;
         remaining -= plen;
@@ -2817,16 +2814,15 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
                 continue;
             }
 
-            unsigned char *chunk_buf = (unsigned char *)cwist_alloc(allowed);
+            unsigned char *chunk_buf CWIST_DEFER_FREE = (unsigned char *)cwist_alloc(allowed);
             if (!chunk_buf) return -1;
             ssize_t r = pread(res->file_stream_fd, chunk_buf, allowed, offset);
-            if (r <= 0) { cwist_free(chunk_buf); return -1; }
+            if (r <= 0) return -1;
             uint8_t flags = (remaining == (size_t)r) ? CWIST_HTTP2_FLAG_END_STREAM : 0;
             if (h2_write_frame(hc, CWIST_HTTP2_FRAME_DATA, flags, stream_id, chunk_buf, (uint32_t)r) != 0) {
-                cwist_free(chunk_buf); return -1;
+                return -1;
             }
             if (s) s->send_xor ^= h2_xor_bytes(chunk_buf, (size_t)r);
-            cwist_free(chunk_buf);
             h2_commit_send(hc, s, (uint32_t)r);
             offset += r;
             remaining -= (size_t)r;
@@ -3323,7 +3319,7 @@ cwist_error_t cwist_http2_serve_connection_ex(
             }
         }
         unsigned char hdr[9];
-        unsigned char *payload = NULL;
+        unsigned char *payload CWIST_DEFER_FREE = NULL;
 
         /* Frames the send-window wait loop pulled off the wire but could not
          * dispatch are served first; only then touch the socket. */
@@ -3393,7 +3389,6 @@ cwist_error_t cwist_http2_serve_connection_ex(
                 type == CWIST_HTTP2_FRAME_CONTINUATION || type == CWIST_HTTP2_FRAME_PUSH_PROMISE) {
                 if (type == CWIST_HTTP2_FRAME_SETTINGS || len > hc.peer_max_frame_size) {
                     h2_send_goaway(&hc, hc.last_processed_stream_id, H2_ERR_FRAME_SIZE_ERROR);
-                    cwist_free(payload);
                     connected = false;
                     break;
                 }
@@ -3404,7 +3399,7 @@ cwist_error_t cwist_http2_serve_connection_ex(
             payload = (unsigned char *)cwist_alloc(len);
             if (!payload) { connected = false; break; }
             if (h2_read_full(&hc, payload, len) != 0) connected = false;
-            if (!connected) { cwist_free(payload); break; }
+            if (!connected) break;
         }
 
         hc.last_activity = h2_now_ms();
@@ -3776,8 +3771,6 @@ cwist_error_t cwist_http2_serve_connection_ex(
                 /* Unknown frames MUST be ignored (RFC 7540 Section 5.5) */
                 break;
         }
-
-        cwist_free(payload);
     }
 
     if (connected && !atomic_load(&g_cwist_running) && !sent_goaway) {

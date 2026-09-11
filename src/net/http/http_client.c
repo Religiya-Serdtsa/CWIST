@@ -84,42 +84,30 @@ static size_t header_callback(char *ptr, size_t size, size_t nmemb, void *userp)
     }
 
     if (name_len > 0 && value_len > 0) {
-        char *name = cwist_alloc(name_len + 1);
+        char *name CWIST_DEFER_FREE = cwist_alloc(name_len + 1);
         if (!name) return total;
         memcpy(name, ptr, name_len);
         name[name_len] = '\0';
 
-        char *val = cwist_alloc(value_len + 1);
-        if (!val) {
-            cwist_free(name);
-            return total;
-        }
+        char *val CWIST_DEFER_FREE = cwist_alloc(value_len + 1);
+        if (!val) return total;
         memcpy(val, value, value_len);
         val[value_len] = '\0';
 
         cwist_http_header_node *node = cwist_alloc(sizeof(*node));
-        if (!node) {
-            cwist_free(name);
-            cwist_free(val);
-            return total;
-        }
+        if (!node) return total;
         node->key = cwist_sstring_create();
         node->value = cwist_sstring_create();
         if (!node->key || !node->value) {
             cwist_sstring_destroy(node->key);
             cwist_sstring_destroy(node->value);
             cwist_free(node);
-            cwist_free(name);
-            cwist_free(val);
             return total;
         }
         cwist_sstring_assign(node->key, name);
         cwist_sstring_assign(node->value, val);
         node->next = rh->headers;
         rh->headers = node;
-
-        cwist_free(name);
-        cwist_free(val);
     }
 
     return total;

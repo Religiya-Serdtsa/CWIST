@@ -189,11 +189,9 @@ char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seco
     size_t hdr_enc_len = b64url_encoded_len(strlen(HEADER_JSON));
     size_t pay_enc_len = b64url_encoded_len(strlen(final_payload_json));
 
-    char *hdr_enc = (char *)cwist_alloc(hdr_enc_len);
-    char *pay_enc = (char *)cwist_alloc(pay_enc_len);
+    char *hdr_enc CWIST_DEFER_FREE = (char *)cwist_alloc(hdr_enc_len);
+    char *pay_enc CWIST_DEFER_FREE = (char *)cwist_alloc(pay_enc_len);
     if (!hdr_enc || !pay_enc) {
-        cwist_free(hdr_enc);
-        cwist_free(pay_enc);
         free(final_payload_json);
         return NULL;
     }
@@ -205,8 +203,6 @@ char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seco
     /* --- Build "header.payload" signing input using sstring --------------- */
     cwist_sstring *signing_input = cwist_sstring_create();
     if (!signing_input) {
-        cwist_free(hdr_enc);
-        cwist_free(pay_enc);
         return NULL;
     }
     cwist_sstring_append(signing_input, hdr_enc);
@@ -217,17 +213,13 @@ char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seco
     unsigned char sig_raw[32];
     if (!hmac_sha256(secret, strlen(secret), signing_input->data, signing_input->size, sig_raw)) {
         cwist_sstring_destroy(signing_input);
-        cwist_free(hdr_enc);
-        cwist_free(pay_enc);
         return NULL;
     }
 
     size_t sig_enc_len = b64url_encoded_len(32);
-    char *sig_enc = (char *)cwist_alloc(sig_enc_len);
+    char *sig_enc CWIST_DEFER_FREE = (char *)cwist_alloc(sig_enc_len);
     if (!sig_enc) {
         cwist_sstring_destroy(signing_input);
-        cwist_free(hdr_enc);
-        cwist_free(pay_enc);
         return NULL;
     }
     b64url_encode(sig_raw, 32, sig_enc);
@@ -236,9 +228,6 @@ char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seco
     cwist_sstring *token = cwist_sstring_create();
     if (!token) {
         cwist_sstring_destroy(signing_input);
-        cwist_free(hdr_enc);
-        cwist_free(pay_enc);
-        cwist_free(sig_enc);
         return NULL;
     }
     cwist_sstring_append(token, signing_input->data);
@@ -249,9 +238,6 @@ char *cwist_jwt_sign(const char *payload_json, const char *secret, long exp_seco
 
     cwist_sstring_destroy(token);
     cwist_sstring_destroy(signing_input);
-    cwist_free(hdr_enc);
-    cwist_free(pay_enc);
-    cwist_free(sig_enc);
 
     return result;
 }
