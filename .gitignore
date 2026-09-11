@@ -84,6 +84,7 @@ test_full_gc_handoff_bug
 test_full_gc_ownership_handoff
 test_full_gc_sweep
 test_gc_ebr_release
+test_full_gc_toggle_hardening
 test_graphql
 test_grpc
 test_grpc_channel

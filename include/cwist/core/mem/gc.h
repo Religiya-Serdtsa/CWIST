@@ -116,9 +116,12 @@ void cwist_gc_pipeline_tick(void);
 /**
  * @brief Enable or disable full-GC mode process-wide.
  *
- * Meant to be set once at startup and left alone: cwist_alloc()/cwist_free()
- * both read the same flag, so flipping it mid-run does not retroactively
- * change how already-allocated blocks are tracked.
+ * Hardened, boot-time-only setter: the first call wins and is latched in;
+ * every later call -- from any thread, deliberate re-invocation or
+ * otherwise -- is a silent no-op, and the backing storage is mprotect()'d
+ * read-only after that first call so a raw memory-corruption write can't
+ * flip it either. See gc.c's cwist_full_gc_guard_t for the full threat
+ * model this defends against.
  *
  * @param enable When true, cwist_alloc() starts registering blocks with the
  *               per-thread pending-sweep list and cwist_free() starts
@@ -132,6 +135,21 @@ void cwist_full_gc(bool enable);
  * @brief Check whether full-GC mode is currently enabled.
  */
 bool cwist_full_gc_enabled(void);
+
+/**
+ * @brief Check whether the full-GC toggle has been latched (i.e.
+ *        cwist_full_gc() has been called once already and every further
+ *        call will be ignored). Diagnostic/testing use.
+ */
+bool cwist_full_gc_locked(void);
+
+/**
+ * @brief Raw pointer to the full-GC toggle's guard page, or NULL if the
+ *        mmap() backing it failed at process startup. Advanced/testing use
+ *        only -- e.g. to confirm the page is actually read-only after
+ *        cwist_full_gc() has been called once.
+ */
+void *cwist_full_gc_guard_page(void);
 
 /**
  * @brief Register a cwist_alloc() block with the current thread's

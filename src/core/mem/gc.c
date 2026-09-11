@@ -3,6 +3,8 @@
 #include <ttak/mem/epoch.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 /**
  * @file gc.c
@@ -151,16 +153,54 @@ bool cwist_release_guard_acquire(cwist_release_guard_t *guard) {
 /* --- Full-GC mode: process-wide toggle + per-thread pending-sweep list --- */
 
 /**
- * @brief Fast-path flag cwist_alloc()/cwist_free()/cwist_io_queue_run()
- * check on every call. A plain relaxed atomic load -- no pthread_once,
- * no touching g_full_gc -- so the default (disabled) path stays
- * effectively free, matching docs/GC.md's "zero cost when disabled"
- * contract. cwist_gc_auto_rotated(&g_full_gc) would also answer this
- * correctly, but only after paying pthread_once on every single
- * allocation; that regressed the C1M reactor latency gate in CI, since
- * cwist_alloc()/cwist_free() sit on the hottest per-request path.
+ * @brief Hardened backing storage for the full-GC toggle.
+ *
+ * Two attacks this defends against, since flipping this flag mid-run
+ * silently disables the EBR deferred-free safety net full-GC mode
+ * provides (opening a use-after-free window for anything it was
+ * protecting): (1) a later call to cwist_full_gc() -- an accidental
+ * re-invocation, or an attacker who has gained the ability to call
+ * arbitrary exported functions -- and (2) a raw arbitrary-write
+ * primitive that overwrites this flag's memory directly, bypassing the
+ * API entirely.
+ *
+ * Defense: the struct lives alone on its own mmap()'d page. cwist_full_gc()
+ * claims the right to set it exactly once via an atomic CAS on `locked`
+ * (defeats (1): every later call, benign or hostile, is a silent no-op);
+ * once set, the page is mprotect()'d PROT_READ (defeats (2): any write
+ * that bypasses the CAS check and lands on this memory directly hard-faults
+ * instead of silently succeeding).
  */
-static _Atomic bool g_full_gc_flag = false;
+typedef struct {
+    _Atomic bool enabled;
+    _Atomic bool locked;
+} cwist_full_gc_guard_t;
+
+/**
+ * @brief The guard page itself, or NULL if the mmap() below failed
+ * (treated as full-GC being permanently unavailable, never as a security
+ * regression -- see cwist_full_gc_enabled()).
+ */
+static cwist_full_gc_guard_t *g_full_gc_guard = NULL;
+
+/**
+ * @brief Map the guard page before main() runs, so cwist_full_gc_enabled()
+ * -- called on every cwist_alloc()/cwist_free() -- never needs a
+ * pthread_once/lazy-init check on its hot path (that check itself
+ * regressed the C1M reactor latency gate in CI once already).
+ */
+__attribute__((constructor))
+static void cwist_full_gc_guard_init(void) {
+    long page_size = sysconf(_SC_PAGESIZE);
+    if (page_size <= 0) page_size = 4096;
+    void *page = mmap(NULL, (size_t)page_size, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (page == MAP_FAILED) return;
+    cwist_full_gc_guard_t *guard = (cwist_full_gc_guard_t *)page;
+    atomic_init(&guard->enabled, false);
+    atomic_init(&guard->locked, false);
+    g_full_gc_guard = guard;
+}
 
 /** @brief Process-wide GC instance backing full-GC's epoch-retire pipeline. */
 static cwist_gc_t g_full_gc;
@@ -175,13 +215,58 @@ static cwist_gc_t *cwist_full_gc_instance(void) {
     return &g_full_gc;
 }
 
+/**
+ * @brief Serializes claiming the "first caller" slot in cwist_full_gc().
+ *
+ * NOT a CAS on g_full_gc_guard->locked: a CAS is a hardware read-modify-
+ * WRITE (x86 cmpxchg asserts write intent even when the comparison
+ * fails), so trying one on the guard page after it's been mprotect()'d
+ * PROT_READ faults immediately -- on every later caller, exactly the
+ * "harmless no-op" case this is supposed to handle gracefully. This
+ * mutex lives off the guarded page, so contending for it is always safe;
+ * only the thread that wins it ever writes to the page, and only before
+ * that same thread mprotect()s it.
+ */
+static pthread_mutex_t g_full_gc_claim_mu = PTHREAD_MUTEX_INITIALIZER;
+
 void cwist_full_gc(bool enable) {
+    if (!g_full_gc_guard) return; /* guard page unavailable; fail safe, not silently unhardened */
+
+    /* Fast path: once locked, this plain load is the only thing every
+     * later caller ever does -- safe indefinitely, even after the page
+     * below becomes read-only. */
+    if (atomic_load_explicit(&g_full_gc_guard->locked, memory_order_acquire)) return;
+
+    pthread_mutex_lock(&g_full_gc_claim_mu);
+    if (atomic_load_explicit(&g_full_gc_guard->locked, memory_order_acquire)) {
+        /* Someone else claimed it while we were waiting for the mutex. */
+        pthread_mutex_unlock(&g_full_gc_claim_mu);
+        return;
+    }
+
+    /* We hold the mutex and locked is still false: nobody has mprotect()'d
+     * the page yet, so it is still writable and we are its sole writer. */
+    atomic_store_explicit(&g_full_gc_guard->enabled, enable, memory_order_relaxed);
+    atomic_store_explicit(&g_full_gc_guard->locked, true, memory_order_release);
+    long page_size = sysconf(_SC_PAGESIZE);
+    mprotect(g_full_gc_guard, (size_t)(page_size > 0 ? page_size : 4096), PROT_READ);
+    pthread_mutex_unlock(&g_full_gc_claim_mu);
+
     cwist_gc_auto_rotate(cwist_full_gc_instance(), enable);
-    atomic_store_explicit(&g_full_gc_flag, enable, memory_order_relaxed);
 }
 
 bool cwist_full_gc_enabled(void) {
-    return atomic_load_explicit(&g_full_gc_flag, memory_order_relaxed);
+    if (!g_full_gc_guard) return false;
+    return atomic_load_explicit(&g_full_gc_guard->enabled, memory_order_relaxed);
+}
+
+bool cwist_full_gc_locked(void) {
+    if (!g_full_gc_guard) return false;
+    return atomic_load_explicit(&g_full_gc_guard->locked, memory_order_acquire);
+}
+
+void *cwist_full_gc_guard_page(void) {
+    return g_full_gc_guard;
 }
 
 /** @brief One thread's list of cwist_alloc() blocks not yet cwist_free()'d. */
