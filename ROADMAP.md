@@ -272,6 +272,19 @@ Theme: gRPC client side, codegen completeness, and the first WASM client-side su
 
 ---
 
+## v3.5 Milestone (Planned)
+
+Theme: **Full GC — automatic resource reclamation**. Today CWIST relies on explicit destroy-family calls (`cwist_app_destroy`, connection/session teardown, `cwist_free`) paired with arena discipline. v3.5 makes cleanup automatic where it matters: threads and processes ending must close connections, and `cwist_alloc` objects must evaporate without manual frees. Design document: `docs/GC.md`.
+
+* **`cwist_full_gc(bool)` global toggle**: when enabled, connections are closed automatically on worker-thread exit and process exit even without explicit destroy calls; when disabled (default), the current explicit model runs unchanged at zero cost.
+* **Connection reclamation via libttak epoch GC** (`ttak_epoch_gc`, already wrapped by `src/core/mem/gc.c`): per-thread connection registration with epoch-deferred teardown, so a connection swept at thread exit can never UAF a thread still referencing it.
+* **`cwist_alloc` registration**: allocations route into the full-GC context (internal changes to `src/core/mem/alloc.c`) so objects are reclaimed by epoch rotation instead of manual `cwist_free` calls.
+* **Pseudo-RAII**: scoped guards via GCC/Clang `__attribute__((cleanup))` for handle-like locals, plus raw borrowing of LibTTAK RAII primitives.
+* **Transparent `malloc` interception**: users will habitually write `malloc`, not `cwist_alloc` — so handler-thread `malloc` calls (including allocations from bundled dependencies such as cJSON) are redirected onto the worker-thread arena/epoch GC via `-Wl,--wrap=malloc` or header-level redefinition. "Write `malloc` by habit and it still evaporates at request end" is the acceptance bar.
+* **Thread/process exit sweeps**: thread-local connection registry with pthread TLS destructors for worker exit, and an `atexit` sweep for process exit.
+
+---
+
 ## Release Line & Codenames
 
 * The 3.x line is stabilization work on the road to v4.0: release intervals are deliberately long, and each release lands a small number of large, well-tested changes rather than frequent small ones. Expect wide gaps between 3.x tags.
