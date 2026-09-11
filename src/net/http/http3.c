@@ -138,6 +138,40 @@ typedef struct h3_stream_ctx {
 #endif
 } h3_stream_ctx_t;
 
+/* ------------------------------------------------------------------ */
+/* Per-connection context                                             */
+/* ------------------------------------------------------------------ */
+
+/* One queued outgoing datagram (see h3_conn_ctx_t::dgram_head below). */
+typedef struct h3_dgram_node {
+    struct h3_dgram_node *next;
+    char *data;
+    size_t len;
+} h3_dgram_node_t;
+
+/* lsquic_conn_set_ctx()'s payload for every connection this stream_if
+ * services. Previously every connection shared the single, unlocked
+ * cwist_http3_context pointer directly, which put datagram state
+ * (g_h3_dgram) in a process-wide global: one connection's pending
+ * datagram could be freed/overwritten by a concurrent send on a
+ * different connection (double-free/UAF), with no lock protecting any
+ * of it. This wrapper keeps the shared, read-mostly server config
+ * (h3_ctx) reachable exactly as before while giving each connection its
+ * own mutex-guarded outgoing-datagram queue. */
+typedef struct h3_conn_ctx {
+    cwist_http3_context *h3_ctx; /* shared server config, not owned here */
+    pthread_mutex_t dgram_lock;
+    h3_dgram_node_t *dgram_head;
+    h3_dgram_node_t *dgram_tail;
+} h3_conn_ctx_t;
+
+/* Every lsquic_conn_get_ctx(conn) callsite below reads this wrapper's
+ * ->h3_ctx instead of casting the raw ctx pointer directly. */
+static inline cwist_http3_context *h3_shared_ctx(lsquic_conn_t *conn) {
+    h3_conn_ctx_t *cc = conn ? (h3_conn_ctx_t *)lsquic_conn_get_ctx(conn) : NULL;
+    return cc ? cc->h3_ctx : NULL;
+}
+
 #ifdef CWIST_WEBTRANSPORT
 
 typedef enum cwist_wt_handle_kind {
@@ -713,8 +747,21 @@ static int cwist_h3_log_stderr(void *ctx, const char *buf, size_t len) {
 static lsquic_conn_ctx_t *cwist_h3_on_new_conn(void *stream_if_ctx,
                                                 lsquic_conn_t *conn) {
     cwist_http3_context *h3_ctx = stream_if_ctx;
-    lsquic_conn_set_ctx(conn, (lsquic_conn_ctx_t *)h3_ctx);
-    return (lsquic_conn_ctx_t *)h3_ctx;
+    h3_conn_ctx_t *cc = (h3_conn_ctx_t *)calloc(1, sizeof(*cc));
+    if (!cc) {
+        /* OOM at connection-accept time: proceed without a ctx rather than
+         * risk type confusion by storing a bare cwist_http3_context* here
+         * on some paths and a h3_conn_ctx_t* on others. Every consumer
+         * below already tolerates lsquic_conn_get_ctx() returning NULL
+         * (h3_shared_ctx(), the datagram callbacks); this connection just
+         * won't get request dispatch or datagram support. */
+        CWIST_LOG_ERROR("[HTTP/3] OOM allocating per-connection context");
+        return NULL;
+    }
+    cc->h3_ctx = h3_ctx;
+    pthread_mutex_init(&cc->dgram_lock, NULL);
+    lsquic_conn_set_ctx(conn, (lsquic_conn_ctx_t *)cc);
+    return (lsquic_conn_ctx_t *)cc;
 }
 
 static void cwist_h3_on_conn_closed(lsquic_conn_t *conn) {
@@ -732,6 +779,22 @@ static void cwist_h3_on_conn_closed(lsquic_conn_t *conn) {
                 info.lci_rtt, info.lci_rttvar,
                 info.lci_pkts_sent, info.lci_pkts_lost,
                 info.lci_pkts_retx, info.lci_cwnd);
+    }
+
+    h3_conn_ctx_t *cc = (h3_conn_ctx_t *)lsquic_conn_get_ctx(conn);
+    if (cc) {
+        pthread_mutex_lock(&cc->dgram_lock);
+        h3_dgram_node_t *n = cc->dgram_head;
+        cc->dgram_head = cc->dgram_tail = NULL;
+        pthread_mutex_unlock(&cc->dgram_lock);
+        while (n) {
+            h3_dgram_node_t *next = n->next;
+            free(n->data);
+            free(n);
+            n = next;
+        }
+        pthread_mutex_destroy(&cc->dgram_lock);
+        free(cc);
     }
 }
 
@@ -1215,8 +1278,7 @@ static void cwist_h3_on_read(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
         st->res = cwist_http_response_create();
         if (st->res && st->req) {
-            cwist_http3_context *h3_ctx = (cwist_http3_context *)
-                lsquic_conn_get_ctx(lsquic_stream_conn(stream));
+            cwist_http3_context *h3_ctx = h3_shared_ctx(lsquic_stream_conn(stream));
 #ifdef CWIST_WEBTRANSPORT
             if (st->is_webtransport && h3_ctx && h3_ctx->wt_handler) {
                 char *host = cwist_http_header_get(st->req->headers, "host");
@@ -1549,14 +1611,31 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
         if (st->res->use_file_stream) {
             /* Fill the congestion window on each callback: loop chunk writes
              * until the stream says EAGAIN instead of one 64 KiB chunk per
-             * tick. */
+             * tick - but cap how many synchronous pread()s a single callback
+             * does. This thread also drives lsquic_engine_process_conns()
+             * and packet I/O for every other connection; with an unbounded
+             * loop, one big response on a wide-open congestion window turns
+             * into dozens of blocking pread()s back to back (worse under
+             * disk contention/page faults than the SSD-idle case), starving
+             * every other connection's ACKs/packets for that whole stretch.
+             * Re-arming wantwrite and returning after H3_FILE_CHUNKS_PER_TICK
+             * chunks gives the event loop a chance to service other
+             * connections between bursts; lsquic calls this back again on
+             * the next tick to keep going from where body_sent left off. */
+#define H3_FILE_CHUNKS_PER_TICK 4
+            int chunks_this_tick = 0;
             while (st->res->file_stream_fd >= 0 && st->body_sent < st->res->file_stream_len) {
+                if (chunks_this_tick >= H3_FILE_CHUNKS_PER_TICK) {
+                    lsquic_stream_wantwrite(stream, 1);
+                    return;
+                }
                 static __thread char file_buf[65536];
                 off_t offset = st->res->file_stream_offset + (off_t)st->body_sent;
                 size_t to_read = st->res->file_stream_len - st->body_sent;
                 if (to_read > sizeof(file_buf)) to_read = sizeof(file_buf);
                 ssize_t nr = pread(st->res->file_stream_fd, file_buf, to_read, offset);
                 if (nr > 0) {
+                    chunks_this_tick++;
                     ssize_t nw = lsquic_stream_write(stream, file_buf, (size_t)nr);
                     if (nw < 0) {
                         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -1595,6 +1674,7 @@ static void cwist_h3_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
                     return;
                 }
             }
+#undef H3_FILE_CHUNKS_PER_TICK
             if (st->res->file_stream_fd >= 0)
                 body_len = st->res->file_stream_len;
         } else if (st->res->is_ptr_body) {
@@ -1666,28 +1746,38 @@ static void cwist_h3_on_close(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h
     (void)stream;
 }
 
-static struct {
-    lsquic_conn_t *conn;
-    char *data;
-    size_t len;
-} g_h3_dgram = {0};
-
+/* Pulls the oldest queued datagram off this connection's own queue (see
+ * h3_conn_ctx_t). Previously this read/freed a single process-wide
+ * g_h3_dgram struct with no lock: two connections sending datagrams at
+ * the same time could free() the same buffer twice or hand one
+ * connection's payload to another. */
 static ssize_t cwist_h3_on_dg_write(lsquic_conn_t *conn, void *buf, size_t len) {
-    if (g_h3_dgram.conn == conn && g_h3_dgram.data && g_h3_dgram.len > 0) {
-        size_t to_copy = g_h3_dgram.len < len ? g_h3_dgram.len : len;
-        memcpy(buf, g_h3_dgram.data, to_copy);
-        free(g_h3_dgram.data);
-        g_h3_dgram.data = NULL;
-        g_h3_dgram.len = 0;
-        g_h3_dgram.conn = NULL;
-        lsquic_conn_want_datagram_write(conn, 0);
-        return (ssize_t)to_copy;
+    h3_conn_ctx_t *cc = (h3_conn_ctx_t *)lsquic_conn_get_ctx(conn);
+    if (!cc) return 0;
+
+    pthread_mutex_lock(&cc->dgram_lock);
+    h3_dgram_node_t *n = cc->dgram_head;
+    if (!n) {
+        pthread_mutex_unlock(&cc->dgram_lock);
+        return 0;
     }
-    return 0;
+    size_t to_copy = n->len < len ? n->len : len;
+    memcpy(buf, n->data, to_copy);
+    cc->dgram_head = n->next;
+    if (!cc->dgram_head) cc->dgram_tail = NULL;
+    bool more_queued = cc->dgram_head != NULL;
+    pthread_mutex_unlock(&cc->dgram_lock);
+
+    free(n->data);
+    free(n);
+    /* Keep want_datagram_write armed while the queue is non-empty so
+     * lsquic calls back for the next entry. */
+    if (!more_queued) lsquic_conn_want_datagram_write(conn, 0);
+    return (ssize_t)to_copy;
 }
 
 static void cwist_h3_on_datagram(lsquic_conn_t *conn, const void *buf, size_t len) {
-    cwist_http3_context *ctx = (cwist_http3_context *)lsquic_conn_get_ctx(conn);
+    cwist_http3_context *ctx = h3_shared_ctx(conn);
     if (ctx && ctx->datagram_cb) {
         ctx->datagram_cb(buf, len, ctx->datagram_user_ctx);
     }
@@ -1702,7 +1792,7 @@ cwist_h3_wt_on_session_open(void *ctx, lsquic_wt_session_t *sess,
     h3_stream_ctx_t *st = (h3_stream_ctx_t *)ctx;
     if (st && st->req && st->res) {
         lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
-        cwist_http3_context *h3_ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+        cwist_http3_context *h3_ctx = h3_shared_ctx(conn);
         cwist_wt_handle_t *session_handle =
             cwist_wt_handle_new(CWIST_WT_HANDLE_SESSION, sess);
         if (!session_handle) return NULL;
@@ -1742,7 +1832,7 @@ cwist_h3_wt_on_stream(lsquic_wt_session_t *sess, lsquic_stream_t *stream) {
     if (sess) {
         lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
         if (conn) {
-            ctx = (cwist_http3_context *)lsquic_conn_get_ctx(conn);
+            ctx = h3_shared_ctx(conn);
         }
     }
     if (ctx && ctx->wt_new_stream_handler) {
@@ -1773,7 +1863,7 @@ static void cwist_h3_wt_on_stream_read(lsquic_stream_t *stream,
     lsquic_wt_session_t *sess = lsquic_wt_session_from_stream(stream);
     if (!sess) return;
     lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
-    cwist_http3_context *ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+    cwist_http3_context *ctx = h3_shared_ctx(conn);
     if (ctx && ctx->wt_new_stream_handler) {
         ctx->wt_new_stream_handler(stream_handle, ctx->wt_new_stream_ctx);
     }
@@ -1801,7 +1891,7 @@ static uint64_t cwist_h3_wt_on_stream_ss_code(lsquic_stream_t *stream,
 static void cwist_h3_wt_on_datagram_read(lsquic_wt_session_t *sess,
                                          const void *buf, size_t len) {
     lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
-    cwist_http3_context *ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+    cwist_http3_context *ctx = h3_shared_ctx(conn);
     if (ctx && ctx->datagram_cb) {
         ctx->datagram_cb(buf, len, ctx->datagram_user_ctx);
     }
@@ -1913,7 +2003,20 @@ static void cwist_h3_setup_session_tickets(SSL_CTX *ssl_ctx) {
 }
 
 static void cwist_h3_free_session_ticket_key(SSL_CTX *ssl_ctx) {
-    if (!ssl_ctx || g_h3_ticket_key_ex_data_idx < 0) return;
+    if (!ssl_ctx) return;
+    /* g_h3_ticket_key_ex_data_idx is only written once, from inside
+     * cwist_h3_ticket_key_ex_data_init() via the pthread_once below -
+     * but this function is also reached from cwist_http3_destroy_context()
+     * (line ~2196), which can run on a thread that never called
+     * cwist_h3_setup_session_tickets()/this same pthread_once itself (e.g.
+     * a dedicated shutdown/admin thread tearing down a context another
+     * thread created). Without calling pthread_once() here too, that
+     * thread has no happens-before edge to the writer and is reading the
+     * global race-free only by luck on the caller's platform/compiler.
+     * pthread_once() is cheap after the first call, so just always take
+     * this gate before reading the index. */
+    pthread_once(&g_h3_ticket_key_ex_data_once, cwist_h3_ticket_key_ex_data_init);
+    if (g_h3_ticket_key_ex_data_idx < 0) return;
     void *key = SSL_CTX_get_ex_data(ssl_ctx, g_h3_ticket_key_ex_data_idx);
     if (key) {
         SSL_CTX_set_ex_data(ssl_ctx, g_h3_ticket_key_ex_data_idx, NULL);
@@ -2724,7 +2827,7 @@ int cwist_webtransport_open_bidi_stream(void *session) {
     lsquic_wt_session_t *sess = lsquic_wt_session_from_stream(stream);
     if (sess) {
         lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
-        cwist_http3_context *ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+        cwist_http3_context *ctx = h3_shared_ctx(conn);
         if (ctx && ctx->wt_new_stream_handler) {
             cwist_wt_handle_t *stream_handle =
                 cwist_wt_handle_new(CWIST_WT_HANDLE_STREAM, stream);
@@ -2748,7 +2851,7 @@ int cwist_webtransport_open_uni_stream(void *session) {
     lsquic_wt_session_t *sess = lsquic_wt_session_from_stream(stream);
     if (sess) {
         lsquic_conn_t *conn = lsquic_wt_session_conn(sess);
-        cwist_http3_context *ctx = conn ? (cwist_http3_context *)lsquic_conn_get_ctx(conn) : NULL;
+        cwist_http3_context *ctx = h3_shared_ctx(conn);
         if (ctx && ctx->wt_new_stream_handler) {
             cwist_wt_handle_t *stream_handle =
                 cwist_wt_handle_new(CWIST_WT_HANDLE_STREAM, stream);
@@ -2838,12 +2941,34 @@ void cwist_http3_set_datagram_callback(cwist_http3_context *ctx,
 int cwist_http3_send_datagram(void *conn, const void *data, size_t len) {
     lsquic_conn_t *c = (lsquic_conn_t *)conn;
     if (!c || !data || len == 0) return -1;
-    if (g_h3_dgram.data) free(g_h3_dgram.data);
-    g_h3_dgram.conn = c;
-    g_h3_dgram.data = malloc(len);
-    if (!g_h3_dgram.data) return -1;
-    memcpy(g_h3_dgram.data, data, len);
-    g_h3_dgram.len = len;
+
+    h3_conn_ctx_t *cc = (h3_conn_ctx_t *)lsquic_conn_get_ctx(c);
+    if (!cc) return -1;
+
+    h3_dgram_node_t *node = (h3_dgram_node_t *)malloc(sizeof(*node));
+    if (!node) return -1;
+    node->data = malloc(len);
+    if (!node->data) {
+        free(node);
+        return -1;
+    }
+    memcpy(node->data, data, len);
+    node->len = len;
+    node->next = NULL;
+
+    /* Append to this connection's own queue - concurrent sends on other
+     * connections touch their own h3_conn_ctx_t and never see this lock,
+     * and concurrent sends on *this* connection now queue instead of one
+     * clobbering (free()ing) the other's buffer. */
+    pthread_mutex_lock(&cc->dgram_lock);
+    if (cc->dgram_tail) {
+        cc->dgram_tail->next = node;
+    } else {
+        cc->dgram_head = node;
+    }
+    cc->dgram_tail = node;
+    pthread_mutex_unlock(&cc->dgram_lock);
+
     lsquic_conn_want_datagram_write(c, 1);
     return 0;
 }
