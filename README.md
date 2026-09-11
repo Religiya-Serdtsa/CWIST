@@ -90,6 +90,27 @@ make
 sudo make install        # optional, installs to /usr/local (override with PREFIX=/opt/cwist)
 ```
 
+### Homebrew
+
+macOS and Linux (Linuxbrew) users can install the latest release from the
+[CWIST tap](https://github.com/c4punks/homebrew-cwist):
+
+```sh
+brew tap c4punks/cwist
+brew install cwist
+```
+
+Or install directly without tapping:
+
+```sh
+brew install c4punks/cwist/cwist
+```
+
+The formula builds from the release source tarball
+(`dist/cwist-<version>.tar.gz`, vendored dependencies included) and installs
+`libcwist.a`, public headers, the `cwist` CLI, and `cwist.pc` pkg-config
+metadata under the Homebrew prefix.
+
 ## Hello world
 
 ```c
