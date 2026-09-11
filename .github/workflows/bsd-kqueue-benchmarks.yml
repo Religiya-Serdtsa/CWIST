@@ -522,6 +522,24 @@ jobs:
           path: |
             webserver-result.json
             raw_logs/
+      - name: Latency regression gate (2.1ms)
+        run: |
+          python3 - <<'PY'
+          import json
+          data = json.load(open("webserver-result.json"))
+          gate_ms = 2.1
+          failures = []
+          for name, key in (("CWIST (classic pool)", "cwist_lat_ms"),
+                            ("CWIST (C1M reactor)", "cwist_c1m_lat_ms")):
+              lat = float(data.get(key, 0.0))
+              status = "OK" if lat <= gate_ms else "REGRESSION"
+              print(f"{status}: {name} average latency {lat:.2f}ms (gate {gate_ms}ms)")
+              if lat > gate_ms:
+                  failures.append(name)
+          if failures:
+              print("Average request latency crossing 2.1ms is a regression: " + ", ".join(failures))
+              raise SystemExit(1)
+          PY
 
   publish-benchmark-report:
     needs: [benchmark-report-tests, bsd-kqueue, benchmark, web-server-benchmark]
