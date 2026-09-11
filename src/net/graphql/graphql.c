@@ -179,12 +179,11 @@ static const char *parse_arguments(const char *p, const cJSON *variables, cJSON 
                 else p++;
             }
             size_t str_len = (size_t)(p - str_start);
-            char *str_val = cwist_alloc(str_len + 1);
+            char *str_val CWIST_DEFER_FREE = cwist_alloc(str_len + 1);
             if (str_val) {
                 memcpy(str_val, str_start, str_len);
                 str_val[str_len] = '\0';
                 val = cJSON_CreateString(str_val);
-                cwist_free(str_val);
             }
             if (*p == '"') p++;
         } else if (*p == '$') { /* Variable reference */

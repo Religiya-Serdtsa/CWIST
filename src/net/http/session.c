@@ -103,7 +103,7 @@ static char *generate_secret(size_t len) {
         cwist_free(secret);
         return NULL;
     }
-    unsigned char *buf = cwist_alloc(len);
+    unsigned char *buf CWIST_DEFER_FREE = cwist_alloc(len);
     if (!buf) {
         close(fd);
         cwist_free(secret);
@@ -112,7 +112,6 @@ static char *generate_secret(size_t len) {
     ssize_t n = read(fd, buf, len);
     close(fd);
     if (n != (ssize_t)len) {
-        cwist_free(buf);
         cwist_free(secret);
         return NULL;
     }
@@ -122,7 +121,6 @@ static char *generate_secret(size_t len) {
         secret[i * 2 + 1] = hex[buf[i] & 0x0F];
     }
     secret[len * 2] = '\0';
-    cwist_free(buf);
     return secret;
 }
 

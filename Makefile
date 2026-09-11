@@ -500,6 +500,11 @@ TEST_TARGETS = test_sstring \
                test_grpc_client \
                test_grpc_channel \
                test_dispatch_memory \
+               test_gc_ebr_release \
+               test_full_gc_sweep \
+               test_io_queue_full_gc \
+               test_full_gc_ownership_handoff \
+               test_defer_free \
                test_proto_gen \
                test_proto_desc
 
@@ -953,6 +958,26 @@ test_grpc_channel: $(LIB_NAME) tests/test_grpc_channel.c
 test_dispatch_memory: $(LIB_NAME) tests/test_dispatch_memory.c
 	$(CC) $(CFLAGS) -o test_dispatch_memory tests/test_dispatch_memory.c $(LIB_NAME) $(LIBS)
 	./test_dispatch_memory
+
+test_gc_ebr_release: $(LIB_NAME) tests/test_gc_ebr_release.c
+	$(CC) $(CFLAGS) -o test_gc_ebr_release tests/test_gc_ebr_release.c $(LIB_NAME) $(LIBS)
+	./test_gc_ebr_release
+
+test_full_gc_sweep: $(LIB_NAME) tests/test_full_gc_sweep.c
+	$(CC) $(CFLAGS) -o test_full_gc_sweep tests/test_full_gc_sweep.c $(LIB_NAME) $(LIBS)
+	./test_full_gc_sweep
+
+test_io_queue_full_gc: $(LIB_NAME) tests/test_io_queue_full_gc.c
+	$(CC) $(CFLAGS) -o test_io_queue_full_gc tests/test_io_queue_full_gc.c $(LIB_NAME) $(LIBS)
+	./test_io_queue_full_gc
+
+test_full_gc_ownership_handoff: $(LIB_NAME) tests/test_full_gc_ownership_handoff.c
+	$(CC) $(CFLAGS) -o test_full_gc_ownership_handoff tests/test_full_gc_ownership_handoff.c $(LIB_NAME) $(LIBS)
+	./test_full_gc_ownership_handoff
+
+test_defer_free: $(LIB_NAME) tests/test_defer_free.c
+	$(CC) $(CFLAGS) -o test_defer_free tests/test_defer_free.c $(LIB_NAME) $(LIBS)
+	./test_defer_free
 
 test_proto_gen: $(LIB_NAME) tests/test_proto_gen.c tests/test_proto_gen_sample.proto
 	./tools/cli/cwist proto tests/test_proto_gen_sample.proto --output tests/test_proto_gen_sample.cwist.pb.h

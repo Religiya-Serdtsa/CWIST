@@ -46,7 +46,7 @@ static void cookie_jar_apply(cwist_test_client *client, cwist_http_request *req,
     for (size_t i = 0; i < adhoc_count; i++)
         buf_len += strlen(adhoc[i].key) + 1 + strlen(adhoc[i].value) + 2;
 
-    char *cookie_header = (char *)cwist_alloc(buf_len + 1);
+    char *cookie_header CWIST_DEFER_FREE = (char *)cwist_alloc(buf_len + 1);
     if (!cookie_header) return;
     cookie_header[0] = '\0';
 
@@ -63,7 +63,6 @@ static void cookie_jar_apply(cwist_test_client *client, cwist_http_request *req,
                                  adhoc[i].key, adhoc[i].value);
     }
     cwist_http_header_add(&req->headers, "Cookie", cookie_header);
-    cwist_free(cookie_header);
 }
 
 static char *trim(char *s) {
@@ -148,12 +147,11 @@ static cwist_http_response *do_request(cwist_test_client *client, cwist_http_met
     const char *hash = strchr(path, '?');
     if (hash) {
         size_t path_len = (size_t)(hash - path);
-        char *path_only = (char *)cwist_alloc(path_len + 1);
+        char *path_only CWIST_DEFER_FREE = (char *)cwist_alloc(path_len + 1);
         if (!path_only) { cwist_http_request_destroy(req); return NULL; }
         memcpy(path_only, path, path_len);
         path_only[path_len] = '\0';
         cwist_sstring_assign(req->path, path_only);
-        cwist_free(path_only);
         query = hash + 1;
     } else {
         cwist_sstring_assign(req->path, (char *)path);
