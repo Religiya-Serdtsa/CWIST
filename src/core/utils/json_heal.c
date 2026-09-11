@@ -99,7 +99,8 @@ static void remove_trailing_commas(strbuf_t *b) {
 
 /* Append missing closing brackets / braces at the end of the buffer. */
 static void balance_brackets(strbuf_t *b, char *log, size_t log_sz) {
-    char  *stack CWIST_DEFER_FREE = (char *)cwist_alloc(b->len + 1);
+    cwist_scratch_t stack_s CWIST_SCRATCH_DEFER = {0};
+    char  *stack = (char *)cwist_scratch_alloc(&stack_s, b->len + 1);
     if (!stack) {
         log_append(log, log_sz, "[L1] bracket-balance skipped (alloc failure); ");
         return;
