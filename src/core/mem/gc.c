@@ -534,3 +534,12 @@ void cwist_conn_registry_flush(void) {
 void cwist_conn_registry_sweep_all(void) {
     cwist_conn_registry_sweep_all_impl();
 }
+
+size_t cwist_conn_registry_pending_count(void) {
+    cwist_conn_pending_t *pending = cwist_conn_pending_get();
+    if (!pending) return 0;
+    pthread_mutex_lock(&pending->lock);
+    size_t n = pending->count;
+    pthread_mutex_unlock(&pending->lock);
+    return n;
+}

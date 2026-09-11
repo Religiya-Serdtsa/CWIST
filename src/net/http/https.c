@@ -5,6 +5,7 @@
 #include <cwist/core/sstring/sstring.h>
 #include <cwist/sys/err/cwist_err.h>
 #include <cwist/core/mem/alloc.h>
+#include <cwist/core/mem/gc.h>
 #include <cwist/sys/app/shutdown.h>
 #include "tls_chain.h"
 #include <openssl/ssl.h>
@@ -104,6 +105,7 @@ void https_pool_submit_ready(int client_fd, SSL *pres_ssl, cwist_https_context *
 static cwist_error_t https_wrap_established(cwist_https_context *ctx, int client_fd, SSL *ssl, cwist_https_connection **conn);
 int https_hs_shepherd_start(void);
 void https_hs_shepherd_stop(void);
+static void https_close_conn_cb(void *handle);
 
 static void *https_pool_worker(void *arg) {
     (void)arg;
@@ -961,6 +963,31 @@ static cwist_error_t https_wrap_established(cwist_https_context *ctx, int client
     (*conn)->http3_enabled = ctx->http3_enabled;
     (*conn)->deferred = false;
 
+    if (cwist_full_gc_enabled()) {
+        /* *conn and its read_buf were just handed to the connection
+         * registry's close_fn (below) as their sole eventual releaser.
+         * They must NOT also sit on this thread's generic cwist_alloc
+         * pending-sweep list: that list's own thread-exit destructor runs
+         * independently of (and in unspecified order relative to) the
+         * connection registry's destructor, so if it fired first it would
+         * cwist_ebr_free() *conn out from under the registry's still-
+         * pending entry -- the registry's sweep would then read a freed
+         * conn->ssl. Disowning here hands sole ownership to the registry,
+         * exactly the cross-list handoff cwist_gc_scope_disown() exists
+         * for (see io_queue.c's job-handoff use of the same call). */
+        cwist_gc_scope_disown(*conn);
+        cwist_gc_scope_disown((*conn)->read_buf);
+        /* Full-GC's safety net: if this connection is never explicitly
+         * closed (worker crashes mid-request, an error path forgets), the
+         * owning thread's exit -- or, failing that, process exit -- still
+         * closes it instead of leaking the fd/TLS session. Normal explicit
+         * close (cwist_https_close_connection) untracks first, so this is
+         * a no-op on the common path. Registering here (rather than only
+         * in cwist_https_accept) covers the shepherd's pre-handshaked
+         * dispatch path too, which calls this function directly. */
+        cwist_conn_registry_track(*conn, https_close_conn_cb);
+    }
+
     const unsigned char *alpn = NULL;
     unsigned int alpn_len = 0;
     SSL_get0_alpn_selected(ssl, &alpn, &alpn_len);
@@ -972,6 +999,20 @@ static cwist_error_t https_wrap_established(cwist_https_context *ctx, int client
 
     err.error.err_i16 = 0;
     return err;
+}
+
+static void https_connection_teardown(cwist_https_connection *conn);
+
+/**
+ * @brief cwist_conn_registry_track() callback adapter: the registry only
+ *        knows `void (*)(void *)`. Points at the raw teardown
+ *        (https_connection_teardown), NOT the public
+ *        cwist_https_close_connection() -- see that raw helper's doc
+ *        comment for why calling back into the registry from here would
+ *        be a bug, not just redundant.
+ */
+static void https_close_conn_cb(void *handle) {
+    https_connection_teardown((cwist_https_connection *)handle);
 }
 
 cwist_error_t cwist_https_accept(cwist_https_context *ctx, int client_fd, cwist_https_connection **conn) {
@@ -1038,7 +1079,18 @@ cwist_https_protocol cwist_https_connection_protocol(const cwist_https_connectio
     return conn->negotiated_protocol;
 }
 
-void cwist_https_close_connection(cwist_https_connection *conn) {
+/**
+ * @brief Raw teardown, no registry bookkeeping -- this is what the
+ *        connection registry's sweep calls directly (it already owns
+ *        removing the entry from its list as a batch, so re-entering
+ *        cwist_conn_registry_untrack() from here would recreate a fresh
+ *        thread-local pending list mid-destructor, since pthread clears
+ *        the TLS association *before* invoking the destructor; that
+ *        recursion is exactly what crashed the first version of this).
+ *        cwist_https_close_connection() -- the public, explicit-close API
+ *        -- calls this too, after its own untrack().
+ */
+static void https_connection_teardown(cwist_https_connection *conn) {
     if (conn) {
         if (conn->ssl) {
             SSL_shutdown(conn->ssl);
@@ -1050,6 +1102,13 @@ void cwist_https_close_connection(cwist_https_connection *conn) {
         cwist_free(conn->read_buf);
         cwist_free(conn);
     }
+}
+
+void cwist_https_close_connection(cwist_https_connection *conn) {
+    if (conn && cwist_full_gc_enabled()) {
+        cwist_conn_registry_untrack(conn);
+    }
+    https_connection_teardown(conn);
 }
 
 /**
