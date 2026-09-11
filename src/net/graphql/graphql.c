@@ -179,7 +179,8 @@ static const char *parse_arguments(const char *p, const cJSON *variables, cJSON 
                 else p++;
             }
             size_t str_len = (size_t)(p - str_start);
-            char *str_val CWIST_DEFER_FREE = cwist_alloc(str_len + 1);
+            cwist_scratch_t str_val_s CWIST_SCRATCH_DEFER = {0};
+            char *str_val = cwist_scratch_alloc(&str_val_s, str_len + 1);
             if (str_val) {
                 memcpy(str_val, str_start, str_len);
                 str_val[str_len] = '\0';

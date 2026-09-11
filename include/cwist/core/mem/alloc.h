@@ -8,6 +8,7 @@
 
 #include <stddef.h>
 #include <ttak/mem/owner.h>
+#include <cwist/core/mem/arena.h>
 
 /**
  * @brief Lazily create (or return) the shared CWIST owner context.
@@ -115,5 +116,77 @@ static inline void cwist_defer_free_cb(void *pp) {
 #define cwist_alloc_scoped(var, cast, size) \
     void *_cwist_scoped_##var CWIST_DEFER_FREE = cwist_alloc(size); \
     cast var = (cast)_cwist_scoped_##var
+
+/**
+ * @brief Backing state for cwist_scratch_alloc()/CWIST_SCRATCH_DEFER: a
+ *        single block-scoped allocation that prefers a recycled arena
+ *        generation and falls back to cwist_alloc() when the request
+ *        doesn't fit one (see cwist/core/mem/arena.h -- only
+ *        CWIST_ARENA_DEFAULT_GENERATION_BYTES-sized generations hit the
+ *        zero-libttak-GC recycle path, so cwist_scratch_alloc() always
+ *        requests the default size and never a custom one).
+ *
+ * Zero-initialize before use (`= {0}`); do not touch fields directly.
+ */
+typedef struct {
+    cwist_arena_t *arena;
+    void *ptr;
+    int heap; /* 1 if ptr came from cwist_alloc() instead of the arena */
+} cwist_scratch_t;
+
+/**
+ * @brief Allocate @p size scratch bytes, preferring a recycled arena
+ *        generation over cwist_alloc()'s heavier owner-guarded path.
+ * @param s Scratch handle; zero-initialize it (`cwist_scratch_t s = {0};`)
+ *          before the first call. One handle holds one allocation.
+ * @param size Bytes needed.
+ * @return Pointer to @p size (NOT zeroed) bytes, or NULL on failure.
+ */
+static inline void *cwist_scratch_alloc(cwist_scratch_t *s, size_t size) {
+    s->arena = cwist_arena_create(0);
+    if (s->arena) {
+        s->ptr = cwist_arena_alloc(s->arena, size);
+        if (s->ptr) {
+            s->heap = 0;
+            return s->ptr;
+        }
+    }
+    s->ptr = cwist_alloc(size);
+    s->heap = 1;
+    return s->ptr;
+}
+
+/**
+ * @brief cleanup-attribute callback for CWIST_SCRATCH_DEFER. Not meant to
+ *        be called directly.
+ */
+static inline void cwist_scratch_cleanup(void *sp) {
+    cwist_scratch_t *s = (cwist_scratch_t *)sp;
+    if (s->heap && s->ptr) {
+        cwist_free(s->ptr);
+    }
+    if (s->arena) {
+        cwist_arena_destroy(s->arena);
+    }
+}
+
+/**
+ * @def CWIST_SCRATCH_DEFER
+ * @brief Attach to a cwist_scratch_t variable's declaration so its
+ *        allocation (arena- or heap-backed, whichever cwist_scratch_alloc()
+ *        picked) is released automatically when the enclosing block exits.
+ *
+ * @code
+ *   cwist_scratch_t buf_s CWIST_SCRATCH_DEFER = {0};
+ *   unsigned char *buf = cwist_scratch_alloc(&buf_s, needed);
+ *   if (!buf) return -1;
+ *   ...
+ *   // buf_s's backing storage is released here, on every return path
+ * @endcode
+ *
+ * Same escape rule as CWIST_DEFER_FREE: only for a pointer that does not
+ * outlive the block cwist_scratch_t was declared in.
+ */
+#define CWIST_SCRATCH_DEFER CWIST_ATTRIBUTE_CLEANUP(cwist_scratch_cleanup)
 
 #endif

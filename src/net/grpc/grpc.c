@@ -936,7 +936,8 @@ static void grpc_reflection_info(cwist_grpc_stream *stream, void *ctx) {
         const char *slash = strrchr(route->path + 1, '/');
         if (!slash) continue;
         size_t len = (size_t)(slash - route->path - 1);
-        char *service CWIST_DEFER_FREE = cwist_alloc(len + 1);
+        cwist_scratch_t service_s CWIST_SCRATCH_DEFER = {0};
+        char *service = cwist_scratch_alloc(&service_s, len + 1);
         if (!service) { stream->status = CWIST_GRPC_RESOURCE_EXHAUSTED; break; }
         memcpy(service, route->path + 1, len); service[len] = '\0';
         if (grpc_reflection_append_service(&response, service) != 0) stream->status = CWIST_GRPC_INTERNAL;
