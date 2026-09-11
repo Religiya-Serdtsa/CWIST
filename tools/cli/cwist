@@ -94,6 +94,134 @@ def source_files(source: Path) -> list[Path]:
     return [source] if source.is_file() else sorted(source.rglob("*.c"))
 
 
+# Allocation/synchronization call sites, grouped by category and by which
+# convention they follow:
+#   cwist -- routed through cwist's own wrapper (visible to cwist_full_gc()
+#            for alloc; libttak's portable primitive for pthread)
+#   gnu   -- the raw glibc/POSIX call, bypassing that wrapper
+#   bsd   -- a BSD-origin idiom (reallocarray/strlcpy/strlcat/explicit_bzero,
+#            or a BSD-flavored pthread_np variant) used directly
+# A line matching none of these is simply not an allocation/sync call site.
+AUDIT_PATTERNS: dict[str, dict[str, str]] = {
+    "alloc": {
+        "cwist": r"\bcwist_(?:malloc|alloc(?:_array|_scoped)?|realloc|strn?dup|free|ebr_alloc|ebr_free)\s*\(|\bCWIST_DEFER_FREE\b",
+        "gnu": r"\b(?:malloc|calloc|realloc|free|strn?dup)\s*\(",
+        "bsd": r"\b(?:reallocarray|strlcpy|strlcat|explicit_bzero|freezero)\s*\(",
+    },
+    "pthread": {
+        "cwist": r"\bttak_(?:mutex|cond|rwlock|thread)_\w+\s*\(",
+        "gnu": r"\bpthread_(?:create|join|detach|mutex_\w+|cond_\w+|rwlock_\w+|key_\w+|once\w*|attr_\w+)\s*\(",
+        "bsd": r"\bpthread_set_name_np\s*\(",
+    },
+}
+
+
+def audit_sources(source: Path, category: str, style: str) -> list[tuple[str, int, str, str, str]]:
+    """Return (file, line, category, style, snippet) for every allocation/
+    sync call site under `source` matching `category`/`style` ("all" for
+    either means no filter). `source` may be a file or a directory, and
+    relative, absolute, or `~`-prefixed; directories are scanned
+    recursively (source_files() -> Path.rglob("*.c"))."""
+    source = source.expanduser().resolve()
+    if not source.exists():
+        fail(f"no such file or directory: {source}")
+    categories = AUDIT_PATTERNS if category == "all" else {category: AUDIT_PATTERNS[category]}
+    compiled = {
+        cat: {sty: re.compile(pat) for sty, pat in styles.items() if style in ("all", sty)}
+        for cat, styles in categories.items()
+    }
+    rows: list[tuple[str, int, str, str, str]] = []
+    for file in source_files(source):
+        try:
+            lines = file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for lineno, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if stripped.startswith(("//", "*", "/*")):
+                continue
+            for cat, styles in compiled.items():
+                for sty, pattern in styles.items():
+                    m = pattern.search(line)
+                    if m:
+                        rows.append((str(file), lineno, cat, sty, stripped[:100]))
+    return rows
+
+
+AUDIT_QUERY_KEYS = {
+    "style": "style",
+    "category": "category",
+    "cat": "category",
+    "folder": "path",
+    "path": "path",
+    "json": "json",
+}
+
+
+def parse_audit_query(raw: str) -> dict[str, str]:
+    """Parse `cwist audit`'s one-string query form:
+    open="style:bsd;folder:./src/net" (the leading `open=` and surrounding
+    quotes are optional -- the shell strips the quotes either way; `open=`
+    is accepted so the form in the docs/examples runs verbatim). Segments
+    are `;`-separated `key:value` pairs; recognized keys: style, category
+    (or cat), folder (or path), json. Unknown keys are rejected so a typo
+    doesn't silently no-op."""
+    text = raw.strip()
+    if text.startswith("open="):
+        text = text[len("open="):]
+    text = text.strip().strip('"').strip("'")
+    result: dict[str, str] = {}
+    for segment in filter(None, (s.strip() for s in text.split(";"))):
+        if ":" not in segment:
+            fail(f"audit query segment missing ':': {segment!r} (expected key:value)")
+        key, value = segment.split(":", 1)
+        key = key.strip().lower()
+        if key not in AUDIT_QUERY_KEYS:
+            fail(f"unknown audit query key {key!r} (expected one of: {', '.join(sorted(set(AUDIT_QUERY_KEYS)))})")
+        result[AUDIT_QUERY_KEYS[key]] = value.strip()
+    return result
+
+
+def looks_like_audit_query(raw: str) -> bool:
+    if raw.startswith("open="):
+        return True
+    head = raw.split(";", 1)[0].split(":", 1)[0].strip().lower()
+    return head in AUDIT_QUERY_KEYS
+
+
+def display_path(path: str) -> str:
+    p = Path(path)
+    try:
+        return str(p.relative_to(Path.cwd()))
+    except ValueError:
+        return str(p)
+
+
+def run_audit(source: Path, category: str, style: str, as_json: bool) -> None:
+    rows = audit_sources(source, category, style)
+    rows = [(display_path(f), ln, cat, sty, snip) for f, ln, cat, sty, snip in rows]
+    if as_json:
+        print(json.dumps([
+            {"file": f, "line": ln, "category": cat, "style": sty, "snippet": snip}
+            for f, ln, cat, sty, snip in rows
+        ], indent=2))
+        return
+    if not rows:
+        print("no matching allocation/sync call sites found")
+        return
+    width = max(len(f"{f}:{ln}") for f, ln, *_ in rows)
+    for f, ln, cat, sty, snip in rows:
+        loc = f"{f}:{ln}"
+        print(f"{loc:<{width}}  {cat:<8} {sty:<6} {snip}")
+    counts: dict[tuple[str, str], int] = {}
+    for _, _, cat, sty, _ in rows:
+        counts[(cat, sty)] = counts.get((cat, sty), 0) + 1
+    print()
+    print("summary:")
+    for (cat, sty), n in sorted(counts.items()):
+        print(f"  {cat:<8} {sty:<6} {n}")
+
+
 def generate_openapi(source: Path, output: Path, title: str, version: str) -> None:
     route_re = re.compile(r"CWIST_OPENAPI_(GET|POST|PUT|DELETE|PATCH)\s*\(\s*[^,]+,\s*\"([^\"]+)\"")
     comment_re = re.compile(r"/\*\*.*?\*/", re.S)
@@ -1304,6 +1432,15 @@ def main() -> None:
     proto.add_argument("--output", type=Path)
     proto.add_argument("--descriptor-set", action="store_true",
                        help="treat input as a binary FileDescriptorSet (protoc --descriptor_set_out); auto-detected otherwise")
+    audit = sub.add_parser("audit", help="list allocation/pthread call sites by convention (cwist / gnu / bsd)")
+    audit.add_argument("target", nargs="?", default=None,
+                       help='a file/directory to scan (relative, absolute, or ~), recursively -- '
+                            'OR a query string \'style:bsd;folder:./src/net\' (an optional leading '
+                            '"open=" is accepted verbatim). Query keys: style, category (cat), '
+                            'folder (path), json. Default: src')
+    audit.add_argument("--category", choices=["all", *AUDIT_PATTERNS.keys()], default="all")
+    audit.add_argument("--style", choices=["all", "cwist", "gnu", "bsd"], default="all")
+    audit.add_argument("--json", action="store_true")
     describe = sub.add_parser("describe", help="print a .cwpro manifest")
     describe.add_argument("--project")
     watch = sub.add_parser("watcher", help="watch, incrementally rebuild, and hot-restart the development process")
@@ -1318,6 +1455,22 @@ def main() -> None:
         output = args.output or args.source.with_suffix(".cwist.pb.h")
         generate_proto(args.source, output,
                        True if args.descriptor_set else None)
+    elif args.command == "audit":
+        path, category, style, as_json = Path("src"), args.category, args.style, args.json
+        if args.target is not None:
+            if looks_like_audit_query(args.target):
+                q = parse_audit_query(args.target)
+                if "path" in q: path = Path(q["path"])
+                if "category" in q:
+                    if q["category"] not in ("all", *AUDIT_PATTERNS.keys()): fail(f"unknown category: {q['category']}")
+                    category = q["category"]
+                if "style" in q:
+                    if q["style"] not in ("all", "cwist", "gnu", "bsd"): fail(f"unknown style: {q['style']}")
+                    style = q["style"]
+                if "json" in q: as_json = q["json"].strip().lower() in ("1", "true", "yes")
+            else:
+                path = Path(args.target)
+        run_audit(path, category, style, as_json)
     elif args.command == "describe": print(json.dumps(json.loads(project_file(args.project).read_text()), indent=2))
     elif args.command == "watcher":
         if args.interval <= 0: fail("--interval must be positive")
