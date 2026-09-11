@@ -26,6 +26,7 @@ cwist_http2_flow_control_adjust(cwist_http2_flow_control *flow_control)
 {
     uint64_t delay_us;
     uint64_t multiplier;
+    uint64_t rate_floor;
 
     if (!flow_control->rtt_initialized) {
         return;
@@ -55,6 +56,13 @@ cwist_http2_flow_control_adjust(cwist_http2_flow_control *flow_control)
     flow_control->pacing_rate_bytes_per_sec =
         ((uint64_t)flow_control->target_window * 1000000U) /
         (flow_control->srtt_us ? flow_control->srtt_us : 1U);
+    /* Floor: a single spiked RTT sample must not throttle the connection to
+     * a crawl.  Overrating is harmless — the peer's flow-control windows
+     * still gate in-flight bytes; pacing only smooths bursts. */
+    rate_floor = (uint64_t)flow_control->min_window * 10U;
+    if (flow_control->pacing_rate_bytes_per_sec < rate_floor) {
+        flow_control->pacing_rate_bytes_per_sec = rate_floor;
+    }
 }
 
 static int
@@ -212,19 +220,36 @@ cwist_http2_stream_flow_control_consume(cwist_http2_stream_flow_control *flow_co
 }
 
 /* Retune the receive target toward 2x the measured bandwidth-delay product:
- * bytes consumed since the previous update, projected over one SRTT. */
+ * bytes consumed since the previous update, projected over one SRTT.  Each
+ * retune moves at most a 2x/0.5x step away from the current target, so a
+ * micro-interval jitter sample cannot slam the window between its floor and
+ * ceiling (oscillation under bursty load). */
 static uint32_t
 cwist_http2_flow_control_retune_target(uint32_t pending_update,
                                        uint64_t srtt_us,
                                        uint64_t interval_us,
+                                       uint32_t current_target,
                                        uint32_t minimum,
                                        uint32_t maximum)
 {
+    uint64_t bdp2;
+    uint64_t grow_cap;
+    uint64_t shrink_floor;
+    uint32_t target;
+
     if (interval_us == 0) {
-        return minimum;
+        return current_target;
     }
-    uint64_t bdp2 = (2ULL * (uint64_t)pending_update * srtt_us) / interval_us;
-    return cwist_http2_window_clamp(bdp2, minimum, maximum);
+    bdp2 = (2ULL * (uint64_t)pending_update * srtt_us) / interval_us;
+    target = cwist_http2_window_clamp(bdp2, minimum, maximum);
+    grow_cap = (uint64_t)current_target * 2U;
+    shrink_floor = current_target / 2U;
+    if ((uint64_t)target > grow_cap) {
+        target = cwist_http2_window_clamp(grow_cap, minimum, maximum);
+    } else if ((uint64_t)target < shrink_floor) {
+        target = cwist_http2_window_clamp(shrink_floor, minimum, maximum);
+    }
+    return target;
 }
 
 /* Credit to hand back to the peer: top the window up to the target, but
@@ -258,6 +283,7 @@ cwist_http2_flow_control_maybe_window_update(cwist_http2_flow_control *flow_cont
         flow_control->target_window = cwist_http2_flow_control_retune_target(
             flow_control->pending_update, flow_control->srtt_us,
             now_us - flow_control->last_window_update_us,
+            flow_control->target_window,
             flow_control->min_window, flow_control->max_window);
     }
 
@@ -306,6 +332,7 @@ cwist_http2_stream_flow_control_maybe_window_update(cwist_http2_flow_control *co
         stream_flow_control->target_window = cwist_http2_flow_control_retune_target(
             stream_flow_control->pending_update, connection_flow_control->srtt_us,
             now_us - connection_flow_control->last_window_update_us,
+            stream_flow_control->target_window,
             stream_flow_control->min_window, stream_flow_control->max_window);
     }
 
@@ -357,6 +384,7 @@ cwist_http2_flow_control_pacing_allowance(cwist_http2_flow_control *connection_f
 {
     uint64_t elapsed;
     uint64_t added;
+    uint64_t fill_us;
     size_t allowed;
 
     if (connection_flow_control == NULL || stream_flow_control == NULL) {
@@ -366,6 +394,18 @@ cwist_http2_flow_control_pacing_allowance(cwist_http2_flow_control *connection_f
         connection_flow_control->pacing_last_us = now_us;
     } else if (now_us > connection_flow_control->pacing_last_us) {
         elapsed = now_us - connection_flow_control->pacing_last_us;
+        /* The bucket tops out at target_window, so accruing beyond one
+         * window's worth of idle time buys nothing.  Capping elapsed at the
+         * exact fill time keeps the multiplication inside uint64 no matter
+         * how long the connection idled or how large the rate is. */
+        fill_us = ((uint64_t)connection_flow_control->target_window * 1000000U) /
+                      (connection_flow_control->pacing_rate_bytes_per_sec
+                           ? connection_flow_control->pacing_rate_bytes_per_sec
+                           : 1U) +
+                  1U;
+        if (elapsed > fill_us) {
+            elapsed = fill_us;
+        }
         added = (elapsed * connection_flow_control->pacing_rate_bytes_per_sec) / 1000000U;
         connection_flow_control->pacing_tokens += added;
         if (connection_flow_control->pacing_tokens > connection_flow_control->target_window) {
