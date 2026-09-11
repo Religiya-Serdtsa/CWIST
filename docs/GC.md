@@ -28,7 +28,24 @@ default), the current explicit model runs unchanged at zero cost.
 cwist_full_gc(true);   /* enable automatic reclamation */
 ```
 
-One process-wide switch. When enabled:
+One process-wide switch. **This cuts across `cwist_multiport_get_app()`'s
+per-port sub-applications.** Multiport advertises detached ports as
+"independently tunable sub-applications," but that independence is
+app-level config only (routes, middleware, TLS, size limits) -- it was
+never true of process-wide subsystems, and `cwist_full_gc()` is one.
+Several `cwist_app` instances can share a process (that's the whole point
+of multiport), but they cannot have different full-GC settings: enabling
+it from any one of them enables it for all of them, with no per-app
+opt-out, because the toggle, the pending-sweep bookkeeping, and the
+epoch-retire pipeline it drives are all singletons scoped to the process,
+not to a `cwist_app *`. (The cJSON allocator hook installed at process
+start via a constructor function is the same shape, for the same reason:
+there's one cJSON allocator per process, not per app.) A deployment that
+genuinely needs different memory-management behavior for different
+sub-apps needs separate processes -- separate `cwist_app` instances in one
+process cannot get it.
+
+When enabled:
 
 - Connections are closed automatically on **worker-thread exit** and on
   **process exit**, even when no explicit destroy-family call was made.
