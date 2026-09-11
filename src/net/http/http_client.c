@@ -84,12 +84,14 @@ static size_t header_callback(char *ptr, size_t size, size_t nmemb, void *userp)
     }
 
     if (name_len > 0 && value_len > 0) {
-        char *name CWIST_DEFER_FREE = cwist_alloc(name_len + 1);
+        cwist_scratch_t name_s CWIST_SCRATCH_DEFER = {0};
+        char *name = cwist_scratch_alloc(&name_s, name_len + 1);
         if (!name) return total;
         memcpy(name, ptr, name_len);
         name[name_len] = '\0';
 
-        char *val CWIST_DEFER_FREE = cwist_alloc(value_len + 1);
+        cwist_scratch_t val_s CWIST_SCRATCH_DEFER = {0};
+        char *val = cwist_scratch_alloc(&val_s, value_len + 1);
         if (!val) return total;
         memcpy(val, value, value_len);
         val[value_len] = '\0';
