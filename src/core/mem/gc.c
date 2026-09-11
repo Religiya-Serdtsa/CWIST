@@ -358,3 +358,179 @@ size_t cwist_gc_scope_pending_count(void) {
     cwist_gc_pending_t *pending = cwist_gc_pending_get();
     return pending ? pending->count : 0;
 }
+
+/* --- Connection registry: thread/process-exit sweep for non-memory
+ * resources (sockets, TLS sessions, protocol state). See gc.h's
+ * cwist_conn_registry_* doc comments for the contract. */
+
+typedef struct {
+    void *handle;
+    cwist_conn_close_fn close_fn;
+} cwist_conn_entry_t;
+
+/**
+ * One thread's list of tracked connection handles, plus enough to let
+ * the process-exit sweep (cwist_conn_registry_sweep_all(), running on
+ * whichever thread happens to call exit()/return from main) safely race
+ * against this same thread's own TLS-destructor sweep (running if this
+ * thread happens to exit around the same time): `lock` serializes the
+ * two, `swept` makes a second attempt (by either path) a no-op instead
+ * of double-closing everything.
+ */
+typedef struct cwist_conn_pending {
+    pthread_mutex_t lock;
+    cwist_conn_entry_t *items;
+    size_t count;
+    size_t cap;
+    bool swept;
+    struct cwist_conn_pending *global_next; /* g_conn_registry_lock-protected link */
+} cwist_conn_pending_t;
+
+static pthread_key_t g_conn_key;
+static pthread_once_t g_conn_key_once = PTHREAD_ONCE_INIT;
+static pthread_mutex_t g_conn_registry_lock = PTHREAD_MUTEX_INITIALIZER;
+static cwist_conn_pending_t *g_conn_registry_head = NULL;
+static _Atomic bool g_conn_atexit_registered = false;
+
+/** @brief Close and drop every entry in @p pending. Caller holds pending->lock. */
+static void cwist_conn_pending_sweep_locked(cwist_conn_pending_t *pending) {
+    if (pending->swept) return;
+    for (size_t i = 0; i < pending->count; i++) {
+        pending->items[i].close_fn(pending->items[i].handle);
+    }
+    pending->count = 0;
+    pending->swept = true;
+}
+
+/** @brief Sweep every still-registered thread's pending list right now. */
+static void cwist_conn_registry_sweep_all_impl(void) {
+    pthread_mutex_lock(&g_conn_registry_lock);
+    for (cwist_conn_pending_t *p = g_conn_registry_head; p; p = p->global_next) {
+        pthread_mutex_lock(&p->lock);
+        cwist_conn_pending_sweep_locked(p);
+        pthread_mutex_unlock(&p->lock);
+    }
+    pthread_mutex_unlock(&g_conn_registry_lock);
+}
+
+static void cwist_conn_registry_atexit(void) {
+    cwist_conn_registry_sweep_all_impl();
+}
+
+/**
+ * @brief pthread TLS destructor: sweep this thread's connections, then
+ * unlink it from the global registry so the atexit sweep (which may run
+ * later, on a different thread) never touches this about-to-be-freed
+ * struct.
+ */
+static void cwist_conn_pending_destroy(void *arg) {
+    cwist_conn_pending_t *pending = (cwist_conn_pending_t *)arg;
+    if (!pending) return;
+
+    pthread_mutex_lock(&pending->lock);
+    cwist_conn_pending_sweep_locked(pending);
+    pthread_mutex_unlock(&pending->lock);
+
+    pthread_mutex_lock(&g_conn_registry_lock);
+    cwist_conn_pending_t **link = &g_conn_registry_head;
+    while (*link && *link != pending) link = &(*link)->global_next;
+    if (*link == pending) *link = pending->global_next;
+    pthread_mutex_unlock(&g_conn_registry_lock);
+
+    pthread_mutex_destroy(&pending->lock);
+    free(pending->items);
+    free(pending);
+}
+
+static void cwist_conn_key_init(void) {
+    pthread_key_create(&g_conn_key, cwist_conn_pending_destroy);
+}
+
+/** @brief Lazily create (or return) this thread's connection pending list. */
+static cwist_conn_pending_t *cwist_conn_pending_get(void) {
+    pthread_once(&g_conn_key_once, cwist_conn_key_init);
+    cwist_conn_pending_t *pending = (cwist_conn_pending_t *)pthread_getspecific(g_conn_key);
+    if (pending) return pending;
+
+    pending = (cwist_conn_pending_t *)calloc(1, sizeof(*pending));
+    if (!pending) return NULL;
+    if (pthread_mutex_init(&pending->lock, NULL) != 0) {
+        free(pending);
+        return NULL;
+    }
+    if (pthread_setspecific(g_conn_key, pending) != 0) {
+        pthread_mutex_destroy(&pending->lock);
+        free(pending);
+        return NULL;
+    }
+
+    /* Register the process-exit sweep exactly once, the first time any
+     * thread ever tracks a connection (not eagerly at load time: most
+     * processes never enable full-GC, and atexit() handlers are a
+     * process-wide resource other code may also be competing for). */
+    if (!atomic_exchange_explicit(&g_conn_atexit_registered, true, memory_order_acq_rel)) {
+        atexit(cwist_conn_registry_atexit);
+    }
+
+    pthread_mutex_lock(&g_conn_registry_lock);
+    pending->global_next = g_conn_registry_head;
+    g_conn_registry_head = pending;
+    pthread_mutex_unlock(&g_conn_registry_lock);
+
+    return pending;
+}
+
+void cwist_conn_registry_track(void *handle, cwist_conn_close_fn close_fn) {
+    if (!handle || !close_fn) return;
+    if (!cwist_full_gc_enabled()) return;
+    cwist_conn_pending_t *pending = cwist_conn_pending_get();
+    if (!pending) return;
+
+    pthread_mutex_lock(&pending->lock);
+    if (pending->count == pending->cap) {
+        size_t new_cap = pending->cap ? pending->cap * 2 : 8;
+        cwist_conn_entry_t *grown =
+            (cwist_conn_entry_t *)realloc(pending->items, new_cap * sizeof(*grown));
+        if (grown) {
+            pending->items = grown;
+            pending->cap = new_cap;
+        }
+    }
+    if (pending->count < pending->cap) {
+        pending->items[pending->count++] = (cwist_conn_entry_t){.handle = handle, .close_fn = close_fn};
+    }
+    pthread_mutex_unlock(&pending->lock);
+}
+
+bool cwist_conn_registry_untrack(void *handle) {
+    if (!handle) return false;
+    cwist_conn_pending_t *pending = cwist_conn_pending_get();
+    if (!pending) return false;
+
+    bool found = false;
+    pthread_mutex_lock(&pending->lock);
+    for (size_t i = 0; i < pending->count; i++) {
+        if (pending->items[i].handle == handle) {
+            pending->items[i] = pending->items[--pending->count];
+            found = true;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&pending->lock);
+    return found;
+}
+
+void cwist_conn_registry_flush(void) {
+    cwist_conn_pending_t *pending = cwist_conn_pending_get();
+    if (!pending) return;
+    pthread_mutex_lock(&pending->lock);
+    for (size_t i = 0; i < pending->count; i++) {
+        pending->items[i].close_fn(pending->items[i].handle);
+    }
+    pending->count = 0;
+    pthread_mutex_unlock(&pending->lock);
+}
+
+void cwist_conn_registry_sweep_all(void) {
+    cwist_conn_registry_sweep_all_impl();
+}

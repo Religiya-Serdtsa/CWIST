@@ -237,4 +237,62 @@ void cwist_release_guard_init(cwist_release_guard_t *guard);
  */
 bool cwist_release_guard_acquire(cwist_release_guard_t *guard);
 
+/**
+ * @brief Full-GC's connection registry: thread/process-exit sweep for
+ * resources that aren't plain cwist_alloc() memory -- sockets, TLS
+ * sessions, protocol-level state -- so a worker thread (or the whole
+ * process) ending without an explicit destroy-family call still closes
+ * them, instead of leaving them for the peer/OS to notice. See
+ * docs/GC.md sections 2-3. There is no cwist_conn_t in this codebase
+ * (connection lifecycle is protocol-specific -- http.c/http2.c/http3.c/
+ * https.c/grpc.c/grpc_client.c each own their own), so this tracks
+ * (handle, close_fn) pairs instead of a concrete type.
+ */
+typedef void (*cwist_conn_close_fn)(void *handle);
+
+/**
+ * @brief Register a connection handle with the current thread's
+ *        pending-sweep list (full-GC mode only; a no-op otherwise, so
+ *        callers can call this unconditionally at connection-open time).
+ *
+ * @param handle Opaque connection handle, passed back to @p close_fn.
+ * @param close_fn Called with @p handle to close/tear it down; must be
+ *                  safe to call from whichever thread ends up sweeping it
+ *                  (the owning thread at its own exit, or any thread
+ *                  running the atexit sweep at process exit).
+ */
+void cwist_conn_registry_track(void *handle, cwist_conn_close_fn close_fn);
+
+/**
+ * @brief Remove a handle from the *calling thread's* pending-sweep list
+ *        before closing it yourself through the normal explicit path.
+ *
+ * Only looks at the calling thread's own list -- a handle closed from a
+ * different thread than the one that tracked it will not be found here
+ * (returns false) and the sweep will still run @p close_fn on it later.
+ * If a handle's close can legitimately happen from another thread, that
+ * code path needs its own coordination (e.g. cwist_release_guard_t) on
+ * top of this, same as cwist_gc_scope_untrack()'s cross-thread caveat.
+ *
+ * @return true if @p handle was pending and has been removed; false if
+ *         it was never tracked, already swept, or tracked by a different
+ *         thread. Either way the caller should proceed to close it.
+ */
+bool cwist_conn_registry_untrack(void *handle);
+
+/**
+ * @brief Sweep (close) everything still on the calling thread's
+ *        pending-sweep list right now, without waiting for thread exit.
+ *        Analogous to cwist_gc_scope_flush() but for connections.
+ */
+void cwist_conn_registry_flush(void);
+
+/**
+ * @brief Sweep every thread's pending-sweep list right now. This is what
+ *        the process-exit (atexit) hook calls; exposed directly for
+ *        testing, or for callers that want a deterministic sweep point
+ *        earlier than actual process exit (e.g. cwist_app_destroy()).
+ */
+void cwist_conn_registry_sweep_all(void);
+
 #endif
