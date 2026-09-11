@@ -1021,6 +1021,19 @@ static bool h3_process_stream_headers(lsquic_stream_t *stream, h3_stream_ctx_t *
     void *hset = lsquic_stream_get_hset(stream);
     if (!hset) return false;
     cwist_h3_hset_t *hs = (cwist_h3_hset_t *)hset;
+    /* lsxpack exposes counted slices, not C strings, so each header needs a
+     * NUL-terminated scratch copy to hand to strcmp()/h3_apply_header().
+     * These used to be a malloc(name_len+1)/malloc(value_len+1) pair freed
+     * at the bottom of every loop iteration - up to two heap round trips
+     * per header, tens of them on a real request. The bounds below
+     * (name_len <= 1024, value_len <= H3_DECODE_BUF_SIZE - 1) are already
+     * enforced before anything touches these buffers, so a single
+     * reusable pair sized to those same bounds, declared once outside the
+     * loop, replaces all of that: h3_apply_header() copies out of them
+     * before the next iteration overwrites them (see below), so reuse is
+     * safe. */
+    char name_scratch[1024 + 1];
+    char value_scratch[H3_DECODE_BUF_SIZE];
     for (size_t i = 0; i < hs->count; ++i) {
         const struct lsxpack_header *xhdr = &hs->headers[i];
         const char *raw_name  = lsxpack_header_get_name(xhdr);
@@ -1029,15 +1042,8 @@ static bool h3_process_stream_headers(lsquic_stream_t *stream, h3_stream_ctx_t *
         size_t value_len = xhdr->val_len;
         if (raw_name && raw_value && name_len > 0 &&
             name_len <= 1024 && value_len <= H3_DECODE_BUF_SIZE - 1) {
-            /* lsxpack exposes counted slices, not C strings. */
-            char *name = malloc(name_len + 1);
-            char *value = malloc(value_len + 1);
-            if (!name || !value) {
-                free(name);
-                free(value);
-                lsquic_stream_close(stream);
-                return false;
-            }
+            char *name = name_scratch;
+            char *value = value_scratch;
             memcpy(name, raw_name, name_len);
             name[name_len] = '\0';
             memcpy(value, raw_value, value_len);
@@ -1054,8 +1060,6 @@ static bool h3_process_stream_headers(lsquic_stream_t *stream, h3_stream_ctx_t *
                 else if (strcmp(name, ":protocol") == 0) bit = H3_PSEUDO_PROTOCOL;
                 if (bit == 0 || st->seen_regular_header ||
                     (st->pseudo_seen & bit)) {
-                    free(value);
-                    free(name);
                     h3_reject_malformed_request(stream, st);
                     return false;
                 }
@@ -1077,8 +1081,6 @@ static bool h3_process_stream_headers(lsquic_stream_t *stream, h3_stream_ctx_t *
                 }
             }
 #endif
-            free(value);
-            free(name);
         }
     }
     /* RFC 9114 Section 4.3.1 completeness rules, evaluated once the whole
@@ -2396,6 +2398,42 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
     }
 #endif
 
+#if defined(__linux__) && defined(_GNU_SOURCE)
+#define H3_RECV_BATCH 32
+    /* recvmmsg() batch scratch space: was 5 fixed-size arrays declared on
+     * the stack inside the loop below (2.1MB total, dominated by
+     * batch_bufs[32][65535]). That only worked because this loop is known
+     * to run on a dedicated thread with the default ~8MB stack - the
+     * comment used to live right above the arrays explaining that TLS
+     * (.tbss) had been tried and rejected for the same reason (it forces
+     * every explicit pthread stack size below ~2.2MB to fail). Heap
+     * allocation removes that "must have a big-stack thread" requirement
+     * entirely without reintroducing the TLS problem (this was never
+     * about a thread-local instance, just about not using the stack),
+     * paying one extra pointer indirection per packet in exchange. Sized
+     * once here, freed once after the loop below (same place pkt_buf is),
+     * since this whole function's body has exactly one path out of the
+     * loop (break/continue only, no returns inside it). */
+    unsigned char (*batch_bufs)[65535] = malloc(sizeof(*batch_bufs) * H3_RECV_BATCH);
+    struct sockaddr_storage *batch_peers = malloc(sizeof(*batch_peers) * H3_RECV_BATCH);
+    char (*batch_cmsgs)[512] = malloc(sizeof(*batch_cmsgs) * H3_RECV_BATCH);
+    struct iovec *batch_iovs = malloc(sizeof(*batch_iovs) * H3_RECV_BATCH);
+    struct mmsghdr *batch_msgs = malloc(sizeof(*batch_msgs) * H3_RECV_BATCH);
+    if (!batch_bufs || !batch_peers || !batch_cmsgs || !batch_iovs || !batch_msgs) {
+        free(batch_bufs);
+        free(batch_peers);
+        free(batch_cmsgs);
+        free(batch_iovs);
+        free(batch_msgs);
+        free(pkt_buf);
+        close(epoll_fd);
+        err.error.err_i16 = -1;
+        lsquic_engine_destroy(engine);
+        ctx->engine = NULL;
+        return err;
+    }
+#endif
+
     while (ctx && ctx->running && atomic_load(&g_cwist_running)) {
         int diff = 100000;
         int timeout_ms = 50;
@@ -2449,17 +2487,10 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 #endif
 
 #if defined(__linux__) && defined(_GNU_SOURCE)
-#define H3_RECV_BATCH 32
         if (can_read) {
-            /* Batch scratch buffers live on this (dedicated, default-stack)
-             * H3 thread's stack, not in TLS: 2.1MB of .tbss here forced glibc
-             * to reject every explicit pthread stack size below ~2.2MB. */
-            unsigned char batch_bufs[H3_RECV_BATCH][65535];
-            struct sockaddr_storage batch_peers[H3_RECV_BATCH];
-            char batch_cmsgs[H3_RECV_BATCH][512];
-            struct iovec batch_iovs[H3_RECV_BATCH];
-            struct mmsghdr batch_msgs[H3_RECV_BATCH];
-
+            /* batch_bufs/batch_peers/batch_cmsgs/batch_iovs/batch_msgs are
+             * heap-allocated once above the outer loop now - see the
+             * comment by their malloc()s. */
             while (1) {
                 for (int b = 0; b < H3_RECV_BATCH; b++) {
                     batch_iovs[b].iov_base = batch_bufs[b];
@@ -2638,6 +2669,14 @@ cwist_error_t cwist_http3_server_loop(int udp_fd,
 
 #ifdef __linux__
     if (epoll_fd >= 0) close(epoll_fd);
+#endif
+
+#if defined(__linux__) && defined(_GNU_SOURCE)
+    free(batch_bufs);
+    free(batch_peers);
+    free(batch_cmsgs);
+    free(batch_iovs);
+    free(batch_msgs);
 #endif
 
     free(pkt_buf);
