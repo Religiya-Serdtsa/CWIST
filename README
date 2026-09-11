@@ -15,12 +15,6 @@ A high-performance, C17 web framework that brings modern ergonomics
 to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
-Pronunciation: [kʰú.i̯.sɯ̂t̚] (or [kʰu˧˥i̯.sɯ˥˩t̚])
-(Yes, this strictly adheres to the Korean pitch accent from my hometown:
-peak the pitch sharply on the rounded [u], glide into a relaxed [i], and
-drop rapidly through the [s] until cut off cleanly by the unreleased [t̚].
-Or, you know, just say "twist" with a sharp "K".)
-
 <!-- BENCHMARKS:START -->
 Latest automated benchmark: **Darwin** — 11.77 M leases/s, 140.72% CPU, 647792 KiB RSS.
 
