@@ -150,7 +150,19 @@ bool cwist_release_guard_acquire(cwist_release_guard_t *guard) {
 
 /* --- Full-GC mode: process-wide toggle + per-thread pending-sweep list --- */
 
-/** @brief Process-wide GC instance backing cwist_full_gc()'s auto_rotated flag. */
+/**
+ * @brief Fast-path flag cwist_alloc()/cwist_free()/cwist_io_queue_run()
+ * check on every call. A plain relaxed atomic load -- no pthread_once,
+ * no touching g_full_gc -- so the default (disabled) path stays
+ * effectively free, matching docs/GC.md's "zero cost when disabled"
+ * contract. cwist_gc_auto_rotated(&g_full_gc) would also answer this
+ * correctly, but only after paying pthread_once on every single
+ * allocation; that regressed the C1M reactor latency gate in CI, since
+ * cwist_alloc()/cwist_free() sit on the hottest per-request path.
+ */
+static _Atomic bool g_full_gc_flag = false;
+
+/** @brief Process-wide GC instance backing full-GC's epoch-retire pipeline. */
 static cwist_gc_t g_full_gc;
 static pthread_once_t g_full_gc_once = PTHREAD_ONCE_INIT;
 
@@ -165,10 +177,11 @@ static cwist_gc_t *cwist_full_gc_instance(void) {
 
 void cwist_full_gc(bool enable) {
     cwist_gc_auto_rotate(cwist_full_gc_instance(), enable);
+    atomic_store_explicit(&g_full_gc_flag, enable, memory_order_relaxed);
 }
 
 bool cwist_full_gc_enabled(void) {
-    return cwist_gc_auto_rotated(cwist_full_gc_instance());
+    return atomic_load_explicit(&g_full_gc_flag, memory_order_relaxed);
 }
 
 /** @brief One thread's list of cwist_alloc() blocks not yet cwist_free()'d. */
