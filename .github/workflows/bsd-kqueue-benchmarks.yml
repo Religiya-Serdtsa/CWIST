@@ -403,6 +403,29 @@ jobs:
               -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093" \
             9093 "/tmp/spring.txt" "/tmp/spring_stat.txt" 90
 
+          # Tuned low-latency profile (wrk -t4 -c100), same reduced-concurrency
+          # profile CWIST gets above. Previously only CWIST got a second,
+          # lower-concurrency data point, so a report that showed "CWIST tuned
+          # latency" next to "Spring latency" was comparing CWIST's best case
+          # against Spring's only case -- not a fair fight. Give Spring Boot
+          # the identical treatment: its own dedicated boot (replaying the
+          # same trained AOT cache, so it isn't paying a second cold-start
+          # penalty CWIST doesn't pay either) measured under -t4 -c100.
+          echo "=== Starting Spring Boot tuned run (wrk -t4 -c100) ==="
+          java $SPRING_JVM_OPTS \
+            -XX:+AOTClassLinking \
+            -XX:AOTCache=$SPRING_AOT_CACHE \
+            -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093 &
+          SPRING_TUNED_PID=$!
+          for i in $(seq 1 90); do
+            curl -sf http://127.0.0.1:9093/ > /dev/null 2>&1 && break
+            sleep 1
+          done
+          wrk -t4 -c100 -d10s http://127.0.0.1:9093/ > /dev/null 2>&1 || true
+          wrk -t4 -c100 -d10s -s "$GITHUB_WORKSPACE/scripts/ci/tail_latency.lua" --latency http://127.0.0.1:9093/ > /tmp/spring_tuned.txt 2>&1 || true
+          kill -9 $SPRING_TUNED_PID || true
+          cat /tmp/spring_tuned.txt
+
           # Result JSON must land in the workspace so upload-artifact can find it
           # (the shell is still sitting in /tmp/spring_bench from the maven build).
           cd $GITHUB_WORKSPACE
@@ -484,6 +507,8 @@ jobs:
           spring_rps, spring_lat, spring_p50, spring_p90, spring_p99, spring_p99_999 = parse_wrk("/tmp/spring.txt")
           spring_rss, spring_csw = parse_stat("/tmp/spring_stat.txt")
 
+          spring_tuned_rps, spring_tuned_lat, spring_tuned_p50, spring_tuned_p90, spring_tuned_p99, spring_tuned_p99_999 = parse_wrk("/tmp/spring_tuned.txt")
+
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
               "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_p90_ms": cwist_p90, "cwist_p99_ms": cwist_p99, "cwist_p99_999_ms": cwist_p99_999, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
@@ -492,6 +517,10 @@ jobs:
               "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_p90_ms": axum_p90, "axum_p99_ms": axum_p99, "axum_p99_999_ms": axum_p99_999, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
               "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_p90_ms": gin_p90, "gin_p99_ms": gin_p99, "gin_p99_999_ms": gin_p99_999, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
               "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_p90_ms": spring_p90, "spring_p99_ms": spring_p99, "spring_p99_999_ms": spring_p99_999, "spring_rss_kib": spring_rss, "spring_csw": spring_csw,
+              # Same -t4 -c100 low-concurrency profile as cwist_tuned_*, added
+              # so a report comparing "tuned" numbers is comparing like with
+              # like instead of CWIST's best case against Spring's only case.
+              "spring_tuned_rps": spring_tuned_rps, "spring_tuned_lat_ms": spring_tuned_lat, "spring_tuned_p50_ms": spring_tuned_p50, "spring_tuned_p90_ms": spring_tuned_p90, "spring_tuned_p99_ms": spring_tuned_p99, "spring_tuned_p99_999_ms": spring_tuned_p99_999,
               "wrk_profile": os.environ.get("WRK_PROFILE", ""),
               "tuned_profile": os.environ.get("TUNED_PROFILE", ""),
               "runner_hw": os.environ.get("RUNNER_HW", ""),
@@ -515,7 +544,7 @@ jobs:
       - name: Copy raw benchmark output
         run: |
           mkdir -p raw_logs
-          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
+          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/cwist_tuned.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_tuned.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: webserver-result
