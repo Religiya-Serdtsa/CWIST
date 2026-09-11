@@ -19,11 +19,11 @@ reaches 0.41ms average at ~155k req/s).
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 243699 req/s | Latency 0.95ms (P90 2.00ms, P99 4.59ms, P99.999 24.01ms) | RSS 15880KiB | Csw 0
-- **CWIST (C1M reactor)**: 270935 req/s | Latency 1.85ms (P90 5.41ms, P99 16.42ms, P99.999 31.41ms) | RSS 10448KiB | Csw 0
-- **Axum**: 250177 req/s | Latency 1.58ms (P90 2.80ms, P99 4.35ms, P99.999 8.65ms) | RSS 15348KiB | Csw 0
-- **Gin (Go)**: 199780 req/s | Latency 3.43ms (P90 9.24ms, P99 20.48ms, P99.999 43.76ms) | RSS 29104KiB | Csw 0
-- **Spring Boot**: 136245 req/s | Latency 2.89ms (P90 4.12ms, P99 5.85ms, P99.999 33.30ms) | RSS 1315568KiB | Csw 0
+- **CWIST (classic pool)**: 110972 req/s | Latency 2.08ms (P90 4.34ms, P99 8.61ms, P99.999 32.88ms) | RSS 16180KiB | Csw 0
+- **CWIST (C1M reactor)**: 117937 req/s | Latency 2.56ms (P90 6.30ms, P99 14.74ms, P99.999 25.16ms) | RSS 9904KiB | Csw 0
+- **Axum**: 108346 req/s | Latency 3.53ms (P90 5.99ms, P99 8.92ms, P99.999 16.18ms) | RSS 16000KiB | Csw 0
+- **Gin (Go)**: 76413 req/s | Latency 6.91ms (P90 16.55ms, P99 36.57ms, P99.999 75.56ms) | RSS 30024KiB | Csw 0
+- **Spring Boot**: 43368 req/s | Latency 9.31ms (P90 11.95ms, P99 20.24ms, P99.999 114.71ms) | RSS 1327672KiB | Csw 0
 
 **Spring runtime environment**
 
@@ -65,7 +65,7 @@ wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)
 _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](docs/webserver-benchmark.md)_
 
 <!-- TUNED_BENCHMARK:START -->
-**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 263,939 req/s at 0.26ms average latency (P50 0.17ms, P90 0.49ms, P99 1.80ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
+**Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)): 112,206 req/s at 0.59ms average latency (P50 0.39ms, P90 1.23ms, P99 2.76ms).** Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
 <!-- TUNED_BENCHMARK:END -->
 
 ---
