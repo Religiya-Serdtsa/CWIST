@@ -113,6 +113,17 @@ AUDIT_PATTERNS: dict[str, dict[str, str]] = {
         "gnu": r"\bpthread_(?:create|join|detach|mutex_\w+|cond_\w+|rwlock_\w+|key_\w+|once\w*|attr_\w+)\s*\(",
         "bsd": r"\bpthread_set_name_np\s*\(",
     },
+    # Not a style classification like the two categories above: both
+    # patterns are "good" CWIST calls on their own. The conflict is between
+    # them -- cwist_multiport_get_app() implies more than one cwist_app
+    # sharing a process, but cwist_full_gc() (and the cJSON allocator hook
+    # it installs) is a process-wide singleton with no per-app opt-out (see
+    # docs/GC.md). run_audit() flags that combination specifically when
+    # both styles turn up matches.
+    "multiport": {
+        "sub_app": r"\bcwist_multiport_get_app\s*\(",
+        "full_gc": r"\bcwist_full_gc\s*\(",
+    },
 }
 
 
@@ -197,6 +208,68 @@ def display_path(path: str) -> str:
         return str(p)
 
 
+AUDIT_STYLES = sorted({sty for styles in AUDIT_PATTERNS.values() for sty in styles})
+
+# Mirrors scripts/ci/malloc_lint.sh exactly (same regex, same comment
+# filter, same "path:line:content" line format) so `cwist audit --gate`
+# can replace that script without touching scripts/ci/malloc-baseline.txt's
+# existing format/content.
+_GATE_RAW_RE = re.compile(r"(?:^|[^a-zA-Z0-9_])(?:malloc|calloc|realloc|free|strdup|strndup)\s*\(")
+_GATE_CWIST_RE = re.compile(r"cwist_(?:malloc|calloc|realloc|free|strdup|strndup|alloc)")
+
+
+def raw_alloc_lines(root: Path) -> list[str]:
+    """`path:line:content` for every raw malloc/calloc/realloc/free/strdup/
+    strndup call under `root`/src, excluding cwist_-prefixed names and
+    comment lines -- the exact set scripts/ci/malloc-baseline.txt pins."""
+    root = root.expanduser().resolve()
+    out: list[str] = []
+    for file in sorted((root / "src").rglob("*.c")):
+        rel = file.relative_to(root)
+        try:
+            lines = file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for lineno, line in enumerate(lines, start=1):
+            if not _GATE_RAW_RE.search(line) or _GATE_CWIST_RE.search(line):
+                continue
+            if line.strip().startswith(("//", "*", "/*")):
+                continue
+            out.append(f"{rel}:{lineno}:{line}")
+    return sorted(set(out))
+
+
+def audit_gate(root: Path, baseline_path: Path) -> int:
+    """Like scripts/ci/malloc_lint.sh: fail (return 1) only on raw
+    allocator call sites not already in the baseline; report any baseline
+    entries that no longer exist (candidates to tighten the baseline)."""
+    current = raw_alloc_lines(root)
+    baseline = sorted(set(baseline_path.read_text(encoding="utf-8").splitlines())) \
+        if baseline_path.exists() else []
+    baseline_set, current_set = set(baseline), set(current)
+    new = [l for l in current if l not in baseline_set]
+    fixed = [l for l in baseline if l not in current_set]
+    if new:
+        print("NEW raw allocator call(s) in src/ -- use cwist_alloc()/cwist_free()")
+        print("or CWIST_DEFER_FREE instead so cwist_full_gc() can see them. If")
+        print("this call site genuinely needs the raw allocator (add a comment")
+        print(f"explaining why), add its line to {baseline_path}:")
+        for l in new:
+            print(l)
+    if fixed:
+        print(f"NOTE: baseline entries no longer present (tighten {baseline_path}):")
+        for l in fixed:
+            print(l)
+    return 1 if new else 0
+
+
+def audit_update_baseline(root: Path, baseline_path: Path) -> None:
+    lines = raw_alloc_lines(root)
+    baseline_path.parent.mkdir(parents=True, exist_ok=True)
+    baseline_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    print(f"wrote {len(lines)} entries to {baseline_path}")
+
+
 def run_audit(source: Path, category: str, style: str, as_json: bool) -> None:
     rows = audit_sources(source, category, style)
     rows = [(display_path(f), ln, cat, sty, snip) for f, ln, cat, sty, snip in rows]
@@ -220,6 +293,24 @@ def run_audit(source: Path, category: str, style: str, as_json: bool) -> None:
     print("summary:")
     for (cat, sty), n in sorted(counts.items()):
         print(f"  {cat:<8} {sty:<6} {n}")
+    warn_multiport_full_gc_conflict(counts)
+
+
+def warn_multiport_full_gc_conflict(counts: dict[tuple[str, str], int]) -> None:
+    """cwist_multiport_get_app() (>1 cwist_app instance sharing a process)
+    plus cwist_full_gc() (a process-wide singleton, no per-app opt-out) in
+    the same project is very likely not what the caller intended -- flag it
+    instead of leaving it to be discovered the hard way. See docs/GC.md."""
+    sub_apps = counts.get(("multiport", "sub_app"), 0)
+    full_gc = counts.get(("multiport", "full_gc"), 0)
+    if sub_apps and full_gc:
+        print()
+        print(f"WARNING: {sub_apps} cwist_multiport_get_app() call(s) and {full_gc} "
+              "cwist_full_gc() call(s) found in the same project.")
+        print("cwist_full_gc() is a process-wide switch (so is the cJSON allocator")
+        print("hook it's paired with): every cwist_app sharing this process --")
+        print("root app and every multiport sub-app -- gets the same setting, with")
+        print("no per-app opt-out. If that's not what you want, see docs/GC.md.")
 
 
 def generate_openapi(source: Path, output: Path, title: str, version: str) -> None:
@@ -1439,8 +1530,16 @@ def main() -> None:
                             '"open=" is accepted verbatim). Query keys: style, category (cat), '
                             'folder (path), json. Default: src')
     audit.add_argument("--category", choices=["all", *AUDIT_PATTERNS.keys()], default="all")
-    audit.add_argument("--style", choices=["all", "cwist", "gnu", "bsd"], default="all")
+    audit.add_argument("--style", choices=["all", *AUDIT_STYLES], default="all")
     audit.add_argument("--json", action="store_true")
+    audit.add_argument("--gate", action="store_true",
+                       help="CI gate: fail if there's a raw allocator call under <target>/src "
+                            "not already in --baseline (replaces scripts/ci/malloc_lint.sh)")
+    audit.add_argument("--update-baseline", action="store_true",
+                       help="regenerate --baseline from <target>/src's current raw allocator calls")
+    audit.add_argument("--baseline", type=Path, default=None,
+                       help="baseline file for --gate/--update-baseline "
+                            "(default: <target>/scripts/ci/malloc-baseline.txt)")
     describe = sub.add_parser("describe", help="print a .cwpro manifest")
     describe.add_argument("--project")
     watch = sub.add_parser("watcher", help="watch, incrementally rebuild, and hot-restart the development process")
@@ -1456,21 +1555,30 @@ def main() -> None:
         generate_proto(args.source, output,
                        True if args.descriptor_set else None)
     elif args.command == "audit":
-        path, category, style, as_json = Path("src"), args.category, args.style, args.json
-        if args.target is not None:
-            if looks_like_audit_query(args.target):
-                q = parse_audit_query(args.target)
-                if "path" in q: path = Path(q["path"])
-                if "category" in q:
-                    if q["category"] not in ("all", *AUDIT_PATTERNS.keys()): fail(f"unknown category: {q['category']}")
-                    category = q["category"]
-                if "style" in q:
-                    if q["style"] not in ("all", "cwist", "gnu", "bsd"): fail(f"unknown style: {q['style']}")
-                    style = q["style"]
-                if "json" in q: as_json = q["json"].strip().lower() in ("1", "true", "yes")
-            else:
-                path = Path(args.target)
-        run_audit(path, category, style, as_json)
+        if args.gate or args.update_baseline:
+            root = Path(args.target) if (args.target and not looks_like_audit_query(args.target)) else Path.cwd()
+            root = root.expanduser().resolve()
+            baseline = (args.baseline or (root / "scripts" / "ci" / "malloc-baseline.txt")).expanduser().resolve()
+            if args.update_baseline:
+                audit_update_baseline(root, baseline)
+            if args.gate:
+                raise SystemExit(audit_gate(root, baseline))
+        else:
+            path, category, style, as_json = Path("src"), args.category, args.style, args.json
+            if args.target is not None:
+                if looks_like_audit_query(args.target):
+                    q = parse_audit_query(args.target)
+                    if "path" in q: path = Path(q["path"])
+                    if "category" in q:
+                        if q["category"] not in ("all", *AUDIT_PATTERNS.keys()): fail(f"unknown category: {q['category']}")
+                        category = q["category"]
+                    if "style" in q:
+                        if q["style"] not in ("all", *AUDIT_STYLES): fail(f"unknown style: {q['style']}")
+                        style = q["style"]
+                    if "json" in q: as_json = q["json"].strip().lower() in ("1", "true", "yes")
+                else:
+                    path = Path(args.target)
+            run_audit(path, category, style, as_json)
     elif args.command == "describe": print(json.dumps(json.loads(project_file(args.project).read_text()), indent=2))
     elif args.command == "watcher":
         if args.interval <= 0: fail("--interval must be positive")
