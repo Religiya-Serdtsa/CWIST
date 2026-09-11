@@ -23,6 +23,17 @@ framework-specific tuning is applied beyond what is documented here.
 - **Context switches** (`nvcsw + nivcsw` from `ps`) are counted only over the measured
   window — the counter baseline is taken *after* warmup.
 
+### Tuned low-latency run
+
+CWIST and Spring Boot are each measured a second time under `wrk -t4 -c100 -d10s`
+(lower concurrency than the main `-t12 -c400` profile above), each in its own
+dedicated process — for Spring Boot this is a fresh boot replaying the same
+trained AOT cache used for its main run, so it isn't paying a second cold-start
+penalty CWIST doesn't pay either. This is CWIST's own published low-latency
+profile; giving Spring Boot the identical treatment keeps the "tuned" numbers
+comparable instead of showing CWIST's best case next to a number Spring was
+never measured at. Axum and Gin are not yet included in this second pass.
+
 ## CWIST
 
 - Built from the checked-out commit: `make`, then the bench server linked against
