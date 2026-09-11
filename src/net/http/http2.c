@@ -2146,7 +2146,8 @@ static int h2_send_response_raw(cwist_https_connection *conn, uint32_t stream_id
     if (res->use_file_stream && res->file_stream_fd >= 0) {
         /* Load file contents and sequence them.  Server push rarely streams
          * huge files, so a single read is acceptable here. */
-        unsigned char *file_buf CWIST_DEFER_FREE = (unsigned char *)cwist_alloc(body_len);
+        cwist_scratch_t file_buf_s CWIST_SCRATCH_DEFER = {0};
+        unsigned char *file_buf = (unsigned char *)cwist_scratch_alloc(&file_buf_s, body_len);
         if (!file_buf) return -1;
         ssize_t r = pread(res->file_stream_fd, file_buf, body_len, res->file_stream_offset);
         if (r <= 0 || (size_t)r != body_len) return -1;
@@ -2327,7 +2328,8 @@ static int h2_send_seq_file_body(h2_conn *hc, h2_stream *s, uint32_t stream_id,
             continue;
         }
 
-        unsigned char *chunk CWIST_DEFER_FREE = (unsigned char *)cwist_alloc(chunk_len);
+        cwist_scratch_t chunk_s CWIST_SCRATCH_DEFER = {0};
+        unsigned char *chunk = (unsigned char *)cwist_scratch_alloc(&chunk_s, chunk_len);
         if (!chunk) return -1;
         ssize_t r = pread(fd, chunk + CWIST_SEQ_HEADER_SIZE, plen, cur_offset);
         if (r <= 0 || (size_t)r != plen) return -1;
@@ -2814,7 +2816,8 @@ static int h2_send_response_hc(h2_conn *hc, uint32_t stream_id, cwist_http_respo
                 continue;
             }
 
-            unsigned char *chunk_buf CWIST_DEFER_FREE = (unsigned char *)cwist_alloc(allowed);
+            cwist_scratch_t chunk_buf_s CWIST_SCRATCH_DEFER = {0};
+            unsigned char *chunk_buf = (unsigned char *)cwist_scratch_alloc(&chunk_buf_s, allowed);
             if (!chunk_buf) return -1;
             ssize_t r = pread(res->file_stream_fd, chunk_buf, allowed, offset);
             if (r <= 0) return -1;
