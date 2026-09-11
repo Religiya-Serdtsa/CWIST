@@ -501,6 +501,7 @@ TEST_TARGETS = test_sstring \
                test_grpc_channel \
                test_dispatch_memory \
                test_gc_ebr_release \
+               test_full_gc_toggle_hardening \
                test_full_gc_sweep \
                test_io_queue_full_gc \
                test_full_gc_ownership_handoff \
@@ -962,6 +963,10 @@ test_dispatch_memory: $(LIB_NAME) tests/test_dispatch_memory.c
 test_gc_ebr_release: $(LIB_NAME) tests/test_gc_ebr_release.c
 	$(CC) $(CFLAGS) -o test_gc_ebr_release tests/test_gc_ebr_release.c $(LIB_NAME) $(LIBS)
 	./test_gc_ebr_release
+
+test_full_gc_toggle_hardening: $(LIB_NAME) tests/test_full_gc_toggle_hardening.c
+	$(CC) $(CFLAGS) -o test_full_gc_toggle_hardening tests/test_full_gc_toggle_hardening.c $(LIB_NAME) $(LIBS)
+	./test_full_gc_toggle_hardening
 
 test_full_gc_sweep: $(LIB_NAME) tests/test_full_gc_sweep.c
 	$(CC) $(CFLAGS) -o test_full_gc_sweep tests/test_full_gc_sweep.c $(LIB_NAME) $(LIBS)
