@@ -231,8 +231,6 @@ On Linux, CWIST uses `io_uring` (raw syscalls, no liburing dependency) strictly 
 - **Cache locality.** Handling request execution on contiguous worker stacks minimizes cache misses and fragmentation compared to multi-stage heap-allocated callback chains.
 - **Deterministic tail.** Thread-pinned worker execution and generational arenas keep latency variance minimal across percentiles.
 
-**Operational gate.** Average request latency crossing **1ms** is treated as a regression and a build/benchmark failure, regardless of throughput gains.
-
 ## Development hot reload
 
 New projects include a self-describing `.cwpro` development command. Run the
