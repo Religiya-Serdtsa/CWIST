@@ -295,4 +295,10 @@ void cwist_conn_registry_flush(void);
  */
 void cwist_conn_registry_sweep_all(void);
 
+/**
+ * @brief Number of connections currently on the calling thread's
+ *        pending-sweep list. Introspection/testing helper.
+ */
+size_t cwist_conn_registry_pending_count(void);
+
 #endif

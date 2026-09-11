@@ -973,6 +973,10 @@ test_conn_registry: $(LIB_NAME) tests/test_conn_registry.c
 	$(CC) $(CFLAGS) -o test_conn_registry tests/test_conn_registry.c $(LIB_NAME) $(LIBS)
 	./test_conn_registry
 
+test_https_full_gc: $(LIB_NAME) tests/test_https_full_gc.c
+	$(CC) $(CFLAGS) -o test_https_full_gc tests/test_https_full_gc.c $(LIB_NAME) $(LIBS)
+	./test_https_full_gc
+
 test_full_gc_sweep: $(LIB_NAME) tests/test_full_gc_sweep.c
 	$(CC) $(CFLAGS) -o test_full_gc_sweep tests/test_full_gc_sweep.c $(LIB_NAME) $(LIBS)
 	./test_full_gc_sweep

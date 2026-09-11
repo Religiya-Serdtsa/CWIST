@@ -86,6 +86,7 @@ test_full_gc_sweep
 test_gc_ebr_release
 test_full_gc_toggle_hardening
 test_conn_registry
+test_https_full_gc
 test_graphql
 test_grpc
 test_grpc_channel
