@@ -22,18 +22,18 @@ drop rapidly through the [s] until cut off cleanly by the unreleased [t̚].
 Or, you know, just say "twist" with a sharp "K".)
 
 <!-- BENCHMARKS:START -->
-Latest automated benchmark: **Darwin** — 16.69 M leases/s, 139.77% CPU, 729040 KiB RSS.
+Latest automated benchmark: **Darwin** — 11.77 M leases/s, 140.72% CPU, 647792 KiB RSS.
 
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 115423 req/s | Latency 1.98ms (P90 3.92ms, P99 7.05ms, P99.999 25.09ms) | RSS 15400KiB | Csw 0
-- **CWIST (C1M reactor)**: 120090 req/s | Latency 2.52ms (P90 6.12ms, P99 14.30ms, P99.999 27.17ms) | RSS 10292KiB | Csw 0
-- **Axum**: 111566 req/s | Latency 3.52ms (P90 5.95ms, P99 8.83ms, P99.999 19.33ms) | RSS 16640KiB | Csw 0
-- **Gin (Go)**: 78279 req/s | Latency 6.59ms (P90 15.73ms, P99 33.01ms, P99.999 85.15ms) | RSS 29576KiB | Csw 0
-- **Spring Boot**: 40899 req/s | Latency 9.74ms (P90 13.30ms, P99 22.38ms, P99.999 70.49ms) | RSS 1298264KiB | Csw 0
+- **CWIST (classic pool)**: 110928 req/s | Latency 2.08ms (P90 4.30ms, P99 8.29ms, P99.999 44.44ms) | RSS 17620KiB | Csw 0
+- **CWIST (C1M reactor)**: 116497 req/s | Latency 2.63ms (P90 6.54ms, P99 14.84ms, P99.999 32.45ms) | RSS 10300KiB | Csw 0
+- **Axum**: 108853 req/s | Latency 3.61ms (P90 6.11ms, P99 9.05ms, P99.999 18.05ms) | RSS 14772KiB | Csw 0
+- **Gin (Go)**: 73686 req/s | Latency 7.51ms (P90 18.34ms, P99 41.37ms, P99.999 94.80ms) | RSS 29532KiB | Csw 0
+- **Spring Boot**: 41139 req/s | Latency 9.75ms (P90 12.35ms, P99 20.36ms, P99.999 101.66ms) | RSS 1353612KiB | Csw 0
 
 **Spring runtime environment**
 
