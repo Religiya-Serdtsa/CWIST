@@ -331,17 +331,33 @@ CJSON_LIB = $(CJSON_DIR)/libcjson.a
 CNATS_DIR = lib/cnats
 CNATS_LIB = $(CNATS_DIR)/build/lib/libnats_static.a
 
-# mimalloc: experimental allocator swap (see ROADMAP.md v3.5, issue #25).
-# Off by default (USE_MIMALLOC=0): nothing below is built or linked, zero
-# impact on the normal build. With USE_MIMALLOC=1, mimalloc is built as a
-# static override library; linking it into a final binary (see
-# benchmarks/web-frameworks/Makefile for an example) is enough on its own -
-# mimalloc replaces malloc/free/calloc/realloc/posix_memalign process-wide by
-# symbol override, so every dependency that calls libc malloc (libttak,
-# sqlite3, cJSON, lsquic, boringssl, cnats - none of which need to know or
-# care) routes through it automatically. There is no such thing as "rebuild
-# libttak against mimalloc" for a malloc-override allocator; the swap happens
-# once, at final link time, for the whole process.
+# mimalloc: EXPERIMENTAL allocator swap, kept optional on purpose - measured
+# WORSE than glibc malloc for CWIST's own C1M-reactor/prefork workload (see
+# issue #25). Real GitHub Actions A/B, same binary/config, allocator as the
+# only variable: mimalloc regressed RPS (-1.8%), P90 (+3.5%), P99 (+11.7%),
+# P99.999 (+97%, 24.18ms -> 47.61ms), and RSS (+120%, 10.3MB -> 22.7MB).
+# Root cause (not a wiring bug): mimalloc eagerly reserves/commits a large
+# arena per process (arena_reserve=1GiB, eager_commit=1 by default) to
+# amortize that cost over a long-lived, allocation-heavy process - the
+# opposite of this workload's shape (many short-lived, low-allocation
+# prefork processes), so every process pays the reservation cost with
+# nothing to amortize it against. Left in as an opt-in knob (USE_MIMALLOC=0
+# by default: nothing below is built or linked, zero impact on the normal
+# build) as a reusable baseline for comparing other allocators/tunings
+# (glibc mallopt(), jemalloc with narenas:1, ...) against, and in case a
+# different CWIST mode (e.g. the classic thread pool, which is long-lived
+# and multi-threaded rather than prefork) turns out to fit mimalloc's actual
+# design target better - not evaluated here.
+#
+# With USE_MIMALLOC=1, mimalloc is built as a static override library;
+# linking it into a final binary (see benchmarks/web-frameworks/Makefile for
+# an example) is enough on its own - mimalloc replaces
+# malloc/free/calloc/realloc/posix_memalign process-wide by symbol override,
+# so every dependency that calls libc malloc (libttak, sqlite3, cJSON,
+# lsquic, boringssl, cnats - none of which need to know or care) routes
+# through it automatically. There is no such thing as "rebuild libttak
+# against mimalloc" for a malloc-override allocator; the swap happens once,
+# at final link time, for the whole process.
 USE_MIMALLOC ?= 0
 MIMALLOC_DIR = lib/mimalloc
 MIMALLOC_BUILD_DIR = $(MIMALLOC_DIR)/build

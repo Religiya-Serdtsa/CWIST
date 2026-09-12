@@ -21,8 +21,15 @@ TARGET = cwist_bench
 # other dependency so its malloc/free/calloc/realloc/posix_memalign symbols
 # win process-wide - libttak, sqlite3 (bundled in libcwist.a), cJSON,
 # lsquic, and boringssl all keep calling plain libc malloc and never notice
-# the swap. See Makefile (top level) for how libmimalloc.a gets built, and
-# ROADMAP.md's v3.5 section / issue #25 for why.
+# the swap. See Makefile (top level) for how libmimalloc.a gets built.
+#
+# EXPERIMENTAL, measured WORSE for this app's default C1M/prefork mode: a
+# same-binary/same-config GitHub Actions A/B (issue #25) showed mimalloc
+# regressing RPS, P90/P99/P99.999 latency (P99.999 nearly doubled), and RSS
+# (+120%) all at once - mimalloc's eager per-process arena reservation
+# doesn't amortize across many short-lived, low-allocation prefork
+# processes. Kept as an opt-in baseline for comparing other allocators/
+# tunings against, not as a recommended flag.
 MIMALLOC_LIB = ../../lib/mimalloc/build/libmimalloc.a
 ifeq ($(USE_MIMALLOC),1)
 TARGET := cwist_bench_mimalloc

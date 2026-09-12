@@ -240,9 +240,14 @@ jobs:
           make
           gcc -Ofast -flto=auto -fno-plt -falign-functions=32 -falign-loops=32 -falign-jumps=32 -falign-labels=32 -fno-semantic-interposition -fomit-frame-pointer -finline-functions -fipa-pta -I./include -I./lib -I./lib/libttak/include -o /tmp/cwist_server /tmp/cwist_server.c libcwist.a lib/cnats/build/lib/libnats_static.a lib/libttak/lib/libttak.a lib/cjson/libcjson.a lib/uriparser/build/liburiparser.a lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec -pthread -ldl -lm -lstdc++ -lz -lzstd
 
-          # Experimental mimalloc-backed CWIST build (see ROADMAP.md v3.5,
-          # issue #25: tail latency lags Axum, hypothesized as glibc
-          # allocator-tail stalls rather than a constant per-request cost).
+          # Experimental mimalloc-backed CWIST build (issue #25). First run
+          # of this A/B showed mimalloc regressing every metric vs. glibc
+          # malloc for this app's C1M/prefork mode - RPS -1.8%, P99.999
+          # nearly 2x worse (24.18ms -> 47.61ms), RSS +120% - not a fluke of
+          # this job's runner, since the allocator was the only variable
+          # between the two runs. Kept running so this stays a live,
+          # reproducible baseline (e.g. for comparing glibc mallopt() tuning
+          # or jemalloc against), not because mimalloc is expected to win.
           # -Wl,--whole-archive is required: with dynamic linking, `malloc`
           # is resolvable at runtime via libc.so, so a plain archive link
           # never pulls libmimalloc.a's object files in to satisfy it. Whole-
