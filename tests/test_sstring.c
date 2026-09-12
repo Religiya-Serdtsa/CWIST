@@ -12,10 +12,42 @@ void test_trim() {
 
     cwist_sstring_assign(s, "   hello world   ");
     assert(strcmp(s->data, "   hello world   ") == 0);
+    assert(cwist_sstring_get_size(s) == 17);
 
     cwist_sstring_trim(s);
     printf("Trimmed: '%s'\n", s->data);
     assert(strcmp(s->data, "hello world") == 0);
+    assert(s->size == 11);
+    assert(cwist_sstring_get_size(s) == 11);
+
+    /* Test rtrim alone updates size */
+    cwist_sstring_assign(s, "abc   ");
+    assert(cwist_sstring_get_size(s) == 6);
+    cwist_sstring_rtrim(s);
+    assert(strcmp(s->data, "abc") == 0);
+    assert(s->size == 3);
+    assert(cwist_sstring_get_size(s) == 3);
+
+    /* Test whitespace-only string */
+    cwist_sstring_assign(s, "    ");
+    cwist_sstring_trim(s);
+    assert(strcmp(s->data, "") == 0);
+    assert(s->size == 0);
+    assert(cwist_sstring_get_size(s) == 0);
+
+    /* Test trimming borrowed buffer safely detaches without mutating borrowed memory */
+    const char *orig = "   borrowed text   ";
+    char borrowed_copy[32];
+    strcpy(borrowed_copy, orig);
+    cwist_sstring_borrow(s, borrowed_copy, strlen(borrowed_copy));
+    assert(s->borrows_buffer == true);
+
+    cwist_sstring_trim(s);
+    assert(strcmp(s->data, "borrowed text") == 0);
+    assert(s->size == 13);
+    assert(cwist_sstring_get_size(s) == 13);
+    assert(s->borrows_buffer == false); /* safely detached */
+    assert(strcmp(borrowed_copy, orig) == 0); /* original borrowed source remains intact */
 
     cwist_sstring_destroy(s);
     printf("Passed trim.\n");
