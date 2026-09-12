@@ -403,6 +403,8 @@ These variables are read directly by the framework runtime (no prefix required):
 |----------|------|---------|-------------|
 | `CWIST_WORKERS` | integer | `1` | Number of worker processes to fork before entering the event loop. |
 | `CWIST_C1M_MODE` | boolean | `true` | Enables the high-concurrency C1M async server loop. Set to `0` or `false` to fall back to a blocking accept loop. |
+| `CWIST_HTTP_BATCH` | integer | `16` | Maximum pipelined HTTP/1.1 requests dispatched per event-loop turn (clamped to `[1, 1024]`). Excess requests are deferred via reactor continuations. |
+| `CWIST_HTTP_YIELD_BATCH` | integer | `16` (derived from batch) | Request dispatch yield granularity within a batch before re-posting connection to reactor queue. |
 | `CWIST_ASYNC_DEBUG` | boolean | unset | When set, the C1M async path and the reactor log rare failure events (rearm/submit/SQ failures) to stderr. No output in normal operation. |
 
 **C1M mode is now measured, not theoretical.** With the event-driven one-shot
