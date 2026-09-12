@@ -331,6 +331,22 @@ CJSON_LIB = $(CJSON_DIR)/libcjson.a
 CNATS_DIR = lib/cnats
 CNATS_LIB = $(CNATS_DIR)/build/lib/libnats_static.a
 
+# mimalloc: experimental allocator swap (see ROADMAP.md v3.5, issue #25).
+# Off by default (USE_MIMALLOC=0): nothing below is built or linked, zero
+# impact on the normal build. With USE_MIMALLOC=1, mimalloc is built as a
+# static override library; linking it into a final binary (see
+# benchmarks/web-frameworks/Makefile for an example) is enough on its own -
+# mimalloc replaces malloc/free/calloc/realloc/posix_memalign process-wide by
+# symbol override, so every dependency that calls libc malloc (libttak,
+# sqlite3, cJSON, lsquic, boringssl, cnats - none of which need to know or
+# care) routes through it automatically. There is no such thing as "rebuild
+# libttak against mimalloc" for a malloc-override allocator; the swap happens
+# once, at final link time, for the whole process.
+USE_MIMALLOC ?= 0
+MIMALLOC_DIR = lib/mimalloc
+MIMALLOC_BUILD_DIR = $(MIMALLOC_DIR)/build
+MIMALLOC_LIB = $(MIMALLOC_BUILD_DIR)/libmimalloc.a
+
 # Installation Paths
 #
 # libcwist.a is deliberately a thin archive: it contains CWIST objects only.
@@ -370,6 +386,9 @@ EXTERNAL_LIBS = $(URIPARSER_LIB) \
 # --- Build Targets ---
 
 all: $(LIBTTAK_LIB) $(CJSON_LIB) $(URIPARSER_LIB) $(SQLITE_DIR)/sqlite3.c $(LSQUIC_LIB) $(LIB_NAME)
+ifeq ($(USE_MIMALLOC),1)
+all: $(MIMALLOC_LIB)
+endif
 
 # SQLite Download & Extraction Rule
 $(SQLITE_DIR)/sqlite3.c:
@@ -398,6 +417,19 @@ $(LIB_NAME): $(EXTERNAL_LIBS) $(OBJS)
 $(LIBTTAK_LIB):
 	@echo "Building libttak..."
 	$(MAKE) -C $(LIBTTAK_DIR) EXTRA_CFLAGS="$(LIBTTAK_EXTRA_CFLAGS)"
+
+lib/mimalloc/CMakeLists.txt:
+	@echo "Initializing mimalloc submodule..."
+	git submodule update --init $(MIMALLOC_DIR)
+
+$(MIMALLOC_LIB): lib/mimalloc/CMakeLists.txt
+	@echo "Building mimalloc (static override library)..."
+	@mkdir -p $(MIMALLOC_BUILD_DIR)
+	cd $(MIMALLOC_BUILD_DIR) && cmake -DCMAKE_BUILD_TYPE=Release \
+		-DMI_BUILD_SHARED=OFF -DMI_BUILD_TESTS=OFF -DMI_BUILD_OBJECT=OFF \
+		-DMI_OVERRIDE=ON .. >/dev/null
+	$(MAKE) -C $(MIMALLOC_BUILD_DIR) -j$(shell nproc 2>/dev/null || echo 1)
+	@echo "mimalloc ready: $(MIMALLOC_LIB)"
 
 $(CJSON_LIB):
 	@echo "Building cJSON..."
@@ -735,6 +767,7 @@ clean:
 	@rm -rf $(CNATS_DIR)/build
 	@rm -rf $(BORINGSSL_BUILD_DIR)
 	@rm -rf $(LSQUIC_BUILD_DIR)
+	@rm -rf $(MIMALLOC_BUILD_DIR)
 	-@$(MAKE) -C $(LIBTTAK_DIR) clean || true
 
 rebuild: clean all

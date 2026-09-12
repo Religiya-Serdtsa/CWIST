@@ -38,3 +38,7 @@
 	path = lib/ngtcp2
 	url = https://github.com/ngtcp2/ngtcp2.git
 	branch = main
+[submodule "lib/mimalloc"]
+	path = lib/mimalloc
+	url = https://github.com/microsoft/mimalloc.git
+	branch = main

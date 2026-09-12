@@ -39,6 +39,15 @@ never measured at. Axum and Gin are not yet included in this second pass.
 - Built from the checked-out commit: `make`, then the bench server linked against
   `libcwist.a` with `gcc -O3`.
 - Listens on port `9091`.
+- **Experimental mimalloc variant** (`dev` branch only, tracked in issue #25): a second binary
+  is linked against the same `libcwist.a` with `libmimalloc.a` force-included via
+  `-Wl,--whole-archive`/`-Wl,--no-whole-archive`, which makes mimalloc's `malloc`/`free`/
+  `calloc`/`realloc` win process-wide over libc's — no dependency (libttak, sqlite3, cJSON,
+  lsquic, boringssl) needs to be rebuilt or know about the swap. Measured under the same
+  C1M-reactor config and `CWIST_C1M_MODE` as the "CWIST C1M" row, so the allocator is the
+  only variable between the two — this isolates whether CWIST's remaining tail-latency gap
+  vs. Axum (see issue #25) is allocator-related. `make USE_MIMALLOC=1` (top-level Makefile)
+  or `benchmarks/web-frameworks/Makefile`'s `USE_MIMALLOC=1` builds it locally.
 
 ## Axum
 

@@ -240,6 +240,19 @@ jobs:
           make
           gcc -Ofast -flto=auto -fno-plt -falign-functions=32 -falign-loops=32 -falign-jumps=32 -falign-labels=32 -fno-semantic-interposition -fomit-frame-pointer -finline-functions -fipa-pta -I./include -I./lib -I./lib/libttak/include -o /tmp/cwist_server /tmp/cwist_server.c libcwist.a lib/cnats/build/lib/libnats_static.a lib/libttak/lib/libttak.a lib/cjson/libcjson.a lib/uriparser/build/liburiparser.a lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec -pthread -ldl -lm -lstdc++ -lz -lzstd
 
+          # Experimental mimalloc-backed CWIST build (see ROADMAP.md v3.5,
+          # issue #25: tail latency lags Axum, hypothesized as glibc
+          # allocator-tail stalls rather than a constant per-request cost).
+          # -Wl,--whole-archive is required: with dynamic linking, `malloc`
+          # is resolvable at runtime via libc.so, so a plain archive link
+          # never pulls libmimalloc.a's object files in to satisfy it. Whole-
+          # archive forces them in regardless, making malloc/free/calloc/
+          # realloc local (T) symbols that win over the same names in
+          # libc.so per normal ELF resolution - libttak/sqlite3/cJSON/
+          # lsquic/boringssl need no changes, they just keep calling malloc.
+          make USE_MIMALLOC=1 lib/mimalloc/build/libmimalloc.a
+          gcc -Ofast -flto=auto -fno-plt -falign-functions=32 -falign-loops=32 -falign-jumps=32 -falign-labels=32 -fno-semantic-interposition -fomit-frame-pointer -finline-functions -fipa-pta -I./include -I./lib -I./lib/libttak/include -o /tmp/cwist_server_mimalloc /tmp/cwist_server.c -Wl,--whole-archive lib/mimalloc/build/libmimalloc.a -Wl,--no-whole-archive libcwist.a lib/cnats/build/lib/libnats_static.a lib/libttak/lib/libttak.a lib/cjson/libcjson.a lib/uriparser/build/liburiparser.a lib/lsquic/build/src/liblsquic/liblsquic.a lib/boringssl/build/libssl.a lib/boringssl/build/libcrypto.a -lcurl -lnghttp2 -lbrotlienc -lbrotlicommon -lbrotlidec -pthread -ldl -lm -lstdc++ -lz -lzstd -lrt -latomic
+
           cd /tmp/axum_bench && cargo build --release
           cd /tmp/gin_bench && go mod tidy && go build -o gin_server .
           # Maven Central occasionally returns 403 to shared CI egress IPs;
@@ -312,6 +325,11 @@ jobs:
           # ultra-low-latency profile) and the event-driven C1M reactor path.
           run_bench "CWIST (classic)" "env CWIST_C1M_MODE=0 /tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
           run_bench "CWIST C1M" "env CWIST_C1M_MODE=1 /tmp/cwist_server" 9091 "/tmp/cwist_c1m.txt" "/tmp/cwist_c1m_stat.txt" 10
+
+          # Same C1M reactor path as the run above, mimalloc-backed binary -
+          # isolates the allocator as the only variable so this is a direct
+          # A/B against "CWIST C1M", not a new configuration to compare cold.
+          run_bench "CWIST C1M (mimalloc)" "env CWIST_C1M_MODE=1 /tmp/cwist_server_mimalloc" 9091 "/tmp/cwist_c1m_mimalloc.txt" "/tmp/cwist_c1m_mimalloc_stat.txt" 10
 
           # Tuned low-latency profile (CWIST classic only): lower connection
           # pressure (c100, 4 wrk threads) so the per-request latency floor is
@@ -496,6 +514,9 @@ jobs:
           cwist_c1m_rps, cwist_c1m_lat, cwist_c1m_p50, cwist_c1m_p90, cwist_c1m_p99, cwist_c1m_p99_999 = parse_wrk("/tmp/cwist_c1m.txt")
           cwist_c1m_rss, cwist_c1m_csw = parse_stat("/tmp/cwist_c1m_stat.txt")
 
+          cwist_c1m_mimalloc_rps, cwist_c1m_mimalloc_lat, cwist_c1m_mimalloc_p50, cwist_c1m_mimalloc_p90, cwist_c1m_mimalloc_p99, cwist_c1m_mimalloc_p99_999 = parse_wrk("/tmp/cwist_c1m_mimalloc.txt")
+          cwist_c1m_mimalloc_rss, cwist_c1m_mimalloc_csw = parse_stat("/tmp/cwist_c1m_mimalloc_stat.txt")
+
           cwist_tuned_rps, cwist_tuned_lat, cwist_tuned_p50, cwist_tuned_p90, cwist_tuned_p99, cwist_tuned_p99_999 = parse_wrk("/tmp/cwist_tuned.txt")
 
           axum_rps, axum_lat, axum_p50, axum_p90, axum_p99, axum_p99_999 = parse_wrk("/tmp/axum.txt")
@@ -513,6 +534,9 @@ jobs:
               "timestamp": datetime.now(timezone.utc).isoformat(),
               "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_p90_ms": cwist_p90, "cwist_p99_ms": cwist_p99, "cwist_p99_999_ms": cwist_p99_999, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
               "cwist_c1m_rps": cwist_c1m_rps, "cwist_c1m_lat_ms": cwist_c1m_lat, "cwist_c1m_p90_ms": cwist_c1m_p90, "cwist_c1m_p99_ms": cwist_c1m_p99, "cwist_c1m_p99_999_ms": cwist_c1m_p99_999, "cwist_c1m_rss_kib": cwist_c1m_rss, "cwist_c1m_csw": cwist_c1m_csw,
+              # Same C1M binary/config as cwist_c1m_* above, mimalloc-linked -
+              # allocator is the only variable, so diff these two directly.
+              "cwist_c1m_mimalloc_rps": cwist_c1m_mimalloc_rps, "cwist_c1m_mimalloc_lat_ms": cwist_c1m_mimalloc_lat, "cwist_c1m_mimalloc_p90_ms": cwist_c1m_mimalloc_p90, "cwist_c1m_mimalloc_p99_ms": cwist_c1m_mimalloc_p99, "cwist_c1m_mimalloc_p99_999_ms": cwist_c1m_mimalloc_p99_999, "cwist_c1m_mimalloc_rss_kib": cwist_c1m_mimalloc_rss, "cwist_c1m_mimalloc_csw": cwist_c1m_mimalloc_csw,
               "cwist_tuned_rps": cwist_tuned_rps, "cwist_tuned_lat_ms": cwist_tuned_lat, "cwist_tuned_p50_ms": cwist_tuned_p50, "cwist_tuned_p90_ms": cwist_tuned_p90, "cwist_tuned_p99_ms": cwist_tuned_p99, "cwist_tuned_p99_999_ms": cwist_tuned_p99_999,
               "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_p90_ms": axum_p90, "axum_p99_ms": axum_p99, "axum_p99_999_ms": axum_p99_999, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
               "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_p90_ms": gin_p90, "gin_p99_ms": gin_p99, "gin_p99_999_ms": gin_p99_999, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
@@ -544,7 +568,7 @@ jobs:
       - name: Copy raw benchmark output
         run: |
           mkdir -p raw_logs
-          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/cwist_tuned.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_tuned.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
+          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/cwist_c1m_mimalloc.txt /tmp/cwist_c1m_mimalloc_stat.txt /tmp/cwist_tuned.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_tuned.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: webserver-result
