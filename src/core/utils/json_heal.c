@@ -79,8 +79,25 @@ static void log_append(char *log, size_t log_sz, const char *msg) {
 static void remove_trailing_commas(strbuf_t *b) {
     char  *d   = b->data;
     size_t len = b->len;
-    for (size_t i = 1; i < len; i++) {
-        if (d[i] == ']' || d[i] == '}') {
+    bool in_str = false;
+    bool esc = false;
+    for (size_t i = 0; i < len; i++) {
+        char c = d[i];
+        if (esc) {
+            esc = false;
+            continue;
+        }
+        if (c == '\\' && in_str) {
+            esc = true;
+            continue;
+        }
+        if (c == '"') {
+            in_str = !in_str;
+            continue;
+        }
+        if (in_str) continue;
+
+        if (c == ']' || c == '}') {
             /* find last non-whitespace before i */
             size_t j = i;
             while (j > 0 && (d[j-1] == ' ' || d[j-1] == '\t' ||
