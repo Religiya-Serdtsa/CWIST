@@ -43,6 +43,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <dirent.h>
@@ -3734,6 +3737,36 @@ int cwist_app_listen(cwist_app *app, int port) {
         workers = (cores > 0) ? (int)cores : 1;
     }
     if (workers < 1) workers = 1;
+
+#if defined(__GLIBC__)
+    /* Experimental (issue #25, ROADMAP.md v3.5): cap glibc's per-process
+     * arena count before forking, so the setting is inherited by every
+     * worker. mallopt() state is plain process memory, not something a
+     * live fork() can "share back" afterward - COW means a child's first
+     * write to any inherited page (which malloc always does) forks its own
+     * private copy immediately, so there's no way to keep multiple
+     * processes pointed at one mutable arena. What *is* achievable is
+     * capping how many arenas each process can independently accumulate:
+     * by default glibc lets internal thread contention grow up to
+     * ncpus*8 arenas *per process* (each worker here forks before
+     * creating its own watcher/HTTP-3 threads, so every worker can hit
+     * that ceiling independently) - with N worker processes that's a
+     * multiplicative blow-up, and each extra arena is its own mmap'd
+     * region that adds directly to RSS. CWIST_MALLOC_ARENA_MAX=1 forces
+     * every worker down to its single main arena regardless of how many
+     * threads it spins up afterward. Unset by default: preserves today's
+     * behavior exactly. Not yet measured against the mimalloc A/B in that
+     * issue - this is the next experiment, not a default change. */
+    const char *arena_max_env = getenv("CWIST_MALLOC_ARENA_MAX");
+    if (arena_max_env && arena_max_env[0]) {
+        char *end = NULL;
+        long arena_max = strtol(arena_max_env, &end, 10);
+        if (end && *end == '\0' && arena_max >= 0 && arena_max <= INT_MAX) {
+            mallopt(M_ARENA_MAX, (int)arena_max);
+        }
+    }
+#endif
+
     bool is_worker_child = false;
     pid_t worker_pids[workers > 1 ? workers - 1 : 1];
     size_t worker_count = 0;

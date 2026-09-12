@@ -313,6 +313,15 @@ jobs:
           run_bench "CWIST (classic)" "env CWIST_C1M_MODE=0 /tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
           run_bench "CWIST C1M" "env CWIST_C1M_MODE=1 /tmp/cwist_server" 9091 "/tmp/cwist_c1m.txt" "/tmp/cwist_c1m_stat.txt" 10
 
+          # Experimental: cap glibc's per-process malloc arena count to 1
+          # before the fork loop (src/sys/app/app.c), inherited by every
+          # worker (see issue #25's mimalloc writeup - this targets the same
+          # "N processes x M arenas" RSS/tail-latency multiplication mimalloc
+          # tried to fix, without mimalloc's eager per-process reservation).
+          # Same binary/config as "CWIST C1M" above; the env var is the only
+          # variable, so this is a direct A/B, not a new configuration.
+          run_bench "CWIST C1M (arena_max=1)" "env CWIST_C1M_MODE=1 CWIST_MALLOC_ARENA_MAX=1 /tmp/cwist_server" 9091 "/tmp/cwist_c1m_arena1.txt" "/tmp/cwist_c1m_arena1_stat.txt" 10
+
           # Tuned low-latency profile (CWIST classic only): lower connection
           # pressure (c100, 4 wrk threads) so the per-request latency floor is
           # visible alongside the c400 throughput numbers.
@@ -496,6 +505,9 @@ jobs:
           cwist_c1m_rps, cwist_c1m_lat, cwist_c1m_p50, cwist_c1m_p90, cwist_c1m_p99, cwist_c1m_p99_999 = parse_wrk("/tmp/cwist_c1m.txt")
           cwist_c1m_rss, cwist_c1m_csw = parse_stat("/tmp/cwist_c1m_stat.txt")
 
+          cwist_c1m_arena1_rps, cwist_c1m_arena1_lat, cwist_c1m_arena1_p50, cwist_c1m_arena1_p90, cwist_c1m_arena1_p99, cwist_c1m_arena1_p99_999 = parse_wrk("/tmp/cwist_c1m_arena1.txt")
+          cwist_c1m_arena1_rss, cwist_c1m_arena1_csw = parse_stat("/tmp/cwist_c1m_arena1_stat.txt")
+
           cwist_tuned_rps, cwist_tuned_lat, cwist_tuned_p50, cwist_tuned_p90, cwist_tuned_p99, cwist_tuned_p99_999 = parse_wrk("/tmp/cwist_tuned.txt")
 
           axum_rps, axum_lat, axum_p50, axum_p90, axum_p99, axum_p99_999 = parse_wrk("/tmp/axum.txt")
@@ -513,6 +525,9 @@ jobs:
               "timestamp": datetime.now(timezone.utc).isoformat(),
               "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_p90_ms": cwist_p90, "cwist_p99_ms": cwist_p99, "cwist_p99_999_ms": cwist_p99_999, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
               "cwist_c1m_rps": cwist_c1m_rps, "cwist_c1m_lat_ms": cwist_c1m_lat, "cwist_c1m_p90_ms": cwist_c1m_p90, "cwist_c1m_p99_ms": cwist_c1m_p99, "cwist_c1m_p99_999_ms": cwist_c1m_p99_999, "cwist_c1m_rss_kib": cwist_c1m_rss, "cwist_c1m_csw": cwist_c1m_csw,
+              # Same C1M binary/config as cwist_c1m_* above, CWIST_MALLOC_ARENA_MAX=1 -
+              # only variable is the env var, direct A/B (see issue #25).
+              "cwist_c1m_arena1_rps": cwist_c1m_arena1_rps, "cwist_c1m_arena1_lat_ms": cwist_c1m_arena1_lat, "cwist_c1m_arena1_p90_ms": cwist_c1m_arena1_p90, "cwist_c1m_arena1_p99_ms": cwist_c1m_arena1_p99, "cwist_c1m_arena1_p99_999_ms": cwist_c1m_arena1_p99_999, "cwist_c1m_arena1_rss_kib": cwist_c1m_arena1_rss, "cwist_c1m_arena1_csw": cwist_c1m_arena1_csw,
               "cwist_tuned_rps": cwist_tuned_rps, "cwist_tuned_lat_ms": cwist_tuned_lat, "cwist_tuned_p50_ms": cwist_tuned_p50, "cwist_tuned_p90_ms": cwist_tuned_p90, "cwist_tuned_p99_ms": cwist_tuned_p99, "cwist_tuned_p99_999_ms": cwist_tuned_p99_999,
               "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_p90_ms": axum_p90, "axum_p99_ms": axum_p99, "axum_p99_999_ms": axum_p99_999, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
               "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_p90_ms": gin_p90, "gin_p99_ms": gin_p99, "gin_p99_999_ms": gin_p99_999, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
@@ -544,7 +559,7 @@ jobs:
       - name: Copy raw benchmark output
         run: |
           mkdir -p raw_logs
-          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/cwist_tuned.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_tuned.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
+          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/cwist_c1m_arena1.txt /tmp/cwist_c1m_arena1_stat.txt /tmp/cwist_tuned.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_tuned.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: webserver-result
