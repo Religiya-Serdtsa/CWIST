@@ -248,13 +248,32 @@ typedef struct {
 
 static http_dynamic_pool_t g_dyn_pool;
 
+/* Optional lock-sharding (CWIST_POOL_SHARDS=N, default 1): the classic pool
+ * is a single shared FIFO behind one mutex/cond, which serializes every
+ * submitter and worker through the same critical section. At high submitter
+ * fan-out that global lock itself can become the bottleneck rather than the
+ * starvation race PR #38 fixed. Shard 0 is always g_dyn_pool (so the
+ * default N=1 path is byte-for-byte the original single-pool code and the
+ * white-box test's direct &g_dyn_pool references keep working); shards
+ * [1..N-1] live in a side array allocated only when N>1. Submitters
+ * round-robin across shards, trading a single global queue's strict FIFO
+ * order for N independent queues under N independent locks. */
+static http_dynamic_pool_t *g_pool_shards_extra = NULL;
+static int g_pool_shard_count = 1;
+static _Atomic long g_pool_shard_rr = 0;
+
+static inline http_dynamic_pool_t *http_pool_shard(int idx) {
+    if (idx <= 0) return &g_dyn_pool;
+    return &g_pool_shards_extra[idx - 1];
+}
+
 static void *http_dynamic_worker_thread(void *arg) {
-    (void)arg;
-    while (atomic_load_explicit(&g_dyn_pool.running, memory_order_acquire)) {
+    http_dynamic_pool_t *pool = (http_dynamic_pool_t *)arg;
+    while (atomic_load_explicit(&pool->running, memory_order_acquire)) {
         http_pool_task_t *task = NULL;
 
-        pthread_mutex_lock(&g_dyn_pool.lock);
-        while (atomic_load_explicit(&g_dyn_pool.running, memory_order_acquire) && !g_dyn_pool.head) {
+        pthread_mutex_lock(&pool->lock);
+        while (atomic_load_explicit(&pool->running, memory_order_acquire) && !pool->head) {
             /* Scale-down idle timeout: CWIST_POOL_IDLE_TIMEOUT_MS overrides
              * the 2s default; 0 parks surplus threads forever (use with
              * CWIST_POOL_PREWARM to eliminate spawn churn entirely). */
@@ -266,42 +285,44 @@ static void *http_dynamic_worker_thread(void *arg) {
                 if (ms < 0) ms = 2000;
                 atomic_store_explicit(&idle_timeout_ms, ms, memory_order_relaxed);
             }
-            atomic_fetch_add_explicit(&g_dyn_pool.idle_workers, 1, memory_order_relaxed);
+            atomic_fetch_add_explicit(&pool->idle_workers, 1, memory_order_relaxed);
             int rc;
             if (ms == 0) {
-                rc = pthread_cond_wait(&g_dyn_pool.cond, &g_dyn_pool.lock);
+                rc = pthread_cond_wait(&pool->cond, &pool->lock);
             } else {
                 struct timespec ts;
                 clock_gettime(CLOCK_REALTIME, &ts);
                 ts.tv_sec += ms / 1000;
                 ts.tv_nsec += (ms % 1000) * 1000000L;
                 if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
-                rc = pthread_cond_timedwait(&g_dyn_pool.cond, &g_dyn_pool.lock, &ts);
+                rc = pthread_cond_timedwait(&pool->cond, &pool->lock, &ts);
             }
-            atomic_fetch_sub_explicit(&g_dyn_pool.idle_workers, 1, memory_order_relaxed);
-            if (rc == ETIMEDOUT && !g_dyn_pool.head) {
+            atomic_fetch_sub_explicit(&pool->idle_workers, 1, memory_order_relaxed);
+            if (rc == ETIMEDOUT && !pool->head) {
                 /* Scale down if idle and above base worker threshold */
-                long current = atomic_load_explicit(&g_dyn_pool.active_workers, memory_order_relaxed);
-                if (current > g_http_thread_count) {
-                    atomic_fetch_sub_explicit(&g_dyn_pool.active_workers, 1, memory_order_relaxed);
-                    pthread_mutex_unlock(&g_dyn_pool.lock);
+                long current = atomic_load_explicit(&pool->active_workers, memory_order_relaxed);
+                long base = g_http_thread_count / g_pool_shard_count;
+                if (base < 1) base = 1;
+                if (current > base) {
+                    atomic_fetch_sub_explicit(&pool->active_workers, 1, memory_order_relaxed);
+                    pthread_mutex_unlock(&pool->lock);
                     return NULL;
                 }
             }
         }
 
-        if (!atomic_load_explicit(&g_dyn_pool.running, memory_order_acquire)) {
-            pthread_mutex_unlock(&g_dyn_pool.lock);
+        if (!atomic_load_explicit(&pool->running, memory_order_acquire)) {
+            pthread_mutex_unlock(&pool->lock);
             break;
         }
 
-        task = g_dyn_pool.head;
+        task = pool->head;
         if (task) {
-            g_dyn_pool.head = task->next;
-            if (!g_dyn_pool.head) g_dyn_pool.tail = NULL;
-            atomic_fetch_sub_explicit(&g_dyn_pool.pending_tasks, 1, memory_order_release);
+            pool->head = task->next;
+            if (!pool->head) pool->tail = NULL;
+            atomic_fetch_sub_explicit(&pool->pending_tasks, 1, memory_order_release);
         }
-        pthread_mutex_unlock(&g_dyn_pool.lock);
+        pthread_mutex_unlock(&pool->lock);
 
         if (task) {
             int fd = task->client_fd;
@@ -314,10 +335,22 @@ static void *http_dynamic_worker_thread(void *arg) {
             atomic_fetch_sub_explicit(&g_http_inflight, 1, memory_order_release);
         }
     }
+    /* Shard 0 (g_dyn_pool) is static and outlives every destroy() call, so
+     * its shutdown path intentionally leaves active_workers untouched here
+     * (matches the pre-sharding code exactly - see
+     * tests/test_classic_pool_scaling.c's active_workers == thread_count
+     * assertion, which pins that behavior). A sharded extra pool, however,
+     * is heap memory that destroy() frees, so its workers must signal
+     * completion here - it is the only exit signal available for a
+     * detached thread, and destroy() waits on it before freeing anything
+     * this worker might still be touching (see cwist_http_pool_destroy). */
+    if (pool != &g_dyn_pool) {
+        atomic_fetch_sub_explicit(&pool->active_workers, 1, memory_order_release);
+    }
     return NULL;
 }
 
-static bool http_spawn_worker(void) {
+static bool http_spawn_worker(http_dynamic_pool_t *pool) {
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -331,18 +364,18 @@ static bool http_spawn_worker(void) {
                        CWIST_POOL_STACK_SIZE);
     }
     pthread_t tid;
-    atomic_fetch_add_explicit(&g_dyn_pool.active_workers, 1, memory_order_relaxed);
-    int rc = pthread_create(&tid, &attr, http_dynamic_worker_thread, NULL);
+    atomic_fetch_add_explicit(&pool->active_workers, 1, memory_order_relaxed);
+    int rc = pthread_create(&tid, &attr, http_dynamic_worker_thread, pool);
     if (rc != 0) {
         /* Retry with the default stack rather than losing the worker. */
         pthread_attr_destroy(&attr);
         pthread_attr_init(&attr);
         pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-        rc = pthread_create(&tid, &attr, http_dynamic_worker_thread, NULL);
+        rc = pthread_create(&tid, &attr, http_dynamic_worker_thread, pool);
     }
     pthread_attr_destroy(&attr);
     if (rc != 0) {
-        atomic_fetch_sub_explicit(&g_dyn_pool.active_workers, 1, memory_order_relaxed);
+        atomic_fetch_sub_explicit(&pool->active_workers, 1, memory_order_relaxed);
         return false;
     }
     return true;
@@ -391,21 +424,63 @@ int cwist_http_pool_init(void) {
         pthread_mutex_init(&g_dyn_pool.lock, NULL);
         pthread_cond_init(&g_dyn_pool.cond, NULL);
 
+        /* Optional lock sharding: CWIST_POOL_SHARDS=N (default 1, i.e. this
+         * block is a no-op and behavior is identical to before). See the
+         * comment above http_pool_shard() for why shard 0 is always
+         * g_dyn_pool itself rather than element 0 of an array. */
+        int shard_count = 1;
+        const char *shards_env = getenv("CWIST_POOL_SHARDS");
+        if (shards_env) {
+            long parsed = atol(shards_env);
+            if (parsed > 1) shard_count = (parsed > INT_MAX) ? INT_MAX : (int)parsed;
+        }
+        g_pool_shard_count = shard_count;
+
+        long total_max_workers = 65536;
+        long per_shard_max = total_max_workers / shard_count;
+        if (per_shard_max < 1) per_shard_max = 1;
+        atomic_store_explicit(&g_dyn_pool.max_workers, per_shard_max, memory_order_relaxed);
+
+        if (shard_count > 1) {
+            g_pool_shards_extra = cwist_alloc((size_t)(shard_count - 1) * sizeof(http_dynamic_pool_t));
+            if (!g_pool_shards_extra) return -1;
+            for (int i = 0; i < shard_count - 1; i++) {
+                http_dynamic_pool_t *s = &g_pool_shards_extra[i];
+                s->head = NULL;
+                s->tail = NULL;
+                atomic_init(&s->pending_tasks, 0);
+                atomic_init(&s->active_workers, 0);
+                atomic_init(&s->idle_workers, 0);
+                atomic_init(&s->max_workers, per_shard_max);
+                atomic_init(&s->running, true);
+                pthread_mutex_init(&s->lock, NULL);
+                pthread_cond_init(&s->cond, NULL);
+            }
+        }
+
         /* Pre-warm worker threads. CWIST_POOL_PREWARM extends the spawn count
          * beyond the base pool when the expected concurrency is known, so the
          * acceptor does not serialize pthread_create + stack mmap during a
-         * connection ramp. */
+         * connection ramp. Split evenly across shards (remainder to the
+         * lowest-indexed shards) so no shard starts starved. */
         long prewarm = g_http_thread_count;
         const char *pw = getenv("CWIST_POOL_PREWARM");
         if (pw) {
             long parsed = atol(pw);
             if (parsed > prewarm) prewarm = parsed;
         }
-        long max_w = atomic_load_explicit(&g_dyn_pool.max_workers, memory_order_relaxed);
-        if (prewarm > max_w) prewarm = max_w;
-        for (long i = 0; i < prewarm; i++) {
-            if (!http_spawn_worker()) {
-                return -1;
+        if (prewarm > total_max_workers) prewarm = total_max_workers;
+        for (int i = 0; i < shard_count; i++) {
+            long share = prewarm / shard_count;
+            if (i < prewarm % shard_count) share++;
+            if (share < 1) share = 1;
+            http_dynamic_pool_t *shard = http_pool_shard(i);
+            long cap = atomic_load_explicit(&shard->max_workers, memory_order_relaxed);
+            if (share > cap) share = cap;
+            for (long j = 0; j < share; j++) {
+                if (!http_spawn_worker(shard)) {
+                    return -1;
+                }
             }
         }
     }
@@ -433,28 +508,39 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
     node->ctx = ctx;
     node->next = NULL;
 
-    pthread_mutex_lock(&g_dyn_pool.lock);
-    if (!g_dyn_pool.tail) {
-        g_dyn_pool.head = node;
-        g_dyn_pool.tail = node;
-    } else {
-        g_dyn_pool.tail->next = node;
-        g_dyn_pool.tail = node;
+    /* CWIST_POOL_SHARDS=1 (default): shard_count stays 1, the branch below
+     * never executes, and shard is always &g_dyn_pool - byte-identical to
+     * the pre-sharding code path, including the absence of the extra
+     * round-robin atomic on this hot path. */
+    int shard_idx = 0;
+    if (g_pool_shard_count > 1) {
+        long rr = atomic_fetch_add_explicit(&g_pool_shard_rr, 1, memory_order_relaxed);
+        shard_idx = (int)(rr % g_pool_shard_count);
     }
-    long pending = atomic_fetch_add_explicit(&g_dyn_pool.pending_tasks, 1, memory_order_release) + 1;
+    http_dynamic_pool_t *shard = http_pool_shard(shard_idx);
+
+    pthread_mutex_lock(&shard->lock);
+    if (!shard->tail) {
+        shard->head = node;
+        shard->tail = node;
+    } else {
+        shard->tail->next = node;
+        shard->tail = node;
+    }
+    long pending = atomic_fetch_add_explicit(&shard->pending_tasks, 1, memory_order_release) + 1;
 
     /* Signalled sleepers remain counted idle until they reacquire this lock.
      * Compare queued demand with that capacity, not merely idle == 0: a
      * burst can otherwise strand connections behind busy keep-alive handlers.
      * Keep the cap check and the spawn reservation in this critical section. */
-    long current = atomic_load_explicit(&g_dyn_pool.active_workers, memory_order_relaxed);
-    long idle = atomic_load_explicit(&g_dyn_pool.idle_workers, memory_order_relaxed);
-    long max_w = atomic_load_explicit(&g_dyn_pool.max_workers, memory_order_relaxed);
+    long current = atomic_load_explicit(&shard->active_workers, memory_order_relaxed);
+    long idle = atomic_load_explicit(&shard->idle_workers, memory_order_relaxed);
+    long max_w = atomic_load_explicit(&shard->max_workers, memory_order_relaxed);
     if (pending > idle && current < max_w) {
-        http_spawn_worker();
+        http_spawn_worker(shard);
     }
-    pthread_cond_signal(&g_dyn_pool.cond);
-    pthread_mutex_unlock(&g_dyn_pool.lock);
+    pthread_cond_signal(&shard->cond);
+    pthread_mutex_unlock(&shard->lock);
 }
 
 bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), void *ctx) {
@@ -466,26 +552,57 @@ bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), 
 void cwist_http_pool_destroy(void) {
     /* Queued continuations must release, not repost into a dying reactor. */
     atomic_store(&g_http_pool_stopping, true);
-    atomic_store_explicit(&g_dyn_pool.running, false, memory_order_release);
-    pthread_mutex_lock(&g_dyn_pool.lock);
-    pthread_cond_broadcast(&g_dyn_pool.cond);
-    pthread_mutex_unlock(&g_dyn_pool.lock);
+    int shard_count = g_pool_shard_count;
+    for (int i = 0; i < shard_count; i++) {
+        http_dynamic_pool_t *s = http_pool_shard(i);
+        atomic_store_explicit(&s->running, false, memory_order_release);
+        pthread_mutex_lock(&s->lock);
+        pthread_cond_broadcast(&s->cond);
+        pthread_mutex_unlock(&s->lock);
+    }
+
+    /* Only the heap-allocated extra shards (index >= 1) get freed below, so
+     * only those need to wait for their detached workers to actually
+     * return before that happens - shard 0 (g_dyn_pool) is static and never
+     * freed, matching the pre-sharding code's shutdown behavior exactly
+     * (see http_dynamic_worker_thread's matching comment). Bounded so one
+     * stuck handler cannot hang shutdown forever. */
+    for (int i = 1; i < shard_count; i++) {
+        http_dynamic_pool_t *s = http_pool_shard(i);
+        int waited_ms = 0;
+        while (atomic_load_explicit(&s->active_workers, memory_order_acquire) > 0 && waited_ms < 5000) {
+            struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000L };
+            nanosleep(&ts, NULL);
+            waited_ms++;
+        }
+        if (atomic_load_explicit(&s->active_workers, memory_order_acquire) > 0) {
+            CWIST_LOG_WARN("[http] pool shard %d still has active workers after 5s shutdown wait", i);
+        }
+    }
 
     /* Drain tasks */
-    pthread_mutex_lock(&g_dyn_pool.lock);
-    http_pool_task_t *node = g_dyn_pool.head;
-    g_dyn_pool.head = NULL;
-    g_dyn_pool.tail = NULL;
-    while (node) {
-        http_pool_task_t *next = node->next;
-        if (node->client_fd >= 0) close(node->client_fd);
-        cwist_free(node);
-        node = next;
-    }
-    pthread_mutex_unlock(&g_dyn_pool.lock);
+    for (int i = 0; i < shard_count; i++) {
+        http_dynamic_pool_t *s = http_pool_shard(i);
+        pthread_mutex_lock(&s->lock);
+        http_pool_task_t *node = s->head;
+        s->head = NULL;
+        s->tail = NULL;
+        while (node) {
+            http_pool_task_t *next = node->next;
+            if (node->client_fd >= 0) close(node->client_fd);
+            cwist_free(node);
+            node = next;
+        }
+        pthread_mutex_unlock(&s->lock);
 
-    pthread_cond_destroy(&g_dyn_pool.cond);
-    pthread_mutex_destroy(&g_dyn_pool.lock);
+        pthread_cond_destroy(&s->cond);
+        pthread_mutex_destroy(&s->lock);
+    }
+    if (g_pool_shards_extra) {
+        cwist_free(g_pool_shards_extra);
+        g_pool_shards_extra = NULL;
+    }
+    g_pool_shard_count = 1;
 
     if (g_workers) {
         for (int i = 0; i < g_http_thread_count; i++) {

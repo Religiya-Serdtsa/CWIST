@@ -455,6 +455,7 @@ $(CNATS_LIB):
 
 TEST_TARGETS = test_classic_pool_scaling \
                test_reactor_wake \
+               test_pool_sharding \
                test_sstring \
                test_seq \
                test_seq_auth \
@@ -542,6 +543,16 @@ test_classic_pool_scaling: $(LIB_NAME) tests/test_classic_pool_scaling.c
 test_reactor_wake: tests/test_reactor_wake.c src/sys/io/reactor.c
 	$(CC) $(CFLAGS) -o $@ tests/test_reactor_wake.c -pthread
 	./$@
+
+test_pool_sharding: $(LIB_NAME) tests/test_pool_sharding.c
+	$(CC) $(CFLAGS) -o $@ tests/test_pool_sharding.c $(LIB_NAME) $(LIBS)
+	./$@
+
+# Manual lock-contention probe, not part of `make test` (see the file's
+# header comment). Run e.g. `make bench_pool_contention && \
+# CWIST_C1M_MODE=0 CWIST_POOL_SHARDS=8 ./bench_pool_contention 32 30000`.
+bench_pool_contention: $(LIB_NAME) tests/bench_pool_contention.c
+	$(CC) $(CFLAGS) -o $@ tests/bench_pool_contention.c $(LIB_NAME) $(LIBS)
 
 test_sstring: $(LIB_NAME) tests/test_sstring.c
 	$(CC) $(CFLAGS) -o test_sstring tests/test_sstring.c $(LIB_NAME) $(LIBS)
