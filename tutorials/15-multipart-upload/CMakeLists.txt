@@ -4,7 +4,7 @@ project(cwist_tut_15 C)
 set(CMAKE_C_STANDARD 11)
 
 include_directories(../../include ../../lib ../../lib/libttak/include)
-link_directories(../../ ../../lib/cjson ../../lib/libttak/lib ../../lib/uriparser/build)
+link_directories(../../ ../../lib/cjson ../../lib/libttak/lib ../../lib/uriparser/build ../../lib/boringssl/build ../../lib/lsquic/build/src/liblsquic ../../lib/cnats/build/lib)
 
 add_executable(tut15 main.c)
-target_link_libraries(tut15 PRIVATE cwist cjson ttak pthread dl uriparser stdc++ m z curl)
+target_link_libraries(tut15 PRIVATE cwist lsquic ssl crypto nats_static cjson ttak pthread dl uriparser stdc++ m z curl)

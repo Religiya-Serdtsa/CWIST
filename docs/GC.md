@@ -1,9 +1,11 @@
 # Full GC: Automatic Resource Reclamation in CWIST
 
-Status: **planned for v3.5** (initial work started). This document is the
-design contract for the full-GC mode; until the feature lands, the explicit
-destroy-family model described in the API docs remains the only supported
-lifecycle.
+Status: **implemented, opt-in** (`src/core/mem/gc.c`, `include/cwist/core/mem/gc.h`).
+`cwist_full_gc(true)` is a real, callable toggle today, not a future one —
+see Tutorial 30 (`tutorials/30-graceful-shutdown/`) for a minimal example.
+This document remains the design contract for what the mode does and does
+not cover; the explicit destroy-family model stays fully supported (and is
+the default) whether or not full-GC mode is ever enabled.
 
 ## Motivation
 
