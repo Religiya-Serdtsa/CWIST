@@ -441,16 +441,20 @@ void cwist_http_pool_submit(int client_fd, void (*handler)(int, void *), void *c
         g_dyn_pool.tail->next = node;
         g_dyn_pool.tail = node;
     }
-    atomic_fetch_add_explicit(&g_dyn_pool.pending_tasks, 1, memory_order_release);
-    pthread_cond_signal(&g_dyn_pool.cond);
-    pthread_mutex_unlock(&g_dyn_pool.lock);
+    long pending = atomic_fetch_add_explicit(&g_dyn_pool.pending_tasks, 1, memory_order_release) + 1;
 
+    /* Signalled sleepers remain counted idle until they reacquire this lock.
+     * Compare queued demand with that capacity, not merely idle == 0: a
+     * burst can otherwise strand connections behind busy keep-alive handlers.
+     * Keep the cap check and the spawn reservation in this critical section. */
     long current = atomic_load_explicit(&g_dyn_pool.active_workers, memory_order_relaxed);
     long idle = atomic_load_explicit(&g_dyn_pool.idle_workers, memory_order_relaxed);
     long max_w = atomic_load_explicit(&g_dyn_pool.max_workers, memory_order_relaxed);
-    if (idle == 0 && current < max_w) {
+    if (pending > idle && current < max_w) {
         http_spawn_worker();
     }
+    pthread_cond_signal(&g_dyn_pool.cond);
+    pthread_mutex_unlock(&g_dyn_pool.lock);
 }
 
 bool cwist_http_pool_rearm_current(int client_fd, void (*handler)(int, void *), void *ctx) {
