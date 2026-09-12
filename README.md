@@ -19,12 +19,12 @@ reaches 0.41ms average at ~155k req/s).
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 114932 req/s | Latency 1.96ms (P90 3.93ms, P99 7.30ms, P99.999 18.36ms) | RSS 15828KiB | Csw 0
-- **CWIST (C1M reactor)**: 121095 req/s | Latency 2.59ms (P90 6.13ms, P99 16.73ms, P99.999 30.58ms) | RSS 10292KiB | Csw 0
-- **CWIST (C1M reactor, arena_max=1)** — experimental, see issue #25: 119359 req/s | Latency 2.77ms (P90 7.10ms, P99 17.54ms, P99.999 32.38ms) | RSS 7164KiB | Csw 0
-- **Axum**: 110334 req/s | Latency 3.51ms (P90 5.93ms, P99 8.68ms, P99.999 15.95ms) | RSS 16704KiB | Csw 0
-- **Gin (Go)**: 79072 req/s | Latency 7.00ms (P90 17.34ms, P99 37.78ms, P99.999 88.80ms) | RSS 30304KiB | Csw 0
-- **Spring Boot**: 44117 req/s | Latency 8.97ms (P90 11.67ms, P99 18.40ms, P99.999 45.08ms) | RSS 1339748KiB | Csw 0
+- **CWIST (classic pool)**: 230149 req/s | Latency 1.08ms (P90 2.33ms, P99 5.81ms, P99.999 40.21ms) | RSS 16660KiB | Csw 0
+- **CWIST (C1M reactor)**: 259149 req/s | Latency 1.69ms (P90 4.53ms, P99 14.96ms, P99.999 41.04ms) | RSS 9792KiB | Csw 0
+- **CWIST (C1M reactor, arena_max=1)** — experimental, see issue #25: 251884 req/s | Latency 1.65ms (P90 4.42ms, P99 14.51ms, P99.999 28.79ms) | RSS 7228KiB | Csw 0
+- **Axum**: 237285 req/s | Latency 1.68ms (P90 3.01ms, P99 4.82ms, P99.999 11.25ms) | RSS 17048KiB | Csw 0
+- **Gin (Go)**: 190702 req/s | Latency 3.70ms (P90 9.92ms, P99 23.48ms, P99.999 58.27ms) | RSS 28440KiB | Csw 0
+- **Spring Boot**: 127489 req/s | Latency 3.13ms (P90 4.38ms, P99 6.95ms, P99.999 40.37ms) | RSS 1316464KiB | Csw 0
 
 **Spring runtime environment**
 
@@ -68,8 +68,8 @@ _Methodology, JVM options, and fairness settings: [docs/webserver-benchmark.md](
 <!-- TUNED_BENCHMARK:START -->
 **Tuned low-latency run (wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)), CWIST vs Spring Boot on identical concurrency:**
 
-- **CWIST**: 110,961 req/s at 0.64ms average latency (P50 0.40ms, P90 1.45ms, P99 3.44ms)
-- **Spring Boot**: 44,964 req/s at 2.29ms average latency (P50 2.02ms, P90 3.80ms, P99 7.85ms), same trained AOT cache as the main run above
+- **CWIST**: 247,722 req/s at 0.29ms average latency (P50 0.17ms, P90 0.55ms, P99 2.02ms)
+- **Spring Boot**: 135,609 req/s at 0.88ms average latency (P50 0.63ms, P90 2.05ms, P99 3.58ms), same trained AOT cache as the main run above
 
 Leaving headroom between server workers and load-generator threads keeps the latency tail flat — oversubscribing the same cores shows a multi-ms average from scheduling jitter alone at similar throughput.
 <!-- TUNED_BENCHMARK:END -->
