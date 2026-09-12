@@ -31,6 +31,7 @@ static const cwist_metric_t metric_defaults[CWIST_METRIC_COUNT] = {
     [CWIST_METRIC_REQUEST_DURATION_NS]  = { .name = "cwist_request_duration_ns",     .help = "Request duration sum in nanoseconds",              .type = CWIST_METRIC_COUNTER },
     [CWIST_METRIC_HTTP_HEADER_OVERFLOW] = { .name = "cwist_http_header_overflow_total", .help = "HTTP/1.1 connections dropped because headers exceeded the read buffer", .type = CWIST_METRIC_COUNTER },
     [CWIST_METRIC_H2_HEADERS_DROPPED]   = { .name = "cwist_h2_headers_dropped_total",   .help = "HTTP/2 header fields dropped due to unresolvable HPACK index",          .type = CWIST_METRIC_COUNTER },
+    [CWIST_METRIC_HTTP_CONTINUATION_SHED] = { .name = "cwist_http_continuation_shed_total", .help = "Pipelined HTTP/1.1 continuations dropped due to full reactor queue", .type = CWIST_METRIC_COUNTER },
 };
 
 /* -------------------------------------------------------------------------
@@ -94,6 +95,9 @@ void cwist_metric_observe(cwist_metrics_registry_t *reg, cwist_metric_id_t id, l
 
 uintmax_t cwist_metric_load(const cwist_metrics_registry_t *reg, cwist_metric_id_t id) {
     if (!reg || id < 0 || id >= CWIST_METRIC_COUNT) return 0;
+    if (id == CWIST_METRIC_HTTP_CONTINUATION_SHED) {
+        return (uintmax_t)cwist_http_continuation_shed_count();
+    }
     return atomic_load_explicit(&reg->metrics[id].value.raw, memory_order_acquire);
 }
 
@@ -112,6 +116,13 @@ static const char *type_str(cwist_metric_type_t t) {
 
 char *cwist_metrics_render_prometheus(const cwist_metrics_registry_t *reg) {
     if (!reg) return NULL;
+
+    /* Synchronize read-only shed counter from net/http */
+    long shed = cwist_http_continuation_shed_count();
+    atomic_store_explicit(&((cwist_metrics_registry_t *)reg)->metrics[CWIST_METRIC_HTTP_CONTINUATION_SHED].value.raw,
+                          (uintmax_t)shed * 1000, memory_order_relaxed);
+    atomic_store_explicit(&((cwist_metrics_registry_t *)reg)->metrics[CWIST_METRIC_HTTP_CONTINUATION_SHED].count,
+                          (uintmax_t)shed, memory_order_relaxed);
 
     size_t cap = 4096;
     char *buf = malloc(cap);
