@@ -667,6 +667,7 @@ bool cwist_http_async_rearm(int client_fd, cwist_reactor_t *reactor, cwist_http_
         if (!cwist_reactor_post(reactor, &continuation->post)) {
             long n = atomic_fetch_add_explicit(&g_http_continuation_shed, 1,
                                                memory_order_relaxed) + 1;
+            cwist_metric_inc(cwist_metrics_registry(), CWIST_METRIC_HTTP_CONTINUATION_SHED);
             if (getenv("CWIST_ASYNC_DEBUG") && (n <= 5 || n % 10000 == 0))
                 fprintf(stderr, "[async] continuation shed fd=%d total=%ld\n",
                         client_fd, n);
