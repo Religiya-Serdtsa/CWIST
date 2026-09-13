@@ -1,11 +1,21 @@
 # Full GC: Automatic Resource Reclamation in CWIST
 
-Status: **implemented, opt-in** (`src/core/mem/gc.c`, `include/cwist/core/mem/gc.h`).
-`cwist_full_gc(true)` is a real, callable toggle today, not a future one —
-see Tutorial 30 (`tutorials/30-graceful-shutdown/`) for a minimal example.
-This document remains the design contract for what the mode does and does
-not cover; the explicit destroy-family model stays fully supported (and is
-the default) whether or not full-GC mode is ever enabled.
+Status: **implemented, opt-in, with one gap** (`src/core/mem/gc.c`,
+`include/cwist/core/mem/gc.h`). `cwist_full_gc(true)` is a real, callable
+toggle today, not a future one — see Tutorial 30
+(`tutorials/30-graceful-shutdown/`) for a minimal example. The toggle,
+connection reclamation, `cwist_alloc` registration, pseudo-RAII, and the
+exit sweeps (sections 1-4 and 6 below) are all implemented and tested.
+**Section 5 (transparent `malloc` interception) is only partially done**:
+cJSON's own internal allocations are redirected to `cwist_alloc` via
+`cJSON_InitHooks` (`src/core/mem/alloc.c`), but a handler's own bare
+`malloc()` calls are not intercepted anywhere in the tree today — no
+`-Wl,--wrap=malloc`, no header-level redefinition. The "write `malloc` by
+habit and it still evaporates" acceptance bar in section 5 does not hold
+yet for a handler's own code, only for the cJSON dependency. This document
+remains the design contract for what the mode does and does not cover; the
+explicit destroy-family model stays fully supported (and is the default)
+whether or not full-GC mode is ever enabled.
 
 ## Motivation
 
@@ -92,19 +102,26 @@ For stack-scoped handles, CWIST provides pseudo-RAII guards:
 - Raw borrowing of LibTTAK RAII primitives where the cleanup-attribute trick
   is unavailable.
 
-### 5. Transparent `malloc` interception
+### 5. Transparent `malloc` interception — partially done
 
 Users will habitually write `malloc`, not `cwist_alloc` — depending on
-finger discipline is how leak-free claims fail. Full-GC mode therefore makes
-the two spellings equivalent in handler context:
+finger discipline is how leak-free claims fail. The goal is to make the two
+spellings equivalent in handler context. Status:
 
-- Handler-thread `malloc` calls — including allocations made by bundled
-  dependencies such as cJSON — are redirected onto the worker-thread
-  arena/epoch GC, either via linker wrapping (`-Wl,--wrap=malloc`) or via
-  header-level redefinition in framework-included headers.
+- **Done**: allocations made by bundled dependencies — currently cJSON — are
+  redirected onto `cwist_alloc` via `cJSON_InitHooks` (`src/core/mem/alloc.c`),
+  so cJSON's own internal `malloc`/`free` calls already evaporate under
+  full-GC mode without any change to cJSON itself.
+- **Not done**: a handler's own bare `malloc()` calls are not redirected
+  anywhere in the tree today. Neither linker wrapping (`-Wl,--wrap=malloc`)
+  nor a header-level `#define malloc` exists yet. Writing `malloc()` by hand
+  inside a handler still leaks under full-GC mode exactly as it would
+  without it — only `cwist_alloc()` calls (and cJSON's) are covered.
 
-Acceptance bar: **write `malloc` by habit and it still evaporates at request
-end**, with no leaks across the request boundary.
+Acceptance bar (not yet met for handler code): **write `malloc` by habit and
+it still evaporates at request end**, with no leaks across the request
+boundary. This remains open work, not a documentation gap - see the v3.5
+roadmap entry.
 
 ### 6. `cwist_alloc` internals
 
@@ -120,7 +137,8 @@ remains correct and simply unregisters the block early.
 | Worker thread exits | Connections must be closed explicitly | TLS sweep closes owned connections |
 | Process exits | `cwist_app_destroy()` required | `atexit` sweep closes remaining connections |
 | `cwist_alloc` object | Manual `cwist_free` | Epoch rotation reclaims; explicit free still fine |
-| Handler calls `malloc` | Heap leak if forgotten | Redirected to worker arena; freed at request end |
+| cJSON's internal `malloc` | N/A (cJSON manages its own memory) | Redirected to `cwist_alloc` via `cJSON_InitHooks`; freed by epoch rotation |
+| Handler calls bare `malloc()` | Heap leak if forgotten | **Still a heap leak if forgotten** - not yet redirected (see section 5) |
 | Teardown safety | Caller discipline | Epoch-deferred; no reclaim while referenced |
 
 ## Non-goals and notes
