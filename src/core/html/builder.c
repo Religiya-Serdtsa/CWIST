@@ -21,7 +21,7 @@ cwist_html_element_t* cwist_html_element_create(const char *tag) {
     if (!el) return NULL;
     
     el->tag = cwist_sstring_create();
-    cwist_sstring_assign(el->tag, (char*)tag);
+    cwist_sstring_assign(el->tag, tag ? tag : "");
     el->attributes = cJSON_CreateObject();
     el->children = NULL;
     el->child_count = 0;
@@ -59,7 +59,7 @@ void cwist_html_element_destroy(cwist_html_element_t *el) {
  * @param value Attribute value stored as a cJSON string node.
  */
 void cwist_html_element_add_attr(cwist_html_element_t *el, const char *key, const char *value) {
-    if (!el || !key || !value) return;
+    if (!el || !key || !value || !el->attributes) return;
     
     if (cJSON_HasObjectItem(el->attributes, key)) {
         cJSON_ReplaceItemInObject(el->attributes, key, cJSON_CreateString(value));
@@ -83,16 +83,16 @@ void cwist_html_element_set_id(cwist_html_element_t *el, const char *id) {
  * @param class_name Class token to append or initialise.
  */
 void cwist_html_element_add_class(cwist_html_element_t *el, const char *class_name) {
-    if (!el || !class_name) return;
+    if (!el || !class_name || !el->attributes) return;
     
     cJSON *cls = cJSON_GetObjectItem(el->attributes, "class");
-    if (cls) {
+    if (cls && cls->valuestring && *cls->valuestring) {
         // Append to existing class
         cwist_sstring *s = cwist_sstring_create();
         cwist_sstring_assign(s, cls->valuestring);
         cwist_sstring_append(s, " ");
         cwist_sstring_append(s, class_name);
-        cJSON_ReplaceItemInObject(el->attributes, "class", cJSON_CreateString(s->data));
+        cJSON_ReplaceItemInObject(el->attributes, "class", cJSON_CreateString(s->data ? s->data : ""));
         cwist_sstring_destroy(s);
     } else {
         cwist_html_element_add_attr(el, "class", class_name);
@@ -106,11 +106,12 @@ void cwist_html_element_add_class(cwist_html_element_t *el, const char *class_na
  */
 void cwist_html_element_set_text(cwist_html_element_t *el, const char *text) {
     if (!el) return;
+    const char *actual_text = text ? text : "";
     if (el->inner_text) {
-        cwist_sstring_assign(el->inner_text, (char*)text);
+        cwist_sstring_assign(el->inner_text, actual_text);
     } else {
         el->inner_text = cwist_sstring_create();
-        cwist_sstring_assign(el->inner_text, (char*)text);
+        cwist_sstring_assign(el->inner_text, actual_text);
     }
 }
 
@@ -138,23 +139,37 @@ void cwist_html_element_add_child(cwist_html_element_t *el, cwist_html_element_t
  * @param out Destination buffer that receives generated markup.
  */
 static void render_element(cwist_html_element_t *el, cwist_sstring *out) {
-    if (!el) return;
+    if (!el || !out) return;
     
     if (el->tag && el->tag->data && *el->tag->data) {
         cwist_sstring_append(out, "<");
         cwist_sstring_append(out, el->tag->data);
         cJSON *attr = NULL;
         cJSON_ArrayForEach(attr, el->attributes) {
-            cwist_sstring_append(out, " ");
-            cwist_sstring_append(out, attr->string);
-            cwist_sstring_append(out, "=\"");
-            cwist_sstring_append(out, attr->valuestring);
-            cwist_sstring_append(out, "\"");
+            if (!attr || !attr->string) continue;
+            if (cJSON_IsString(attr) && attr->valuestring) {
+                cwist_sstring_append(out, " ");
+                cwist_sstring_append(out, attr->string);
+                cwist_sstring_append(out, "=\"");
+                cwist_sstring_append_escaped(out, attr->valuestring);
+                cwist_sstring_append(out, "\"");
+            } else if (cJSON_IsTrue(attr)) {
+                cwist_sstring_append(out, " ");
+                cwist_sstring_append(out, attr->string);
+            } else if (cJSON_IsNumber(attr)) {
+                char num_buf[64];
+                snprintf(num_buf, sizeof(num_buf), "%g", attr->valuedouble);
+                cwist_sstring_append(out, " ");
+                cwist_sstring_append(out, attr->string);
+                cwist_sstring_append(out, "=\"");
+                cwist_sstring_append(out, num_buf);
+                cwist_sstring_append(out, "\"");
+            }
         }
         cwist_sstring_append(out, ">");
         
         if (el->inner_text && el->inner_text->data) {
-            cwist_sstring_append(out, el->inner_text->data);
+            cwist_sstring_append_escaped(out, el->inner_text->data);
         }
         
         if (el->children) {
