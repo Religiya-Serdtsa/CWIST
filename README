@@ -16,19 +16,19 @@ to systems programming without sacrificing control.
 Powered by BoringSSL, lsquic, OpenSSL without context contamination.
 
 <!-- BENCHMARKS:START -->
-Latest automated benchmark: **Darwin** — 16.22 M leases/s, 142.43% CPU, 710704 KiB RSS.
+Latest automated benchmark: **Darwin** — 10.01 M leases/s, 116.14% CPU, 617632 KiB RSS.
 
 ![CWIST benchmark trends](docs/benchmark-trends.svg)
 <!-- BENCHMARKS:END -->
 
 <!-- WEBSERVER_BENCHMARKS:START -->
 Latest Web Server Benchmark (wrk -t12 -c400 -d10s (after 10s warmup, warmup discarded)):
-- **CWIST (classic pool)**: 230149 req/s | Latency 1.08ms (P90 2.33ms, P99 5.81ms, P99.999 40.21ms) | RSS 16660KiB | Csw 0
-- **CWIST (C1M reactor)**: 259149 req/s | Latency 1.69ms (P90 4.53ms, P99 14.96ms, P99.999 41.04ms) | RSS 9792KiB | Csw 0
-- **CWIST (C1M reactor, arena_max=1)** — experimental, see issue #25: 251884 req/s | Latency 1.65ms (P90 4.42ms, P99 14.51ms, P99.999 28.79ms) | RSS 7228KiB | Csw 0
-- **Axum**: 237285 req/s | Latency 1.68ms (P90 3.01ms, P99 4.82ms, P99.999 11.25ms) | RSS 17048KiB | Csw 0
-- **Gin (Go)**: 190702 req/s | Latency 3.70ms (P90 9.92ms, P99 23.48ms, P99.999 58.27ms) | RSS 28440KiB | Csw 0
-- **Spring Boot**: 127489 req/s | Latency 3.13ms (P90 4.38ms, P99 6.95ms, P99.999 40.37ms) | RSS 1316464KiB | Csw 0
+- **CWIST (classic pool)**: 112191 req/s | Latency 2.10ms (P90 4.49ms, P99 8.48ms, P99.999 26.04ms) | RSS 15904KiB | Csw 0
+- **CWIST (C1M reactor)**: 118502 req/s | Latency 2.65ms (P90 6.54ms, P99 16.58ms, P99.999 35.02ms) | RSS 9760KiB | Csw 0
+- **CWIST (C1M reactor, arena_max=1)** — experimental, see issue #25: 119389 req/s | Latency 2.45ms (P90 5.84ms, P99 13.26ms, P99.999 41.63ms) | RSS 7104KiB | Csw 0
+- **Axum**: 111630 req/s | Latency 3.51ms (P90 5.88ms, P99 8.64ms, P99.999 16.23ms) | RSS 17220KiB | Csw 0
+- **Gin (Go)**: 78832 req/s | Latency 6.78ms (P90 16.35ms, P99 36.40ms, P99.999 88.44ms) | RSS 29316KiB | Csw 0
+- **Spring Boot**: 43907 req/s | Latency 9.10ms (P90 12.38ms, P99 20.29ms, P99.999 75.47ms) | RSS 1321244KiB | Csw 0
 
 **Spring runtime environment**
 
