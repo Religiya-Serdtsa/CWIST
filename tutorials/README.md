@@ -12,7 +12,7 @@ Welcome to the **CWIST** hands-on tutorial series. Each directory contains a run
 4. **[04-middleware-pipeline](04-middleware-pipeline)**: Pipeline middleware registration (`cwist_app_use`) for global logging and request processing.
 5. **[05-database-sqlite](05-database-sqlite)**: Embedded in-memory SQLite integration, schema creation, and querying.
 6. **[06-db-pool](06-db-pool)**: High-concurrency thread-safe SQLite connection pool (`cwist_db_pool_t`) management.
-7. **[07-jwt-auth](07-jwt-auth)**: Issuing and signing JSON Web Tokens (`cwist_jwt_sign`) for stateless authentication.
+7. **[07-jwt-auth](07-jwt-auth)**: Issuing and signing JSON Web Tokens (`cwist_jwt_sign`) for stateless authentication, releasing the returned token with `CWIST_DEFER_FREE`.
 8. **[08-sse-realtime](08-sse-realtime)**: Unidirectional real-time event streaming with Server-Sent Events (SSE).
 9. **[09-websocket-chat](09-websocket-chat)**: Full-duplex bidirectional communication with WebSocket handlers.
 10. **[10-background-scheduler](10-background-scheduler)**: Asynchronous task execution with worker thread background schedulers.
@@ -33,9 +33,33 @@ Welcome to the **CWIST** hands-on tutorial series. Each directory contains a run
 25. **[25-big-dumb-reply-cache](25-big-dumb-reply-cache)**: Ultra-fast static response caching with the Big Dumb Reply (BDR) engine.
 26. **[26-generic-orm](26-generic-orm)**: Type-safe generic ORM query building via C11 `_Generic` macros.
 27. **[27-db-migrations](27-db-migrations)**: Programmatic database schema migration execution.
-28. **[28-transparent-column-encryption](28-transparent-column-encryption)**: Transparent column-level database encryption (`db_crypt`).
+28. **[28-transparent-column-encryption](28-transparent-column-encryption)**: Transparent column-level database encryption (`db_crypt`), with sealed/opened buffers released via `CWIST_DEFER_FREE`.
 29. **[29-test-client-automation](29-test-client-automation)**: Writing automated in-memory integration tests with `cwist_test_client`.
-30. **[30-graceful-shutdown](30-graceful-shutdown)**: Handling SIGTERM/SIGINT signals for graceful server shutdown.
+30. **[30-graceful-shutdown](30-graceful-shutdown)**: Handling SIGTERM/SIGINT signals for graceful server shutdown, plus `cwist_full_gc(true)` as its automatic complement.
+
+---
+
+## Memory management: DEFER macros and full-GC auto-rotate
+
+Two ergonomics layers on top of the explicit `cwist_alloc`/`cwist_free` model
+sit behind this series — most tutorials don't need either (see
+[docs/GC.md](../docs/GC.md) and `cwist/core/mem/alloc.h` for the full
+picture), but two demonstrate them directly:
+
+- **`CWIST_DEFER_FREE`** (a scoped, block-exit cleanup attached to a
+  pointer's declaration — C's practical equivalent of RAII for a value that
+  never leaves the block it's declared in): [07-jwt-auth](07-jwt-auth) and
+  [28-transparent-column-encryption](28-transparent-column-encryption).
+- **`cwist_full_gc(true)`** (the "auto-rotate" toggle: connections and
+  `cwist_alloc` blocks a thread/process forgets to release explicitly get
+  swept automatically on thread/process exit, epoch-deferred so a swept
+  connection can never be use-after-freed by a thread still on it):
+  [30-graceful-shutdown](30-graceful-shutdown).
+
+Both are opt-in and additive — none of the other 27 tutorials' explicit
+`cwist_free()`/`cwist_app_destroy()` calls need to change, and won't behave
+any differently, whether or not these are used elsewhere in the same
+process.
 
 ---
 

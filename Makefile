@@ -452,7 +452,9 @@ $(CNATS_LIB):
 
 # --- Test Targets ---
 
-TEST_TARGETS = test_sstring \
+TEST_TARGETS = test_reactor_wake \
+               test_classic_pool_scaling \
+               test_sstring \
                test_seq \
                test_seq_auth \
                test_http \
@@ -526,6 +528,19 @@ bench_security_pool: $(LIB_NAME) tests/bench_security_pool.c
 	./bench_security_pool
 
 test: $(TEST_TARGETS)
+
+# Kernel/queue contract test: use the real reactor with a test-only allocator,
+# without pulling HTTP/TLS or libttak runtime state into the wake-up schedule.
+test_reactor_wake: tests/test_reactor_wake.c src/sys/io/reactor.c
+	$(CC) $(CFLAGS) -o $@ tests/test_reactor_wake.c -pthread
+	./$@
+
+test_classic_pool_scaling: $(LIB_NAME) tests/test_classic_pool_scaling.c
+	$(CC) $(CFLAGS) -o $@ tests/test_classic_pool_scaling.c $(LIB_NAME) $(LIBS)
+	./$@ burst
+	./$@ multi
+	./$@ cap
+	./$@ failure
 
 test_sstring: $(LIB_NAME) tests/test_sstring.c
 	$(CC) $(CFLAGS) -o test_sstring tests/test_sstring.c $(LIB_NAME) $(LIBS)

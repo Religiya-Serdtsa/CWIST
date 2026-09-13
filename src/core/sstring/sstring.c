@@ -267,8 +267,19 @@ cwist_error_t cwist_sstring_ltrim(cwist_sstring *str) {
     }
 
     if (start > 0) {
-        memmove(str->data, str->data + start, len - start + 1);
-        str->size -= start; 
+        if (str->borrows_buffer) {
+            char *new_data = cwist_sstring_reserve(str, len - start, 0);
+            if (!new_data) {
+                err.error.err_i8 = ERR_SSTRING_NULL_STRING;
+                return err;
+            }
+            memcpy(new_data, str->data + start, len - start + 1);
+            str->data = new_data;
+            str->borrows_buffer = false;
+        } else {
+            memmove(str->data, str->data + start, len - start + 1);
+        }
+        str->size = len - start; 
     }
 
     err.error.err_i8 = ERR_SSTRING_OKAY;
@@ -297,8 +308,19 @@ cwist_error_t cwist_sstring_rtrim(cwist_sstring *str) {
         isspace((unsigned char)str->data[end])) { 
         end--;
     }
+
+    if (str->borrows_buffer) {
+        char *new_data = cwist_sstring_reserve(str, end + 1, end + 1);
+        if (!new_data) {
+            err.error.err_i8 = ERR_SSTRING_NULL_STRING;
+            return err;
+        }
+        str->data = new_data;
+        str->borrows_buffer = false;
+    }
     
     str->data[end + 1] = '\0';
+    str->size = end + 1;
     
     err.error.err_i8 = ERR_SSTRING_OKAY;
     return err;
