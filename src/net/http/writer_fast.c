@@ -85,11 +85,12 @@ cwist_write_status_t cwist_http_sendmsg_speculative(int fd, struct iovec *iov, i
 }
 
 uint32_t cwist_sched_p2c_select_worker(const _Atomic uint32_t *worker_loads, uint32_t num_workers) {
-    if (num_workers <= 1) return 0;
+    if (!worker_loads || num_workers <= 1) return 0;
 
     static _Thread_local uint32_t seed = 0x9e3779b9;
     if (__builtin_expect(seed == 0, 0)) {
         seed = (uint32_t)(uintptr_t)&seed;
+        if (seed == 0) seed = 0x9e3779b9;
     }
 
     /* Fast xorshift32 PRNG */
