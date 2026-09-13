@@ -1,8 +1,10 @@
 # Classic pool: optional lock sharding (`CWIST_POOL_SHARDS`)
 
-Status: **experimental, opt-in, default off.** Related to [issue #25](../../../issues/25)
-and [classic-pool-starvation.md](classic-pool-starvation.md) (PR #38), but a
-distinct concern - see "What this is not" below.
+Status: **disproven at HTTP level - keep opt-in/off, do not promote.**
+Related to [issue #25](../../../issues/25) and
+[classic-pool-starvation.md](classic-pool-starvation.md) (PR #38), but a
+distinct concern - see "What this is not" below. See "CI results" for why
+this does not graduate past experimental.
 
 ## The question this answers
 
@@ -73,6 +75,50 @@ says nothing about end-to-end RPS or tail latency yet. Treat the table as
 "the hypothesis is worth taking further," not as a shipped performance
 claim.
 
+## CI results (HTTP-level, real workload) - the microbenchmark's gain does not hold up
+
+A dedicated CI A/B was added (`CWIST (classic, sharded pool)` in
+`.github/workflows/bsd-kqueue-benchmarks.yml`, `CWIST_POOL_SHARDS=$(nproc)`
+vs. the same binary/config unsharded, same runner, same `wrk -t12 -c400
+-d10s` load). Result on a 4 vCPU GitHub Actions runner (`N=4` shards):
+
+| metric | classic (baseline) | classic (sharded, N=4) | change |
+|---|---:|---:|---:|
+| RPS | 121,575 | 123,919 | +1.9% (noise) |
+| P90 | 3.80ms | 4.12ms | +8.4% |
+| P99 | 6.85ms | 8.10ms | **+18.2% worse** |
+| P99.999 | 25.46ms | 30.01ms | **+17.9% worse** |
+| RSS | 17,024 KiB | 10,556 KiB | -38% |
+
+This contradicts the local lock-only microbenchmark above, and the reason
+is exactly the caveat that table already flagged: real request handling
+(accept/parse/write) dominates the critical section's cost far more than
+the microbenchmark's ~50-integer-op handler does, so there was little
+lock contention left to remove at this concurrency/hardware scale - RPS
+is a wash. Worse, splitting one shared queue into N independent ones
+sacrifices *pooling*: a single M/M/c-style queue with several workers
+absorbs a burst by pulling from whichever worker frees up first, while N
+separate small queues (here, ~1 worker's worth of capacity each) leave a
+shard that happens to get a bursty share of the round-robin waiting behind
+its own backlog while another shard's worker sits idle. That shows up
+exactly where it did: P99/P99.999, not the average. The RSS drop is real
+in this run but unexplained - plausibly an artifact of how prewarm count
+gets divided across shards (see `cwist_http_pool_init`) rather than a
+property of sharding itself; not chased further given the negative
+latency result above.
+
+**Conclusion: do not enable this by default, and do not promote it past
+opt-in/experimental.** The hypothesis this was testing (global lock
+contention is costing real HTTP-level throughput or latency) is not
+supported by the CI-backed measurement - if anything, sharding taxes tail
+latency for a wash on throughput, the same negative-result shape as the
+mimalloc experiment earlier in issue #25. `CWIST_POOL_SHARDS` stays in the
+tree as a documented, opt-in, off-by-default option (correctness is real
+and covered - see below) in case a workload/hardware combination with
+enough submitter fan-out and cheap-enough handlers exists where the
+microbenchmark's regime actually applies, but there is no evidence for that
+today and no reason to reach for it by default.
+
 ## Correctness
 
 `tests/test_pool_sharding.c` (part of `make test`) exercises init/submit/
@@ -95,14 +141,11 @@ it does before returning, and `destroy()` waits (bounded to 5s, logging a
 warning if exceeded) on that counter per extra shard before freeing
 anything.
 
-## Open questions before this graduates past "experimental"
+## Open questions (moot unless a future workload revisits this)
 
-- Real CI benchmark run (this repo's `bench.sh`/GitHub Actions workflow) to
-  see whether the local microbenchmark's contention effect survives contact
-  with actual HTTP parsing/handling overhead, which may dwarf the
-  lock-acquire cost this measures in isolation.
-- A sensible default `N` (cores? `g_http_thread_count`-derived? left to the
-  operator?) if this is ever promoted out of opt-in-only.
-- Whether round-robin submission's loss of strict cross-request FIFO
-  ordering matters for any real workload (soft-realtime keep-alive
-  scheduling, request affinity, etc.).
+- ~~Real CI benchmark run~~ - done above; answered negatively.
+- Whether the RSS drop observed in the one CI run above is real and, if so,
+  where it comes from (prewarm division is the leading guess, unverified).
+- A sensible default `N`, and the FIFO-ordering trade-off, are now
+  hypothetical - both only matter if some future workload/hardware
+  combination actually shows a positive result, which none has so far.
