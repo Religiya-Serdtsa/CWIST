@@ -60,23 +60,52 @@
 #define CWIST_STATIC_RETIRE_NS TT_SECOND(5)
 
 #ifndef __EMSCRIPTEN__
+/* Default open-file soft-limit target: covers C1M's one-fd-per-connection
+ * budget with headroom. Overridable via CWIST_FD_LIMIT_TARGET for
+ * deployments that need a different budget (a smaller container quota, or a
+ * larger one for a workload with more fds-per-connection than plain HTTP -
+ * e.g. proxying, or per-connection log/temp files). */
+#define CWIST_DEFAULT_FD_LIMIT_TARGET ((rlim_t)1050000)
+
 /**
  * @brief Tune system resource limits to handle high concurrency loads.
  */
 static void cwist_app_tune_system(void) {
     struct rlimit rl;
-    // Increase File Descriptor limit to 1050000 for C1M
-    if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
-        rl.rlim_cur = 1050000;
-        rl.rlim_max = 1050000;
-        if (setrlimit(RLIMIT_NOFILE, &rl) != 0) {
-            // Fallback to max if 1050000 is too high for the current user
-            rl.rlim_cur = rl.rlim_max;
-            setrlimit(RLIMIT_NOFILE, &rl);
+    if (getrlimit(RLIMIT_NOFILE, &rl) != 0) {
+        fprintf(stderr, "[CWIST] Cannot read file limits: %s\n", strerror(errno));
+        return;
+    }
+    /* Keep the hard limit. Increase the soft limit only, up to a tunable
+     * target - CWIST_FD_LIMIT_TARGET overrides the default when set to a
+     * valid positive integer; any other value (unset, empty, non-numeric,
+     * trailing garbage, zero or negative) falls back to the default rather
+     * than silently using 0 or a partially-parsed number. */
+    rlim_t target = CWIST_DEFAULT_FD_LIMIT_TARGET;
+    const char *fd_limit_env = getenv("CWIST_FD_LIMIT_TARGET");
+    if (fd_limit_env && fd_limit_env[0]) {
+        char *end = NULL;
+        errno = 0;
+        long parsed = strtol(fd_limit_env, &end, 10);
+        if (errno == 0 && end && *end == '\0' && parsed > 0) {
+            target = (rlim_t)parsed;
+        } else {
+            fprintf(stderr, "[CWIST] Ignoring invalid CWIST_FD_LIMIT_TARGET=\"%s\" (using default %llu)\n",
+                    fd_limit_env, (unsigned long long)CWIST_DEFAULT_FD_LIMIT_TARGET);
         }
     }
-    
-    printf("[CWIST] System tuned for C100K connections.\n");}
+    if (rl.rlim_max != RLIM_INFINITY && target > rl.rlim_max) {
+        target = rl.rlim_max;
+    }
+    if (rl.rlim_cur < target) {
+        rl.rlim_cur = target;
+        if (setrlimit(RLIMIT_NOFILE, &rl) != 0) {
+            fprintf(stderr, "[CWIST] Cannot increase file limit: %s\n", strerror(errno));
+            return;
+        }
+    }
+    printf("[CWIST] Open file soft limit: %llu\n", (unsigned long long)rl.rlim_cur);
+}
 #endif
 
 #ifndef __EMSCRIPTEN__

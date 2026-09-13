@@ -452,7 +452,8 @@ $(CNATS_LIB):
 
 # --- Test Targets ---
 
-TEST_TARGETS = test_reactor_wake \
+TEST_TARGETS = test_app_resource_limits \
+               test_reactor_wake \
                test_classic_pool_scaling \
                test_sstring \
                test_seq \
@@ -498,6 +499,7 @@ TEST_TARGETS = test_reactor_wake \
                test_test_client \
                test_multiport \
                test_grpc \
+               test_grpc_append_error \
                test_grpc_stream \
                test_grpc_client \
                test_grpc_channel \
@@ -510,7 +512,9 @@ TEST_TARGETS = test_reactor_wake \
                test_full_gc_ownership_handoff \
                test_defer_free \
                test_proto_gen \
-               test_proto_desc
+               test_proto_desc \
+               test_html_builder \
+               test_css_composer
 
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples wasm wasm-smoke clean-wasm
 
@@ -529,6 +533,10 @@ bench_security_pool: $(LIB_NAME) tests/bench_security_pool.c
 	./bench_security_pool
 
 test: $(TEST_TARGETS)
+
+test_app_resource_limits: $(LIB_NAME) tests/test_app_resource_limits.c
+	$(CC) $(CFLAGS) -o $@ tests/test_app_resource_limits.c $(LIB_NAME) $(LIBS)
+	./$@
 
 # Kernel/queue contract test: use the real reactor with a test-only allocator,
 # without pulling HTTP/TLS or libttak runtime state into the wake-up schedule.
@@ -964,6 +972,10 @@ test_grpc: $(LIB_NAME) tests/test_grpc.c
 	$(CC) $(CFLAGS) -o test_grpc tests/test_grpc.c $(LIB_NAME) $(LIBS)
 	./test_grpc
 
+test_grpc_append_error: $(LIB_NAME) tests/test_grpc_append_error.c
+	$(CC) $(CFLAGS) -o test_grpc_append_error tests/test_grpc_append_error.c $(LIB_NAME) $(LIBS)
+	./test_grpc_append_error
+
 test_grpc_stream: $(LIB_NAME) tests/test_grpc_stream.c
 	$(CC) $(CFLAGS) -o test_grpc_stream tests/test_grpc_stream.c $(LIB_NAME) $(LIBS)
 	./test_grpc_stream
@@ -1027,3 +1039,12 @@ test_proto_desc: $(LIB_NAME) tests/test_proto_gen.c tests/make_sample_descriptor
 	diff tests/test_proto_gen_sample.cwist.pb.h tests/test_proto_gen_desc_sample.cwist.pb.h
 	$(CC) $(CFLAGS) -Itests -DPROTO_GEN_SAMPLE_HEADER='"test_proto_gen_desc_sample.cwist.pb.h"' -o test_proto_desc tests/test_proto_gen.c $(LIB_NAME) $(LIBS)
 	./test_proto_desc
+
+test_html_builder: $(LIB_NAME) tests/test_html_builder.c
+	$(CC) $(CFLAGS) -o test_html_builder tests/test_html_builder.c $(LIB_NAME) $(LIBS)
+	./test_html_builder
+
+test_css_composer: $(LIB_NAME) tests/test_css_composer.c
+	$(CC) $(CFLAGS) -o test_css_composer tests/test_css_composer.c $(LIB_NAME) $(LIBS)
+	./test_css_composer
+

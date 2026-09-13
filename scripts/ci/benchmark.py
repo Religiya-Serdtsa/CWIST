@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run reproducible CWIST microbenchmarks and render tracked SVG trends."""
 from __future__ import annotations
-import json, os, platform, re, resource, subprocess, sys, time
+import json, math, platform, re, resource, subprocess, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -48,6 +48,172 @@ def replace(path: Path, begin: str, end: str, content: str) -> None:
     path.write_text(text[:start] + "\n" + content.rstrip() + "\n" + text[finish:])
 
 WEBSERVER_HISTORY = ROOT / "benchmarks" / "webserver.json"
+WEBSERVER_LATENCY_SVG = ROOT / "docs" / "webserver-latency-distribution.svg"
+
+# Servers compared in the KDE-style latency distribution chart: only the ones
+# run under the identical wrk -t12 -c400 profile every CI cycle (the
+# *_tuned entries use a different, lower-concurrency profile and aren't
+# comparable here; cwist_c1m_arena1/cwist_sharded are opt-in experimental
+# A/Bs, not part of the standing comparison set).
+_LATENCY_KDE_SERVERS = [
+    ("CWIST (classic)", "cwist", "#22c55e"),
+    ("CWIST (C1M)", "cwist_c1m", "#10b981"),
+    ("Axum", "axum", "#3b82f6"),
+    ("Gin", "gin", "#06b6d4"),
+    ("Spring Boot", "spring", "#ef4444"),
+]
+
+
+def _percentile_anchors(ws_latest: dict, prefix: str) -> list[tuple[float, float]]:
+    """(fraction, latency_ms) anchor points from whatever percentile fields
+    are present for this server - gracefully degrades to the older
+    avg/p90/p99/p99.999-only schema for history rows predating the fuller
+    min/p50/p75/p999/p9999/max fields (see the workflow's parse_wrk())."""
+    fields = [
+        (0.0, "min_ms"), (0.5, "p50_ms"), (0.75, "p75_ms"), (0.90, "p90_ms"),
+        (0.99, "p99_ms"), (0.999, "p999_ms"), (0.9999, "p9999_ms"),
+        (0.99999, "p99_999_ms"), (1.0, "max_ms"),
+    ]
+    anchors = []
+    for frac, suffix in fields:
+        val = ws_latest.get(f"{prefix}_{suffix}")
+        if val is None or val <= 0:
+            continue
+        anchors.append((frac, float(val)))
+    # Strictly increasing in both fraction and latency - drop a point that
+    # doesn't add new information (e.g. p999 == p99 when wrk rounds equal).
+    cleaned: list[tuple[float, float]] = []
+    for frac, val in anchors:
+        if cleaned and (frac <= cleaned[-1][0] or val < cleaned[-1][1]):
+            continue
+        cleaned.append((frac, val))
+    return cleaned
+
+
+def _inverse_cdf_samples(anchors: list[tuple[float, float]], n: int) -> list[float]:
+    """n synthetic latency samples by linearly interpolating the inverse CDF
+    (quantile function) built from the known percentile anchors - the
+    standard trick for reconstructing an approximate distribution shape from
+    a handful of percentiles rather than raw per-request samples (wrk/the
+    CI pipeline only ever gives us percentiles, never the raw latencies)."""
+    if len(anchors) < 2:
+        return [anchors[0][1]] * n if anchors else []
+    samples = []
+    for i in range(n):
+        frac = (i + 0.5) / n
+        for j in range(1, len(anchors)):
+            f0, v0 = anchors[j - 1]
+            f1, v1 = anchors[j]
+            if frac <= f1 or j == len(anchors) - 1:
+                t = 0.0 if f1 == f0 else (frac - f0) / (f1 - f0)
+                t = min(1.0, max(0.0, t))
+                samples.append(v0 + t * (v1 - v0))
+                break
+    return samples
+
+
+def _gaussian_kde(samples: list[float], grid: list[float]) -> list[float]:
+    """Textbook Gaussian KDE, pure stdlib (no numpy/scipy dependency here -
+    matches this script's existing zero-dependency style). Bandwidth via
+    Silverman's rule of thumb, degrading to a small fixed bandwidth when the
+    sample is degenerate (e.g. every anchor collapsed to one value)."""
+    n = len(samples)
+    if n == 0:
+        return [0.0] * len(grid)
+    mean = sum(samples) / n
+    var = sum((s - mean) ** 2 for s in samples) / n
+    std = math.sqrt(var)
+    sorted_s = sorted(samples)
+    iqr = sorted_s[int(0.75 * (n - 1))] - sorted_s[int(0.25 * (n - 1))]
+    spread = min(std, iqr / 1.34) if iqr > 0 else std
+    if spread <= 0:
+        spread = max(sorted_s[-1] - sorted_s[0], 1e-6) / 4 or 0.1
+    bandwidth = max(0.9 * spread * n ** (-0.2), 1e-3)
+    density = []
+    norm = 1.0 / (n * bandwidth * math.sqrt(2 * math.pi))
+    for x in grid:
+        total = 0.0
+        for s in samples:
+            z = (x - s) / bandwidth
+            total += math.exp(-0.5 * z * z)
+        density.append(total * norm)
+    return density
+
+
+def render_latency_kde_svg(ws_latest: dict) -> str:
+    """Latency *distribution* chart, distinct from the bar-chart summary in
+    render_webserver_svg(): reconstructs an approximate density curve per
+    server from its known percentiles (see _inverse_cdf_samples/_gaussian_kde)
+    so the shape of the tail - not just its P99.999 number - is visible at a
+    glance. X-axis uses log1p(ms) so a long Gin/Spring tail doesn't compress
+    the CWIST/Axum curves into an unreadable spike at the left edge."""
+    width, height = 900, 460
+    plot_x0, plot_x1 = 60, 860
+    plot_y0, plot_y1 = 60, 380
+
+    per_server = []
+    max_ms_overall = 1.0
+    for label, prefix, color in _LATENCY_KDE_SERVERS:
+        anchors = _percentile_anchors(ws_latest, prefix)
+        if len(anchors) < 2:
+            continue
+        samples = _inverse_cdf_samples(anchors, 400)
+        per_server.append((label, color, samples))
+        max_ms_overall = max(max_ms_overall, anchors[-1][1])
+
+    def to_x(ms: float) -> float:
+        span = math.log1p(max_ms_overall)
+        return plot_x0 + (math.log1p(max(ms, 0.0)) / span) * (plot_x1 - plot_x0)
+
+    blocks = [
+        f'<text x="30" y="30" class="title">Latency Distribution (density, log scale) - {ws_latest.get("wrk_profile", "wrk 12t 400c")}</text>',
+        f'<rect x="{plot_x0}" y="{plot_y0}" width="{plot_x1-plot_x0}" height="{plot_y1-plot_y0}" fill="#1f2937" rx="6" stroke="#374151"/>',
+    ]
+
+    tick_ms = [0, 1, 2, 5, 10, 20, 50, 100, 200, 500]
+    tick_ms = [t for t in tick_ms if t <= max_ms_overall * 1.05] or [0, 1]
+    for t in tick_ms:
+        x = to_x(t)
+        blocks.append(f'<line x1="{x:.1f}" y1="{plot_y0}" x2="{x:.1f}" y2="{plot_y1}" stroke="#374151" stroke-dasharray="2,3"/>')
+        blocks.append(f'<text x="{x:.1f}" y="{plot_y1+16}" text-anchor="middle" class="tick">{t}ms</text>')
+
+    legend_x = plot_x0
+    for idx, (label, color, _samples) in enumerate(per_server):
+        lx = legend_x + idx * 150
+        blocks.append(f'<rect x="{lx}" y="34" width="11" height="11" fill="{color}" rx="2"/>')
+        blocks.append(f'<text x="{lx+16}" y="43" class="legend">{label}</text>')
+
+    grid_n = 240
+    grid = [math.expm1((i / (grid_n - 1)) * math.log1p(max_ms_overall)) for i in range(grid_n)]
+    for label, color, samples in per_server:
+        density = _gaussian_kde(samples, grid)
+        peak = max(density) or 1.0
+        pts = []
+        for ms, d in zip(grid, density):
+            x = to_x(ms)
+            y = plot_y1 - (d / peak) * (plot_y1 - plot_y0 - 10)
+            pts.append(f"{x:.1f},{y:.1f}")
+        blocks.append(f'<polyline points="{" ".join(pts)}" fill="none" stroke="{color}" stroke-width="2.2" opacity="0.9"/>')
+
+    blocks.append(f'<text x="{(plot_x0+plot_x1)//2}" y="{plot_y1+34}" text-anchor="middle" class="axis-label">Latency (ms, log scale)</text>')
+    blocks.append(f'<text x="30" y="{(plot_y0+plot_y1)//2}" text-anchor="middle" class="axis-label" transform="rotate(-90 30 {(plot_y0+plot_y1)//2})">Relative density</text>')
+    blocks.append(f'<text x="30" y="{height-14}" class="footer">Reconstructed from wrk percentiles (min/p50/p75/p90/p99/p99.9/p99.99/p99.999/max), not raw per-request samples - shape is representative, not exact.</text>')
+
+    svg_style = (
+        '<style>'
+        '.title{font:15px sans-serif;font-weight:bold;fill:#f9fafb}'
+        '.legend{font:12px sans-serif;fill:#d1d5db}'
+        '.tick{font:10px sans-serif;fill:#9ca3af}'
+        '.axis-label{font:12px sans-serif;fill:#9ca3af}'
+        '.footer{font:10px sans-serif;fill:#6b7280}'
+        '</style>'
+    )
+    return (
+        f'<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
+        f'{svg_style}<rect width="100%" height="100%" fill="#111827"/>' + ''.join(blocks) + '</svg>\n'
+    )
+
 WEBSERVER_SVG = ROOT / "docs" / "webserver-benchmark-trends.svg"
 README_MD = ROOT / "README.md"
 
@@ -151,6 +317,8 @@ def render() -> None:
     WEBSERVER_SVG.parent.mkdir(parents=True, exist_ok=True)
     WEBSERVER_SVG.write_text(render_webserver_svg(ws_history))
     ws_latest = ws_history[-1] if ws_history else {}
+    WEBSERVER_LATENCY_SVG.parent.mkdir(parents=True, exist_ok=True)
+    WEBSERVER_LATENCY_SVG.write_text(render_latency_kde_svg(ws_latest))
 
     def get_lat_part(prefix):
         p90 = ws_latest.get(f"{prefix}_p90_ms")
@@ -204,6 +372,12 @@ def render() -> None:
             f"\n**Warmup/profile**\n\n{ws_latest.get('wrk_profile','n/a')}\n"
         )
     ws_summary += f"\n![Web Server Benchmark Trends](docs/webserver-benchmark-trends.svg)"
+    ws_summary += (
+        f"\n\nLatency distribution (density curve reconstructed from each "
+        f"server's percentiles - shows the shape of the tail, not just its "
+        f"P99.999 number):\n\n"
+        f"![Web Server Latency Distribution](docs/webserver-latency-distribution.svg)"
+    )
     if README.exists(): replace(README, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
     if README_MD.exists(): replace(README_MD, "<!-- WEBSERVER_BENCHMARKS:START -->", "<!-- WEBSERVER_BENCHMARKS:END -->", ws_summary)
 
