@@ -65,6 +65,30 @@ static void test_l1_trailing_comma(void) {
     printf("  Passed.\n");
 }
 
+static void test_l1_string_with_comma_and_closer(void) {
+    printf("L1: comma followed by closer inside string literal preserved...\n");
+    const char *input = "{\"query\":\"SELECT a, } FROM t\",\"items\":[\"x, ]\", 1,]}";
+    cwist_heal_result_t r = cwist_json_heal(input, NULL);
+    assert(r.json   != NULL);
+    assert(r.healed == true);
+    assert(r.level  == 1);
+
+    cJSON *parsed = cJSON_Parse(r.json);
+    assert(parsed != NULL);
+    cJSON *q = cJSON_GetObjectItem(parsed, "query");
+    assert(q && strcmp(q->valuestring, "SELECT a, } FROM t") == 0);
+    cJSON *items = cJSON_GetObjectItem(parsed, "items");
+    assert(items && cJSON_GetArraySize(items) == 2);
+    cJSON *item0 = cJSON_GetArrayItem(items, 0);
+    assert(item0 && strcmp(item0->valuestring, "x, ]") == 0);
+    cJSON *item1 = cJSON_GetArrayItem(items, 1);
+    assert(item1 && item1->valueint == 1);
+    cJSON_Delete(parsed);
+
+    cwist_heal_result_free(&r);
+    printf("  Passed.\n");
+}
+
 static void test_l1_missing_closers(void) {
     printf("L1: missing closing brace and bracket...\n");
     const char *input = "{\"items\":[1,2,3";
@@ -438,6 +462,7 @@ int main(void) {
     printf("=== L1 Syntax Healing ===\n");
     test_l1_already_valid();
     test_l1_trailing_comma();
+    test_l1_string_with_comma_and_closer();
     test_l1_missing_closers();
     test_l1_line_comment();
     test_l1_bom();
