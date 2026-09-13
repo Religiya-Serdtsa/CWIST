@@ -165,6 +165,7 @@ def render() -> None:
         return ""
 
     cwist_lat_part = get_lat_part("cwist")
+    cwist_sharded_lat_part = get_lat_part("cwist_sharded")
     cwist_c1m_lat_part = get_lat_part("cwist_c1m")
     cwist_c1m_arena1_lat_part = get_lat_part("cwist_c1m_arena1")
     axum_lat_part = get_lat_part("axum")
@@ -174,6 +175,7 @@ def render() -> None:
     ws_summary = (
         f"Latest Web Server Benchmark ({ws_latest.get('wrk_profile','wrk 12t 400c')}):\n"
         f"- **CWIST (classic pool)**: {ws_latest.get('cwist_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_lat_ms',0):.2f}ms{cwist_lat_part} | RSS {ws_latest.get('cwist_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_csw',0):.0f}\n"
+        f"- **CWIST (classic pool, sharded)** — experimental, see issue #25: {ws_latest.get('cwist_sharded_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_sharded_lat_ms',0):.2f}ms{cwist_sharded_lat_part} | RSS {ws_latest.get('cwist_sharded_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_sharded_csw',0):.0f}\n"
         f"- **CWIST (C1M reactor)**: {ws_latest.get('cwist_c1m_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_c1m_lat_ms',0):.2f}ms{cwist_c1m_lat_part} | RSS {ws_latest.get('cwist_c1m_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_c1m_csw',0):.0f}\n"
         f"- **CWIST (C1M reactor, arena_max=1)** — experimental, see issue #25: {ws_latest.get('cwist_c1m_arena1_rps',0):.0f} req/s | Latency {ws_latest.get('cwist_c1m_arena1_lat_ms',0):.2f}ms{cwist_c1m_arena1_lat_part} | RSS {ws_latest.get('cwist_c1m_arena1_rss_kib',0):.0f}KiB | Csw {ws_latest.get('cwist_c1m_arena1_csw',0):.0f}\n"
         f"- **Axum**: {ws_latest.get('axum_rps',0):.0f} req/s | Latency {ws_latest.get('axum_lat_ms',0):.2f}ms{axum_lat_part} | RSS {ws_latest.get('axum_rss_kib',0):.0f}KiB | Csw {ws_latest.get('axum_csw',0):.0f}\n"

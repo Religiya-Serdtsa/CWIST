@@ -311,6 +311,18 @@ jobs:
           # CWIST is measured twice: the classic thread-pool path (the
           # ultra-low-latency profile) and the event-driven C1M reactor path.
           run_bench "CWIST (classic)" "env CWIST_C1M_MODE=0 /tmp/cwist_server" 9091 "/tmp/cwist.txt" "/tmp/cwist_stat.txt" 10
+
+          # Experimental: split the classic pool's single shared queue/lock
+          # into N independent shards (src/net/http/http.c), submitters
+          # round-robin across them. Answers a different question than the
+          # arena_max/mimalloc experiments below - not an allocator change,
+          # a submitter-side lock-contention one (see
+          # docs/classic-pool-sharding.md and issue #25). Same binary/config
+          # as "CWIST (classic)" above, CWIST_POOL_SHARDS is the only
+          # variable, so this is a direct A/B against that row, not a new
+          # configuration. N = nproc on this runner.
+          run_bench "CWIST (classic, sharded pool)" "env CWIST_C1M_MODE=0 CWIST_POOL_SHARDS=$(nproc) /tmp/cwist_server" 9091 "/tmp/cwist_sharded.txt" "/tmp/cwist_sharded_stat.txt" 10
+
           run_bench "CWIST C1M" "env CWIST_C1M_MODE=1 /tmp/cwist_server" 9091 "/tmp/cwist_c1m.txt" "/tmp/cwist_c1m_stat.txt" 10
 
           # Experimental: cap glibc's per-process malloc arena count to 1
@@ -502,6 +514,9 @@ jobs:
           cwist_rps, cwist_lat, cwist_p50, cwist_p90, cwist_p99, cwist_p99_999 = parse_wrk("/tmp/cwist.txt")
           cwist_rss, cwist_csw = parse_stat("/tmp/cwist_stat.txt")
 
+          cwist_sharded_rps, cwist_sharded_lat, cwist_sharded_p50, cwist_sharded_p90, cwist_sharded_p99, cwist_sharded_p99_999 = parse_wrk("/tmp/cwist_sharded.txt")
+          cwist_sharded_rss, cwist_sharded_csw = parse_stat("/tmp/cwist_sharded_stat.txt")
+
           cwist_c1m_rps, cwist_c1m_lat, cwist_c1m_p50, cwist_c1m_p90, cwist_c1m_p99, cwist_c1m_p99_999 = parse_wrk("/tmp/cwist_c1m.txt")
           cwist_c1m_rss, cwist_c1m_csw = parse_stat("/tmp/cwist_c1m_stat.txt")
 
@@ -524,6 +539,10 @@ jobs:
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
               "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_p90_ms": cwist_p90, "cwist_p99_ms": cwist_p99, "cwist_p99_999_ms": cwist_p99_999, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
+              # Same classic-pool binary/config as cwist_* above,
+              # CWIST_POOL_SHARDS=nproc is the only variable - direct A/B
+              # (see docs/classic-pool-sharding.md, issue #25).
+              "cwist_sharded_rps": cwist_sharded_rps, "cwist_sharded_lat_ms": cwist_sharded_lat, "cwist_sharded_p90_ms": cwist_sharded_p90, "cwist_sharded_p99_ms": cwist_sharded_p99, "cwist_sharded_p99_999_ms": cwist_sharded_p99_999, "cwist_sharded_rss_kib": cwist_sharded_rss, "cwist_sharded_csw": cwist_sharded_csw,
               "cwist_c1m_rps": cwist_c1m_rps, "cwist_c1m_lat_ms": cwist_c1m_lat, "cwist_c1m_p90_ms": cwist_c1m_p90, "cwist_c1m_p99_ms": cwist_c1m_p99, "cwist_c1m_p99_999_ms": cwist_c1m_p99_999, "cwist_c1m_rss_kib": cwist_c1m_rss, "cwist_c1m_csw": cwist_c1m_csw,
               # Same C1M binary/config as cwist_c1m_* above, CWIST_MALLOC_ARENA_MAX=1 -
               # only variable is the env var, direct A/B (see issue #25).
@@ -559,7 +578,7 @@ jobs:
       - name: Copy raw benchmark output
         run: |
           mkdir -p raw_logs
-          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/cwist_c1m_arena1.txt /tmp/cwist_c1m_arena1_stat.txt /tmp/cwist_tuned.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_tuned.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
+          cp /tmp/cwist.txt /tmp/cwist_stat.txt /tmp/cwist_sharded.txt /tmp/cwist_sharded_stat.txt /tmp/cwist_c1m.txt /tmp/cwist_c1m_stat.txt /tmp/cwist_c1m_arena1.txt /tmp/cwist_c1m_arena1_stat.txt /tmp/cwist_tuned.txt /tmp/axum.txt /tmp/axum_stat.txt /tmp/gin.txt /tmp/gin_stat.txt /tmp/spring.txt /tmp/spring_stat.txt /tmp/spring_tuned.txt /tmp/spring_gc.log raw_logs/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: webserver-result
