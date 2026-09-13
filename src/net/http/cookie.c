@@ -47,7 +47,9 @@ int cwist_cookie_decode(const char *in, char *out, size_t out_len) {
     size_t j = 0;
     for (size_t i = 0; i < len; i++) {
         if (j >= out_len - 1) return -1;
-        if (in[i] == '%' && i + 2 < len) {
+        if (in[i] == '%' && i + 2 < len &&
+            isxdigit((unsigned char)in[i + 1]) &&
+            isxdigit((unsigned char)in[i + 2])) {
             unsigned int hex;
             if (sscanf(in + i + 1, "%2x", &hex) != 1) {
                 out[j++] = in[i];
@@ -82,12 +84,16 @@ void cwist_cookie_parse(cwist_query_map *map, const char *header) {
             char *name = pair;
             char *value = eq + 1;
             /* trim trailing whitespace on name */
-            char *end = name + strlen(name) - 1;
-            while (end > name && (*end == ' ' || *end == '\t')) *end-- = '\0';
+            size_t nlen = strlen(name);
+            while (nlen > 0 && (name[nlen - 1] == ' ' || name[nlen - 1] == '\t')) {
+                name[--nlen] = '\0';
+            }
 
-            char decoded[4096];
-            if (cwist_cookie_decode(value, decoded, sizeof(decoded)) >= 0) {
-                cwist_query_map_set(map, name, decoded);
+            if (nlen > 0) {
+                char decoded[4096];
+                if (cwist_cookie_decode(value, decoded, sizeof(decoded)) >= 0) {
+                    cwist_query_map_set(map, name, decoded);
+                }
             }
         }
         pair = strtok_r(NULL, ";", &save);
