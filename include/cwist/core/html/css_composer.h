@@ -58,7 +58,7 @@ cwist_color_hsl cwist_color_rgb_to_hsl(cwist_color_rgb rgb);
 cwist_color_rgb cwist_color_hsl_to_rgb(cwist_color_hsl hsl);
 
 /**
- * @brief Parses a hex string (e.g., "#FF0000" or "FF0000") into an RGB struct.
+ * @brief Parses a hex string (e.g., "#FF0000", "FF0000", "#F00", or "F00") into an RGB struct.
  * @param hex The null-terminated hex string.
  * @return The parsed RGB color. Defaults to black on parse error.
  */

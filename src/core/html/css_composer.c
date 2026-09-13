@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 #define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
 #define MAX3(a, b, c) ((a) > (b) ? ((a) > (c) ? (a) : (c)) : ((b) > (c) ? (b) : (c)))
@@ -69,14 +70,38 @@ cwist_color_rgb cwist_color_hsl_to_rgb(cwist_color_hsl hsl) {
     return rgb;
 }
 
+static inline int hex_char_to_val(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
 cwist_color_rgb cwist_color_hex_to_rgb(const char *hex) {
     cwist_color_rgb rgb = {0, 0, 0};
     if (!hex) return rgb;
     if (hex[0] == '#') hex++;
-    if (strlen(hex) == 6) {
-        int r, g, b;
-        if (sscanf(hex, "%02x%02x%02x", &r, &g, &b) == 3) {
-            rgb.r = r; rgb.g = g; rgb.b = b;
+    size_t len = strlen(hex);
+    if (len == 6) {
+        int r1 = hex_char_to_val(hex[0]);
+        int r2 = hex_char_to_val(hex[1]);
+        int g1 = hex_char_to_val(hex[2]);
+        int g2 = hex_char_to_val(hex[3]);
+        int b1 = hex_char_to_val(hex[4]);
+        int b2 = hex_char_to_val(hex[5]);
+        if (r1 >= 0 && r2 >= 0 && g1 >= 0 && g2 >= 0 && b1 >= 0 && b2 >= 0) {
+            rgb.r = (unsigned char)((r1 << 4) | r2);
+            rgb.g = (unsigned char)((g1 << 4) | g2);
+            rgb.b = (unsigned char)((b1 << 4) | b2);
+        }
+    } else if (len == 3) {
+        int r = hex_char_to_val(hex[0]);
+        int g = hex_char_to_val(hex[1]);
+        int b = hex_char_to_val(hex[2]);
+        if (r >= 0 && g >= 0 && b >= 0) {
+            rgb.r = (unsigned char)((r << 4) | r);
+            rgb.g = (unsigned char)((g << 4) | g);
+            rgb.b = (unsigned char)((b << 4) | b);
         }
     }
     return rgb;

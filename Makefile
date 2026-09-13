@@ -511,7 +511,8 @@ TEST_TARGETS = test_classic_pool_scaling \
                test_full_gc_ownership_handoff \
                test_defer_free \
                test_proto_gen \
-               test_proto_desc
+               test_proto_desc \
+               test_css_composer
 
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples wasm wasm-smoke clean-wasm
 
@@ -1028,3 +1029,8 @@ test_proto_desc: $(LIB_NAME) tests/test_proto_gen.c tests/make_sample_descriptor
 	diff tests/test_proto_gen_sample.cwist.pb.h tests/test_proto_gen_desc_sample.cwist.pb.h
 	$(CC) $(CFLAGS) -Itests -DPROTO_GEN_SAMPLE_HEADER='"test_proto_gen_desc_sample.cwist.pb.h"' -o test_proto_desc tests/test_proto_gen.c $(LIB_NAME) $(LIBS)
 	./test_proto_desc
+
+test_css_composer: $(LIB_NAME) tests/test_css_composer.c
+	$(CC) $(CFLAGS) -o test_css_composer tests/test_css_composer.c $(LIB_NAME) $(LIBS)
+	./test_css_composer
+
