@@ -32,15 +32,29 @@ static int g_entry_count = 0;
 
 bool cwist_healthz_register(const char *name, cwist_health_probe_fn fn, void *ctx) {
     if (!name || !fn) return false;
-    if (g_entry_count >= CWIST_HEALTHZ_MAX_PROBES) return false;
 
+    int first_free_slot = -1;
     for (int i = 0; i < g_entry_count; ++i) {
-        if (g_entries[i].active && strcmp(g_entries[i].name, name) == 0) {
-            g_entries[i].fn = fn;
-            g_entries[i].ctx = ctx;
-            return true;
+        if (g_entries[i].active) {
+            if (strcmp(g_entries[i].name, name) == 0) {
+                g_entries[i].fn = fn;
+                g_entries[i].ctx = ctx;
+                return true;
+            }
+        } else if (first_free_slot == -1) {
+            first_free_slot = i;
         }
     }
+
+    if (first_free_slot != -1) {
+        g_entries[first_free_slot].name   = name;
+        g_entries[first_free_slot].fn     = fn;
+        g_entries[first_free_slot].ctx    = ctx;
+        g_entries[first_free_slot].active = true;
+        return true;
+    }
+
+    if (g_entry_count >= CWIST_HEALTHZ_MAX_PROBES) return false;
 
     g_entries[g_entry_count].name   = name;
     g_entries[g_entry_count].fn     = fn;
@@ -79,10 +93,15 @@ void cwist_healthz_run(cwist_health_probe_t *out_probes,
     size_t count = 0;
     cwist_health_status_t overall = CWIST_HEALTH_OK;
 
-    for (int i = 0; i < g_entry_count && count < max_probes; ++i) {
+    for (int i = 0; i < g_entry_count; ++i) {
         if (!g_entries[i].active) continue;
         cwist_health_probe_t r = g_entries[i].fn(g_entries[i].ctx);
-        out_probes[count++] = r;
+        if (out_probes && count < max_probes) {
+            out_probes[count] = r;
+        }
+        if (!out_probes || count < max_probes) {
+            count++;
+        }
         if (r.status == CWIST_HEALTH_FAIL) overall = CWIST_HEALTH_FAIL;
         else if (r.status == CWIST_HEALTH_DEGRADED && overall == CWIST_HEALTH_OK)
             overall = CWIST_HEALTH_DEGRADED;
@@ -128,6 +147,7 @@ void cwist_app_healthz(cwist_http_response *res) {
         case CWIST_HEALTH_OK:       res->status_code = CWIST_HTTP_OK; break;
         case CWIST_HEALTH_DEGRADED: res->status_code = CWIST_HTTP_SERVICE_UNAVAILABLE; break;
         case CWIST_HEALTH_FAIL:     res->status_code = CWIST_HTTP_SERVICE_UNAVAILABLE; break;
+        default:                    res->status_code = CWIST_HTTP_SERVICE_UNAVAILABLE; break;
     }
     cwist_json_builder_destroy(jb);
 }
