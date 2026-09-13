@@ -149,9 +149,30 @@ void test_metrics_middleware_wiring(void) {
     printf("  OK\n");
 }
 
+void test_metrics_continuation_shed(void) {
+    printf("test_metrics_continuation_shed...\n");
+    cwist_metrics_registry_t *reg = cwist_metrics_registry();
+    assert(reg != NULL);
+
+    long initial_shed = cwist_http_continuation_shed_count();
+    assert(initial_shed >= 0);
+
+    uintmax_t metric_val = cwist_metric_load(reg, CWIST_METRIC_HTTP_CONTINUATION_SHED);
+    assert(metric_val == (uintmax_t)initial_shed);
+
+    char *text = cwist_metrics_render_prometheus(reg);
+    assert(text != NULL);
+    assert(strstr(text, "cwist_http_continuation_shed_total") != NULL);
+    assert(strstr(text, "# HELP cwist_http_continuation_shed_total") != NULL);
+    assert(strstr(text, "# TYPE cwist_http_continuation_shed_total counter") != NULL);
+    free(text);
+    printf("  OK\n");
+}
+
 int main(void) {
     test_metrics_counter();
     test_metrics_gauge();
+    test_metrics_continuation_shed();
     test_metrics_prometheus_render();
     test_metrics_http_response();
     test_healthz_ok();

@@ -103,3 +103,9 @@ Starts the main server loop.
 cwist_error_t cwist_accept_socket(int server_fd, struct sockaddr *sockv4, void (*handler_func)(int, void *), void *ctx);
 ```
 Low-level accept loop wrapper.
+
+### `cwist_http_continuation_shed_count`
+```c
+long cwist_http_continuation_shed_count(void);
+```
+Monotonic counter of pipelined HTTP/1.1 continuations dropped (and whose connections were closed) because the reactor post queue was full. Also exposed via Prometheus `/metrics` as `cwist_http_continuation_shed_total`. Useful for backpressure and shed-rate alerting.
