@@ -189,6 +189,53 @@ static void test_sign_verify_chunks(void) {
     printf("  Passed sign/verify chunks.\n");
 }
 
+static void test_malformed_b64url_remainder(void) {
+    printf("Testing JWT reject malformed base64 remainder (rem == 1)...\n");
+
+    const char *secret = "secret";
+    char *token = cwist_jwt_sign("{\"sub\":\"test\"}", secret, 3600);
+    assert(token != NULL);
+
+    /* Construct an invalid token by appending a single character to the payload (length % 4 == 1) */
+    char malformed[512];
+    char *dot1 = strchr(token, '.');
+    char *dot2 = dot1 ? strchr(dot1 + 1, '.') : NULL;
+    assert(dot1 && dot2);
+
+    size_t header_len = (size_t)(dot1 - token);
+    size_t payload_len = (size_t)(dot2 - dot1 - 1);
+    /* Make payload section length % 4 == 1 */
+    size_t new_payload_len = ((payload_len / 4) * 4) + 1;
+    snprintf(malformed, sizeof(malformed), "%.*s.%.*s.%s",
+             (int)header_len, token,
+             (int)new_payload_len, dot1 + 1,
+             dot2 + 1);
+
+    cwist_jwt_claims *claims = cwist_jwt_verify(malformed, secret);
+    assert(claims == NULL); /* Must be rejected */
+
+    cwist_free(token);
+    printf("  Passed malformed base64 remainder rejection.\n");
+}
+
+static void test_corrupt_chunk_feed(void) {
+    printf("Testing JWT join chunks failure handling on feed error...\n");
+
+    /* Single chunk with corrupted seq total (e.g. index > total) */
+    cwist_jwt_chunk_t corrupt_chunk;
+    corrupt_chunk.data = (uint8_t *)cwist_alloc(16);
+    assert(corrupt_chunk.data != NULL);
+    /* Manually craft chunk with chunk index 5 of 2 (invalid) */
+    snprintf((char *)corrupt_chunk.data, 16, "[5/2]test");
+    corrupt_chunk.len = strlen((char *)corrupt_chunk.data);
+
+    char *joined = cwist_jwt_join_chunks(&corrupt_chunk, 1);
+    assert(joined == NULL);
+
+    cwist_free(corrupt_chunk.data);
+    printf("  Passed corrupt chunk feed rejection.\n");
+}
+
 int main(void) {
     test_sign_and_verify();
     test_wrong_secret();
@@ -197,6 +244,8 @@ int main(void) {
     test_no_exp();
     test_sequenced_chunks();
     test_sign_verify_chunks();
+    test_malformed_b64url_remainder();
+    test_corrupt_chunk_feed();
     printf("All JWT tests passed!\n");
     return 0;
 }

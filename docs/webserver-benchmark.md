@@ -108,6 +108,31 @@ to the numbers, so a result is never an isolated req/s figure:
 `scripts/ci/benchmark.py render` prints this environment block as the SVG footer and in
 the README benchmark summary.
 
+## Latency distribution chart
+
+`docs/webserver-latency-distribution.svg` (linked in the README right below the
+bar-chart trends SVG) plots each server's latency distribution as a density
+curve, so the *shape* of the tail is visible at a glance instead of only its
+P99.999 number. It compares the same five servers as the summary table above
+(`cwist`, `cwist_c1m`, `axum`, `gin`, `spring`) — the `_tuned` entries (different,
+lower-concurrency load profile) and the opt-in experimental A/Bs
+(`cwist_c1m_arena1`, `cwist_sharded`) are excluded so the chart only ever compares
+runs made under the identical `wrk -t12 -c400 -d10s` profile.
+
+This is **reconstructed, not raw**: wrk only ever reports percentiles
+(min/p50/p75/p90/p99/p99.9/p99.99/p99.999/max — all now captured by the
+workflow's `parse_wrk()`, see `.github/workflows/bsd-kqueue-benchmarks.yml`),
+never the underlying per-request samples. `scripts/ci/benchmark.py`
+(`_inverse_cdf_samples`) linearly interpolates the inverse CDF between those
+known percentile points to synthesize a representative sample set, then runs a
+standard Gaussian KDE (`_gaussian_kde`, Silverman's rule of thumb for
+bandwidth) over it. The x-axis uses `log1p(ms)` so a long tail (Gin, Spring
+Boot) doesn't compress the tighter CWIST/Axum curves into an unreadable spike
+at the left edge. Treat the curve shapes as representative, not exact — a
+server with sparser percentile data (an older history row missing the newer
+p75/p999/p9999/min/max fields) still renders, just with fewer anchor points to
+interpolate between.
+
 ## Known limitations
 
 - GitHub-hosted runners are shared, noisy **4-vCPU** machines; treat absolute numbers as
