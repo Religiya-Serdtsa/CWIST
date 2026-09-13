@@ -39,6 +39,18 @@ int main(void) {
     assert(!cwist_seq_auth_unwrap(ctx, replay, replay_len, &meta, &chunk));
     cwist_free(wire); cwist_free(tampered); cwist_free(replay);
     cwist_seq_message_free(&split);
+
+    /* Test chunk with total > CWIST_SEQ_MAX_CHUNKS is rejected */
+    uint8_t invalid_chunk[CWIST_SEQ_AUTH_HEADER_SIZE + 4];
+    memset(invalid_chunk, 0, sizeof(invalid_chunk));
+    invalid_chunk[0] = 0; invalid_chunk[1] = 1; /* seq = 1 */
+    uint16_t excessive_total = CWIST_SEQ_MAX_CHUNKS + 1;
+    invalid_chunk[2] = (uint8_t)(excessive_total >> 8);
+    invalid_chunk[3] = (uint8_t)(excessive_total & 0xff);
+    invalid_chunk[4] = 0; invalid_chunk[5] = 4; /* payload_len = 4 */
+    invalid_chunk[6] = 0; invalid_chunk[7] = 4; /* chunk_size = 4 */
+    assert(!cwist_seq_auth_unwrap(ctx, invalid_chunk, sizeof(invalid_chunk), &meta, &chunk));
+
     cwist_seq_auth_context_destroy(ctx);
     puts("Authenticated sequence tests passed.");
     return 0;
