@@ -27,24 +27,35 @@ static void free_cookie(cwist_test_client_cookie *c) {
 }
 
 static cwist_test_client_cookie *find_cookie(cwist_test_client_cookie *head, const char *name) {
+    if (!name) return NULL;
     for (; head; head = head->next) {
-        if (strcmp(head->name, name) == 0) return head;
+        if (head->name && strcmp(head->name, name) == 0) return head;
     }
     return NULL;
 }
 
 static void cookie_jar_apply(cwist_test_client *client, cwist_http_request *req,
                               const cwist_test_client_kv *adhoc, size_t adhoc_count) {
-    if (!client) return;
+    if (!client || !req) return;
     size_t jar_count = 0;
-    for (cwist_test_client_cookie *c = client->cookies; c; c = c->next) jar_count++;
-    if (jar_count == 0 && adhoc_count == 0) return;
+    for (cwist_test_client_cookie *c = client->cookies; c; c = c->next) {
+        if (c->name && c->value) jar_count++;
+    }
+    size_t valid_adhoc = 0;
+    for (size_t i = 0; i < adhoc_count; i++) {
+        if (adhoc && adhoc[i].key && adhoc[i].value) valid_adhoc++;
+    }
+    if (jar_count == 0 && valid_adhoc == 0) return;
 
     size_t buf_len = 0;
-    for (cwist_test_client_cookie *c = client->cookies; c; c = c->next)
-        buf_len += strlen(c->name) + 1 + strlen(c->value) + 2;
-    for (size_t i = 0; i < adhoc_count; i++)
-        buf_len += strlen(adhoc[i].key) + 1 + strlen(adhoc[i].value) + 2;
+    for (cwist_test_client_cookie *c = client->cookies; c; c = c->next) {
+        if (c->name && c->value)
+            buf_len += strlen(c->name) + 1 + strlen(c->value) + 2;
+    }
+    for (size_t i = 0; i < adhoc_count; i++) {
+        if (adhoc && adhoc[i].key && adhoc[i].value)
+            buf_len += strlen(adhoc[i].key) + 1 + strlen(adhoc[i].value) + 2;
+    }
 
     char *cookie_header CWIST_DEFER_FREE = (char *)cwist_alloc(buf_len + 1);
     if (!cookie_header) return;
@@ -52,11 +63,13 @@ static void cookie_jar_apply(cwist_test_client *client, cwist_http_request *req,
 
     size_t pos = 0;
     for (cwist_test_client_cookie *c = client->cookies; c; c = c->next) {
+        if (!c->name || !c->value) continue;
         if (pos > 0) cookie_header[pos++] = ';';
         if (pos > 0) cookie_header[pos++] = ' ';
         pos += (size_t)snprintf(cookie_header + pos, buf_len + 1 - pos, "%s=%s", c->name, c->value);
     }
     for (size_t i = 0; i < adhoc_count; i++) {
+        if (!adhoc || !adhoc[i].key || !adhoc[i].value) continue;
         if (pos > 0) cookie_header[pos++] = ';';
         if (pos > 0) cookie_header[pos++] = ' ';
         pos += (size_t)snprintf(cookie_header + pos, buf_len + 1 - pos, "%s=%s",
@@ -78,7 +91,8 @@ static void cookie_jar_update(cwist_test_client *client, cwist_http_response *re
         if (!h->key || !h->value || strcasecmp(h->key->data, "Set-Cookie") != 0) continue;
         char *buf = clone_str(h->value->data);
         if (!buf) continue;
-        char *name_val = strtok(buf, ";");
+        char *saveptr = NULL;
+        char *name_val = strtok_r(buf, ";", &saveptr);
         if (!name_val) { cwist_free(buf); continue; }
         name_val = trim(name_val);
         char *eq = strchr(name_val, '=');
@@ -86,15 +100,21 @@ static void cookie_jar_update(cwist_test_client *client, cwist_http_response *re
         *eq = '\0';
         char *name = clone_str(trim(name_val));
         char *value = clone_str(trim(eq + 1));
+        if (!name || !value) {
+            cwist_free(name);
+            cwist_free(value);
+            cwist_free(buf);
+            continue;
+        }
         char *path = NULL;
-        char *rest = strtok(NULL, ";");
+        char *rest = strtok_r(NULL, ";", &saveptr);
         while (rest) {
             rest = trim(rest);
             if (strncasecmp(rest, "Path=", 5) == 0) {
                 path = clone_str(trim(rest + 5));
                 break;
             }
-            rest = strtok(NULL, ";");
+            rest = strtok_r(NULL, ";", &saveptr);
         }
         cwist_test_client_cookie *c = find_cookie(client->cookies, name);
         if (c) {
