@@ -235,7 +235,7 @@ size_t cwist_sstring_get_size(cwist_sstring *str) {
     return str ? str->size : 0;
 }
 
-static inline const char *sstring_data_or_empty(const cwist_sstring *s) {
+static inline const char *sstring_as_text(const cwist_sstring *s) {
     return (s && s->data) ? s->data : "";
 }
 
@@ -246,7 +246,7 @@ static inline const char *sstring_data_or_empty(const cwist_sstring *s) {
  * @return Negative, zero, or positive depending on lexical ordering.
  */
 int cwist_sstring_compare_sstring(cwist_sstring *left, const cwist_sstring *right) {
-    return strcmp(sstring_data_or_empty(left), sstring_data_or_empty(right));
+    return strcmp(sstring_as_text(left), sstring_as_text(right));
 }
 
 /**
@@ -738,7 +738,7 @@ void cwist_sstring_destroy(cwist_sstring *str) {
  * @return Negative, zero, or positive depending on lexical ordering.
  */
 int cwist_sstring_compare(cwist_sstring *str, const char *compare_to) {
-    return strcmp(sstring_data_or_empty(str), compare_to ? compare_to : "");
+    return strcmp(sstring_as_text(str), compare_to ? compare_to : "");
 }
 
 /**
