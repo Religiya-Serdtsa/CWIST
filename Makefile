@@ -512,7 +512,8 @@ TEST_TARGETS = test_app_resource_limits \
                test_defer_free \
                test_proto_gen \
                test_proto_desc \
-               test_html_builder
+               test_html_builder \
+               test_css_composer
 
 .PHONY: all test $(TEST_TARGETS) fuzz_seq install uninstall dist clean rebuild examples clean-examples wasm wasm-smoke clean-wasm
 
@@ -1037,4 +1038,8 @@ test_proto_desc: $(LIB_NAME) tests/test_proto_gen.c tests/make_sample_descriptor
 test_html_builder: $(LIB_NAME) tests/test_html_builder.c
 	$(CC) $(CFLAGS) -o test_html_builder tests/test_html_builder.c $(LIB_NAME) $(LIBS)
 	./test_html_builder
+
+test_css_composer: $(LIB_NAME) tests/test_css_composer.c
+	$(CC) $(CFLAGS) -o test_css_composer tests/test_css_composer.c $(LIB_NAME) $(LIBS)
+	./test_css_composer
 
