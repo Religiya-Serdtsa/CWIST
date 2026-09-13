@@ -65,18 +65,24 @@
  */
 static void cwist_app_tune_system(void) {
     struct rlimit rl;
-    // Increase File Descriptor limit to 1050000 for C1M
-    if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
-        rl.rlim_cur = 1050000;
-        rl.rlim_max = 1050000;
+    if (getrlimit(RLIMIT_NOFILE, &rl) != 0) {
+        fprintf(stderr, "[CWIST] Cannot read file limits: %s\n", strerror(errno));
+        return;
+    }
+    /* Keep the hard limit. Increase the soft limit only. */
+    rlim_t target = 1050000;
+    if (rl.rlim_max != RLIM_INFINITY && target > rl.rlim_max) {
+        target = rl.rlim_max;
+    }
+    if (rl.rlim_cur < target) {
+        rl.rlim_cur = target;
         if (setrlimit(RLIMIT_NOFILE, &rl) != 0) {
-            // Fallback to max if 1050000 is too high for the current user
-            rl.rlim_cur = rl.rlim_max;
-            setrlimit(RLIMIT_NOFILE, &rl);
+            fprintf(stderr, "[CWIST] Cannot increase file limit: %s\n", strerror(errno));
+            return;
         }
     }
-    
-    printf("[CWIST] System tuned for C100K connections.\n");}
+    printf("[CWIST] Open file soft limit: %llu\n", (unsigned long long)rl.rlim_cur);
+}
 #endif
 
 #ifndef __EMSCRIPTEN__
