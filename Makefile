@@ -464,6 +464,17 @@ TEST_TARGETS = test_app_resource_limits \
                test_healthz \
                test_json_builder \
                test_flash \
+               test_sse \
+               test_graphql \
+               test_core_hardening \
+               test_https_full_gc \
+               test_cwist \
+               test_html_builder \
+               test_http2_flow_control \
+               test_idle_reaper \
+               test_linux_writer_fast \
+               test_orm_socket \
+               test_webtransport \
                test_http \
                test_siphash \
                test_mux \
@@ -1083,4 +1094,35 @@ test_proto_desc: $(LIB_NAME) tests/test_proto_gen.c tests/make_sample_descriptor
 test_css_composer: $(LIB_NAME) tests/test_css_composer.c
 	$(CC) $(CFLAGS) -o test_css_composer tests/test_css_composer.c $(LIB_NAME) $(LIBS)
 	./test_css_composer
+
+# The following seven had a tests/test_*.c file with no Makefile rule at
+# all (so no CI coverage, ever) until scripts/ci/check_test_wiring.py
+# caught the gap - all seven build and pass as-is, just never wired in.
+test_cwist: $(LIB_NAME) tests/test_cwist.c
+	$(CC) $(CFLAGS) -o test_cwist tests/test_cwist.c $(LIB_NAME) $(LIBS)
+	./test_cwist
+
+test_html_builder: $(LIB_NAME) tests/test_html_builder.c
+	$(CC) $(CFLAGS) -o test_html_builder tests/test_html_builder.c $(LIB_NAME) $(LIBS)
+	./test_html_builder
+
+test_http2_flow_control: $(LIB_NAME) tests/test_http2_flow_control.c
+	$(CC) $(CFLAGS) -o test_http2_flow_control tests/test_http2_flow_control.c $(LIB_NAME) $(LIBS)
+	./test_http2_flow_control
+
+test_idle_reaper: $(LIB_NAME) tests/test_idle_reaper.c
+	$(CC) $(CFLAGS) -o test_idle_reaper tests/test_idle_reaper.c $(LIB_NAME) $(LIBS)
+	./test_idle_reaper
+
+test_linux_writer_fast: $(LIB_NAME) tests/test_linux_writer_fast.c
+	$(CC) $(CFLAGS) -o test_linux_writer_fast tests/test_linux_writer_fast.c $(LIB_NAME) $(LIBS)
+	./test_linux_writer_fast
+
+test_orm_socket: $(LIB_NAME) tests/test_orm_socket.c
+	$(CC) $(CFLAGS) -o test_orm_socket tests/test_orm_socket.c $(LIB_NAME) $(LIBS)
+	./test_orm_socket
+
+test_webtransport: $(LIB_NAME) tests/test_webtransport.c
+	$(CC) $(CFLAGS) -o test_webtransport tests/test_webtransport.c $(LIB_NAME) $(LIBS)
+	./test_webtransport
 

@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test benchmark report generation
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+      - name: Check every tests/test_*.c file is wired into make test
+        run: python3 scripts/ci/check_test_wiring.py
 
   bsd-kqueue:
     name: kqueue tests (macOS)
