@@ -459,6 +459,10 @@ TEST_TARGETS = test_app_resource_limits \
                test_sstring \
                test_seq \
                test_seq_auth \
+               test_error \
+               test_arena \
+               test_healthz \
+               test_json_builder \
                test_http \
                test_siphash \
                test_mux \
@@ -562,6 +566,22 @@ test_seq: $(LIB_NAME) tests/test_seq.c
 test_seq_auth: $(LIB_NAME) tests/test_seq_auth.c
 	$(CC) $(CFLAGS) -o test_seq_auth tests/test_seq_auth.c $(LIB_NAME) $(LIBS)
 	./test_seq_auth
+
+test_error: $(LIB_NAME) tests/test_error.c
+	$(CC) $(CFLAGS) -o test_error tests/test_error.c $(LIB_NAME) $(LIBS)
+	./test_error
+
+test_arena: $(LIB_NAME) tests/test_arena.c
+	$(CC) $(CFLAGS) -o test_arena tests/test_arena.c $(LIB_NAME) $(LIBS)
+	./test_arena
+
+test_healthz: $(LIB_NAME) tests/test_healthz.c
+	$(CC) $(CFLAGS) -o test_healthz tests/test_healthz.c $(LIB_NAME) $(LIBS)
+	./test_healthz
+
+test_json_builder: $(LIB_NAME) tests/test_json_builder.c
+	$(CC) $(CFLAGS) -o test_json_builder tests/test_json_builder.c $(LIB_NAME) $(LIBS)
+	./test_json_builder
 
 test_http: $(LIB_NAME) tests/test_http.c
 	$(CC) $(CFLAGS) -o test_http tests/test_http.c $(LIB_NAME) $(LIBS)
