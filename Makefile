@@ -452,7 +452,8 @@ $(CNATS_LIB):
 
 # --- Test Targets ---
 
-TEST_TARGETS = test_reactor_wake \
+TEST_TARGETS = test_app_resource_limits \
+               test_reactor_wake \
                test_classic_pool_scaling \
                test_sstring \
                test_seq \
@@ -529,6 +530,10 @@ bench_security_pool: $(LIB_NAME) tests/bench_security_pool.c
 	./bench_security_pool
 
 test: $(TEST_TARGETS)
+
+test_app_resource_limits: $(LIB_NAME) tests/test_app_resource_limits.c
+	$(CC) $(CFLAGS) -o $@ tests/test_app_resource_limits.c $(LIB_NAME) $(LIBS)
+	./$@
 
 # Kernel/queue contract test: use the real reactor with a test-only allocator,
 # without pulling HTTP/TLS or libttak runtime state into the wake-up schedule.
