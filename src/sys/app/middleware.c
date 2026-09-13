@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -447,8 +448,8 @@ void cwist_mw_jwt_auth_handler(cwist_http_request *req, cwist_http_response *res
         return;
     }
 
-    /* Expect "Bearer <token>" */
-    if (strncmp(auth_header, "Bearer ", 7) != 0) {
+    /* Expect "Bearer <token>" (scheme is case-insensitive per RFC 6750) */
+    if (strncasecmp(auth_header, "Bearer ", 7) != 0) {
         res->status_code = CWIST_HTTP_UNAUTHORIZED;
         cwist_sstring_assign(res->body, "{\"error\":\"Invalid Authorization scheme\"}");
         cwist_http_header_add(&res->headers, "Content-Type", "application/json");
@@ -456,6 +457,7 @@ void cwist_mw_jwt_auth_handler(cwist_http_request *req, cwist_http_response *res
     }
 
     const char *token = auth_header + 7;
+    while (*token == ' ' || *token == '\t') token++;
 
     cwist_jwt_claims *claims = cwist_jwt_verify(token, secret);
     if (!claims) {
@@ -539,9 +541,9 @@ cwist_middleware_func cwist_mw_jwt_auth(const char *secret) {
 
     pthread_mutex_lock(&s_jwt_cfg_mutex);
 
-    /* Reuse existing slot for the same secret pointer */
+    /* Reuse existing slot for the same secret */
     for (int i = 0; i < s_jwt_cfg_count; i++) {
-        if (s_jwt_cfgs[i].secret == secret) {
+        if (s_jwt_cfgs[i].secret && strcmp(s_jwt_cfgs[i].secret, secret) == 0) {
             pthread_mutex_unlock(&s_jwt_cfg_mutex);
             return s_jwt_wrappers[i];
         }
