@@ -27,6 +27,12 @@ static void test_p2c_scheduler(void) {
     assert(counts[2] > counts[0]);
     assert(counts[2] > counts[1]);
     assert(counts[2] > counts[3]);
+
+    /* Null and boundary guards */
+    assert(cwist_sched_p2c_select_worker(NULL, 4) == 0);
+    assert(cwist_sched_p2c_select_worker(NULL, 0) == 0);
+    assert(cwist_sched_p2c_select_worker(loads, 0) == 0);
+    assert(cwist_sched_p2c_select_worker(loads, 1) == 0);
     printf("OK\n");
 }
 
