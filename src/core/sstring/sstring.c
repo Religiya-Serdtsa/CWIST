@@ -521,19 +521,24 @@ cwist_error_t cwist_sstring_append_escaped(cwist_sstring *str, const char *data)
     size_t input_len = strlen(data);
     size_t new_size = current_len + (input_len * 6) + 1;
 
-    cwist_error_t err = make_error(CWIST_ERR_JSON);
-    err.error.err_json = cJSON_CreateObject();
-
     if (str->is_fixed) {
         if (new_size > str->size) {
-            cJSON_AddStringToObject(err.error.err_json, "err", "Cannot append: would exceed fixed size");
+            cwist_error_t err = make_error(CWIST_ERR_JSON);
+            err.error.err_json = cJSON_CreateObject();
+            if (err.error.err_json) {
+                cJSON_AddStringToObject(err.error.err_json, "err", "Cannot append: would exceed fixed size");
+            }
             return err;
         }
     } else {
         char *new_data = cwist_sstring_reserve(str, new_size, current_len);
         if (!new_data) {
-             cJSON_AddStringToObject(err.error.err_json, "err", "Cannot append: memory full");
-             return err;
+            cwist_error_t err = make_error(CWIST_ERR_JSON);
+            err.error.err_json = cJSON_CreateObject();
+            if (err.error.err_json) {
+                cJSON_AddStringToObject(err.error.err_json, "err", "Cannot append: memory full");
+            }
+            return err;
         }
         str->data = new_data;
         str->borrows_buffer = false;
@@ -548,7 +553,7 @@ cwist_error_t cwist_sstring_append_escaped(cwist_sstring *str, const char *data)
                 ptr += 4;
                 break;
             case '>':
-                memcpy(ptr, "&gtl", 4);
+                memcpy(ptr, "&gt;", 4);
                 ptr += 4;
                 break;
             case '&':
@@ -572,8 +577,7 @@ cwist_error_t cwist_sstring_append_escaped(cwist_sstring *str, const char *data)
     *ptr = '\0';
     str->size = (size_t) (ptr - str->data);
 
-    cJSON_Delete(err.error.err_json);
-    err = make_error(CWIST_ERR_INT8);
+    cwist_error_t err = make_error(CWIST_ERR_INT8);
     err.error.err_i8 = ERR_SSTRING_OKAY;
     return err;
 }

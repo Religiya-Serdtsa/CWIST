@@ -159,6 +159,34 @@ void test_sstring_ops() {
     printf("Passed sstring-to-sstring ops.\n");
 }
 
+void test_html_escape() {
+    printf("Testing html escape...\n");
+    cwist_sstring *s = cwist_sstring_create();
+    assert(s != NULL);
+
+    cwist_error_t err = cwist_sstring_append_escaped(s, "<div class=\"alert\">Bob & Alice's test > 0</div>");
+    assert(err.errtype == CWIST_ERR_INT8 && err.error.err_i8 == ERR_SSTRING_OKAY);
+    assert(strcmp(s->data, "&lt;div class=&quot;alert&quot;&gt;Bob &amp; Alice&#39;s test &gt; 0&lt;/div&gt;") == 0);
+    assert(cwist_sstring_get_size(s) == strlen("&lt;div class=&quot;alert&quot;&gt;Bob &amp; Alice&#39;s test &gt; 0&lt;/div&gt;"));
+
+    /* Test NULL string and NULL data safety */
+    err = cwist_sstring_append_escaped(NULL, "test");
+    assert(err.errtype == CWIST_ERR_INT8 && err.error.err_i8 == ERR_SSTRING_NULL_STRING);
+
+    err = cwist_sstring_append_escaped(s, NULL);
+    assert(err.errtype == CWIST_ERR_INT8 && err.error.err_i8 == ERR_SSTRING_OKAY);
+
+    /* Test standalone > character */
+    cwist_sstring *s2 = cwist_sstring_create();
+    cwist_sstring_append_escaped(s2, ">");
+    assert(strcmp(s2->data, "&gt;") == 0);
+    assert(cwist_sstring_get_size(s2) == 4);
+
+    cwist_sstring_destroy(s);
+    cwist_sstring_destroy(s2);
+    printf("Passed html escape.\n");
+}
+
 int main() {
     test_trim();
     test_resize();
@@ -166,6 +194,8 @@ int main() {
     test_compare();
     test_substr();
     test_sstring_ops();
+    test_html_escape();
     printf("All tests passed!\n");
     return 0;
 }
+
