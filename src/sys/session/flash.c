@@ -24,7 +24,7 @@ const char *cwist_flash_peek(cwist_http_request *req, const char *key) {
 }
 
 const char *cwist_flash_get(cwist_http_request *req, const char *key) {
-    if (!req || !key || !req->flash) return NULL;
+    if (!req || !key || !req->flash || !req->flash->buckets || req->flash->size == 0) return NULL;
     uint64_t hash = siphash24(key, strlen(key), req->flash->seed);
     size_t idx = hash % req->flash->size;
 
@@ -46,7 +46,7 @@ const char *cwist_flash_get(cwist_http_request *req, const char *key) {
 }
 
 char *cwist_flash_pop_all_json(cwist_http_request *req) {
-    if (!req || !req->flash) return NULL;
+    if (!req || !req->flash || !req->flash->buckets || req->flash->size == 0) return NULL;
     int count = 0;
     for (size_t i = 0; i < req->flash->size; i++) {
         cwist_query_bucket *b = req->flash->buckets[i];
@@ -59,6 +59,7 @@ char *cwist_flash_pop_all_json(cwist_http_request *req) {
 
     size_t cap = 256;
     char *buf = (char *)cwist_alloc(cap);
+    if (!buf) return NULL;
     size_t len = 0;
     buf[len++] = '{';
     int first = 1;
@@ -66,7 +67,16 @@ char *cwist_flash_pop_all_json(cwist_http_request *req) {
         cwist_query_bucket *b = req->flash->buckets[i];
         while (b) {
             if (!first) {
-                if (len + 2 >= cap) { cap *= 2; buf = cwist_realloc(buf, cap); }
+                if (len + 2 >= cap) {
+                    size_t new_cap = cap * 2;
+                    char *new_buf = (char *)cwist_realloc(buf, new_cap);
+                    if (!new_buf) {
+                        cwist_free(buf);
+                        return NULL;
+                    }
+                    buf = new_buf;
+                    cap = new_cap;
+                }
                 buf[len++] = ',';
             }
             first = 0;
@@ -74,8 +84,15 @@ char *cwist_flash_pop_all_json(cwist_http_request *req) {
             size_t val_escaped_len = strlen(b->value) * 2 + 3;
             size_t needed = key_escaped_len + val_escaped_len + 4;
             if (len + needed >= cap) {
-                while (len + needed >= cap) cap *= 2;
-                buf = cwist_realloc(buf, cap);
+                size_t new_cap = cap;
+                while (len + needed >= new_cap) new_cap *= 2;
+                char *new_buf = (char *)cwist_realloc(buf, new_cap);
+                if (!new_buf) {
+                    cwist_free(buf);
+                    return NULL;
+                }
+                buf = new_buf;
+                cap = new_cap;
             }
             buf[len++] = '"';
             for (char *p = b->key; *p; p++) {
@@ -93,7 +110,16 @@ char *cwist_flash_pop_all_json(cwist_http_request *req) {
             b = b->next;
         }
     }
-    if (len + 2 >= cap) { cap *= 2; buf = cwist_realloc(buf, cap); }
+    if (len + 2 >= cap) {
+        size_t new_cap = cap * 2;
+        char *new_buf = (char *)cwist_realloc(buf, new_cap);
+        if (!new_buf) {
+            cwist_free(buf);
+            return NULL;
+        }
+        buf = new_buf;
+        cap = new_cap;
+    }
     buf[len++] = '}';
     buf[len] = '\0';
     // Clear all flash entries
