@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run reproducible CWIST microbenchmarks and render tracked SVG trends."""
 from __future__ import annotations
-import json, math, os, platform, re, resource, subprocess, sys, time
+import json, math, platform, re, resource, subprocess, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 
