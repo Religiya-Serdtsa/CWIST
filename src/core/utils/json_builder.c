@@ -3,6 +3,7 @@
 #include <cwist/core/mem/alloc.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 /**
  * @file json_builder.c
@@ -21,6 +22,10 @@ cwist_json_builder *cwist_json_builder_create(void) {
     cwist_json_builder *b = (cwist_json_builder *)cwist_alloc(sizeof(cwist_json_builder));
     if (!b) return NULL;
     b->buffer = cwist_sstring_create();
+    if (!b->buffer) {
+        cwist_free(b);
+        return NULL;
+    }
     b->needs_comma = false;
     return b;
 }
@@ -31,18 +36,70 @@ cwist_json_builder *cwist_json_builder_create(void) {
  */
 void cwist_json_builder_destroy(cwist_json_builder *b) {
     if (b) {
-        cwist_sstring_destroy(b->buffer);
+        if (b->buffer) {
+            cwist_sstring_destroy(b->buffer);
+        }
         cwist_free(b);
     }
 }
 
-/**
- * @brief Insert a comma when the previous operation emitted a complete value.
- * @param b Builder being updated.
- */
 static void append_comma_if_needed(cwist_json_builder *b) {
-    if (b->needs_comma) {
+    if (b && b->buffer && b->needs_comma) {
         cwist_sstring_append(b->buffer, ",");
+    }
+}
+
+static void append_json_escaped_str(cwist_sstring *buf, const char *str) {
+    if (!str) return;
+    cwist_sstring_append(buf, "\"");
+    const char *start = str;
+    const char *p = str;
+    while (*p) {
+        const char *esc = NULL;
+        char ucode[8];
+        switch (*p) {
+            case '"':  esc = "\\\""; break;
+            case '\\': esc = "\\\\"; break;
+            case '\b': esc = "\\b";  break;
+            case '\f': esc = "\\f";  break;
+            case '\n': esc = "\\n";  break;
+            case '\r': esc = "\\r";  break;
+            case '\t': esc = "\\t";  break;
+            default:
+                if ((unsigned char)*p < 0x20) {
+                    snprintf(ucode, sizeof(ucode), "\\u%04x", (unsigned char)*p);
+                    esc = ucode;
+                }
+                break;
+        }
+        if (esc) {
+            if (p > start) {
+                char tmp[4096];
+                size_t seg_len = (size_t)(p - start);
+                while (seg_len > 0) {
+                    size_t chunk = seg_len < sizeof(tmp) - 1 ? seg_len : sizeof(tmp) - 1;
+                    memcpy(tmp, start, chunk);
+                    tmp[chunk] = '\0';
+                    cwist_sstring_append(buf, tmp);
+                    start += chunk;
+                    seg_len -= chunk;
+                }
+            }
+            cwist_sstring_append(buf, esc);
+            start = p + 1;
+        }
+        p++;
+    }
+    if (p > start) {
+        cwist_sstring_append(buf, start);
+    }
+    cwist_sstring_append(buf, "\"");
+}
+
+static void append_key_if_present(cwist_json_builder *b, const char *key) {
+    if (key) {
+        append_json_escaped_str(b->buffer, key);
+        cwist_sstring_append(b->buffer, ":");
     }
 }
 
@@ -51,7 +108,7 @@ static void append_comma_if_needed(cwist_json_builder *b) {
  * @param b Builder to update. NULL is ignored.
  */
 void cwist_json_begin_object(cwist_json_builder *b) {
-    if (!b) return;
+    if (!b || !b->buffer) return;
     append_comma_if_needed(b);
     cwist_sstring_append(b->buffer, "{");
     b->needs_comma = false;
@@ -62,7 +119,7 @@ void cwist_json_begin_object(cwist_json_builder *b) {
  * @param b Builder to update. NULL is ignored.
  */
 void cwist_json_end_object(cwist_json_builder *b) {
-    if (!b) return;
+    if (!b || !b->buffer) return;
     cwist_sstring_append(b->buffer, "}");
     b->needs_comma = true;
 }
@@ -73,12 +130,11 @@ void cwist_json_end_object(cwist_json_builder *b) {
  * @param key Object member name, or NULL when emitting a bare array value.
  */
 void cwist_json_begin_array(cwist_json_builder *b, const char *key) {
-    if (!b) return;
+    if (!b || !b->buffer) return;
     append_comma_if_needed(b);
     if (key) {
-        cwist_sstring_append(b->buffer, "\"");
-        cwist_sstring_append(b->buffer, (char*)key);
-        cwist_sstring_append(b->buffer, "\":[");
+        append_json_escaped_str(b->buffer, key);
+        cwist_sstring_append(b->buffer, ":[");
     } else {
         cwist_sstring_append(b->buffer, "[");
     }
@@ -90,7 +146,7 @@ void cwist_json_begin_array(cwist_json_builder *b, const char *key) {
  * @param b Builder to update. NULL is ignored.
  */
 void cwist_json_end_array(cwist_json_builder *b) {
-    if (!b) return;
+    if (!b || !b->buffer) return;
     cwist_sstring_append(b->buffer, "]");
     b->needs_comma = true;
 }
@@ -102,16 +158,14 @@ void cwist_json_end_array(cwist_json_builder *b) {
  * @param value String payload to emit verbatim between quotes.
  */
 void cwist_json_add_string(cwist_json_builder *b, const char *key, const char *value) {
-    if (!b) return;
+    if (!b || !b->buffer) return;
     append_comma_if_needed(b);
-    if (key) {
-        cwist_sstring_append(b->buffer, "\"");
-        cwist_sstring_append(b->buffer, (char*)key);
-        cwist_sstring_append(b->buffer, "\":");
+    append_key_if_present(b, key);
+    if (value) {
+        append_json_escaped_str(b->buffer, value);
+    } else {
+        cwist_sstring_append(b->buffer, "null");
     }
-    cwist_sstring_append(b->buffer, "\"");
-    cwist_sstring_append(b->buffer, (char*)value);
-    cwist_sstring_append(b->buffer, "\"");
     b->needs_comma = true;
 }
 
@@ -122,13 +176,9 @@ void cwist_json_add_string(cwist_json_builder *b, const char *key, const char *v
  * @param value Integer payload to format in base 10.
  */
 void cwist_json_add_int(cwist_json_builder *b, const char *key, int value) {
-    if (!b) return;
+    if (!b || !b->buffer) return;
     append_comma_if_needed(b);
-    if (key) {
-        cwist_sstring_append(b->buffer, "\"");
-        cwist_sstring_append(b->buffer, (char*)key);
-        cwist_sstring_append(b->buffer, "\":");
-    }
+    append_key_if_present(b, key);
     char buf[32];
     snprintf(buf, sizeof(buf), "%d", value);
     cwist_sstring_append(b->buffer, buf);
@@ -142,13 +192,9 @@ void cwist_json_add_int(cwist_json_builder *b, const char *key, int value) {
  * @param value Boolean payload to serialise as true or false.
  */
 void cwist_json_add_bool(cwist_json_builder *b, const char *key, bool value) {
-    if (!b) return;
+    if (!b || !b->buffer) return;
     append_comma_if_needed(b);
-    if (key) {
-        cwist_sstring_append(b->buffer, "\"");
-        cwist_sstring_append(b->buffer, (char*)key);
-        cwist_sstring_append(b->buffer, "\":");
-    }
+    append_key_if_present(b, key);
     cwist_sstring_append(b->buffer, value ? "true" : "false");
     b->needs_comma = true;
 }
@@ -159,13 +205,9 @@ void cwist_json_add_bool(cwist_json_builder *b, const char *key, bool value) {
  * @param key Object member name, or NULL when appending an array element.
  */
 void cwist_json_add_null(cwist_json_builder *b, const char *key) {
-    if (!b) return;
+    if (!b || !b->buffer) return;
     append_comma_if_needed(b);
-    if (key) {
-        cwist_sstring_append(b->buffer, "\"");
-        cwist_sstring_append(b->buffer, (char*)key);
-        cwist_sstring_append(b->buffer, "\":");
-    }
+    append_key_if_present(b, key);
     cwist_sstring_append(b->buffer, "null");
     b->needs_comma = true;
 }
