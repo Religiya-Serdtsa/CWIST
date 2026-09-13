@@ -1,4 +1,5 @@
 #include <cwist/sys/err/cwist_err.h>
+#include <string.h>
 
 /**
  * @file error.c
@@ -12,6 +13,7 @@
  */
 cwist_error_t make_error(cwist_errtype_t type) {
     cwist_error_t err;
+    memset(&err, 0, sizeof(err));
     err.errtype = type;
     return err;
 }
