@@ -463,6 +463,7 @@ TEST_TARGETS = test_app_resource_limits \
                test_arena \
                test_healthz \
                test_json_builder \
+               test_flash \
                test_http \
                test_siphash \
                test_mux \
@@ -583,6 +584,10 @@ test_healthz: $(LIB_NAME) tests/test_healthz.c
 test_json_builder: $(LIB_NAME) tests/test_json_builder.c
 	$(CC) $(CFLAGS) -o test_json_builder tests/test_json_builder.c $(LIB_NAME) $(LIBS)
 	./test_json_builder
+
+test_flash: $(LIB_NAME) tests/test_flash.c
+	$(CC) $(CFLAGS) -o test_flash tests/test_flash.c $(LIB_NAME) $(LIBS)
+	./test_flash
 
 test_http: $(LIB_NAME) tests/test_http.c
 	$(CC) $(CFLAGS) -o test_http tests/test_http.c $(LIB_NAME) $(LIBS)
