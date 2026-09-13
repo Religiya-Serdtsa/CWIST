@@ -145,6 +145,7 @@ int main(void) {
     /* Cookie jar: set, send, receive from response, send again */
     cwist_test_client_set_cookie(client, "manual", "mv", "/");
     FAIL_IF(strcmp(cwist_test_client_get_cookie(client, "manual"), "mv") != 0, "manual cookie");
+    FAIL_IF(cwist_test_client_get_cookie(client, NULL) != NULL, "get null cookie");
 
     res = cwist_test_client_get(client, "/set-cookie");
     FAIL_IF(!res || strcmp(cwist_test_client_get_cookie(client, "tc"), "jarvalue") != 0, "jar cookie");
@@ -154,6 +155,17 @@ int main(void) {
     FAIL_IF(!res || !res->body, "get-cookie res");
     FAIL_IF(strstr(res->body->data, "tc=jarvalue") == NULL, "jar cookie sent");
     FAIL_IF(strstr(res->body->data, "manual=mv") == NULL, "manual cookie sent");
+    cwist_http_response_destroy(res);
+
+    /* Test adhoc cookies with NULL key/value safety */
+    cwist_test_client_kv safe_cookies[] = { {NULL, "none"}, {"valid", "val"}, {"nullval", NULL} };
+    cwist_test_client_request_options safe_opts = {
+        .cookies = safe_cookies,
+        .cookie_count = 3
+    };
+    res = cwist_test_client_request_ex(client, CWIST_HTTP_GET, "/get-cookie", &safe_opts);
+    FAIL_IF(!res || !res->body, "safe cookies res");
+    FAIL_IF(strstr(res->body->data, "valid=val") == NULL, "safe adhoc cookie sent");
     cwist_http_response_destroy(res);
 
     /* Multipart upload */
