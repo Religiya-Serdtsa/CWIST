@@ -516,6 +516,7 @@ TEST_TARGETS = test_app_resource_limits \
                test_io_queue_full_gc \
                test_full_gc_ownership_handoff \
                test_defer_free \
+               test_malloc_intercept \
                test_proto_gen \
                test_proto_desc \
                test_css_composer
@@ -1043,6 +1044,20 @@ test_full_gc_ownership_handoff: $(LIB_NAME) tests/test_full_gc_ownership_handoff
 test_defer_free: $(LIB_NAME) tests/test_defer_free.c
 	$(CC) $(CFLAGS) -o test_defer_free tests/test_defer_free.c $(LIB_NAME) $(LIBS)
 	./test_defer_free
+
+test_malloc_intercept: $(LIB_NAME) tests/test_malloc_intercept.c
+	$(CC) $(CFLAGS) -o test_malloc_intercept tests/test_malloc_intercept.c $(LIB_NAME) $(LIBS)
+	./test_malloc_intercept
+
+# Manual throughput probe (not part of `make test`): quantifies the cost of
+# CWIST_INTERCEPT_MALLOC's fallback path against a plain, unshimmed
+# malloc/free baseline, with full-GC both off and on. See the file's
+# header comment for how to read the numbers.
+bench_malloc_intercept: $(LIB_NAME) tests/bench_malloc_intercept.c
+	$(CC) $(CFLAGS) -o bench_malloc_intercept tests/bench_malloc_intercept.c $(LIB_NAME) $(LIBS)
+
+bench_malloc_intercept_baseline: tests/bench_malloc_intercept.c
+	$(CC) $(CFLAGS) -DBASELINE -o bench_malloc_intercept_baseline tests/bench_malloc_intercept.c
 
 test_proto_gen: $(LIB_NAME) tests/test_proto_gen.c tests/test_proto_gen_sample.proto
 	./tools/cli/cwist proto tests/test_proto_gen_sample.proto --output tests/test_proto_gen_sample.cwist.pb.h

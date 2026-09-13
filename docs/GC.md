@@ -1,21 +1,14 @@
 # Full GC: Automatic Resource Reclamation in CWIST
 
-Status: **implemented, opt-in, with one gap** (`src/core/mem/gc.c`,
+Status: **implemented, opt-in** (`src/core/mem/gc.c`,
 `include/cwist/core/mem/gc.h`). `cwist_full_gc(true)` is a real, callable
 toggle today, not a future one — see Tutorial 30
-(`tutorials/30-graceful-shutdown/`) for a minimal example. The toggle,
-connection reclamation, `cwist_alloc` registration, pseudo-RAII, and the
-exit sweeps (sections 1-4 and 6 below) are all implemented and tested.
-**Section 5 (transparent `malloc` interception) is only partially done**:
-cJSON's own internal allocations are redirected to `cwist_alloc` via
-`cJSON_InitHooks` (`src/core/mem/alloc.c`), but a handler's own bare
-`malloc()` calls are not intercepted anywhere in the tree today — no
-`-Wl,--wrap=malloc`, no header-level redefinition. The "write `malloc` by
-habit and it still evaporates" acceptance bar in section 5 does not hold
-yet for a handler's own code, only for the cJSON dependency. This document
-remains the design contract for what the mode does and does not cover; the
-explicit destroy-family model stays fully supported (and is the default)
-whether or not full-GC mode is ever enabled.
+(`tutorials/30-graceful-shutdown/`) for a minimal example. All six design
+sections below, including section 5 (transparent `malloc` interception),
+are implemented and tested. This document remains the design contract for
+what the mode does and does not cover; the explicit destroy-family model
+stays fully supported (and is the default) whether or not full-GC mode is
+ever enabled.
 
 ## Motivation
 
@@ -102,64 +95,93 @@ For stack-scoped handles, CWIST provides pseudo-RAII guards:
 - Raw borrowing of LibTTAK RAII primitives where the cleanup-attribute trick
   is unavailable.
 
-### 5. Transparent `malloc` interception — partially done
+### 5. Transparent `malloc` interception
 
 Users will habitually write `malloc`, not `cwist_alloc` — depending on
-finger discipline is how leak-free claims fail. The goal is to make the two
-spellings equivalent in handler context. Status:
+finger discipline is how leak-free claims fail. `<cwist/core/mem/intercept.h>`
+makes the two spellings equivalent, opt-in per translation unit:
 
-- **Done**: allocations made by bundled dependencies — currently cJSON — are
-  redirected onto `cwist_alloc` via `cJSON_InitHooks` (`src/core/mem/alloc.c`),
-  so cJSON's own internal `malloc`/`free` calls already evaporate under
-  full-GC mode without any change to cJSON itself.
-- **Not done**: a handler's own bare `malloc()` calls are not redirected
-  anywhere in the tree today. Writing `malloc()` by hand inside a handler
-  still leaks under full-GC mode exactly as it would without it — only
-  `cwist_alloc()` calls (and cJSON's) are covered.
+```c
+#define CWIST_INTERCEPT_MALLOC
+#include <cwist/core/mem/intercept.h>
+#include <cwist/app.h>
 
-Acceptance bar (not yet met for handler code): **write `malloc` by habit and
-it still evaporates**, with no leaks across the tracked scope's boundary.
-This remains open work, not a documentation gap.
+static void handle(cwist_http_request *req, cwist_http_response *res) {
+    char *buf = malloc(256);   /* -> cwist_malloc_shim() */
+    ...
+    /* no free(buf) needed: under cwist_full_gc(true), this evaporates
+     * exactly like a forgotten cwist_alloc() would. free(buf), if called,
+     * still works normally either way. */
+}
+```
 
-**Design direction for the remaining work** (link-level wrapping was
-considered and rejected as the mechanism — see rationale below):
+- **cJSON's own internal allocations** are separately redirected onto
+  `cwist_alloc` via `cJSON_InitHooks` (`src/core/mem/alloc.c`) — this was
+  already true before the shim below existed and needs no opt-in.
+- **A handler's own `malloc`/`calloc`/`realloc`/`free`** are redirected by
+  `cwist_malloc_shim`/`cwist_calloc_shim`/`cwist_realloc_shim`/`cwist_free_shim`
+  (`src/core/mem/alloc.c`) once the translation unit defines
+  `CWIST_INTERCEPT_MALLOC` before including the header. `malloc`/`calloc`
+  keep their real semantics (uninitialized vs. zeroed memory respectively —
+  neither becomes `cwist_alloc`'s always-zeroed behavior) and register with
+  the pending-sweep list only when `cwist_full_gc_enabled()`; `realloc`
+  preserves or drops tracking based on whether the incoming pointer was
+  tracked, never opting an untracked pointer in on its own; `free` untracks
+  first (a safe no-op if the pointer was never tracked) then calls the real
+  `free`.
 
-- **Scope to CWIST's own translation units only, via header-level
-  `#define malloc cwist_alloc`** (in CWIST's own headers), never
-  `-Wl,--wrap=malloc`. The link-level wrap intercepts *every* `malloc`
-  reference in the final binary, including inside vendored dependencies
-  (BoringSSL, lsquic, cnats, sqlite3) that never see CWIST's headers and
-  have no reason to expect a non-libc allocator underneath them. This is
-  not a hypothetical risk: BoringSSL calls `OPENSSL_cleanse()` to zero
-  secret key material on free, on the assumption of plain heap semantics —
-  redirecting its allocations into the epoch-deferred GC arena means that
-  cleanse-then-free no longer reliably erases the memory before it becomes
-  reclaimable, which is a security regression, not a performance
-  footnote. A header-scoped `#define` only ever takes effect in
-  translation units that include a CWIST header, which vendored
-  dependencies structurally never do — this excludes them by
-  construction, at the cost of not extending coverage beyond
-  CWIST-authored code and cJSON (already covered separately). Any design
-  that wraps `malloc` must also cover `calloc`/`realloc`/`free` consistently
-  from the same seam, or a pointer allocated through one path and freed
-  through the other corrupts the heap.
-- **Reuse the existing `cwist_gc_scope_track`/`cwist_gc_scope_flush`
-  pipeline unchanged** rather than inventing a separate reclaim policy
-  for intercepted `malloc`. That pipeline already tracks per-thread, not
-  per-request — the thread-exit TLS sweep is the last-resort fallback,
-  and callers flush explicitly at natural completion points (e.g. per-job
-  in `src/sys/io/io_queue.c`). A policy that reclaims *only* at thread
-  exit would be close to a no-op for the C1M reactor's worker threads,
-  which are intentionally long-lived for the process's whole life —
-  exactly the deployment model this feature is meant to help most.
-  Whatever calls `cwist_alloc()` today for its reclaim cadence should be
-  the same thing an intercepted `malloc()` calls.
-- **Cross-thread handoff already has its escape hatch: `cwist_gc_scope_disown()`**
-  (see below) — a pointer that legitimately needs to outlive its
-  allocating scope (cached in a connection pool, handed to a background
-  job) calls this once at the handoff point and becomes the new owner's
-  responsibility. No new API is needed for intercepted `malloc` to use
-  the same mechanism.
+**Why header-scoped, not link-level `-Wl,--wrap=malloc`**: the link-level
+wrap intercepts *every* `malloc` reference in the final binary, including
+inside vendored dependencies (BoringSSL, lsquic, cnats, sqlite3) that never
+see CWIST's headers and have no reason to expect a non-libc allocator
+underneath them. This is not a hypothetical risk: BoringSSL calls
+`OPENSSL_cleanse()` to zero secret key material on free, on the assumption
+of plain heap semantics — redirecting its allocations into the
+epoch-deferred GC arena would mean cleanse-then-free no longer reliably
+erases the memory before it becomes reclaimable, a security regression,
+not a performance footnote. A header-scoped `#define` only ever takes
+effect in a translation unit that explicitly opts in, and vendored
+dependencies structurally never do (they don't include CWIST headers at
+all) — this excludes them by construction. The header also pulls in
+`<stdlib.h>` before defining the macros, specifically so a later
+`#include <stdlib.h>` (this translation unit's own, or transitively via
+another header) is a no-op against its own include guard instead of
+re-declaring `malloc`/`calloc`/`realloc`/`free` through the now-active
+macros — which reliably fails to compile otherwise.
+
+**Reclaim cadence** reuses the existing `cwist_gc_scope_track`/
+`cwist_gc_scope_flush` pipeline unchanged (per-thread tracking, thread-exit
+TLS sweep as the last resort, explicit flush at natural completion points
+such as the per-job flush already wired into `src/sys/io/io_queue.c`) — the
+same mechanism `cwist_alloc()` already uses, not a separate policy. A
+policy that reclaimed only at thread exit would be close to a no-op for
+the C1M reactor's intentionally long-lived worker threads, exactly the
+deployment model this feature is meant to help most.
+
+**Cross-thread handoff** reuses the existing `cwist_gc_scope_disown()`
+escape hatch (see below and `tests/test_full_gc_ownership_handoff.c`) — a
+pointer that legitimately needs to outlive its allocating scope (cached in
+a connection pool, handed to a background job) calls this once at the
+handoff point and becomes the new owner's responsibility. No separate API
+exists for shimmed pointers; they use the same one `cwist_alloc()`
+pointers do.
+
+**Measured overhead** (`tests/bench_malloc_intercept.c`, single-threaded,
+mixed 16–512 byte allocations with an occasional `realloc`, this machine):
+
+| configuration | ns/op | vs. baseline |
+|---|---:|---:|
+| baseline (no shim) | ~11.8 | — |
+| shim, full-GC off (default) | ~12.2 | +3% |
+| shim, full-GC on | ~21.9 | +86% |
+
+The "off" cost is one relaxed atomic load (`cwist_full_gc_enabled()`) plus
+one extra function call per operation — matching the overhead
+`cwist_alloc()`/`cwist_free()` already pay today. The "on" cost is the real
+price of the safety net: pending-sweep list insertion/removal on every
+`malloc`/`free`. Both are per-call microbenchmark numbers on a single
+thread — they isolate per-operation overhead, not lock contention under
+concurrent load.
 
 ### 6. `cwist_alloc` internals
 
@@ -176,7 +198,7 @@ remains correct and simply unregisters the block early.
 | Process exits | `cwist_app_destroy()` required | `atexit` sweep closes remaining connections |
 | `cwist_alloc` object | Manual `cwist_free` | Epoch rotation reclaims; explicit free still fine |
 | cJSON's internal `malloc` | N/A (cJSON manages its own memory) | Redirected to `cwist_alloc` via `cJSON_InitHooks`; freed by epoch rotation |
-| Handler calls bare `malloc()` | Heap leak if forgotten | **Still a heap leak if forgotten** - not yet redirected (see section 5) |
+| Handler calls bare `malloc()` (opt-in via `CWIST_INTERCEPT_MALLOC`) | Heap leak if forgotten | Redirected to the pending-sweep list; freed by epoch rotation |
 | Teardown safety | Caller discipline | Epoch-deferred; no reclaim while referenced |
 
 ## Non-goals and notes

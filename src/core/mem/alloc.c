@@ -407,6 +407,69 @@ void cwist_free(void *ptr) {
 }
 
 /**
+ * @brief malloc() shim backing <cwist/core/mem/intercept.h>'s
+ *        CWIST_INTERCEPT_MALLOC redefinition. Real libc malloc()
+ *        (uninitialized, unlike cwist_alloc()'s calloc-based zeroing) so
+ *        callers relying on malloc's actual semantics see no behavior
+ *        change; tracked with the full-GC pending-sweep list exactly like
+ *        cwist_alloc() when full-GC is enabled, untouched otherwise.
+ */
+void *cwist_malloc_shim(size_t size) {
+    void *ptr = malloc(size ? size : 1);
+    if (ptr && cwist_full_gc_enabled()) {
+        cwist_gc_scope_track(ptr);
+    }
+    return ptr;
+}
+
+/**
+ * @brief calloc() shim; see cwist_malloc_shim().
+ */
+void *cwist_calloc_shim(size_t nmemb, size_t size) {
+    void *ptr = calloc(nmemb ? nmemb : 1, size ? size : 1);
+    if (ptr && cwist_full_gc_enabled()) {
+        cwist_gc_scope_track(ptr);
+    }
+    return ptr;
+}
+
+/**
+ * @brief realloc() shim; see cwist_malloc_shim(). Tracking follows the
+ *        incoming pointer (see the header doc comment for the exact
+ *        rule) rather than unconditionally tracking every result, since a
+ *        pointer's caller may have already disowned it (cwist_gc_scope_disown())
+ *        or allocated it before full-GC was ever enabled.
+ */
+void *cwist_realloc_shim(void *ptr, size_t size) {
+    size_t actual = size ? size : 1;
+    if (!ptr) {
+        return cwist_malloc_shim(actual);
+    }
+    bool was_tracked = false;
+    if (cwist_full_gc_enabled()) {
+        was_tracked = cwist_gc_scope_untrack(ptr);
+    }
+    void *new_ptr = realloc(ptr, actual);
+    if (new_ptr && was_tracked && cwist_full_gc_enabled()) {
+        cwist_gc_scope_track(new_ptr);
+    }
+    return new_ptr;
+}
+
+/**
+ * @brief free() shim; see cwist_malloc_shim(). Untracking a pointer that
+ *        was never tracked (untouched by the shim, or already
+ *        disowned/freed) is a safe no-op - same contract as cwist_free().
+ */
+void cwist_free_shim(void *ptr) {
+    if (!ptr) return;
+    if (cwist_full_gc_enabled()) {
+        cwist_gc_scope_untrack(ptr);
+    }
+    free(ptr);
+}
+
+/**
  * @brief Adapter that lets cJSON allocate through CWIST's memory layer.
  * @param size Requested allocation size in bytes.
  * @return Zeroed memory block, or NULL on failure.
