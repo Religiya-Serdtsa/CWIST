@@ -696,7 +696,9 @@ int cwist_grpc_stream_send(cwist_grpc_stream *stream,
     }
     cwist_error_t err = cwist_sstring_append_len(stream->res->body, (char *)frame, frame_len);
     cwist_free(frame);
-    if (err.error.err_i16 != 0) {
+    bool appended = cwist_error_is_ok(&err);
+    cwist_error_dispose(&err);
+    if (!appended) {
         stream->status = CWIST_GRPC_INTERNAL;
         stream->status_message = "failed to append gRPC stream message";
         return -1;
