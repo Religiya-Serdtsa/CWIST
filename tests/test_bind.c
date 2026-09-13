@@ -177,6 +177,53 @@ void test_bind_regex(void) {
     printf("  OK\n");
 }
 
+void test_bind_null_guards_and_numeric_validation(void) {
+    printf("test_bind_null_guards_and_numeric_validation...\n");
+    /* 1. Non-numeric value for numeric rule */
+    const char *json_nan = "{\"email\":\"test@example.com\",\"age\":\"notanumber\",\"name\":\"Test\",\"score\":50.0}";
+    cwist_http_request *req = cwist_http_request_create();
+    cwist_sstring_assign(req->body, (char *)json_nan);
+    user_t out;
+    memset(&out, 0, sizeof(out));
+    cwist_bind_result_t result;
+    bool ok = cwist_app_req_bind_json(req, &user_schema, &out, &result);
+    assert(ok == false);
+    assert(result.error_count > 0);
+    cwist_http_request_destroy(req);
+
+    /* 2. NULL pattern regex rule safety */
+    typedef struct { char val[16]; } null_re_t;
+    CWIST_BIND_RULES(null_re_rules, CWIST_RULE_REGEX(NULL));
+    static const cwist_bind_field_t null_re_fields[] = {
+        CWIST_BIND_FIELD(null_re_t, val, "val", null_re_rules),
+    };
+    static const cwist_bind_schema_t null_re_schema = CWIST_BIND_SCHEMA(null_re_t, null_re_fields);
+    req = cwist_http_request_create();
+    cwist_sstring_assign(req->body, "{\"val\":\"abc\"}");
+    null_re_t out_re;
+    memset(&out_re, 0, sizeof(out_re));
+    ok = cwist_app_req_bind_json(req, &null_re_schema, &out_re, &result);
+    assert(ok == false);
+    cwist_http_request_destroy(req);
+
+    /* 3. NULL custom callback rule safety */
+    typedef struct { char val[16]; } null_custom_t;
+    CWIST_BIND_RULES(null_custom_rules, CWIST_RULE_CUSTOM(NULL, NULL));
+    static const cwist_bind_field_t null_custom_fields[] = {
+        CWIST_BIND_FIELD(null_custom_t, val, "val", null_custom_rules),
+    };
+    static const cwist_bind_schema_t null_custom_schema = CWIST_BIND_SCHEMA(null_custom_t, null_custom_fields);
+    req = cwist_http_request_create();
+    cwist_sstring_assign(req->body, "{\"val\":\"abc\"}");
+    null_custom_t out_custom;
+    memset(&out_custom, 0, sizeof(out_custom));
+    ok = cwist_app_req_bind_json(req, &null_custom_schema, &out_custom, &result);
+    assert(ok == false);
+    cwist_http_request_destroy(req);
+
+    printf("  OK\n");
+}
+
 int main(void) {
     test_bind_success();
     test_bind_missing_required();
@@ -185,6 +232,8 @@ int main(void) {
     test_bind_auto_400_response();
     test_bind_form_data();
     test_bind_regex();
+    test_bind_null_guards_and_numeric_validation();
     printf("All bind tests passed.\n");
     return 0;
 }
+
