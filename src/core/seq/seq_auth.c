@@ -32,7 +32,8 @@ static bool seq_auth_chunk_valid(const uint8_t *data, size_t len,
     out->total = read_u16(data + 2);
     out->payload_len = read_u16(data + 4);
     out->chunk_size = read_u16(data + 6);
-    if (!out->seq || !out->total || out->seq > out->total ||
+    if (!out->seq || !out->total || out->total > CWIST_SEQ_MAX_CHUNKS ||
+        out->seq > out->total ||
         !out->payload_len || !out->chunk_size ||
         out->payload_len > out->chunk_size ||
         (out->seq != out->total && out->payload_len != out->chunk_size) ||
@@ -93,6 +94,7 @@ cwist_seq_auth_context_t *cwist_seq_auth_context_create(
 void cwist_seq_auth_context_destroy(cwist_seq_auth_context_t *ctx) {
     if (!ctx) return;
     OPENSSL_cleanse(ctx->key, sizeof(ctx->key));
+    OPENSSL_cleanse(ctx->session_id, sizeof(ctx->session_id));
     pthread_mutex_destroy(&ctx->lock);
     cwist_free(ctx->nonces);
     cwist_free(ctx->completed_ids);
