@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test benchmark report generation
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+      - name: Test benchmark process isolation
+        run: python3 -m unittest discover -s tests -p 'test_benchmark_session.py' -v
 
   bsd-kqueue:
     name: kqueue tests (macOS)
@@ -277,35 +279,11 @@ jobs:
             TXT=$4
             STAT_TXT=$5
             WAIT=${6:-2}
-
+            THREADS=${7:-12}
+            CONNECTIONS=${8:-400}
             echo "=== Starting $NAME Web Server (Port $PORT) ==="
-            $CMD &
-            PID=$!
-            for i in $(seq 1 $WAIT); do
-              curl -sf http://127.0.0.1:$PORT/ > /dev/null 2>&1 && break
-              sleep 1
-            done
-
-            # Warmup (results discarded)
-            wrk -t12 -c400 -d10s http://127.0.0.1:$PORT/ > /dev/null 2>&1 || true
-
-            # Initial stat (after warmup)
-            BEFORE_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
-            [ -z "$BEFORE_CSW" ] && BEFORE_CSW=0
-
-            wrk -t12 -c400 -d10s -s "$GITHUB_WORKSPACE/scripts/ci/tail_latency.lua" --latency http://127.0.0.1:$PORT/ > $TXT 2>&1 || true
-
-            AFTER_CSW=$(ps -o nvcsw=,nivcsw= -p $PID 2>/dev/null | awk '{print $1+$2}')
-            [ -z "$AFTER_CSW" ] && AFTER_CSW=0
-            RSS=$(ps -o rss= -p $PID 2>/dev/null | awk '{print $1}')
-            [ -z "$RSS" ] && RSS=0
-
-            CSW=$((AFTER_CSW - BEFORE_CSW))
-            [ $CSW -lt 0 ] && CSW=0
-
-            kill -9 $PID || true
-            echo "rss_kib=$RSS csw=$CSW" > $STAT_TXT
-            cat $TXT
+            python3 "$GITHUB_WORKSPACE/scripts/ci/benchmark_session.py" --server "$CMD" -- \
+              bash "$GITHUB_WORKSPACE/scripts/ci/benchmark_workload.sh" "$PORT" "$TXT" "$STAT_TXT" "$WAIT" "$THREADS" "$CONNECTIONS"
           }
 
           # CWIST is measured twice: the classic thread-pool path (the
@@ -325,17 +303,7 @@ jobs:
           # Tuned low-latency profile (CWIST classic only): lower connection
           # pressure (c100, 4 wrk threads) so the per-request latency floor is
           # visible alongside the c400 throughput numbers.
-          echo "=== Starting CWIST tuned run (wrk -t4 -c100) ==="
-          env CWIST_C1M_MODE=0 /tmp/cwist_server &
-          TUNED_PID=$!
-          for i in $(seq 1 10); do
-            curl -sf http://127.0.0.1:9091/ > /dev/null 2>&1 && break
-            sleep 1
-          done
-          wrk -t4 -c100 -d10s http://127.0.0.1:9091/ > /dev/null 2>&1 || true
-          wrk -t4 -c100 -d10s -s "$GITHUB_WORKSPACE/scripts/ci/tail_latency.lua" --latency http://127.0.0.1:9091/ > /tmp/cwist_tuned.txt 2>&1 || true
-          kill -9 $TUNED_PID || true
-          cat /tmp/cwist_tuned.txt
+          run_bench "CWIST tuned" "env CWIST_C1M_MODE=0 /tmp/cwist_server" 9091 "/tmp/cwist_tuned.txt" "/tmp/cwist_tuned_stat.txt" 10 4 100
           export TUNED_PROFILE="wrk -t4 -c100 -d10s (after 10s warmup, warmup discarded)"
           run_bench "Axum" "/tmp/axum_bench/target/release/axum_server" 9092 "/tmp/axum.txt" "/tmp/axum_stat.txt" 10
           run_bench "Gin" "/tmp/gin_bench/gin_server" 9094 "/tmp/gin.txt" "/tmp/gin_stat.txt" 10
@@ -420,20 +388,9 @@ jobs:
           # the identical treatment: its own dedicated boot (replaying the
           # same trained AOT cache, so it isn't paying a second cold-start
           # penalty CWIST doesn't pay either) measured under -t4 -c100.
-          echo "=== Starting Spring Boot tuned run (wrk -t4 -c100) ==="
-          java $SPRING_JVM_OPTS \
-            -XX:+AOTClassLinking \
-            -XX:AOTCache=$SPRING_AOT_CACHE \
-            -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093 &
-          SPRING_TUNED_PID=$!
-          for i in $(seq 1 90); do
-            curl -sf http://127.0.0.1:9093/ > /dev/null 2>&1 && break
-            sleep 1
-          done
-          wrk -t4 -c100 -d10s http://127.0.0.1:9093/ > /dev/null 2>&1 || true
-          wrk -t4 -c100 -d10s -s "$GITHUB_WORKSPACE/scripts/ci/tail_latency.lua" --latency http://127.0.0.1:9093/ > /tmp/spring_tuned.txt 2>&1 || true
-          kill -9 $SPRING_TUNED_PID || true
-          cat /tmp/spring_tuned.txt
+          run_bench "Spring Boot tuned" \
+            "java $SPRING_JVM_OPTS -XX:+AOTClassLinking -XX:AOTCache=$SPRING_AOT_CACHE -jar /tmp/spring_bench/target/spring-bench-0.0.1-SNAPSHOT.jar --server.port=9093" \
+            9093 "/tmp/spring_tuned.txt" "/tmp/spring_tuned_stat.txt" 90 4 100
 
           # Result JSON must land in the workspace so upload-artifact can find it
           # (the shell is still sitting in /tmp/spring_bench from the maven build).
