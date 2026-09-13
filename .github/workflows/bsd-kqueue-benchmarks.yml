@@ -26,6 +26,10 @@ jobs:
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
       - name: Check every tests/test_*.c file is wired into make test
         run: python3 scripts/ci/check_test_wiring.py
+      - name: Raw-allocator baseline gate (cwist audit --gate)
+        run: |
+          chmod +x tools/cli/cwist
+          scripts/ci/malloc_lint.sh
 
   bsd-kqueue:
     name: kqueue tests (macOS)
