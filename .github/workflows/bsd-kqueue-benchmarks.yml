@@ -454,39 +454,47 @@ jobs:
           import json, os, re, pathlib
           from datetime import datetime, timezone
 
+          # wrk's own default "Thread Stats" section only ever prints 50/75/90/99,
+          # but scripts/ci/tail_latency.lua's `done()` callback appends an extended
+          # block with min/avg/max plus 50/75/90/99/99.9/99.99/99.999 - every field
+          # below is already in every run's raw text, this just extracts all of it
+          # instead of discarding most of it (only p50/p90/p99/p99.999 were kept
+          # before). The extra percentiles feed the KDE-style latency distribution
+          # chart in scripts/ci/benchmark.py (see docs/webserver-latency-distribution.svg).
           def parse_wrk(path_str):
               p = pathlib.Path(path_str)
               text = p.read_text() if p.exists() else ""
+
+              def to_ms(val, unit):
+                  if unit == "us": return val / 1000.0
+                  if unit == "s": return val * 1000.0
+                  return val
+
+              def find(pattern):
+                  m = re.search(pattern, text)
+                  if not m: return 0.0
+                  return to_ms(float(m.group(1)), m.group(2))
+
+              def percentile(pct_str):
+                  return find(r"\s+" + re.escape(pct_str) + r"\s+([0-9.]+)(us|ms|s)")
+
               rps = 0.0
-              lat_ms = 0.0
-              lat_p90_ms = 0.0
-              lat_p99_ms = 0.0
               m_rps = re.search(r"Requests/sec:\s+([0-9.]+)", text)
-              if m_rps:
-                  rps = float(m_rps.group(1))
-              m_lat = re.search(r"Latency\s+([0-9.]+)(us|ms|s)", text)
-              if m_lat:
-                  val = float(m_lat.group(1))
-                  unit = m_lat.group(2)
-                  if unit == "us": lat_ms = val / 1000.0
-                  elif unit == "ms": lat_ms = val
-                  elif unit == "s": lat_ms = val * 1000.0
+              if m_rps: rps = float(m_rps.group(1))
 
-              def parse_percentile(pct_str, raw_text):
-                  m = re.search(r"\s+" + re.escape(pct_str) + r"\s+([0-9.]+)(us|ms|s)", raw_text)
-                  if m:
-                      val = float(m.group(1))
-                      unit = m.group(2)
-                      if unit == "us": return val / 1000.0
-                      elif unit == "ms": return val
-                      elif unit == "s": return val * 1000.0
-                  return 0.0
-
-              lat_p50_ms = parse_percentile("50%", text)
-              lat_p90_ms = parse_percentile("90%", text)
-              lat_p99_ms = parse_percentile("99%", text)
-              lat_p99_999_ms = parse_percentile("99.999%", text)
-              return rps, lat_ms, lat_p50_ms, lat_p90_ms, lat_p99_ms, lat_p99_999_ms
+              return {
+                  "rps": rps,
+                  "lat_ms": find(r"Latency\s+([0-9.]+)(us|ms|s)"),
+                  "min_ms": find(r"Min Latency:\s+([0-9.]+)\s*(us|ms|s)"),
+                  "max_ms": find(r"Max Latency:\s+([0-9.]+)\s*(us|ms|s)"),
+                  "p50": percentile("50%"),
+                  "p75": percentile("75%"),
+                  "p90": percentile("90%"),
+                  "p99": percentile("99%"),
+                  "p999": percentile("99.9%"),
+                  "p9999": percentile("99.99%"),
+                  "p99_999": percentile("99.999%"),
+              }
 
           def parse_stat(path_str):
               p = pathlib.Path(path_str)
@@ -499,43 +507,56 @@ jobs:
               if m_csw: csw = float(m_csw.group(1))
               return rss, csw
 
-          cwist_rps, cwist_lat, cwist_p50, cwist_p90, cwist_p99, cwist_p99_999 = parse_wrk("/tmp/cwist.txt")
+          # Flattens a parse_wrk() dict into "<prefix>_<field>_ms" keys (plus RSS/Csw
+          # when a stat file is given) so every server's full latency distribution -
+          # not just the handful of percentiles the summary line needs - lands in
+          # webserver.json for the KDE chart to consume.
+          def server_fields(prefix, wrk, rss=None, csw=None):
+              out = {f"{prefix}_rps": wrk["rps"], f"{prefix}_lat_ms": wrk["lat_ms"]}
+              for field in ("min_ms", "p50", "p75", "p90", "p99", "p999", "p9999", "p99_999", "max_ms"):
+                  out_key = field if field.endswith("_ms") else f"{field}_ms"
+                  out[f"{prefix}_{out_key}"] = wrk[field]
+              if rss is not None: out[f"{prefix}_rss_kib"] = rss
+              if csw is not None: out[f"{prefix}_csw"] = csw
+              return out
+
+          cwist_wrk = parse_wrk("/tmp/cwist.txt")
           cwist_rss, cwist_csw = parse_stat("/tmp/cwist_stat.txt")
 
-          cwist_c1m_rps, cwist_c1m_lat, cwist_c1m_p50, cwist_c1m_p90, cwist_c1m_p99, cwist_c1m_p99_999 = parse_wrk("/tmp/cwist_c1m.txt")
+          cwist_c1m_wrk = parse_wrk("/tmp/cwist_c1m.txt")
           cwist_c1m_rss, cwist_c1m_csw = parse_stat("/tmp/cwist_c1m_stat.txt")
 
-          cwist_c1m_arena1_rps, cwist_c1m_arena1_lat, cwist_c1m_arena1_p50, cwist_c1m_arena1_p90, cwist_c1m_arena1_p99, cwist_c1m_arena1_p99_999 = parse_wrk("/tmp/cwist_c1m_arena1.txt")
+          cwist_c1m_arena1_wrk = parse_wrk("/tmp/cwist_c1m_arena1.txt")
           cwist_c1m_arena1_rss, cwist_c1m_arena1_csw = parse_stat("/tmp/cwist_c1m_arena1_stat.txt")
 
-          cwist_tuned_rps, cwist_tuned_lat, cwist_tuned_p50, cwist_tuned_p90, cwist_tuned_p99, cwist_tuned_p99_999 = parse_wrk("/tmp/cwist_tuned.txt")
+          cwist_tuned_wrk = parse_wrk("/tmp/cwist_tuned.txt")
 
-          axum_rps, axum_lat, axum_p50, axum_p90, axum_p99, axum_p99_999 = parse_wrk("/tmp/axum.txt")
+          axum_wrk = parse_wrk("/tmp/axum.txt")
           axum_rss, axum_csw = parse_stat("/tmp/axum_stat.txt")
 
-          gin_rps, gin_lat, gin_p50, gin_p90, gin_p99, gin_p99_999 = parse_wrk("/tmp/gin.txt")
+          gin_wrk = parse_wrk("/tmp/gin.txt")
           gin_rss, gin_csw = parse_stat("/tmp/gin_stat.txt")
 
-          spring_rps, spring_lat, spring_p50, spring_p90, spring_p99, spring_p99_999 = parse_wrk("/tmp/spring.txt")
+          spring_wrk = parse_wrk("/tmp/spring.txt")
           spring_rss, spring_csw = parse_stat("/tmp/spring_stat.txt")
 
-          spring_tuned_rps, spring_tuned_lat, spring_tuned_p50, spring_tuned_p90, spring_tuned_p99, spring_tuned_p99_999 = parse_wrk("/tmp/spring_tuned.txt")
+          spring_tuned_wrk = parse_wrk("/tmp/spring_tuned.txt")
 
           data = {
               "timestamp": datetime.now(timezone.utc).isoformat(),
-              "cwist_rps": cwist_rps, "cwist_lat_ms": cwist_lat, "cwist_p90_ms": cwist_p90, "cwist_p99_ms": cwist_p99, "cwist_p99_999_ms": cwist_p99_999, "cwist_rss_kib": cwist_rss, "cwist_csw": cwist_csw,
-              "cwist_c1m_rps": cwist_c1m_rps, "cwist_c1m_lat_ms": cwist_c1m_lat, "cwist_c1m_p90_ms": cwist_c1m_p90, "cwist_c1m_p99_ms": cwist_c1m_p99, "cwist_c1m_p99_999_ms": cwist_c1m_p99_999, "cwist_c1m_rss_kib": cwist_c1m_rss, "cwist_c1m_csw": cwist_c1m_csw,
+              **server_fields("cwist", cwist_wrk, cwist_rss, cwist_csw),
+              **server_fields("cwist_c1m", cwist_c1m_wrk, cwist_c1m_rss, cwist_c1m_csw),
               # Same C1M binary/config as cwist_c1m_* above, CWIST_MALLOC_ARENA_MAX=1 -
               # only variable is the env var, direct A/B (see issue #25).
-              "cwist_c1m_arena1_rps": cwist_c1m_arena1_rps, "cwist_c1m_arena1_lat_ms": cwist_c1m_arena1_lat, "cwist_c1m_arena1_p90_ms": cwist_c1m_arena1_p90, "cwist_c1m_arena1_p99_ms": cwist_c1m_arena1_p99, "cwist_c1m_arena1_p99_999_ms": cwist_c1m_arena1_p99_999, "cwist_c1m_arena1_rss_kib": cwist_c1m_arena1_rss, "cwist_c1m_arena1_csw": cwist_c1m_arena1_csw,
-              "cwist_tuned_rps": cwist_tuned_rps, "cwist_tuned_lat_ms": cwist_tuned_lat, "cwist_tuned_p50_ms": cwist_tuned_p50, "cwist_tuned_p90_ms": cwist_tuned_p90, "cwist_tuned_p99_ms": cwist_tuned_p99, "cwist_tuned_p99_999_ms": cwist_tuned_p99_999,
-              "axum_rps": axum_rps, "axum_lat_ms": axum_lat, "axum_p90_ms": axum_p90, "axum_p99_ms": axum_p99, "axum_p99_999_ms": axum_p99_999, "axum_rss_kib": axum_rss, "axum_csw": axum_csw,
-              "gin_rps": gin_rps, "gin_lat_ms": gin_lat, "gin_p90_ms": gin_p90, "gin_p99_ms": gin_p99, "gin_p99_999_ms": gin_p99_999, "gin_rss_kib": gin_rss, "gin_csw": gin_csw,
-              "spring_rps": spring_rps, "spring_lat_ms": spring_lat, "spring_p90_ms": spring_p90, "spring_p99_ms": spring_p99, "spring_p99_999_ms": spring_p99_999, "spring_rss_kib": spring_rss, "spring_csw": spring_csw,
+              **server_fields("cwist_c1m_arena1", cwist_c1m_arena1_wrk, cwist_c1m_arena1_rss, cwist_c1m_arena1_csw),
+              **server_fields("cwist_tuned", cwist_tuned_wrk),
+              **server_fields("axum", axum_wrk, axum_rss, axum_csw),
+              **server_fields("gin", gin_wrk, gin_rss, gin_csw),
+              **server_fields("spring", spring_wrk, spring_rss, spring_csw),
               # Same -t4 -c100 low-concurrency profile as cwist_tuned_*, added
               # so a report comparing "tuned" numbers is comparing like with
               # like instead of CWIST's best case against Spring's only case.
-              "spring_tuned_rps": spring_tuned_rps, "spring_tuned_lat_ms": spring_tuned_lat, "spring_tuned_p50_ms": spring_tuned_p50, "spring_tuned_p90_ms": spring_tuned_p90, "spring_tuned_p99_ms": spring_tuned_p99, "spring_tuned_p99_999_ms": spring_tuned_p99_999,
+              **server_fields("spring_tuned", spring_tuned_wrk),
               "wrk_profile": os.environ.get("WRK_PROFILE", ""),
               "tuned_profile": os.environ.get("TUNED_PROFILE", ""),
               "runner_hw": os.environ.get("RUNNER_HW", ""),
