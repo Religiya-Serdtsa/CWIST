@@ -235,6 +235,10 @@ size_t cwist_sstring_get_size(cwist_sstring *str) {
     return str ? str->size : 0;
 }
 
+static inline const char *sstring_data_or_empty(const cwist_sstring *s) {
+    return (s && s->data) ? s->data : "";
+}
+
 /**
  * @brief Compare two CWIST string objects using strcmp semantics.
  * @param left Left-hand string.
@@ -242,12 +246,7 @@ size_t cwist_sstring_get_size(cwist_sstring *str) {
  * @return Negative, zero, or positive depending on lexical ordering.
  */
 int cwist_sstring_compare_sstring(cwist_sstring *left, const cwist_sstring *right) {
-    if (!left || !left->data) {
-        if (!right || !right->data) return 0;
-        return -1;
-    }
-    if (!right || !right->data) return 1;
-    return strcmp(left->data, right->data);
+    return strcmp(sstring_data_or_empty(left), sstring_data_or_empty(right));
 }
 
 /**
@@ -739,13 +738,7 @@ void cwist_sstring_destroy(cwist_sstring *str) {
  * @return Negative, zero, or positive depending on lexical ordering.
  */
 int cwist_sstring_compare(cwist_sstring *str, const char *compare_to) {
-    if (!str || !str->data) {
-        if (!compare_to) return 0; // Both NULL-ish (empty treated as NULL for comparison?)
-        return -1; 
-    }
-    if (!compare_to) return 1; 
-    
-    return strcmp(str->data, compare_to);
+    return strcmp(sstring_data_or_empty(str), compare_to ? compare_to : "");
 }
 
 /**
@@ -762,8 +755,8 @@ cwist_sstring *cwist_sstring_substr(cwist_sstring *str, int start, int length) {
     if ((size_t)start >= current_len) return NULL;
     
     // Adjust length if it goes beyond end
-    if ((size_t)(start + length) > current_len) {
-        length = current_len - start;
+    if ((size_t)length > current_len - (size_t)start) {
+        length = (int)(current_len - (size_t)start);
     }
     
     cwist_sstring *sub = cwist_sstring_create();
