@@ -240,7 +240,8 @@ static void append_grpc_string_frame(cwist_sstring *body, const char *value) {
     uint8_t *frame = NULL;
     size_t frame_len = 0;
     assert(cwist_grpc_encode_message(pb.data, pb.len, 0, &frame, &frame_len) == 0);
-    assert(cwist_sstring_append_len(body, (char *)frame, frame_len).error.err_i16 == 0);
+    cwist_error_t append_err = cwist_sstring_append_len(body, (char *)frame, frame_len);
+    assert(cwist_error_is_ok(&append_err));
 
     cwist_free(frame);
     cwist_pb_writer_free(&pb);

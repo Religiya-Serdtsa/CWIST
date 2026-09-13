@@ -499,6 +499,7 @@ TEST_TARGETS = test_app_resource_limits \
                test_test_client \
                test_multiport \
                test_grpc \
+               test_grpc_append_error \
                test_grpc_stream \
                test_grpc_client \
                test_grpc_channel \
@@ -970,6 +971,10 @@ test_multiport: $(LIB_NAME) tests/test_multiport.c
 test_grpc: $(LIB_NAME) tests/test_grpc.c
 	$(CC) $(CFLAGS) -o test_grpc tests/test_grpc.c $(LIB_NAME) $(LIBS)
 	./test_grpc
+
+test_grpc_append_error: $(LIB_NAME) tests/test_grpc_append_error.c
+	$(CC) $(CFLAGS) -o test_grpc_append_error tests/test_grpc_append_error.c $(LIB_NAME) $(LIBS)
+	./test_grpc_append_error
 
 test_grpc_stream: $(LIB_NAME) tests/test_grpc_stream.c
 	$(CC) $(CFLAGS) -o test_grpc_stream tests/test_grpc_stream.c $(LIB_NAME) $(LIBS)
